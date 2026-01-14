@@ -1,0 +1,1428 @@
+% Chapter 22: System Identification
+% IEEE-formatted LaTeX chapter for Control Systems Textbook
+% Self-contained chapter - can be \input{} into main document
+
+\chapter{System Identification}
+\label{ch:system_identification}
+
+\begin{abstract}
+This chapter introduces system identification---the art and science of building mathematical models from experimental data. We trace the historical development from Gauss's least squares method for orbital mechanics to Ljung's modern framework, establish the mathematical foundations of parametric and non-parametric identification, and provide hands-on laboratory exercises for identifying DC motor dynamics. The fundamental insight: when first-principles models are expensive or inaccurate, let the system tell us what it is through carefully designed experiments.
+\end{abstract}
+
+%=============================================================================
+\section{Historical Motivation: Learning Models from Data}
+\label{sec:sysid_history}
+%=============================================================================
+
+The challenge of building accurate mathematical models has confronted engineers and scientists for centuries. While physics provides elegant equations governing idealized systems, real-world systems exhibit complexities---nonlinearities, distributed parameters, unknown friction, parasitic dynamics---that make first-principles modeling extraordinarily difficult. System identification offers an alternative: rather than deriving models from physical laws, we learn them directly from observed input-output behavior.
+
+\subsection{Gauss and the Birth of Least Squares (1809)}
+\label{subsec:gauss}
+
+The mathematical foundations of system identification trace to Carl Friedrich Gauss and his work on celestial mechanics. In 1801, the Italian astronomer Giuseppe Piazzi discovered Ceres, the first asteroid, observing it for only 41 days before it disappeared behind the Sun. The astronomical community faced a critical challenge: with such limited observations, could Ceres's orbit be predicted well enough to relocate it months later when it emerged from the Sun's glare?
+
+\subsubsection{The Orbit Prediction Problem}
+
+The orbit of a celestial body is described by six parameters: semi-major axis, eccentricity, inclination, longitude of ascending node, argument of perihelion, and true anomaly. However, observational measurements contain errors from atmospheric distortion, instrument imprecision, and human factors. Given $n$ noisy observations where $n > 6$, how should one estimate the six orbital parameters?
+
+The challenge is \textit{overdetermined}: more equations than unknowns. Different subsets of observations yield different parameter estimates. Which estimate is ``best''?
+
+\subsubsection{Gauss's Method of Least Squares}
+
+Gauss proposed a principle that would become the cornerstone of statistical estimation: choose the parameters that minimize the sum of squared errors between predicted and observed positions. If $y_i$ denotes the $i$-th observed position and $\hat{y}_i(\boldsymbol{\theta})$ the position predicted by model parameters $\boldsymbol{\theta}$, the optimal estimate is:
+\begin{equation}
+\hat{\boldsymbol{\theta}} = \arg\min_{\boldsymbol{\theta}} \sum_{i=1}^{n} \left( y_i - \hat{y}_i(\boldsymbol{\theta}) \right)^2
+\label{eq:gauss_ls}
+\end{equation}
+
+Using this method, the 24-year-old Gauss computed Ceres's orbit with such accuracy that astronomer Franz Xaver von Zach relocated the asteroid on December 31, 1801---within half a degree of Gauss's prediction. This triumph established least squares as the fundamental tool for fitting models to data.
+
+\subsubsection{Why Squared Errors?}
+
+Gauss justified the squared error criterion through his theory of errors. Under the assumption that measurement errors are normally distributed (the ``Gaussian'' distribution he characterized), the least squares estimate is also the \textit{maximum likelihood} estimate---the parameter values most likely to have produced the observed data. This provided a principled statistical foundation for what might otherwise seem an arbitrary choice.
+
+The squared error criterion also offers practical advantages:
+\begin{itemize}
+    \item \textbf{Differentiability}: The squared function is smooth everywhere, enabling gradient-based optimization
+    \item \textbf{Convexity}: For linear-in-parameters models, the objective function is convex, guaranteeing a unique global minimum
+    \item \textbf{Analytical solution}: Linear least squares admits a closed-form solution via the normal equations
+    \item \textbf{Statistical optimality}: Under Gaussian noise, least squares is the Best Linear Unbiased Estimator (BLUE)
+\end{itemize}
+
+\subsection{From Astronomy to Engineering}
+\label{subsec:engineering_history}
+
+Throughout the 19th and early 20th centuries, least squares remained primarily a tool of astronomers and surveyors. Engineers building control systems relied on first-principles models derived from Newton's laws, thermodynamics, and electrical circuit theory. However, several developments gradually pushed engineers toward data-driven approaches.
+
+\subsubsection{The Complexity Barrier}
+
+As engineered systems grew more sophisticated, first-principles modeling became increasingly burdensome:
+\begin{itemize}
+    \item \textbf{Aircraft flutter analysis}: Predicting the complex interaction between aerodynamic forces and structural vibration required models of extraordinary complexity. Finite element methods could approximate structural dynamics, but coupling with unsteady aerodynamics introduced uncertainties that pure analysis could not resolve.
+    \item \textbf{Process control}: Chemical plants involve thousands of interacting variables---temperatures, pressures, flow rates, concentrations---with nonlinear kinetics and transport phenomena. Complete mechanistic models were impractical for online control.
+    \item \textbf{Electromechanical systems}: Friction, backlash, magnetic saturation, and thermal effects created discrepancies between idealized models and actual behavior.
+\end{itemize}
+
+\subsubsection{The Data Revolution}
+
+Simultaneously, the ability to collect experimental data improved dramatically:
+\begin{itemize}
+    \item \textbf{Electronic sensors}: Strain gauges, thermocouples, and later solid-state sensors enabled precise measurement of physical quantities
+    \item \textbf{Data acquisition systems}: Analog-to-digital converters and digital storage made it feasible to record thousands of data points
+    \item \textbf{Computational power}: Digital computers could process large datasets and perform the matrix operations required for least squares
+\end{itemize}
+
+The economics shifted: collecting data became cheaper than developing first-principles models.
+
+\subsection{Lennart Ljung and the Modern Framework (1970s--1980s)}
+\label{subsec:ljung}
+
+The modern theory of system identification crystallized through the work of Lennart Ljung at Link\"{o}ping University in Sweden. His 1987 textbook \textit{System Identification: Theory for the User} synthesized decades of research into a coherent framework that remains the foundation of the field.
+
+\subsubsection{Ljung's Contributions}
+
+Ljung's framework addressed several critical questions:
+\begin{enumerate}
+    \item \textbf{Model structure selection}: What class of models should we consider? Too simple a structure cannot capture system dynamics; too complex a structure leads to overfitting.
+    \item \textbf{Input design}: What input signals maximize the information content of experimental data?
+    \item \textbf{Estimation algorithms}: How do we efficiently compute optimal parameter estimates, especially for nonlinear model structures?
+    \item \textbf{Model validation}: How do we assess whether an identified model is adequate for its intended purpose?
+    \item \textbf{Theoretical foundations}: Under what conditions do parameter estimates converge to true values as data increases?
+\end{enumerate}
+
+\subsubsection{The Prediction Error Framework}
+
+Central to Ljung's approach is the \textit{prediction error method}. Given a model parametrized by $\boldsymbol{\theta}$, define the one-step-ahead prediction:
+\begin{equation}
+\hat{y}(t|\boldsymbol{\theta}) = \text{best prediction of } y(t) \text{ given past data and model } \boldsymbol{\theta}
+\end{equation}
+
+The prediction error is:
+\begin{equation}
+\varepsilon(t, \boldsymbol{\theta}) = y(t) - \hat{y}(t|\boldsymbol{\theta})
+\end{equation}
+
+The parameter estimate minimizes a criterion function of these errors:
+\begin{equation}
+\hat{\boldsymbol{\theta}}_N = \arg\min_{\boldsymbol{\theta}} V_N(\boldsymbol{\theta}) = \arg\min_{\boldsymbol{\theta}} \frac{1}{N} \sum_{t=1}^{N} \ell\left(\varepsilon(t, \boldsymbol{\theta})\right)
+\label{eq:pem}
+\end{equation}
+where $\ell(\cdot)$ is a loss function (typically $\ell(\varepsilon) = \varepsilon^2$ for quadratic loss).
+
+This framework unifies diverse identification methods---least squares, maximum likelihood, instrumental variables---as special cases with different model structures and loss functions.
+
+\subsection{``All Models Are Wrong, Some Are Useful''}
+\label{subsec:box}
+
+The statistician George E.P. Box articulated a crucial philosophical principle that underlies all system identification work:
+
+\begin{quote}
+``Essentially, all models are wrong, but some are useful.'' --- George E.P. Box, 1976
+\end{quote}
+
+This aphorism captures several important truths:
+\begin{enumerate}
+    \item \textbf{No model is perfect}: Every mathematical model is a simplification of reality. Real systems have infinite degrees of freedom; models have finite parameters.
+    \item \textbf{Usefulness is context-dependent}: A model adequate for one purpose may be inadequate for another. A first-order approximation might suffice for slow control loops but fail for high-bandwidth applications.
+    \item \textbf{The goal is not truth, but utility}: We seek models that predict well within their intended domain of application, not models that capture every physical detail.
+    \item \textbf{Model validation is essential}: Since all models are wrong, we must rigorously test whether a particular model is ``wrong enough to matter'' for our application.
+\end{enumerate}
+
+\subsection{Aerospace Applications: Flutter Testing}
+\label{subsec:flutter}
+
+Aircraft flutter---the potentially catastrophic interaction between aerodynamic forces and structural vibration---provides a compelling application of system identification. Flight testing for flutter requires extracting dynamic characteristics from in-flight data.
+
+\subsubsection{The Flutter Problem}
+
+As aircraft speed increases, aerodynamic forces couple increasingly strongly with structural modes. At a critical speed, this coupling can produce self-excited oscillations of rapidly growing amplitude---flutter. Since flutter can destroy an aircraft within seconds, flight test programs must carefully approach the flutter boundary while ensuring adequate safety margins.
+
+\subsubsection{Ground Vibration Testing}
+
+Before flight, aircraft undergo ground vibration testing (GVT) to identify structural modes. Shakers excite the structure, and accelerometers measure the response. From this input-output data, modal frequencies, damping ratios, and mode shapes are extracted using system identification techniques.
+
+\subsubsection{Flight Flutter Testing}
+
+In flight, atmospheric turbulence or controlled excitation (from stick inputs, oscillating control surfaces, or dedicated excitation systems) provides the input. The challenge is more severe than ground testing:
+\begin{itemize}
+    \item Multiple inputs: Atmospheric turbulence excites all modes simultaneously
+    \item Varying conditions: Airspeed, altitude, and fuel state change during maneuvers
+    \item Limited excitation: Safety concerns limit input amplitude near the flutter boundary
+    \item Real-time requirements: Damping trends must be monitored during the test point
+\end{itemize}
+
+Modern flutter testing relies on recursive identification algorithms that update model estimates as data arrives, enabling real-time tracking of modal damping as conditions change.
+
+%=============================================================================
+\section{Modern Applications}
+\label{sec:sysid_applications}
+%=============================================================================
+
+System identification has become indispensable across engineering disciplines, enabling applications ranging from adaptive control to digital twin creation.
+
+\subsection{Adaptive Control: Identify Then Control}
+\label{subsec:adaptive}
+
+Adaptive control systems adjust their parameters in response to changing plant dynamics or operating conditions. A common architecture is \textit{indirect adaptive control}:
+\begin{enumerate}
+    \item Use an online identification algorithm to estimate plant parameters from recent input-output data
+    \item Use the estimated parameters to update controller gains
+    \item Repeat continuously during operation
+\end{enumerate}
+
+This ``identify then control'' paradigm enables systems to maintain performance despite plant variations---wear, fouling, load changes---that would degrade fixed-gain controllers. Applications include:
+\begin{itemize}
+    \item \textbf{Autopilots}: Aircraft dynamics vary with altitude, speed, and configuration
+    \item \textbf{Engine control}: Combustion characteristics change with temperature and fuel quality
+    \item \textbf{Robot manipulators}: Payload mass varies between tasks
+\end{itemize}
+
+\subsection{Digital Twins from Operational Data}
+\label{subsec:digital_twins}
+
+A \textit{digital twin} is a virtual replica of a physical asset that mirrors its behavior in real-time. System identification enables the creation of digital twins from operational data:
+\begin{itemize}
+    \item \textbf{Predictive maintenance}: Identifying changes in system dynamics can reveal incipient faults---bearing wear manifests as changing resonance frequencies; valve degradation appears as changing flow coefficients
+    \item \textbf{Process optimization}: High-fidelity models enable simulation-based optimization without risky experimentation on the physical plant
+    \item \textbf{Operator training}: Digital twins provide realistic simulators for training scenarios
+\end{itemize}
+
+\subsection{Machine Learning for Dynamics}
+\label{subsec:ml}
+
+The boundary between system identification and machine learning has become increasingly porous:
+\begin{itemize}
+    \item \textbf{Neural network dynamics models}: Recurrent networks and transformers can learn complex nonlinear dynamics from data
+    \item \textbf{Gaussian processes}: Provide probabilistic models with uncertainty quantification
+    \item \textbf{Physics-informed learning}: Combines data-driven fitting with physical constraints (conservation laws, symmetries)
+    \item \textbf{Reinforcement learning}: Uses learned dynamics models for model-predictive control
+\end{itemize}
+
+These methods extend the reach of system identification to systems too complex for traditional linear or low-order nonlinear models.
+
+\subsection{Biomedical System Modeling}
+\label{subsec:biomedical}
+
+Biological systems present unique identification challenges---they cannot be opened for inspection, they vary between individuals, and they adapt over time. System identification enables:
+\begin{itemize}
+    \item \textbf{Pharmacokinetic modeling}: Estimating drug absorption, distribution, metabolism, and excretion rates from blood concentration measurements
+    \item \textbf{Glucose-insulin dynamics}: Identifying patient-specific models for artificial pancreas control
+    \item \textbf{Cardiovascular modeling}: Characterizing heart pump function and vascular resistance from pressure and flow measurements
+    \item \textbf{Neural system identification}: Inferring neural connectivity and dynamics from electrode recordings or imaging data
+\end{itemize}
+
+%=============================================================================
+\section{Mathematical Foundation}
+\label{sec:sysid_math}
+%=============================================================================
+
+We now develop the mathematical framework for system identification, proceeding from problem formulation through model structures, estimation algorithms, and validation techniques.
+
+\subsection{Problem Formulation}
+\label{subsec:problem_setup}
+
+The fundamental system identification problem can be stated as:
+
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,title=System Identification Problem]
+Given:
+\begin{itemize}
+    \item A sequence of input measurements $\{u(1), u(2), \ldots, u(N)\}$
+    \item A sequence of output measurements $\{y(1), y(2), \ldots, y(N)\}$
+    \item A model structure $\mathcal{M}$ with parameters $\boldsymbol{\theta}$
+\end{itemize}
+Find: The parameter values $\hat{\boldsymbol{\theta}}$ that best explain the observed data according to some criterion.
+\end{tcolorbox}
+
+The key choices in this formulation are:
+\begin{enumerate}
+    \item \textbf{Model structure}: What class of models do we consider? Linear vs. nonlinear, continuous vs. discrete, parametric vs. nonparametric
+    \item \textbf{Optimality criterion}: What does ``best'' mean? Least squares, maximum likelihood, prediction accuracy
+    \item \textbf{Experimental design}: What inputs should we apply to maximize information content?
+\end{enumerate}
+
+\subsection{Input Signal Design}
+\label{subsec:input_design}
+
+The input signal profoundly affects identification quality. A constant input provides no information about dynamics. An ideal input excites all relevant modes while respecting practical constraints (amplitude limits, safety, operating range).
+
+\subsubsection{Persistence of Excitation}
+
+For parameter convergence, the input must be \textit{persistently exciting} of sufficient order. Informally, an input is persistently exciting of order $n$ if it contains at least $n$ distinct frequency components. A formal definition involves the positive definiteness of certain correlation matrices:
+\begin{equation}
+\frac{1}{N} \sum_{t=1}^{N} \boldsymbol{\phi}(t) \boldsymbol{\phi}^T(t) > \alpha \mathbf{I}
+\end{equation}
+for some $\alpha > 0$, where $\boldsymbol{\phi}(t)$ is the regression vector.
+
+\subsubsection{Pseudorandom Binary Sequence (PRBS)}
+
+A PRBS is a deterministic binary signal that approximates white noise over a finite period. It switches between two levels ($+A$ and $-A$) according to a linear feedback shift register:
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.8]
+    % Time axis
+    \draw[->] (0,0) -- (12,0) node[right] {$t$};
+    \draw[->] (0,-1.5) -- (0,1.5) node[above] {$u(t)$};
+
+    % PRBS signal
+    \draw[thick, blue] (0,1) -- (0.5,1) -- (0.5,-1) -- (1,-1) -- (1,-1) -- (1.5,-1) -- (1.5,1) -- (2,1) -- (2,1) -- (2.5,1) -- (2.5,-1) -- (3,-1) -- (3,1) -- (3.5,1) -- (3.5,1) -- (4,1) -- (4,-1) -- (4.5,-1) -- (4.5,-1) -- (5,-1) -- (5,-1) -- (5.5,-1) -- (5.5,1) -- (6,1) -- (6,-1) -- (6.5,-1) -- (6.5,1) -- (7,1) -- (7,1) -- (7.5,1) -- (7.5,1) -- (8,1) -- (8,-1) -- (8.5,-1) -- (8.5,1) -- (9,1) -- (9,-1) -- (9.5,-1) -- (9.5,-1) -- (10,-1) -- (10,1) -- (10.5,1) -- (10.5,-1) -- (11,-1) -- (11,1) -- (11.5,1);
+
+    % Level labels
+    \node[left] at (0,1) {$+A$};
+    \node[left] at (0,-1) {$-A$};
+
+    % Title
+    \node[above] at (6,1.5) {\textbf{Pseudorandom Binary Sequence (PRBS)}};
+\end{tikzpicture}
+\caption{A PRBS input signal switches between two levels in a pattern that approximates white noise.}
+\label{fig:prbs}
+\end{figure}
+
+Properties of PRBS:
+\begin{itemize}
+    \item \textbf{Broadband excitation}: The autocorrelation approximates a delta function, providing uniform spectral content
+    \item \textbf{Bounded amplitude}: Respects actuator limits
+    \item \textbf{Deterministic}: Repeatable experiments
+    \item \textbf{Adjustable bandwidth}: The clock frequency sets the spectral rolloff
+\end{itemize}
+
+\subsubsection{Frequency Sweep (Chirp)}
+
+A chirp signal is a sinusoid with time-varying frequency:
+\begin{equation}
+u(t) = A \sin\left(2\pi f_0 t + \pi \frac{f_1 - f_0}{T} t^2\right)
+\label{eq:chirp}
+\end{equation}
+where frequency sweeps from $f_0$ to $f_1$ over duration $T$.
+
+The chirp is particularly useful for frequency domain identification, exciting each frequency in sequence and enabling spectral analysis at each frequency.
+
+\subsubsection{Step and Pulse Sequences}
+
+Step inputs are simple to implement and intuitive to analyze but concentrate energy at low frequencies. Multiple steps of varying amplitude improve high-frequency content. Pulse sequences (short-duration steps) provide broader excitation.
+
+\subsubsection{Multisine Signals}
+
+A multisine consists of superimposed sinusoids at selected frequencies:
+\begin{equation}
+u(t) = \sum_{k=1}^{K} A_k \sin(2\pi f_k t + \phi_k)
+\end{equation}
+
+By choosing frequencies $f_k$ and phases $\phi_k$, one can target specific frequency bands while controlling the signal's crest factor (ratio of peak to RMS amplitude).
+
+\subsection{Least Squares Estimation}
+\label{subsec:least_squares}
+
+Least squares provides the foundation for linear system identification. We develop the method in detail, as it underlies many more sophisticated techniques.
+
+\subsubsection{The Regression Form}
+
+Consider a system whose output depends linearly on known functions of past inputs and outputs:
+\begin{equation}
+y(t) = \phi_1(t) \theta_1 + \phi_2(t) \theta_2 + \cdots + \phi_n(t) \theta_n + e(t)
+\label{eq:regression_scalar}
+\end{equation}
+where $\phi_i(t)$ are known regressors, $\theta_i$ are unknown parameters, and $e(t)$ is the equation error.
+
+In vector form:
+\begin{equation}
+y(t) = \boldsymbol{\phi}^T(t) \boldsymbol{\theta} + e(t)
+\label{eq:regression_vector}
+\end{equation}
+where $\boldsymbol{\phi}(t) = [\phi_1(t), \ldots, \phi_n(t)]^T$ and $\boldsymbol{\theta} = [\theta_1, \ldots, \theta_n]^T$.
+
+Collecting $N$ measurements into matrices:
+\begin{equation}
+\underbrace{\begin{bmatrix} y(1) \\ y(2) \\ \vdots \\ y(N) \end{bmatrix}}_{\mathbf{y}} = \underbrace{\begin{bmatrix} \boldsymbol{\phi}^T(1) \\ \boldsymbol{\phi}^T(2) \\ \vdots \\ \boldsymbol{\phi}^T(N) \end{bmatrix}}_{\boldsymbol{\Phi}} \underbrace{\begin{bmatrix} \theta_1 \\ \theta_2 \\ \vdots \\ \theta_n \end{bmatrix}}_{\boldsymbol{\theta}} + \underbrace{\begin{bmatrix} e(1) \\ e(2) \\ \vdots \\ e(N) \end{bmatrix}}_{\mathbf{e}}
+\label{eq:matrix_form}
+\end{equation}
+
+Compactly:
+\begin{equation}
+\mathbf{y} = \boldsymbol{\Phi} \boldsymbol{\theta} + \mathbf{e}
+\label{eq:regression_matrix}
+\end{equation}
+
+\subsubsection{The Normal Equations}
+
+The least squares estimate minimizes the sum of squared errors:
+\begin{equation}
+\hat{\boldsymbol{\theta}} = \arg\min_{\boldsymbol{\theta}} J(\boldsymbol{\theta}) = \arg\min_{\boldsymbol{\theta}} \sum_{t=1}^{N} e^2(t) = \arg\min_{\boldsymbol{\theta}} \|\mathbf{y} - \boldsymbol{\Phi}\boldsymbol{\theta}\|^2
+\label{eq:ls_criterion}
+\end{equation}
+
+Expanding the squared norm:
+\begin{equation}
+J(\boldsymbol{\theta}) = (\mathbf{y} - \boldsymbol{\Phi}\boldsymbol{\theta})^T (\mathbf{y} - \boldsymbol{\Phi}\boldsymbol{\theta}) = \mathbf{y}^T\mathbf{y} - 2\boldsymbol{\theta}^T\boldsymbol{\Phi}^T\mathbf{y} + \boldsymbol{\theta}^T\boldsymbol{\Phi}^T\boldsymbol{\Phi}\boldsymbol{\theta}
+\end{equation}
+
+Taking the gradient and setting to zero:
+\begin{equation}
+\frac{\partial J}{\partial \boldsymbol{\theta}} = -2\boldsymbol{\Phi}^T\mathbf{y} + 2\boldsymbol{\Phi}^T\boldsymbol{\Phi}\boldsymbol{\theta} = \mathbf{0}
+\end{equation}
+
+Solving yields the \textbf{normal equations}:
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,title=Least Squares Solution]
+\begin{equation}
+\hat{\boldsymbol{\theta}} = \left(\boldsymbol{\Phi}^T\boldsymbol{\Phi}\right)^{-1}\boldsymbol{\Phi}^T\mathbf{y}
+\label{eq:normal_equations}
+\end{equation}
+
+The matrix $\left(\boldsymbol{\Phi}^T\boldsymbol{\Phi}\right)^{-1}\boldsymbol{\Phi}^T$ is the \textit{Moore-Penrose pseudoinverse} of $\boldsymbol{\Phi}$.
+\end{tcolorbox}
+
+\subsubsection{Existence and Uniqueness}
+
+The solution (\ref{eq:normal_equations}) exists and is unique if and only if $\boldsymbol{\Phi}^T\boldsymbol{\Phi}$ is invertible. This requires:
+\begin{itemize}
+    \item $N \geq n$: At least as many measurements as parameters
+    \item $\text{rank}(\boldsymbol{\Phi}) = n$: The regressors are linearly independent
+\end{itemize}
+
+The second condition is equivalent to persistent excitation. If the input is not persistently exciting of order $n$, some parameters are not uniquely identifiable from the data.
+
+\subsubsection{Statistical Properties}
+
+Under the assumption that $e(t)$ is zero-mean white noise with variance $\sigma^2$, the least squares estimate has desirable statistical properties:
+\begin{itemize}
+    \item \textbf{Unbiased}: $E[\hat{\boldsymbol{\theta}}] = \boldsymbol{\theta}_0$ (the true parameters)
+    \item \textbf{Consistent}: $\hat{\boldsymbol{\theta}} \to \boldsymbol{\theta}_0$ as $N \to \infty$
+    \item \textbf{Minimum variance}: Among all linear unbiased estimators, least squares has the smallest variance (Gauss-Markov theorem)
+\end{itemize}
+
+The covariance of the estimate is:
+\begin{equation}
+\text{Cov}(\hat{\boldsymbol{\theta}}) = \sigma^2 \left(\boldsymbol{\Phi}^T\boldsymbol{\Phi}\right)^{-1}
+\label{eq:param_covariance}
+\end{equation}
+
+This fundamental result relates estimation uncertainty to noise variance and information content (encoded in $\boldsymbol{\Phi}^T\boldsymbol{\Phi}$).
+
+\subsection{ARX Model Structure}
+\label{subsec:arx}
+
+The AutoRegressive with eXogenous input (ARX) model is the simplest and most widely used structure for discrete-time identification.
+
+\subsubsection{Model Definition}
+
+The ARX model relates output $y[k]$ to past outputs, past inputs, and a noise term:
+\begin{equation}
+y[k] + a_1 y[k-1] + \cdots + a_{n_a} y[k-n_a] = b_1 u[k-1] + \cdots + b_{n_b} u[k-n_b] + e[k]
+\label{eq:arx_time}
+\end{equation}
+
+Using the backward shift operator $q^{-1}$ (where $q^{-1}y[k] = y[k-1]$):
+\begin{equation}
+A(q^{-1}) y[k] = B(q^{-1}) u[k] + e[k]
+\label{eq:arx_operator}
+\end{equation}
+where:
+\begin{align}
+A(q^{-1}) &= 1 + a_1 q^{-1} + a_2 q^{-2} + \cdots + a_{n_a} q^{-n_a} \\
+B(q^{-1}) &= b_1 q^{-1} + b_2 q^{-2} + \cdots + b_{n_b} q^{-n_b}
+\end{align}
+
+\subsubsection{Transfer Function Form}
+
+The deterministic part of the ARX model corresponds to the transfer function:
+\begin{equation}
+G(q^{-1}) = \frac{B(q^{-1})}{A(q^{-1})} = \frac{b_1 q^{-1} + b_2 q^{-2} + \cdots + b_{n_b} q^{-n_b}}{1 + a_1 q^{-1} + \cdots + a_{n_a} q^{-n_a}}
+\label{eq:arx_tf}
+\end{equation}
+
+Converting to $z$-transform notation (where $z = q$):
+\begin{equation}
+G(z) = \frac{b_1 z^{-1} + \cdots + b_{n_b} z^{-n_b}}{1 + a_1 z^{-1} + \cdots + a_{n_a} z^{-n_a}} = \frac{b_1 z^{n_b-1} + \cdots + b_{n_b}}{z^{n_a} + a_1 z^{n_a-1} + \cdots + a_{n_a}} \cdot z^{n_a - n_b}
+\label{eq:arx_z}
+\end{equation}
+
+\subsubsection{Regression Form for ARX}
+
+The ARX model (\ref{eq:arx_time}) is linear in the parameters $\{a_1, \ldots, a_{n_a}, b_1, \ldots, b_{n_b}\}$. Rearranging:
+\begin{equation}
+y[k] = -a_1 y[k-1] - \cdots - a_{n_a} y[k-n_a] + b_1 u[k-1] + \cdots + b_{n_b} u[k-n_b] + e[k]
+\end{equation}
+
+Defining:
+\begin{align}
+\boldsymbol{\phi}[k] &= [-y[k-1], \ldots, -y[k-n_a], u[k-1], \ldots, u[k-n_b]]^T \\
+\boldsymbol{\theta} &= [a_1, \ldots, a_{n_a}, b_1, \ldots, b_{n_b}]^T
+\end{align}
+
+We obtain the standard regression form:
+\begin{equation}
+y[k] = \boldsymbol{\phi}^T[k] \boldsymbol{\theta} + e[k]
+\end{equation}
+
+The least squares solution (\ref{eq:normal_equations}) directly provides parameter estimates.
+
+\subsubsection{Advantages and Limitations}
+
+\textbf{Advantages}:
+\begin{itemize}
+    \item Simple linear regression---closed-form solution
+    \item Efficient computation---no iterative optimization
+    \item Well-understood statistical properties
+\end{itemize}
+
+\textbf{Limitations}:
+\begin{itemize}
+    \item Assumes specific noise structure (equation error enters directly)
+    \item Biased estimates if noise is colored (correlated)
+    \item May require high orders to capture complex dynamics
+\end{itemize}
+
+\subsection{Frequency Domain Identification}
+\label{subsec:freq_domain}
+
+An alternative to time-domain parametric identification is to characterize the system's frequency response directly.
+
+\subsubsection{The Frequency Response Function}
+
+For a stable LTI system, the frequency response function (FRF) describes the gain and phase at each frequency:
+\begin{equation}
+G(j\omega) = |G(j\omega)| e^{j\angle G(j\omega)}
+\label{eq:frf}
+\end{equation}
+
+The FRF relates sinusoidal inputs to outputs: if $u(t) = A\sin(\omega t)$, then at steady state:
+\begin{equation}
+y(t) = A|G(j\omega)|\sin(\omega t + \angle G(j\omega))
+\label{eq:sinusoidal_ss}
+\end{equation}
+
+\subsubsection{Sine-Sweep Identification}
+
+A direct method to measure the FRF:
+\begin{enumerate}
+    \item Apply a sinusoidal input at frequency $\omega_k$
+    \item Wait for transients to decay
+    \item Measure the output amplitude $Y_k$ and phase $\phi_k$ relative to input
+    \item Compute $|G(j\omega_k)| = Y_k / U_k$ and $\angle G(j\omega_k) = \phi_k$
+    \item Repeat for frequencies spanning the range of interest
+\end{enumerate}
+
+The result is an \textit{empirical Bode plot}---gain and phase data at discrete frequencies.
+
+\subsubsection{Spectral Analysis}
+
+For broadband inputs (PRBS, random noise), spectral analysis provides FRF estimates:
+\begin{equation}
+\hat{G}(j\omega) = \frac{S_{yu}(\omega)}{S_{uu}(\omega)}
+\label{eq:spectral_frf}
+\end{equation}
+where $S_{yu}(\omega)$ is the cross-spectral density between output and input, and $S_{uu}(\omega)$ is the input power spectral density.
+
+This approach is computationally efficient using the Fast Fourier Transform (FFT):
+\begin{equation}
+\hat{G}(j\omega_k) = \frac{Y(\omega_k)}{U(\omega_k)}
+\label{eq:fft_frf}
+\end{equation}
+where $Y(\omega_k)$ and $U(\omega_k)$ are the FFTs of output and input.
+
+\subsubsection{From Frequency Data to Parametric Models}
+
+Once FRF data is available, a parametric model can be fitted:
+\begin{equation}
+\hat{\boldsymbol{\theta}} = \arg\min_{\boldsymbol{\theta}} \sum_{k=1}^{K} \left| \hat{G}(j\omega_k) - G(j\omega_k; \boldsymbol{\theta}) \right|^2
+\label{eq:freq_fitting}
+\end{equation}
+
+This frequency-domain fitting can be solved using least squares if the model is linear in parameters, or iterative methods for general rational transfer functions.
+
+\subsection{Model Validation}
+\label{subsec:validation}
+
+An identified model must be validated before use. Validation assesses whether the model adequately represents the system for its intended purpose.
+
+\subsubsection{Residual Analysis}
+
+The residuals $\varepsilon(t) = y(t) - \hat{y}(t)$ contain information about model quality:
+
+\begin{itemize}
+    \item \textbf{Whiteness}: If the model captures all system dynamics, residuals should be white noise (uncorrelated)
+    \item \textbf{Independence from input}: Residuals should be uncorrelated with past inputs
+    \item \textbf{Normality}: Under Gaussian noise assumptions, residuals should be normally distributed
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.7]
+    % Good residuals - white noise like
+    \begin{scope}
+        \draw[->] (0,0) -- (6,0) node[right] {$\tau$};
+        \draw[->] (0,-1.5) -- (0,1.5) node[above] {$R_\varepsilon(\tau)$};
+
+        % Autocorrelation of white noise - spike at 0
+        \draw[thick, blue] (0,0) -- (0.5,0);
+        \draw[thick, blue, fill=blue] (0.5,1.2) circle (0.05);
+        \draw[thick, blue] (0.5,0) -- (5.5,0);
+
+        % Confidence bounds
+        \draw[dashed, gray] (0,0.3) -- (5.5,0.3);
+        \draw[dashed, gray] (0,-0.3) -- (5.5,-0.3);
+
+        \node[below] at (3,-1.8) {(a) Good model: white residuals};
+    \end{scope}
+
+    % Bad residuals - correlated
+    \begin{scope}[xshift=8cm]
+        \draw[->] (0,0) -- (6,0) node[right] {$\tau$};
+        \draw[->] (0,-1.5) -- (0,1.5) node[above] {$R_\varepsilon(\tau)$};
+
+        % Autocorrelation showing correlation
+        \draw[thick, red] (0,0) -- (0.5,0);
+        \draw[thick, red, fill=red] (0.5,1.2) circle (0.05);
+        \draw[thick, red] plot[smooth] coordinates {(0.5,1.2) (1,0.7) (1.5,0.5) (2,0.4) (2.5,0.25) (3,0.15) (3.5,0.1) (4,0.05) (4.5,0.02) (5,0) (5.5,0)};
+
+        % Confidence bounds
+        \draw[dashed, gray] (0,0.3) -- (5.5,0.3);
+        \draw[dashed, gray] (0,-0.3) -- (5.5,-0.3);
+
+        \node[below] at (3,-1.8) {(b) Poor model: correlated residuals};
+    \end{scope}
+\end{tikzpicture}
+\caption{Residual autocorrelation analysis. (a) White residuals indicate the model captures system dynamics. (b) Correlated residuals suggest unmodeled dynamics.}
+\label{fig:residual_analysis}
+\end{figure}
+
+The autocorrelation function of residuals is:
+\begin{equation}
+\hat{R}_\varepsilon(\tau) = \frac{1}{N} \sum_{t=1}^{N-\tau} \varepsilon(t)\varepsilon(t+\tau)
+\label{eq:residual_acf}
+\end{equation}
+
+For a good model, $\hat{R}_\varepsilon(\tau) \approx 0$ for $\tau \neq 0$ (within confidence bounds).
+
+\subsubsection{Cross-Validation}
+
+The gold standard for validation is testing on data not used for estimation:
+\begin{enumerate}
+    \item Divide available data into \textit{estimation} and \textit{validation} sets
+    \item Identify the model using only estimation data
+    \item Simulate the model with validation input
+    \item Compare simulated output to measured validation output
+\end{enumerate}
+
+Common metrics include:
+\begin{itemize}
+    \item \textbf{Fit percentage}:
+    \begin{equation}
+    \text{FIT} = 100 \times \left(1 - \frac{\|\mathbf{y}_\text{val} - \hat{\mathbf{y}}\|}{\|\mathbf{y}_\text{val} - \bar{y}\|}\right) \%
+    \label{eq:fit_percent}
+    \end{equation}
+    \item \textbf{Normalized RMSE}: $\text{NRMSE} = \sqrt{\sum(y - \hat{y})^2 / \sum y^2}$
+\end{itemize}
+
+\subsubsection{Model Comparison}
+
+When multiple model structures are candidates, information criteria help select the best:
+\begin{itemize}
+    \item \textbf{Akaike Information Criterion (AIC)}:
+    \begin{equation}
+    \text{AIC} = N \ln(\hat{\sigma}^2) + 2n
+    \label{eq:aic}
+    \end{equation}
+    \item \textbf{Bayesian Information Criterion (BIC)}:
+    \begin{equation}
+    \text{BIC} = N \ln(\hat{\sigma}^2) + n \ln(N)
+    \label{eq:bic}
+    \end{equation}
+\end{itemize}
+where $\hat{\sigma}^2$ is the estimated noise variance and $n$ is the number of parameters. Lower values indicate better models, balancing fit quality against complexity.
+
+\subsection{Bias-Variance Tradeoff}
+\label{subsec:bias_variance}
+
+Model complexity selection embodies a fundamental tradeoff:
+
+\begin{itemize}
+    \item \textbf{Underfitting} (too simple): The model cannot capture true system dynamics, leading to \textit{bias} (systematic error)
+    \item \textbf{Overfitting} (too complex): The model fits noise in the training data, leading to high \textit{variance} (sensitivity to data randomness) and poor generalization
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.9]
+    \draw[->] (0,0) -- (8,0) node[right] {Model Complexity};
+    \draw[->] (0,0) -- (0,5) node[above] {Error};
+
+    % Bias curve (decreasing)
+    \draw[thick, blue] plot[smooth] coordinates {(0.5,4) (1,3) (2,2) (3,1.2) (4,0.7) (5,0.4) (6,0.25) (7,0.15)};
+    \node[blue, right] at (7,0.15) {Bias$^2$};
+
+    % Variance curve (increasing)
+    \draw[thick, red] plot[smooth] coordinates {(0.5,0.1) (1,0.15) (2,0.25) (3,0.5) (4,0.9) (5,1.5) (6,2.3) (7,3.3)};
+    \node[red, right] at (7,3.3) {Variance};
+
+    % Total error (sum)
+    \draw[thick, black, dashed] plot[smooth] coordinates {(0.5,4.1) (1,3.15) (2,2.25) (3,1.7) (4,1.6) (5,1.9) (6,2.55) (7,3.45)};
+    \node[right] at (7,3.45) {Total};
+
+    % Optimal point
+    \draw[dotted] (4,0) -- (4,1.6);
+    \node[below] at (4,0) {Optimal};
+    \draw[fill=black] (4,1.6) circle (0.08);
+\end{tikzpicture}
+\caption{The bias-variance tradeoff. Simple models have high bias but low variance; complex models have low bias but high variance. The optimal complexity minimizes total prediction error.}
+\label{fig:bias_variance}
+\end{figure}
+
+The expected prediction error can be decomposed:
+\begin{equation}
+\text{Expected Error} = \text{Bias}^2 + \text{Variance} + \text{Irreducible Noise}
+\label{eq:bias_variance}
+\end{equation}
+
+Cross-validation or information criteria help navigate this tradeoff, selecting models complex enough to capture dynamics but simple enough to generalize.
+
+%=============================================================================
+\section{Practical Experiment: Identifying DC Motor Dynamics}
+\label{sec:sysid_lab}
+%=============================================================================
+
+This laboratory demonstrates system identification principles by treating a DC motor as a ``black box'' whose parameters are unknown. Students will apply input signals, record responses, fit models using least squares, and validate predictions.
+
+\subsection{Learning Objectives}
+
+Upon completion, students will be able to:
+\begin{enumerate}
+    \item Design input signals for system identification
+    \item Collect and preprocess input-output data
+    \item Formulate and solve the least squares estimation problem
+    \item Validate identified models using independent test data
+    \item Compare data-driven models to physics-based models
+\end{enumerate}
+
+\subsection{Equipment and Setup}
+
+\begin{table}[htbp]
+\centering
+\caption{Bill of Materials for System Identification Laboratory}
+\label{tab:sysid_bom}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Component} & \textbf{Specification} & \textbf{Qty} \\
+\hline
+Arduino Uno/Nano & ATmega328P microcontroller & 1 \\
+DC Motor with Encoder & 12V, 200+ PPR quadrature encoder & 1 \\
+Motor Driver & L298N or TB6612FNG H-bridge & 1 \\
+Power Supply & 12V, 2A DC adapter & 1 \\
+Computer & MATLAB, Python, or similar & 1 \\
+\hline
+\end{tabular}
+\end{table}
+
+The motor is treated as a ``black box''---we pretend not to know its electrical and mechanical parameters, though for validation we will compare with a physics-based model.
+
+\subsection{System Model}
+
+A DC motor velocity response to armature voltage can be modeled as a first-order system:
+\begin{equation}
+G(s) = \frac{\omega(s)}{V(s)} = \frac{K}{\tau s + 1}
+\label{eq:motor_first_order}
+\end{equation}
+where $K$ is the DC gain (rad/s per volt) and $\tau$ is the time constant.
+
+In discrete time with sampling period $T_s$:
+\begin{equation}
+\omega[k] = a_1 \omega[k-1] + b_1 v[k-1] + e[k]
+\label{eq:motor_discrete}
+\end{equation}
+
+The continuous-time parameters relate to discrete parameters via:
+\begin{align}
+a_1 &= e^{-T_s/\tau} \\
+b_1 &= K(1 - e^{-T_s/\tau}) = K(1 - a_1)
+\end{align}
+
+Inverting:
+\begin{align}
+\tau &= \frac{-T_s}{\ln(a_1)} \label{eq:tau_recovery}\\
+K &= \frac{b_1}{1 - a_1} \label{eq:k_recovery}
+\end{align}
+
+\subsection{Experimental Procedure}
+
+\subsubsection{Part 1: Data Collection}
+
+\begin{lstlisting}[language=C++, caption={Arduino Data Collection for System Identification}, label={lst:sysid_arduino}]
+// System Identification Data Collection
+// Records input (PWM) and output (encoder velocity) pairs
+
+const int motorPWM1 = 5;
+const int motorPWM2 = 6;
+const int encoderA = 2;
+const int encoderB = 3;
+
+volatile long encoderCount = 0;
+volatile long lastCount = 0;
+
+// Sampling parameters
+const float Ts = 0.02;  // 20ms = 50 Hz sampling
+const unsigned long Ts_ms = 20;
+unsigned long lastSampleTime = 0;
+
+// PRBS generator (7-bit: period 127)
+byte shiftReg = 0x01;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(motorPWM1, OUTPUT);
+  pinMode(motorPWM2, OUTPUT);
+  pinMode(encoderA, INPUT_PULLUP);
+  pinMode(encoderB, INPUT_PULLUP);
+
+  attachInterrupt(digitalPinToInterrupt(encoderA),
+                  updateEncoder, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoderB),
+                  updateEncoder, CHANGE);
+
+  Serial.println("time_ms,pwm,velocity");
+  delay(1000);
+}
+
+void loop() {
+  unsigned long currentTime = millis();
+
+  if (currentTime - lastSampleTime >= Ts_ms) {
+    lastSampleTime = currentTime;
+
+    // Generate PRBS input
+    byte newBit = ((shiftReg >> 6) ^ (shiftReg >> 5)) & 0x01;
+    shiftReg = (shiftReg << 1) | newBit;
+    int pwmValue = (shiftReg & 0x01) ? 150 : 80;  // Two levels
+
+    // Apply input
+    setMotorPWM(pwmValue);
+
+    // Measure velocity (counts per sample period)
+    long currentCount = encoderCount;
+    float velocity = (currentCount - lastCount) / Ts;
+    lastCount = currentCount;
+
+    // Log data
+    Serial.print(currentTime);
+    Serial.print(",");
+    Serial.print(pwmValue);
+    Serial.print(",");
+    Serial.println(velocity);
+  }
+}
+
+void setMotorPWM(int pwm) {
+  analogWrite(motorPWM1, pwm);
+  analogWrite(motorPWM2, 0);
+}
+
+void updateEncoder() {
+  // Simplified quadrature decoding
+  int a = digitalRead(encoderA);
+  int b = digitalRead(encoderB);
+  if (a == b) encoderCount++;
+  else encoderCount--;
+}
+\end{lstlisting}
+
+\textbf{Procedure}:
+\begin{enumerate}
+    \item Upload the code and connect the motor
+    \item Open Serial Monitor and copy data to a file (3000+ samples)
+    \item Split data: first 2000 samples for estimation, remainder for validation
+\end{enumerate}
+
+\subsubsection{Part 2: Parameter Estimation in MATLAB/Python}
+
+\begin{lstlisting}[language=Matlab, caption={MATLAB Least Squares Parameter Estimation}, label={lst:sysid_matlab}]
+% Load data
+data = readmatrix('motor_data.csv');
+t = data(:,1) / 1000;  % Convert to seconds
+u = data(:,2);          % PWM input
+y = data(:,3);          % Velocity output
+
+% Split into estimation and validation sets
+N_est = 2000;
+u_est = u(1:N_est);
+y_est = y(1:N_est);
+u_val = u(N_est+1:end);
+y_val = y(N_est+1:end);
+
+% Build regression matrix for ARX(1,1) model
+% y[k] = a1*y[k-1] + b1*u[k-1] + e[k]
+Phi = [y_est(1:end-1), u_est(1:end-1)];
+Y = y_est(2:end);
+
+% Least squares solution
+theta_hat = (Phi' * Phi) \ (Phi' * Y);
+a1 = theta_hat(1);
+b1 = theta_hat(2);
+
+fprintf('Identified parameters:\n');
+fprintf('  a1 = %.4f\n', a1);
+fprintf('  b1 = %.4f\n', b1);
+
+% Convert to continuous-time parameters
+Ts = 0.02;  % Sampling period
+tau = -Ts / log(a1);
+K = b1 / (1 - a1);
+
+fprintf('\nContinuous-time parameters:\n');
+fprintf('  Time constant tau = %.4f s\n', tau);
+fprintf('  DC gain K = %.4f (units/volt)\n', K);
+
+% Parameter covariance
+residuals = Y - Phi * theta_hat;
+sigma2 = var(residuals);
+cov_theta = sigma2 * inv(Phi' * Phi);
+std_theta = sqrt(diag(cov_theta));
+
+fprintf('\nParameter standard deviations:\n');
+fprintf('  std(a1) = %.4f\n', std_theta(1));
+fprintf('  std(b1) = %.4f\n', std_theta(2));
+
+% 95% confidence intervals
+fprintf('\n95%% Confidence Intervals:\n');
+fprintf('  a1: [%.4f, %.4f]\n', a1 - 1.96*std_theta(1), ...
+                                a1 + 1.96*std_theta(1));
+fprintf('  b1: [%.4f, %.4f]\n', b1 - 1.96*std_theta(2), ...
+                                b1 + 1.96*std_theta(2));
+\end{lstlisting}
+
+\subsubsection{Part 3: Model Validation}
+
+\begin{lstlisting}[language=Matlab, caption={Model Validation Code}, label={lst:sysid_validation}]
+% Simulate model on validation data
+y_sim = zeros(size(y_val));
+y_sim(1) = y_val(1);  % Initialize
+
+for k = 2:length(y_val)
+    y_sim(k) = a1 * y_sim(k-1) + b1 * u_val(k-1);
+end
+
+% Compute fit percentage
+fit = 100 * (1 - norm(y_val - y_sim) / norm(y_val - mean(y_val)));
+fprintf('Validation fit: %.1f%%\n', fit);
+
+% Plot comparison
+figure;
+t_val = (0:length(y_val)-1) * Ts;
+plot(t_val, y_val, 'b', t_val, y_sim, 'r--', 'LineWidth', 1.5);
+xlabel('Time (s)');
+ylabel('Velocity (counts/s)');
+legend('Measured', 'Model Prediction');
+title(sprintf('Model Validation (Fit = %.1f%%)', fit));
+grid on;
+
+% Residual analysis
+residuals = y_val - y_sim;
+figure;
+subplot(2,1,1);
+plot(t_val, residuals);
+xlabel('Time (s)');
+ylabel('Residual');
+title('Prediction Residuals');
+grid on;
+
+subplot(2,1,2);
+[acf, lags] = xcorr(residuals, 50, 'normalized');
+stem(lags, acf);
+xlabel('Lag');
+ylabel('Autocorrelation');
+title('Residual Autocorrelation');
+grid on;
+
+% Confidence bounds for white noise
+hold on;
+conf = 1.96 / sqrt(length(residuals));
+plot([-50 50], [conf conf], 'r--');
+plot([-50 50], [-conf -conf], 'r--');
+\end{lstlisting}
+
+\subsection{Comparison with Physics-Based Model}
+
+For a DC motor, first-principles analysis yields:
+\begin{align}
+\tau_\text{physics} &= \frac{JR}{K_t K_e + bR} \label{eq:tau_physics}\\
+K_\text{physics} &= \frac{K_t}{K_t K_e + bR} \label{eq:k_physics}
+\end{align}
+where $J$ is moment of inertia, $R$ is armature resistance, $K_t$ is torque constant, $K_e$ is back-EMF constant, and $b$ is viscous friction.
+
+Students should:
+\begin{enumerate}
+    \item Look up motor datasheet parameters
+    \item Calculate $\tau_\text{physics}$ and $K_\text{physics}$
+    \item Compare with identified values $\tau$ and $K$
+    \item Discuss sources of discrepancy (unmodeled friction, driver nonlinearity, etc.)
+\end{enumerate}
+
+\subsection{Data Recording Table}
+
+\begin{table}[htbp]
+\centering
+\caption{System Identification Results}
+\label{tab:sysid_results}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Parameter} & \textbf{Identified} & \textbf{Physics-Based} & \textbf{Difference} \\
+\hline
+Time constant $\tau$ (s) & & & \\
+DC gain $K$ & & & \\
+Validation fit (\%) & & N/A & \\
+\hline
+\end{tabular}
+\end{table}
+
+%=============================================================================
+\section{Worked Examples}
+\label{sec:sysid_examples}
+%=============================================================================
+
+\begin{example}[First-Order System Least Squares Setup]
+\label{ex:ls_setup}
+A first-order system $G(s) = \frac{K}{\tau s + 1}$ is sampled at $T_s = 0.1$ s. Set up the least squares problem to estimate the discrete-time ARX(1,1) parameters.
+
+\textbf{Solution:}
+
+The continuous-time differential equation is:
+\begin{equation*}
+\tau \dot{y} + y = Ku
+\end{equation*}
+
+Discretizing using the forward Euler approximation or exact discretization:
+\begin{equation*}
+y[k] = e^{-T_s/\tau} y[k-1] + K(1 - e^{-T_s/\tau}) u[k-1]
+\end{equation*}
+
+Defining $a_1 = e^{-T_s/\tau}$ and $b_1 = K(1 - e^{-T_s/\tau})$:
+\begin{equation*}
+y[k] = a_1 y[k-1] + b_1 u[k-1] + e[k]
+\end{equation*}
+
+The regression vector is:
+\begin{equation*}
+\boldsymbol{\phi}[k] = \begin{bmatrix} y[k-1] \\ u[k-1] \end{bmatrix}
+\end{equation*}
+
+The parameter vector is:
+\begin{equation*}
+\boldsymbol{\theta} = \begin{bmatrix} a_1 \\ b_1 \end{bmatrix}
+\end{equation*}
+
+For $N$ data points $(k = 2, \ldots, N+1)$:
+\begin{equation*}
+\boldsymbol{\Phi} = \begin{bmatrix}
+y[1] & u[1] \\
+y[2] & u[2] \\
+\vdots & \vdots \\
+y[N] & u[N]
+\end{bmatrix}, \quad
+\mathbf{y} = \begin{bmatrix}
+y[2] \\
+y[3] \\
+\vdots \\
+y[N+1]
+\end{bmatrix}
+\end{equation*}
+
+The least squares solution is:
+\begin{equation*}
+\boxed{\hat{\boldsymbol{\theta}} = (\boldsymbol{\Phi}^T \boldsymbol{\Phi})^{-1} \boldsymbol{\Phi}^T \mathbf{y}}
+\end{equation*}
+\end{example}
+
+\begin{example}[Parameter Estimation from Step Response]
+\label{ex:step_estimation}
+The following step response data was collected from a first-order system with a step input of magnitude $u = 5$:
+
+\begin{center}
+\begin{tabular}{|c|cccccccc|}
+\hline
+$t$ (s) & 0 & 0.5 & 1.0 & 1.5 & 2.0 & 2.5 & 3.0 & 3.5 \\
+\hline
+$y$ & 0 & 1.57 & 2.53 & 3.12 & 3.49 & 3.72 & 3.86 & 3.95 \\
+\hline
+\end{tabular}
+\end{center}
+
+Estimate the DC gain $K$ and time constant $\tau$.
+
+\textbf{Solution:}
+
+For a first-order step response:
+\begin{equation*}
+y(t) = Ku(1 - e^{-t/\tau}) = 5K(1 - e^{-t/\tau})
+\end{equation*}
+
+\textbf{Method 1: Graphical/Approximate}
+
+The steady-state value appears to be approaching $5K \approx 4.0$, giving $K \approx 0.8$.
+
+At $t = \tau$, the response reaches $63.2\%$ of steady-state: $0.632 \times 4.0 = 2.53$.
+From the data, $y(1.0) = 2.53$, so $\tau \approx 1.0$ s.
+
+\textbf{Method 2: Least Squares}
+
+Define $z = 5K - y$, so $z = 5K e^{-t/\tau}$, and $\ln(z) = \ln(5K) - t/\tau$.
+
+This is linear in $\ln(5K)$ and $-1/\tau$. We can estimate $K$ from the final value and then use linear regression on $\ln(z)$ vs. $t$.
+
+Assuming $5K = 4.0$ (estimated final value):
+\begin{center}
+\begin{tabular}{|c|cccccccc|}
+\hline
+$t$ & 0 & 0.5 & 1.0 & 1.5 & 2.0 & 2.5 & 3.0 & 3.5 \\
+\hline
+$z = 4 - y$ & 4.0 & 2.43 & 1.47 & 0.88 & 0.51 & 0.28 & 0.14 & 0.05 \\
+$\ln(z)$ & 1.39 & 0.89 & 0.39 & -0.13 & -0.67 & -1.27 & -1.97 & -3.00 \\
+\hline
+\end{tabular}
+\end{center}
+
+Linear regression of $\ln(z)$ vs. $t$:
+\begin{equation*}
+\ln(z) = 1.386 - 1.003 t
+\end{equation*}
+
+Therefore:
+\begin{align*}
+-\frac{1}{\tau} &= -1.003 \quad \Rightarrow \quad \tau = 0.997 \approx 1.0 \text{ s} \\
+\ln(5K) &= 1.386 \quad \Rightarrow \quad 5K = 4.0 \quad \Rightarrow \quad K = 0.8
+\end{align*}
+
+\begin{equation*}
+\boxed{K = 0.8 \text{ (units/input)}, \quad \tau = 1.0 \text{ s}}
+\end{equation*}
+\end{example}
+
+\begin{example}[Frequency Response Identification]
+\label{ex:freq_id}
+Sinusoidal tests on a system yield the following frequency response data:
+
+\begin{center}
+\begin{tabular}{|c|ccccc|}
+\hline
+$\omega$ (rad/s) & 0.1 & 0.5 & 1.0 & 2.0 & 5.0 \\
+\hline
+$|G(j\omega)|$ & 0.98 & 0.89 & 0.71 & 0.45 & 0.20 \\
+$\angle G(j\omega)$ (deg) & $-5.7°$ & $-26.6°$ & $-45°$ & $-63.4°$ & $-78.7°$ \\
+\hline
+\end{tabular}
+\end{center}
+
+Identify a first-order model $G(s) = \frac{K}{\tau s + 1}$.
+
+\textbf{Solution:}
+
+For a first-order system:
+\begin{align*}
+|G(j\omega)| &= \frac{K}{\sqrt{1 + (\omega\tau)^2}} \\
+\angle G(j\omega) &= -\arctan(\omega\tau)
+\end{align*}
+
+\textbf{Using phase data:}
+
+At $\omega = 1.0$ rad/s, $\angle G = -45°$, which implies:
+\begin{equation*}
+\arctan(\omega\tau) = 45° \quad \Rightarrow \quad \omega\tau = 1 \quad \Rightarrow \quad \tau = 1.0 \text{ s}
+\end{equation*}
+
+\textbf{Using magnitude data:}
+
+At DC ($\omega \to 0$), $|G| \to K$. From the data, $|G(0.1)| \approx 0.98 \approx K$.
+
+More precisely, at $\omega = 1.0$ rad/s:
+\begin{equation*}
+|G| = \frac{K}{\sqrt{1 + 1}} = \frac{K}{\sqrt{2}} = 0.71
+\end{equation*}
+\begin{equation*}
+K = 0.71 \times \sqrt{2} = 1.0
+\end{equation*}
+
+\textbf{Verification:}
+
+At $\omega = 2.0$ rad/s:
+\begin{equation*}
+|G| = \frac{1}{\sqrt{1 + 4}} = \frac{1}{\sqrt{5}} = 0.447 \approx 0.45 \quad \checkmark
+\end{equation*}
+
+\begin{equation*}
+\boxed{G(s) = \frac{1}{s + 1}}
+\end{equation*}
+\end{example}
+
+\begin{example}[Confidence Intervals on Parameters]
+\label{ex:confidence}
+An ARX model was identified from $N = 500$ data points, yielding:
+\begin{equation*}
+\hat{\boldsymbol{\theta}} = \begin{bmatrix} 0.85 \\ 0.12 \end{bmatrix}, \quad
+\boldsymbol{\Phi}^T\boldsymbol{\Phi} = \begin{bmatrix} 450 & 25 \\ 25 & 100 \end{bmatrix}, \quad
+\hat{\sigma}^2 = 0.04
+\end{equation*}
+
+Compute 95\% confidence intervals for the parameters.
+
+\textbf{Solution:}
+
+The parameter covariance matrix is:
+\begin{equation*}
+\text{Cov}(\hat{\boldsymbol{\theta}}) = \hat{\sigma}^2 (\boldsymbol{\Phi}^T\boldsymbol{\Phi})^{-1}
+\end{equation*}
+
+First, compute the inverse:
+\begin{equation*}
+(\boldsymbol{\Phi}^T\boldsymbol{\Phi})^{-1} = \frac{1}{450 \times 100 - 25^2} \begin{bmatrix} 100 & -25 \\ -25 & 450 \end{bmatrix}
+= \frac{1}{44375} \begin{bmatrix} 100 & -25 \\ -25 & 450 \end{bmatrix}
+\end{equation*}
+
+\begin{equation*}
+= \begin{bmatrix} 0.00225 & -0.000563 \\ -0.000563 & 0.01014 \end{bmatrix}
+\end{equation*}
+
+Then:
+\begin{equation*}
+\text{Cov}(\hat{\boldsymbol{\theta}}) = 0.04 \times \begin{bmatrix} 0.00225 & -0.000563 \\ -0.000563 & 0.01014 \end{bmatrix}
+= \begin{bmatrix} 9.0 \times 10^{-5} & -2.25 \times 10^{-5} \\ -2.25 \times 10^{-5} & 4.06 \times 10^{-4} \end{bmatrix}
+\end{equation*}
+
+Standard deviations:
+\begin{align*}
+\sigma_{a_1} &= \sqrt{9.0 \times 10^{-5}} = 0.0095 \\
+\sigma_{b_1} &= \sqrt{4.06 \times 10^{-4}} = 0.0201
+\end{align*}
+
+For 95\% confidence with large samples (using $z_{0.975} = 1.96$):
+\begin{align*}
+a_1 &: 0.85 \pm 1.96 \times 0.0095 = 0.85 \pm 0.019 \\
+b_1 &: 0.12 \pm 1.96 \times 0.0201 = 0.12 \pm 0.039
+\end{align*}
+
+\begin{equation*}
+\boxed{a_1 \in [0.831, 0.869], \quad b_1 \in [0.081, 0.159] \text{ (95\% confidence)}}
+\end{equation*}
+\end{example}
+
+\begin{example}[Model Validation with Test Data]
+\label{ex:validation}
+A model identified from training data predicts the following on a validation set of 100 points:
+
+\begin{center}
+\begin{tabular}{|c|c|}
+\hline
+Quantity & Value \\
+\hline
+$\sum_{k=1}^{100} y^2_\text{val}[k]$ & 5000 \\
+$\sum_{k=1}^{100} (y_\text{val}[k] - \hat{y}[k])^2$ & 200 \\
+Mean of $y_\text{val}$ & 6.5 \\
+\hline
+\end{tabular}
+\end{center}
+
+Compute the fit percentage and NRMSE.
+
+\textbf{Solution:}
+
+\textbf{NRMSE (Normalized Root Mean Square Error):}
+\begin{equation*}
+\text{NRMSE} = \sqrt{\frac{\sum(y - \hat{y})^2}{\sum y^2}} = \sqrt{\frac{200}{5000}} = \sqrt{0.04} = 0.2 = 20\%
+\end{equation*}
+
+\textbf{Fit Percentage:}
+
+First compute $\|y_\text{val} - \bar{y}\|^2$:
+\begin{equation*}
+\sum_{k=1}^{100} (y_\text{val}[k] - \bar{y})^2 = \sum y^2 - N\bar{y}^2 = 5000 - 100 \times 6.5^2 = 5000 - 4225 = 775
+\end{equation*}
+
+Then:
+\begin{equation*}
+\text{FIT} = 100 \times \left(1 - \frac{\|y - \hat{y}\|}{\|y - \bar{y}\|}\right) = 100 \times \left(1 - \frac{\sqrt{200}}{\sqrt{775}}\right)
+\end{equation*}
+\begin{equation*}
+= 100 \times \left(1 - \frac{14.14}{27.84}\right) = 100 \times (1 - 0.508) = 49.2\%
+\end{equation*}
+
+\begin{equation*}
+\boxed{\text{NRMSE} = 20\%, \quad \text{FIT} = 49.2\%}
+\end{equation*}
+
+A fit of 49\% is marginal---the model captures about half the variance beyond the mean. This suggests the model structure may be inadequate (e.g., first-order for a higher-order system) or there is significant noise.
+\end{example}
+
+\begin{example}[Second-Order System Identification]
+\label{ex:second_order}
+Step response data from a system shows oscillatory behavior with the following characteristics:
+\begin{itemize}
+    \item Final value: $y_{ss} = 2.0$ (for step input $u = 1$)
+    \item Peak value: $y_{peak} = 2.5$ at $t_p = 0.5$ s
+    \item Second peak: $y_{peak2} = 2.1$ at $t = 1.5$ s
+\end{itemize}
+
+Identify a second-order model $G(s) = \frac{K\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}$.
+
+\textbf{Solution:}
+
+\textbf{DC Gain:}
+\begin{equation*}
+K = \frac{y_{ss}}{u} = \frac{2.0}{1} = 2.0
+\end{equation*}
+
+\textbf{Percent Overshoot:}
+\begin{equation*}
+\%OS = \frac{y_{peak} - y_{ss}}{y_{ss}} \times 100 = \frac{2.5 - 2.0}{2.0} \times 100 = 25\%
+\end{equation*}
+
+\textbf{Damping Ratio:}
+\begin{equation*}
+\%OS = 100 \times e^{-\pi\zeta/\sqrt{1-\zeta^2}}
+\end{equation*}
+\begin{equation*}
+0.25 = e^{-\pi\zeta/\sqrt{1-\zeta^2}}
+\end{equation*}
+\begin{equation*}
+\ln(0.25) = \frac{-\pi\zeta}{\sqrt{1-\zeta^2}}
+\end{equation*}
+\begin{equation*}
+-1.386 = \frac{-\pi\zeta}{\sqrt{1-\zeta^2}}
+\end{equation*}
+
+Squaring both sides:
+\begin{equation*}
+1.922 = \frac{\pi^2\zeta^2}{1-\zeta^2}
+\end{equation*}
+\begin{equation*}
+1.922(1-\zeta^2) = \pi^2\zeta^2
+\end{equation*}
+\begin{equation*}
+\zeta^2 = \frac{1.922}{1.922 + \pi^2} = \frac{1.922}{11.79} = 0.163
+\end{equation*}
+\begin{equation*}
+\zeta = 0.404
+\end{equation*}
+
+\textbf{Natural Frequency:}
+
+The peak time is:
+\begin{equation*}
+t_p = \frac{\pi}{\omega_n\sqrt{1-\zeta^2}} = \frac{\pi}{\omega_d}
+\end{equation*}
+\begin{equation*}
+\omega_d = \frac{\pi}{t_p} = \frac{\pi}{0.5} = 6.28 \text{ rad/s}
+\end{equation*}
+\begin{equation*}
+\omega_n = \frac{\omega_d}{\sqrt{1-\zeta^2}} = \frac{6.28}{\sqrt{1-0.163}} = \frac{6.28}{0.915} = 6.87 \text{ rad/s}
+\end{equation*}
+
+\textbf{Final Model:}
+\begin{equation*}
+\boxed{G(s) = \frac{2 \times 47.2}{s^2 + 5.55s + 47.2} = \frac{94.4}{s^2 + 5.55s + 47.2}}
+\end{equation*}
+where $\omega_n^2 = 47.2$, $2\zeta\omega_n = 5.55$.
+\end{example}
+
+%=============================================================================
+\section{System Identification Flowchart}
+\label{sec:sysid_flowchart}
+%=============================================================================
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=1.5cm,
+    block/.style={rectangle, draw, text width=5cm, text centered, minimum height=1cm, fill=blue!10},
+    decision/.style={diamond, draw, text width=3cm, text centered, aspect=2, fill=yellow!20},
+    arrow/.style={->, >=stealth, thick}]
+
+% Nodes
+\node[block] (design) {1. Design Experiment\\Choose input signal (PRBS, chirp, step)};
+\node[block, below=of design] (collect) {2. Collect Data\\Apply input, record output};
+\node[block, below=of collect] (preprocess) {3. Preprocess Data\\Remove mean, filter, check quality};
+\node[block, below=of preprocess] (select) {4. Select Model Structure\\ARX$(n_a, n_b)$, OE, etc.};
+\node[block, below=of select] (estimate) {5. Estimate Parameters\\Least squares, ML, PEM};
+\node[decision, below=of estimate] (validate) {6. Validate Model\\Residuals white? Good fit on test data?};
+\node[block, below left=1.5cm and -1cm of validate] (increase) {Increase model order};
+\node[block, below right=1.5cm and -1cm of validate] (accept) {Accept Model};
+
+% Arrows
+\draw[arrow] (design) -- (collect);
+\draw[arrow] (collect) -- (preprocess);
+\draw[arrow] (preprocess) -- (select);
+\draw[arrow] (select) -- (estimate);
+\draw[arrow] (estimate) -- (validate);
+\draw[arrow] (validate) -- node[left] {No} (increase);
+\draw[arrow] (increase) -- ++(-2,0) |- (select);
+\draw[arrow] (validate) -- node[right] {Yes} (accept);
+
+\end{tikzpicture}
+\caption{System identification workflow. The iterative loop between model structure selection and validation continues until an adequate model is found.}
+\label{fig:sysid_flowchart}
+\end{figure}
+
+%=============================================================================
+\section{Chapter Summary}
+\label{sec:sysid_summary}
+%=============================================================================
+
+This chapter developed the theory and practice of system identification:
+
+\begin{enumerate}
+    \item \textbf{Historical Foundation}: System identification originated with Gauss's least squares method for orbital prediction (1809) and matured through Ljung's prediction error framework (1970s--80s). The guiding philosophy is ``all models are wrong, some are useful'' (Box).
+
+    \item \textbf{Input Design}: Effective identification requires persistently exciting inputs. PRBS signals provide broadband excitation with bounded amplitude; chirps enable frequency-by-frequency characterization.
+
+    \item \textbf{Least Squares Estimation}: The regression form $\mathbf{y} = \boldsymbol{\Phi}\boldsymbol{\theta} + \mathbf{e}$ leads to the normal equations $\hat{\boldsymbol{\theta}} = (\boldsymbol{\Phi}^T\boldsymbol{\Phi})^{-1}\boldsymbol{\Phi}^T\mathbf{y}$. Under Gaussian noise, this is the Best Linear Unbiased Estimator.
+
+    \item \textbf{ARX Models}: The AutoRegressive with eXogenous input structure $y[k] = a_1 y[k-1] + \cdots + b_1 u[k-1] + \cdots + e[k]$ enables direct least squares estimation. Continuous-time parameters are recovered through conversion formulas.
+
+    \item \textbf{Frequency Domain Methods}: Sinusoidal testing or spectral analysis yields empirical Bode plots. Parametric models can be fitted to frequency data.
+
+    \item \textbf{Model Validation}: Residual whiteness tests and cross-validation on held-out data assess model adequacy. The bias-variance tradeoff governs model complexity selection.
+\end{enumerate}
+
+\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Key Takeaway]
+System identification bridges the gap between theoretical models and physical reality. When first-principles modeling is expensive or inaccurate, data-driven identification provides an alternative path to useful models. The key insight: design experiments to maximize information content, fit models using principled estimation methods, and rigorously validate before deployment.
+\end{tcolorbox}
+
+%=============================================================================
+\section{Problems}
+\label{sec:sysid_problems}
+%=============================================================================
+
+\begin{enumerate}
+    \item \textbf{Regression Form}: Write the ARX(2,2) model
+    \begin{equation*}
+    y[k] + a_1 y[k-1] + a_2 y[k-2] = b_1 u[k-1] + b_2 u[k-2] + e[k]
+    \end{equation*}
+    in regression form $y[k] = \boldsymbol{\phi}^T[k]\boldsymbol{\theta} + e[k]$. Define $\boldsymbol{\phi}[k]$ and $\boldsymbol{\theta}$.
+
+    \item \textbf{Least Squares Derivation}: Derive the normal equations by completing the square on the cost function $J(\boldsymbol{\theta}) = \|\mathbf{y} - \boldsymbol{\Phi}\boldsymbol{\theta}\|^2$.
+
+    \item \textbf{Step Response Identification}: The following step response data ($u = 2$) was recorded:
+    \begin{center}
+    \begin{tabular}{|c|ccccccc|}
+    \hline
+    $t$ (s) & 0 & 1 & 2 & 3 & 4 & 5 & 6 \\
+    \hline
+    $y$ & 0 & 3.16 & 5.07 & 6.22 & 6.93 & 7.36 & 7.62 \\
+    \hline
+    \end{tabular}
+    \end{center}
+    Estimate $K$ and $\tau$ for a first-order model.
+
+    \item \textbf{Frequency Domain Fitting}: Given frequency response measurements $|G(j\omega)| = [0.95, 0.7, 0.45, 0.3]$ at $\omega = [0.5, 1, 2, 3]$ rad/s, fit a first-order model using least squares on $|G|^{-2}$.
+
+    \item \textbf{Covariance Analysis}: If $\boldsymbol{\Phi}^T\boldsymbol{\Phi} = \begin{bmatrix} 1000 & 0 \\ 0 & 500 \end{bmatrix}$ and $\sigma^2 = 0.01$, compute the parameter standard deviations. How does doubling the data length (approximately doubling $\boldsymbol{\Phi}^T\boldsymbol{\Phi}$) affect these?
+
+    \item \textbf{Model Order Selection}: An engineer identifies ARX models of orders 1 through 5. The validation fit percentages are 65\%, 78\%, 82\%, 83\%, 82\%. Which order should be selected and why?
+
+    \item \textbf{PRBS Design}: Design a 7-bit PRBS with clock period 0.1 s. What is its period? What is its approximate bandwidth?
+
+    \item \textbf{Laboratory Extension}: Modify the Arduino code to use a chirp input instead of PRBS. Compute the empirical frequency response using FFT in MATLAB/Python.
+
+    \item \textbf{Bias Analysis}: An ARX model is fitted to data from a system where the noise is actually filtered (colored). Will the least squares estimate be biased? Explain why.
+
+    \item \textbf{Physics Comparison}: A motor has datasheet parameters $R = 5\,\Omega$, $L = 10\,$mH (negligible), $K_t = K_e = 0.05\,$Nm/A, $J = 10^{-4}\,$kg$\cdot$m$^2$, $b = 10^{-5}\,$Nm$\cdot$s/rad. Calculate the theoretical time constant and DC gain. Compare with typical identified values and discuss sources of discrepancy.
+\end{enumerate}
+
+%=============================================================================
+% End of Chapter
+%=============================================================================

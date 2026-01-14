@@ -1,0 +1,111 @@
+% Standalone TikZ figure: Actor-Critic Architecture for SAC
+% For Chapter 3: Reinforcement Learning for Parameter Optimization
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, backgrounds, calc, decorations.pathreplacing}
+
+\begin{document}
+\begin{tikzpicture}[
+    node distance=1.5cm and 2cm,
+    every node/.style={font=\small},
+    box/.style={rectangle, draw, thick, minimum width=2.5cm, minimum height=1cm, align=center, rounded corners=3pt},
+    smallbox/.style={rectangle, draw, minimum width=1.8cm, minimum height=0.7cm, align=center, rounded corners=2pt, font=\footnotesize},
+    netbox/.style={rectangle, draw, thick, minimum width=2.2cm, minimum height=1.2cm, align=center, rounded corners=5pt, font=\small},
+    arrow/.style={-{Stealth[length=2.5mm]}, thick},
+    dashedarrow/.style={-{Stealth[length=2.5mm]}, thick, dashed},
+    label/.style={font=\footnotesize},
+    title/.style={font=\bfseries}
+]
+
+% ============ ACTOR SECTION ============
+\node[title, text=blue!70!black] at (-5, 3.5) {Actor (Policy)};
+
+% Actor network
+\node[netbox, fill=blue!15] (actor) at (-5, 2) {Policy Network\\$\pi_\phi(\mathbf{a}|\mathbf{s})$};
+
+% State input
+\node[box, fill=gray!15, left=2cm of actor] (state) {State\\$\mathbf{s}_t$};
+
+% Action output
+\node[box, fill=green!15, below=1.5cm of actor] (action) {Action\\$\mathbf{a}_t = \mu_\phi + \sigma_\phi \odot \epsilon$};
+
+% ============ CRITIC SECTION ============
+\node[title, text=red!70!black] at (2, 3.5) {Critic (Value Functions)};
+
+% Twin Q-networks
+\node[netbox, fill=red!15] (q1) at (1, 2) {Q-Network 1\\$Q_{\theta_1}(\mathbf{s}, \mathbf{a})$};
+\node[netbox, fill=red!15] (q2) at (4, 2) {Q-Network 2\\$Q_{\theta_2}(\mathbf{s}, \mathbf{a})$};
+
+% Target networks
+\node[netbox, fill=red!8, dashed] (tq1) at (1, -0.5) {Target\\$Q_{\bar{\theta}_1}$};
+\node[netbox, fill=red!8, dashed] (tq2) at (4, -0.5) {Target\\$Q_{\bar{\theta}_2}$};
+
+% Min operation
+\node[box, fill=orange!20] (minq) at (2.5, -2.5) {$\min(Q_1, Q_2)$};
+
+% ============ ENVIRONMENT ============
+\node[netbox, fill=yellow!20, minimum width=3.5cm] (env) at (-5, -2.5) {Environment\\Generator + YOLO};
+
+% Reward
+\node[box, fill=green!20] (reward) at (-5, -5) {Reward\\$r = \text{mAP}$};
+
+% ============ REPLAY BUFFER ============
+\node[netbox, fill=purple!15, minimum width=3cm, minimum height=1cm] (buffer) at (2.5, -5) {Replay Buffer $\mathcal{D}$\\$(\mathbf{s}, \mathbf{a}, r, \mathbf{s}')$};
+
+% ============ CONNECTIONS ============
+% State to networks
+\draw[arrow, blue!70] (state) -- (actor);
+\draw[arrow, gray] (state.east) -- ++(0.5,0) |- (q1.west);
+\draw[arrow, gray] (state.east) -- ++(0.5,0) |- (q2.west);
+
+% Actor to action
+\draw[arrow, blue!70] (actor) -- node[right, font=\footnotesize] {sample} (action);
+
+% Action to environment
+\draw[arrow, green!60!black] (action) -- (env);
+
+% Action to critics
+\draw[arrow, gray] (action.east) -- ++(0.5,0) |- (q1.south west);
+\draw[arrow, gray] (action.east) -- ++(1.5,0) |- (q2.south west);
+
+% Environment to reward
+\draw[arrow, orange!70] (env) -- (reward);
+
+% Store to buffer
+\draw[arrow, purple!70] (reward.east) -- node[below, font=\footnotesize] {store} (buffer.west);
+
+% Buffer to critics (training)
+\draw[dashedarrow, purple!70] (buffer.north) -- ++(0, 1) -| node[pos=0.25, above, font=\footnotesize] {sample batch} (q1.south);
+\draw[dashedarrow, purple!70] (buffer.north) -- ++(0, 1) -| (q2.south);
+
+% Q to target (soft update)
+\draw[dashedarrow, red!50] (q1) -- node[right, font=\footnotesize] {$\tau$} (tq1);
+\draw[dashedarrow, red!50] (q2) -- node[right, font=\footnotesize] {$\tau$} (tq2);
+
+% Targets to min
+\draw[arrow, red!50] (tq1.south) |- (minq.west);
+\draw[arrow, red!50] (tq2.south) |- (minq.east);
+
+% Policy gradient from critics to actor
+\draw[dashedarrow, blue!70, very thick] (q1.north) -- ++(0, 0.7) -| node[pos=0.3, above, font=\footnotesize] {$\nabla_\phi J(\pi)$} (actor.north);
+
+% ============ ENTROPY BONUS ============
+\node[smallbox, fill=cyan!20] (entropy) at (-5, 0.3) {Entropy Bonus\\$\alpha \mathcal{H}(\pi)$};
+\draw[arrow, cyan!70] (entropy) -- (actor);
+
+% ============ DECORATIONS ============
+% Brace for twin critics
+\draw[decorate, decoration={brace, amplitude=8pt, raise=3pt}] (q2.north east) -- (q1.north west) node[midway, above=12pt, font=\footnotesize] {Reduces overestimation};
+
+% Legend
+\node[anchor=north west] at (-7, -6) {
+    \begin{tikzpicture}[every node/.style={font=\footnotesize}]
+        \draw[arrow, blue!70, thick] (0,0) -- (0.8,0) node[right] {Policy flow};
+        \draw[arrow, red!50, thick] (0,-0.4) -- (0.8,-0.4) node[right] {Value flow};
+        \draw[dashedarrow, purple!70, thick] (0,-0.8) -- (0.8,-0.8) node[right] {Training signal};
+    \end{tikzpicture}
+};
+
+\end{tikzpicture}
+\end{document}

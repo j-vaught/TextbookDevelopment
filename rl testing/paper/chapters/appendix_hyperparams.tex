@@ -1,0 +1,644 @@
+
+This appendix provides comprehensive reference tables documenting the hyperparameter configurations employed throughout the optimization framework. Each table specifies recommended values derived from extensive empirical evaluation, valid operational ranges that maintain system stability, and descriptive explanations to guide practitioner adaptation to novel application domains.
+
+\section{Synthetic Data Generation Parameters}
+\label{sec:synth_params}
+
+The synthetic data generation pipeline encompasses multiple parameter categories that jointly determine the characteristics of rendered training imagery. These parameters constitute the search space explored by the Bayesian optimization procedure. The following tables organize parameters by functional category to facilitate systematic configuration.
+
+\subsection{Scene Composition Parameters}
+
+Scene composition parameters govern the placement, quantity, and spatial arrangement of objects within rendered scenes. Appropriate configuration of these parameters directly influences the diversity and realism of object appearances in training data.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Scene Composition Parameter Reference} \label{tab:scene_composition} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Scene Composition Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+num\_objects\_per\_image & 5--12 & 1--30 & Number of target objects rendered per scene. Higher values increase occlusion complexity but may reduce per-object annotation quality. \\
+\addlinespace
+min\_object\_scale & 0.15 & 0.05--0.5 & Minimum scale factor applied to object meshes relative to baseline dimensions. Controls the smallest object size appearing in training data. \\
+\addlinespace
+max\_object\_scale & 1.2 & 0.3--3.0 & Maximum scale factor for object meshes. Should exceed min\_object\_scale by at least 0.3 to ensure scale diversity. \\
+\addlinespace
+scale\_distribution & log-uniform & uniform, log-uniform, truncated-normal & Statistical distribution from which object scales are sampled. Log-uniform produces more small objects. \\
+\addlinespace
+placement\_jitter & 0.4 & 0.0--1.0 & Magnitude of random displacement from grid placement positions, normalized by grid cell size. Zero produces regular arrangements. \\
+\addlinespace
+depth\_range\_min & 1.0 m & 0.5--5.0 m & Minimum distance from camera to object centers. Constrains the nearest object placement depth. \\
+\addlinespace
+depth\_range\_max & 10.0 m & 2.0--50.0 m & Maximum object placement depth. Wider depth ranges increase scale variation within single scenes. \\
+\addlinespace
+max\_occlusion\_ratio & 0.35 & 0.0--0.8 & Maximum fraction of object bounding box that may be occluded by other objects or scene geometry. \\
+\addlinespace
+placement\_surface & ground & ground, table, shelf, arbitrary & Semantic constraint on valid object placement locations within the scene. \\
+\addlinespace
+rotation\_range\_yaw & 360.0 deg & 0.0--360.0 deg & Range of yaw rotation angles for object orientation randomization. \\
+\addlinespace
+rotation\_range\_pitch & 15.0 deg & 0.0--90.0 deg & Range of pitch rotation angles. Higher values produce more tilted object views. \\
+\addlinespace
+rotation\_range\_roll & 10.0 deg & 0.0--90.0 deg & Range of roll rotation angles for in-plane object rotation. \\
+\addlinespace
+allow\_truncation & True & True, False & Whether objects may extend beyond image boundaries, producing truncated instances. \\
+\addlinespace
+min\_visible\_fraction & 0.3 & 0.1--1.0 & Minimum fraction of object that must remain visible after occlusion and truncation for annotation retention. \\
+\end{longtable}
+
+\subsection{Illumination Model Parameters}
+
+Illumination parameters control the lighting conditions under which synthetic scenes are rendered. Realistic lighting variation is essential for training detectors robust to the diverse illumination conditions encountered in real-world deployment.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Illumination Model Parameter Reference} \label{tab:illumination} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Illumination Model Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+ambient\_intensity & 0.25 & 0.0--1.0 & Intensity of ambient (non-directional) illumination as fraction of maximum scene luminance. \\
+\addlinespace
+key\_light\_intensity & 0.9 & 0.1--2.0 & Intensity of primary directional light source. Values exceeding 1.0 permit high-key lighting conditions. \\
+\addlinespace
+fill\_light\_ratio & 0.35 & 0.0--1.0 & Ratio of fill light intensity to key light intensity. Controls shadow softness and contrast. \\
+\addlinespace
+back\_light\_intensity & 0.2 & 0.0--1.0 & Intensity of rim/back lighting. Higher values enhance object-background separation. \\
+\addlinespace
+color\_temperature\_k & 5500 & 2000--12000 & Correlated color temperature of primary illumination in Kelvin. Lower values produce warmer, orange-tinted light. \\
+\addlinespace
+color\_temp\_variation & 1000 & 0--4000 & Standard deviation of color temperature variation across scenes. \\
+\addlinespace
+key\_light\_azimuth\_range & 180.0 deg & 0.0--360.0 deg & Range of azimuthal angles for key light direction randomization. \\
+\addlinespace
+key\_light\_elevation\_min & 20.0 deg & 0.0--90.0 deg & Minimum elevation angle for key light direction. \\
+\addlinespace
+key\_light\_elevation\_max & 70.0 deg & 0.0--90.0 deg & Maximum elevation angle for key light direction. \\
+\addlinespace
+enable\_hdri & True & True, False & Whether to use High Dynamic Range Image-based lighting for environment illumination. \\
+\addlinespace
+hdri\_rotation\_range & 360.0 deg & 0.0--360.0 deg & Range of rotation angles for HDRI environment map orientation. \\
+\addlinespace
+hdri\_intensity\_scale & 1.0 & 0.1--3.0 & Multiplier applied to HDRI illumination intensity. \\
+\addlinespace
+shadow\_softness & 0.5 & 0.0--1.0 & Softness of cast shadows, ranging from hard (0) to fully diffuse (1). \\
+\addlinespace
+enable\_caustics & False & True, False & Whether to simulate light caustics from refractive and reflective surfaces. Computationally expensive. \\
+\addlinespace
+num\_area\_lights & 2 & 0--8 & Number of area light sources for soft shadow simulation. \\
+\end{longtable}
+
+\subsection{Material and Texture Parameters}
+
+Material parameters control the surface appearance properties of rendered objects, including reflectance characteristics, texture mapping, and color variation.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Material and Texture Parameter Reference} \label{tab:materials} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Material and Texture Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+base\_color\_jitter & 0.12 & 0.0--0.5 & Standard deviation of random color shifts applied to base material colors in HSV space. \\
+\addlinespace
+specular\_intensity\_mean & 0.4 & 0.0--1.0 & Mean specular reflectance intensity for PBR materials. \\
+\addlinespace
+specular\_intensity\_std & 0.15 & 0.0--0.3 & Standard deviation of specular intensity variation across object instances. \\
+\addlinespace
+roughness\_mean & 0.5 & 0.0--1.0 & Mean surface roughness parameter. Lower values produce more mirror-like reflections. \\
+\addlinespace
+roughness\_std & 0.2 & 0.0--0.4 & Standard deviation of roughness variation. \\
+\addlinespace
+metallic\_probability & 0.15 & 0.0--1.0 & Probability that an object instance receives metallic material properties. \\
+\addlinespace
+texture\_scale\_min & 0.7 & 0.1--2.0 & Minimum UV texture coordinate scaling factor. \\
+\addlinespace
+texture\_scale\_max & 1.4 & 0.5--4.0 & Maximum UV texture coordinate scaling factor. \\
+\addlinespace
+enable\_normal\_maps & True & True, False & Whether to apply normal mapping for surface detail enhancement. \\
+\addlinespace
+normal\_map\_strength & 1.0 & 0.0--2.0 & Multiplier for normal map displacement intensity. \\
+\addlinespace
+enable\_displacement & False & True, False & Whether to apply geometric displacement mapping. Significantly increases render time. \\
+\addlinespace
+subsurface\_scattering & 0.0 & 0.0--1.0 & Subsurface scattering intensity for translucent materials. \\
+\addlinespace
+emission\_probability & 0.02 & 0.0--0.2 & Probability that an object includes emissive material components. \\
+\addlinespace
+anisotropy & 0.0 & 0.0--1.0 & Anisotropic reflection intensity for brushed metal effects. \\
+\end{longtable}
+
+\subsection{Camera Simulation Parameters}
+
+Camera parameters simulate the optical and sensor characteristics of the imaging system, including lens properties, sensor noise, and image formation artifacts.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Camera Simulation Parameter Reference} \label{tab:camera} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Camera Simulation Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+focal\_length\_mm & 35.0 & 12.0--200.0 & Effective focal length in millimeters. Shorter values produce wider fields of view. \\
+\addlinespace
+focal\_length\_std & 10.0 & 0.0--50.0 & Standard deviation of focal length variation across scenes in millimeters. \\
+\addlinespace
+sensor\_width\_mm & 36.0 & 6.0--50.0 & Sensor width for field of view calculation. 36mm corresponds to full-frame. \\
+\addlinespace
+aperture\_fstop & 5.6 & 1.4--22.0 & Lens aperture f-number. Lower values produce shallower depth of field. \\
+\addlinespace
+enable\_dof & True & True, False & Whether to simulate depth of field blur based on aperture and focus distance. \\
+\addlinespace
+focus\_distance\_mode & auto & auto, fixed, random & Method for determining focus distance. Auto focuses on nearest object. \\
+\addlinespace
+sensor\_noise\_std & 0.025 & 0.0--0.15 & Standard deviation of additive Gaussian sensor noise, normalized to image intensity range. \\
+\addlinespace
+shot\_noise\_scale & 0.01 & 0.0--0.1 & Scale factor for Poisson shot noise simulation. \\
+\addlinespace
+read\_noise\_std & 0.005 & 0.0--0.05 & Standard deviation of read noise component. \\
+\addlinespace
+motion\_blur\_amount & 0.3 & 0.0--5.0 & Magnitude of motion blur in pixels for camera motion simulation. \\
+\addlinespace
+motion\_blur\_direction & random & random, horizontal, vertical & Direction constraint for motion blur vectors. \\
+\addlinespace
+chromatic\_aberration & 0.003 & 0.0--0.02 & Chromatic aberration magnitude as fraction of image diagonal. \\
+\addlinespace
+lens\_distortion\_k1 & 0.0 & -0.5--0.5 & First radial distortion coefficient. Negative values produce barrel distortion. \\
+\addlinespace
+lens\_distortion\_k2 & 0.0 & -0.3--0.3 & Second radial distortion coefficient for higher-order distortion. \\
+\addlinespace
+vignetting\_strength & 0.08 & 0.0--0.5 & Vignetting intensity as fractional reduction at image corners. \\
+\addlinespace
+exposure\_bias\_range & 0.5 & 0.0--2.0 & Range of exposure bias variation in EV stops. \\
+\addlinespace
+white\_balance\_shift & 0.05 & 0.0--0.2 & Magnitude of white balance error in normalized color space. \\
+\addlinespace
+jpeg\_quality\_min & 85 & 50--100 & Minimum JPEG compression quality. Lower values introduce more compression artifacts. \\
+\addlinespace
+jpeg\_quality\_max & 98 & 70--100 & Maximum JPEG compression quality level. \\
+\end{longtable}
+
+\subsection{Domain Randomization Parameters}
+
+Domain randomization parameters control the intensity and variety of randomization strategies applied to bridge the synthetic-to-real domain gap.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Domain Randomization Parameter Reference} \label{tab:domain_rand} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Domain Randomization Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+background\_type & mixed & solid, textured, hdri, mixed & Type of background environment. Mixed samples from all categories. \\
+\addlinespace
+background\_complexity & 0.6 & 0.0--1.0 & Complexity level of background scenes from simple (0) to cluttered (1). \\
+\addlinespace
+distractor\_density & 0.25 & 0.0--1.0 & Density of distractor objects in the scene. Higher values increase background clutter. \\
+\addlinespace
+distractor\_scale\_range & 0.5 & 0.1--2.0 & Scale variation range for distractor objects relative to target objects. \\
+\addlinespace
+texture\_randomization & 0.7 & 0.0--1.0 & Intensity of texture domain randomization from none (0) to maximum (1). \\
+\addlinespace
+color\_augmentation & 0.5 & 0.0--1.0 & Intensity of color space augmentation applied post-rendering. \\
+\addlinespace
+weather\_probability & 0.15 & 0.0--1.0 & Probability of applying weather effects (rain, fog, snow). \\
+\addlinespace
+fog\_density\_range & 0.3 & 0.0--1.0 & Maximum fog density when weather effects are active. \\
+\addlinespace
+rain\_intensity\_range & 0.5 & 0.0--1.0 & Maximum rain intensity when weather effects are active. \\
+\addlinespace
+geometric\_augmentation & moderate & none, light, moderate, heavy & Level of geometric augmentation (perspective, affine transforms). \\
+\addlinespace
+cutout\_probability & 0.1 & 0.0--0.5 & Probability of applying random cutout/erasing augmentation. \\
+\addlinespace
+cutout\_size\_range & 0.15 & 0.05--0.4 & Maximum cutout size as fraction of image dimensions. \\
+\addlinespace
+style\_transfer\_prob & 0.0 & 0.0--0.3 & Probability of applying neural style transfer for texture randomization. Computationally expensive. \\
+\addlinespace
+physics\_variation & 0.3 & 0.0--1.0 & Intensity of physics simulation parameter randomization. \\
+\end{longtable}
+
+\section{YOLO Training Hyperparameters}
+\label{sec:yolo_hyperparams}
+
+The YOLO detector training process requires careful hyperparameter configuration to achieve optimal performance on synthetic training data while maintaining generalization to real-world imagery.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{YOLO Training Hyperparameter Reference} \label{tab:yolo_training} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{YOLO Training Hyperparameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+model\_variant & yolov8m & yolov8n, yolov8s, yolov8m, yolov8l, yolov8x & YOLO architecture variant. Larger models offer higher accuracy at increased computational cost. \\
+\addlinespace
+input\_size & 640 & 320--1280 & Input image resolution in pixels. Must be multiple of 32. \\
+\addlinespace
+batch\_size & 16 & 4--64 & Training batch size. Larger batches stabilize gradients but require more memory. \\
+\addlinespace
+epochs & 100 & 30--300 & Total training epochs. Synthetic data may require fewer epochs due to unlimited data availability. \\
+\addlinespace
+initial\_lr & 0.01 & 0.0001--0.1 & Initial learning rate before warmup completion. \\
+\addlinespace
+final\_lr\_factor & 0.01 & 0.001--0.1 & Final learning rate as fraction of initial rate. \\
+\addlinespace
+lr\_schedule & cosine & cosine, linear, step & Learning rate decay schedule type. \\
+\addlinespace
+optimizer & AdamW & SGD, Adam, AdamW & Optimization algorithm. AdamW provides adaptive learning with decoupled weight decay. \\
+\addlinespace
+momentum & 0.937 & 0.8--0.99 & Momentum coefficient for SGD optimizer. Ignored for Adam variants. \\
+\addlinespace
+weight\_decay & 0.0005 & 0.0--0.01 & L2 regularization coefficient. Higher values reduce overfitting. \\
+\addlinespace
+warmup\_epochs & 3.0 & 0.0--10.0 & Number of epochs for learning rate warmup from near-zero. \\
+\addlinespace
+warmup\_momentum & 0.8 & 0.5--0.95 & Initial momentum during warmup phase. \\
+\addlinespace
+warmup\_bias\_lr & 0.1 & 0.01--0.5 & Bias parameter learning rate during warmup. \\
+\addlinespace
+box\_loss\_weight & 7.5 & 1.0--15.0 & Weight for bounding box regression loss component. \\
+\addlinespace
+cls\_loss\_weight & 0.5 & 0.1--2.0 & Weight for classification loss component. \\
+\addlinespace
+dfl\_loss\_weight & 1.5 & 0.5--3.0 & Weight for distribution focal loss component. \\
+\addlinespace
+label\_smoothing & 0.0 & 0.0--0.2 & Label smoothing factor for classification targets. \\
+\addlinespace
+conf\_threshold & 0.001 & 0.0--0.5 & Confidence threshold for training-time NMS. \\
+\addlinespace
+iou\_threshold & 0.7 & 0.3--0.9 & IoU threshold for NMS during training. \\
+\addlinespace
+max\_detections & 300 & 100--1000 & Maximum detections retained per image during training. \\
+\addlinespace
+amp & True & True, False & Whether to use automatic mixed precision training for speed improvement. \\
+\addlinespace
+gradient\_clip & 10.0 & 1.0--100.0 & Maximum gradient norm for gradient clipping. \\
+\addlinespace
+ema\_decay & 0.9999 & 0.99--0.99999 & Exponential moving average decay for model weight averaging. \\
+\end{longtable}
+
+\subsection{YOLO Data Augmentation Parameters}
+
+Data augmentation during YOLO training provides additional domain randomization beyond the synthetic generation pipeline.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{YOLO Data Augmentation Parameter Reference} \label{tab:yolo_augmentation} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{YOLO Data Augmentation Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+hsv\_h & 0.015 & 0.0--0.1 & Hue shift range as fraction of full hue range. \\
+\addlinespace
+hsv\_s & 0.7 & 0.0--1.0 & Saturation shift range as fraction. \\
+\addlinespace
+hsv\_v & 0.4 & 0.0--1.0 & Value (brightness) shift range as fraction. \\
+\addlinespace
+degrees & 0.0 & 0.0--45.0 & Maximum rotation angle in degrees. \\
+\addlinespace
+translate & 0.1 & 0.0--0.5 & Maximum translation as fraction of image size. \\
+\addlinespace
+scale & 0.5 & 0.0--1.0 & Scale augmentation range around 1.0. \\
+\addlinespace
+shear & 0.0 & 0.0--30.0 & Maximum shear angle in degrees. \\
+\addlinespace
+perspective & 0.0 & 0.0--0.001 & Perspective distortion coefficient. \\
+\addlinespace
+flipud & 0.0 & 0.0--1.0 & Probability of vertical flip. \\
+\addlinespace
+fliplr & 0.5 & 0.0--1.0 & Probability of horizontal flip. \\
+\addlinespace
+mosaic & 1.0 & 0.0--1.0 & Probability of 4-image mosaic augmentation. \\
+\addlinespace
+mixup & 0.0 & 0.0--1.0 & Probability of mixup augmentation between images. \\
+\addlinespace
+copy\_paste & 0.0 & 0.0--1.0 & Probability of copy-paste instance augmentation. \\
+\addlinespace
+erasing & 0.4 & 0.0--1.0 & Probability of random erasing augmentation. \\
+\addlinespace
+crop\_fraction & 1.0 & 0.5--1.0 & Minimum crop size as fraction of image. \\
+\end{longtable}
+
+\section{Optuna and BOHB Configuration}
+\label{sec:optuna_config}
+
+The Bayesian Optimization with Hyperband framework requires configuration of the sampler, pruner, and study-level parameters that govern the optimization campaign.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Optuna/BOHB Configuration Parameter Reference} \label{tab:optuna_config} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Optuna/BOHB Configuration Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+sampler\_type & TPE & TPE, CmaEs, Random, GP & Sampling algorithm for parameter suggestion. TPE provides efficient Bayesian optimization. \\
+\addlinespace
+n\_startup\_trials & 10 & 5--30 & Number of random trials before engaging Bayesian sampling. \\
+\addlinespace
+n\_ei\_candidates & 24 & 10--100 & Number of candidate points evaluated for Expected Improvement. \\
+\addlinespace
+multivariate & True & True, False & Whether to model parameter correlations in TPE. \\
+\addlinespace
+group & True & True, False & Whether to group correlated parameters in sampling. \\
+\addlinespace
+constant\_liar & True & True, False & Whether to use constant liar strategy for parallel trials. \\
+\addlinespace
+seed & 42 & 0--$2^{32}$ & Random seed for reproducibility. \\
+\addlinespace
+pruner\_type & Hyperband & Hyperband, Median, Percentile, SHA & Pruning algorithm for early termination. \\
+\addlinespace
+reduction\_factor & 3 & 2--5 & Reduction factor $\eta$ for successive halving. \\
+\addlinespace
+min\_resource & 1 & 1--10 & Minimum resource allocation in budget units. \\
+\addlinespace
+max\_resource & 100 & 10--500 & Maximum resource allocation (typically epochs). \\
+\addlinespace
+n\_brackets & 4 & 1--6 & Number of brackets for Hyperband. Calculated automatically if not specified. \\
+\addlinespace
+bootstrap\_count & 0 & 0--5 & Number of bootstrap resamples for pruner median estimation. \\
+\addlinespace
+study\_direction & maximize & maximize, minimize & Optimization direction for the objective. \\
+\addlinespace
+load\_if\_exists & True & True, False & Whether to resume from existing study storage. \\
+\addlinespace
+storage\_backend & sqlite & sqlite, postgresql, mysql, redis & Database backend for study persistence. \\
+\addlinespace
+gc\_after\_trial & True & True, False & Whether to trigger garbage collection after each trial. \\
+\addlinespace
+n\_jobs & 1 & 1--16 & Number of parallel trial workers. \\
+\end{longtable}
+
+\section{Reward Function Weight Recommendations}
+\label{sec:reward_weights}
+
+The composite reward function combines multiple objectives with configurable weights. The following table provides weight recommendations for different optimization scenarios.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Reward Function Weight Reference} \label{tab:reward_weights} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Reward Function Weight Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+w\_mAP\_50 & 0.7 & 0.3--1.0 & Weight for mAP@0.5 IoU threshold in primary performance metric. \\
+\addlinespace
+w\_mAP\_50\_95 & 0.3 & 0.0--0.7 & Weight for mAP@0.5:0.95 averaged metric. Higher values emphasize localization precision. \\
+\addlinespace
+w\_efficiency & 0.0 & 0.0--0.3 & Weight for computational efficiency score. Nonzero values trade accuracy for speed. \\
+\addlinespace
+w\_mmd & 0.1 & 0.0--0.5 & Weight for domain alignment MMD score. Higher values emphasize synthetic-real similarity. \\
+\addlinespace
+w\_class\_balance & 0.05 & 0.0--0.2 & Weight for per-class performance balance penalty. \\
+\addlinespace
+alpha\_balance & 0.5 & 0.0--2.0 & Scaling factor for class imbalance penalty computation. \\
+\addlinespace
+lambda\_mmd & 10.0 & 1.0--100.0 & Scaling factor in MMD exponential transformation. \\
+\addlinespace
+mmd\_kernel\_sigma & auto & auto, 0.1--10.0 & Kernel bandwidth for MMD computation. Auto uses median heuristic. \\
+\addlinespace
+efficiency\_target\_ms & 50.0 & 10.0--500.0 & Target inference time in milliseconds for efficiency scoring. \\
+\addlinespace
+confidence\_penalty\_weight & 0.0 & 0.0--0.2 & Weight for penalizing low-confidence detections. \\
+\addlinespace
+false\_positive\_penalty & 0.0 & 0.0--0.3 & Additional penalty weight for false positive detections. \\
+\addlinespace
+small\_object\_bonus & 0.0 & 0.0--0.3 & Bonus weight for performance on small objects. \\
+\addlinespace
+recall\_floor\_penalty & 0.0 & 0.0--0.5 & Penalty for recall falling below minimum threshold. \\
+\addlinespace
+recall\_floor\_threshold & 0.5 & 0.3--0.9 & Minimum recall threshold for floor penalty activation. \\
+\end{longtable}
+
+\section{Multi-Fidelity Schedule Configurations}
+\label{sec:multifidelity}
+
+Multi-fidelity optimization enables efficient exploration by evaluating configurations at reduced resource levels before committing full training budgets. The following tables document recommended schedules for various computational budget scenarios.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Multi-Fidelity Schedule Parameter Reference} \label{tab:multifidelity} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Multi-Fidelity Schedule Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+min\_epochs & 5 & 1--20 & Minimum training epochs for lowest fidelity evaluations. \\
+\addlinespace
+max\_epochs & 100 & 30--300 & Maximum training epochs for full fidelity evaluations. \\
+\addlinespace
+epoch\_multiplier & 3 & 2--5 & Multiplicative factor between successive fidelity levels. \\
+\addlinespace
+num\_fidelity\_levels & 4 & 2--6 & Number of discrete fidelity levels in the schedule. \\
+\addlinespace
+min\_dataset\_fraction & 0.1 & 0.05--0.5 & Minimum fraction of synthetic dataset used at lowest fidelity. \\
+\addlinespace
+dataset\_scaling & geometric & geometric, linear & How dataset size scales with fidelity level. \\
+\addlinespace
+image\_size\_min & 320 & 160--640 & Minimum image resolution for low-fidelity training. \\
+\addlinespace
+image\_size\_schedule & fixed & fixed, progressive & Whether image size increases with fidelity level. \\
+\addlinespace
+model\_size\_schedule & fixed & fixed, progressive & Whether to use smaller model variants at lower fidelity. \\
+\addlinespace
+augmentation\_schedule & full & full, reduced, progressive & Augmentation intensity schedule across fidelity levels. \\
+\addlinespace
+early\_stop\_patience\_low & 3 & 1--10 & Early stopping patience at lowest fidelity level. \\
+\addlinespace
+early\_stop\_patience\_high & 10 & 5--30 & Early stopping patience at highest fidelity level. \\
+\addlinespace
+promotion\_threshold & top-$k$ & top-$k$, percentile & Criterion for promoting configurations to next fidelity level. \\
+\addlinespace
+promotion\_fraction & 0.33 & 0.1--0.5 & Fraction of configurations promoted at each stage (for top-$k$). \\
+\addlinespace
+budget\_allocation & equal & equal, exponential & How total budget is allocated across fidelity levels. \\
+\addlinespace
+correlation\_threshold & 0.7 & 0.5--0.95 & Required rank correlation for fidelity level validation. \\
+\end{longtable}
+
+\section{Convergence Detection Parameters}
+\label{sec:convergence_params}
+
+Convergence detection determines when the optimization campaign has identified a satisfactory solution and further exploration yields diminishing returns.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Convergence Detection Parameter Reference} \label{tab:convergence} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Convergence Detection Parameter Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+max\_trials & 50 & 20--200 & Maximum number of optimization trials before forced termination. \\
+\addlinespace
+patience\_trials & 15 & 5--30 & Number of trials without improvement before early stopping. \\
+\addlinespace
+improvement\_threshold & 0.005 & 0.001--0.05 & Minimum improvement in reward to reset patience counter. \\
+\addlinespace
+convergence\_window & 10 & 5--25 & Window size for statistical convergence tests. \\
+\addlinespace
+variance\_threshold & 0.01 & 0.005--0.05 & Maximum variance in convergence window for convergence declaration. \\
+\addlinespace
+trend\_significance & 0.05 & 0.01--0.1 & Significance level for trend detection test. \\
+\addlinespace
+target\_reward & 0.90 & 0.7--0.99 & Absolute reward threshold for early success termination. \\
+\addlinespace
+target\_mAP & 0.85 & 0.6--0.95 & Absolute mAP threshold for early success termination. \\
+\addlinespace
+min\_trials\_before\_check & 15 & 10--30 & Minimum trials before convergence checking begins. \\
+\addlinespace
+check\_frequency & 5 & 1--10 & How often (in trials) to evaluate convergence criteria. \\
+\addlinespace
+require\_multiple\_criteria & True & True, False & Whether multiple convergence criteria must be satisfied. \\
+\addlinespace
+use\_bootstrap\_ci & True & True, False & Whether to use bootstrap confidence intervals in convergence assessment. \\
+\addlinespace
+ci\_overlap\_threshold & 0.5 & 0.0--1.0 & Required CI overlap between best and recent trials for convergence. \\
+\addlinespace
+plateau\_detection & True & True, False & Whether to detect performance plateaus as convergence indicator. \\
+\addlinespace
+plateau\_tolerance & 0.02 & 0.005--0.1 & Maximum variation within plateau for detection. \\
+\addlinespace
+plateau\_length & 8 & 3--15 & Minimum consecutive trials at plateau for detection. \\
+\addlinespace
+regret\_bound\_check & False & True, False & Whether to use theoretical regret bounds for convergence. \\
+\addlinespace
+save\_on\_convergence & True & True, False & Whether to save best model checkpoint upon convergence. \\
+\end{longtable}
+
+\section{Computational Resource Planning}
+\label{sec:resource_planning}
+
+Effective resource planning ensures that optimization campaigns complete within available computational budgets while maintaining solution quality.
+
+\begin{longtable}{p{3.5cm}p{2cm}p{2.5cm}p{5.5cm}}
+\caption{Computational Resource Planning Reference} \label{tab:resources} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\caption[]{Computational Resource Planning Reference (continued)} \\
+\toprule
+\textbf{Parameter} & \textbf{Recommended} & \textbf{Valid Range} & \textbf{Description} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+gpu\_memory\_gb & 24 & 8--80 & Available GPU memory in gigabytes. Constrains batch size and model selection. \\
+\addlinespace
+num\_gpus & 1 & 1--8 & Number of GPUs available for training. \\
+\addlinespace
+cpu\_workers & 8 & 2--32 & Number of CPU workers for data loading. \\
+\addlinespace
+expected\_trial\_hours & 2.0 & 0.5--12.0 & Expected wall-clock time per full-fidelity trial in hours. \\
+\addlinespace
+total\_budget\_hours & 100 & 24--500 & Total compute time budget for optimization campaign. \\
+\addlinespace
+synthetic\_images\_per\_trial & 5000 & 1000--50000 & Number of synthetic images generated per optimization trial. \\
+\addlinespace
+render\_time\_per\_image\_s & 0.5 & 0.1--10.0 & Expected rendering time per synthetic image in seconds. \\
+\addlinespace
+storage\_per\_trial\_gb & 5.0 & 1.0--50.0 & Expected storage consumption per trial in gigabytes. \\
+\addlinespace
+checkpoint\_frequency & 10 & 5--50 & Epochs between model checkpoints. \\
+\addlinespace
+max\_checkpoints\_kept & 3 & 1--10 & Maximum number of checkpoints retained per trial. \\
+\addlinespace
+enable\_mixed\_precision & True & True, False & Whether to use FP16 mixed precision for memory efficiency. \\
+\addlinespace
+gradient\_checkpointing & False & True, False & Whether to use gradient checkpointing for memory-constrained settings. \\
+\addlinespace
+prefetch\_factor & 2 & 1--8 & Number of batches prefetched by data loader. \\
+\addlinespace
+pin\_memory & True & True, False & Whether to pin data loader memory for faster GPU transfer. \\
+\addlinespace
+persistent\_workers & True & True, False & Whether to keep data loader workers alive between epochs. \\
+\end{longtable}
+

@@ -1,0 +1,1266 @@
+
+\chapter{Transfer Functions and Block Diagrams}
+\label{ch:transfer_functions}
+
+\begin{quote}
+\textit{``Mathematics is an experimental science, and definitions do not come first, but later on.''}\\
+--- Oliver Heaviside (1850--1925)
+\end{quote}
+
+\vspace{1em}
+
+\noindent The analysis of dynamic systems underwent a profound transformation in the late nineteenth and early twentieth centuries. What began as a pragmatic need to solve differential equations for electrical networks evolved into one of the most powerful abstractions in engineering: the transfer function. This chapter traces the historical development of these ideas, establishes the rigorous mathematical foundation, and demonstrates their application through both theoretical analysis and practical experimentation.
+
+%=============================================================================
+\section{Historical Motivation: From Telegraph Cables to Modern Control}
+\label{sec:history}
+%=============================================================================
+
+\subsection{The Transatlantic Cable Problem}
+
+In the summer of 1866, the successful laying of the first permanent transatlantic telegraph cable represented one of the greatest engineering achievements of the Victorian era. Yet the triumph was accompanied by a profound technical mystery: signals transmitted across the 2,000-mile cable emerged distorted, delayed, and barely recognizable. The sharp ``dots'' and ``dashes'' of Morse code spread into overlapping pulses, limiting transmission to a painfully slow 8 words per minute.
+
+The mathematical description of signal propagation along submarine cables had been established by William Thomson (later Lord Kelvin) in 1855. The \textit{telegrapher's equations} that governed voltage $V(x,t)$ and current $I(x,t)$ along the cable took the form of coupled partial differential equations:
+\begin{align}
+\frac{\partial V}{\partial x} &= -L\frac{\partial I}{\partial t} - RI \label{eq:telegraph1}\\
+\frac{\partial I}{\partial x} &= -C\frac{\partial V}{\partial t} - GV \label{eq:telegraph2}
+\end{align}
+where $R$, $L$, $C$, and $G$ represent the resistance, inductance, capacitance, and conductance per unit length, respectively.
+
+Solving these equations for practical cable designs required considerable mathematical sophistication. Engineers needed solutions for various input signals and cable parameters, and each new configuration demanded fresh calculations. The situation called for a fundamentally new approach.
+
+\subsection{Oliver Heaviside and Operational Calculus}
+
+Enter Oliver Heaviside (1850--1925), a self-taught English mathematician and electrical engineer whose unconventional methods would revolutionize the analysis of electrical systems. Working in isolation after leaving his position as a telegraph operator, Heaviside developed what he called \textit{operational calculus}---a symbolic method that treated the differential operator $\diff/\diff t$ as an algebraic quantity.
+
+Heaviside introduced the operator $p = \diff/\diff t$ and manipulated it according to algebraic rules. For instance, to solve the differential equation
+\begin{equation}
+L\frac{\diff i}{\diff t} + Ri = v(t)
+\end{equation}
+Heaviside would write $(Lp + R)i = v$, and ``solve'' for $i$ as
+\begin{equation}
+i = \frac{1}{Lp + R}v = \frac{1}{R}\cdot\frac{1}{1 + (L/R)p}v
+\end{equation}
+
+He then expanded this in a series or used tables to find the time-domain solution. The expression $1/(Lp + R)$ is recognizable today as what we call a \textit{transfer function}.
+
+\subsubsection{Controversy and Vindication}
+
+Heaviside's methods were controversial. Prominent mathematicians objected that his manipulations lacked rigorous justification. The operational calculus produced correct answers, but \textit{why} it worked remained unclear. Heaviside himself was unapologetic, famously retorting: ``Shall I refuse my dinner because I do not fully understand the process of digestion?''
+
+The rigorous foundation came later, through the work of Thomas John I'Anson Bromwich (1875--1929) and others who connected Heaviside's operators to the contour integrals of complex analysis. The crucial link was the \textit{Laplace transform}, a mathematical tool that had been developed nearly a century earlier but whose engineering applications were only then becoming apparent.
+
+\subsection{The Earlier Mathematical Foundations}
+
+The Laplace transform takes its name from Pierre-Simon Laplace (1749--1827), who used similar integral transforms in his work on probability theory and celestial mechanics. The specific form we use today:
+\begin{equation}
+F(s) = \int_0^{\infty} f(t)\e^{-st}\,\diff t
+\end{equation}
+converts functions of time into functions of a complex variable $s$.
+
+Joseph Fourier (1768--1830) had developed related transform methods for studying heat conduction. Fourier's transform, using $\j\omega$ instead of $s$, remains essential for frequency-domain analysis. The Laplace transform can be viewed as a generalization that handles a broader class of functions, including those with exponential growth.
+
+The connection between these mathematical tools and Heaviside's operational methods became clear in the early twentieth century: Heaviside's operator $p$ corresponds to the complex variable $s$ in the Laplace transform. His intuitive manipulations had been, in effect, transform-domain algebra conducted without explicit acknowledgment of the underlying integral transformation.
+
+\subsection{The Telephone Era: Systematizing Transfer Functions}
+
+The development of telephone networks in the 1920s and 1930s brought new challenges that accelerated the formalization of transfer function methods. Engineers at Bell Telephone Laboratories, including Hendrik Bode, Harry Nyquist, and others, needed to design amplifiers, filters, and feedback systems for long-distance telephony.
+
+These engineers faced the problem of \textit{interconnection}: how to predict the behavior of complex systems built from simpler components. The transfer function provided the answer. By characterizing each component by its transfer function $G(s)$, engineers could analyze cascaded systems by multiplying transfer functions, parallel systems by adding them, and feedback systems by applying simple algebraic formulas.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, minimum height=1cm, minimum width=1.5cm},
+    arrow/.style={-Stealth, thick}
+]
+% Simple cascade
+\node[block] (G1) {$G_1(s)$};
+\node[block, right=1.5cm of G1] (G2) {$G_2(s)$};
+\node[left=1cm of G1] (input) {$U(s)$};
+\node[right=1cm of G2] (output) {$Y(s)$};
+
+\draw[arrow] (input) -- (G1);
+\draw[arrow] (G1) -- (G2);
+\draw[arrow] (G2) -- (output);
+
+\node[below=0.5cm of G1, anchor=north] (eq) {$Y(s) = G_1(s)G_2(s)U(s)$};
+\end{tikzpicture}
+\caption{The cascade connection of two systems. The overall transfer function is simply the product of the individual transfer functions---an elegant result that enables modular system design.}
+\label{fig:cascade_simple}
+\end{figure}
+
+\subsection{The Power of Abstraction}
+
+The transfer function embodies a fundamental engineering principle: \textit{abstraction}. By representing a system as a transfer function, we treat it as a ``black box'' characterized solely by its input-output relationship. The internal details---whether the system is electrical, mechanical, thermal, or hybrid---become irrelevant for interconnection analysis.
+
+This abstraction enables:
+\begin{itemize}
+    \item \textbf{Modular design:} Systems can be designed independently and combined predictably.
+    \item \textbf{Analysis simplification:} Differential equations become algebraic equations.
+    \item \textbf{Frequency-domain insight:} Setting $s = \j\omega$ reveals the steady-state frequency response.
+    \item \textbf{Stability analysis:} Pole locations determine stability without solving the time-domain equations.
+\end{itemize}
+
+The journey from Heaviside's pragmatic operators to the modern transfer function illustrates how engineering necessity drives mathematical development. Today, transfer functions form the foundation of control system analysis, and the block diagram has become the universal language for describing interconnected dynamic systems.
+
+%=============================================================================
+\section{Modern Applications}
+\label{sec:modern_applications}
+%=============================================================================
+
+The transfer function concept, born from nineteenth-century telegraph engineering, has become indispensable across virtually every domain of modern technology. We highlight several representative applications.
+
+\subsection{Audio Processing and Equalization}
+
+Digital and analog audio systems rely extensively on transfer function design. An audio equalizer, whether in a music production studio or a smartphone, consists of filters characterized by their transfer functions. A parametric equalizer band, for example, might implement a second-order transfer function:
+\begin{equation}
+H(s) = \frac{s^2 + (A/Q)\omega_0 s + \omega_0^2}{s^2 + (1/Q)\omega_0 s + \omega_0^2}
+\end{equation}
+where $\omega_0$ is the center frequency, $Q$ is the quality factor, and $A$ determines the boost or cut amount.
+
+Professional audio software displays these transfer functions as frequency response curves, allowing engineers to shape sound precisely. The underlying mathematics---pole-zero placement and frequency response calculation---remains exactly as developed for control systems.
+
+\subsection{Communication Systems}
+
+Every communication channel---wireless, fiber optic, or copper---can be characterized by a transfer function that describes how it affects transmitted signals. The channel transfer function $H(f)$ captures:
+\begin{itemize}
+    \item Frequency-dependent attenuation (magnitude response)
+    \item Signal delay and dispersion (phase response)
+    \item Bandwidth limitations
+\end{itemize}
+
+Modern communication systems use \textit{equalization}---the design of inverse transfer functions---to compensate for channel distortion. The principles of cascade systems (Section~\ref{sec:block_algebra}) apply directly: if the channel has transfer function $H_c(s)$ and the equalizer has $H_e(s)$, the cascade $H_e(s)H_c(s)$ should approximate unity for distortion-free transmission.
+
+\subsection{Mechanical Vibration Analysis}
+
+The mass-spring-damper system we derive in Section~\ref{sec:msd_derivation} represents the fundamental model for mechanical vibration. Transfer functions enable engineers to:
+\begin{itemize}
+    \item Predict resonance frequencies and amplitudes
+    \item Design vibration isolators for sensitive equipment
+    \item Analyze vehicle suspension systems
+    \item Study structural dynamics in buildings and bridges
+\end{itemize}
+
+The same mathematical framework applies whether analyzing a microscopic MEMS accelerometer or the vibration modes of a skyscraper.
+
+\subsection{Control System Design Software}
+
+Modern engineering relies heavily on computational tools that implement transfer function methods. MATLAB's Control System Toolbox and Simulink provide:
+\begin{itemize}
+    \item Transfer function representation and manipulation
+    \item Automated block diagram reduction
+    \item Pole-zero analysis and plotting
+    \item Frequency response computation (Bode plots, Nyquist diagrams)
+    \item Time response simulation
+\end{itemize}
+
+Python's control systems library (\texttt{python-control}) offers similar capabilities in an open-source environment. These tools automate the calculations developed in this chapter, but understanding the underlying theory remains essential for effective use.
+
+%=============================================================================
+\section{Mathematical Foundation}
+\label{sec:math_foundation}
+%=============================================================================
+
+We now develop the rigorous mathematical framework for transfer function analysis, beginning with the Laplace transform and progressing through transfer function derivation, pole-zero analysis, and block diagram algebra.
+
+\subsection{The Laplace Transform}
+\label{sec:laplace_def}
+
+\begin{definition}[Laplace Transform]
+The \textit{Laplace transform} of a function $f(t)$ defined for $t \geq 0$ is
+\begin{equation}
+\Laplace\{f(t)\} = F(s) = \int_0^{\infty} f(t)\e^{-st}\,\diff t
+\label{eq:laplace_def}
+\end{equation}
+where $s = \sigma + \j\omega$ is a complex variable. The transform exists for $\mathrm{Re}(s) > \sigma_0$, where $\sigma_0$ depends on the growth rate of $f(t)$.
+\end{definition}
+
+The inverse Laplace transform recovers $f(t)$ from $F(s)$:
+\begin{equation}
+\invLaplace\{F(s)\} = f(t) = \frac{1}{2\pi\j}\int_{c-\j\infty}^{c+\j\infty} F(s)\e^{st}\,\diff s
+\label{eq:inverse_laplace}
+\end{equation}
+where $c > \sigma_0$. In practice, we rarely evaluate this integral directly, instead using transform tables and partial fraction expansion.
+
+\subsection{Key Laplace Transform Pairs}
+
+We derive the transforms of the most important functions for control systems analysis.
+
+\subsubsection{Unit Step Function}
+
+The unit step function is defined as:
+\begin{equation}
+u(t) = \begin{cases} 0, & t < 0 \\ 1, & t \geq 0 \end{cases}
+\end{equation}
+
+Applying the definition:
+\begin{align}
+\Laplace\{u(t)\} &= \int_0^{\infty} 1 \cdot \e^{-st}\,\diff t = \left[-\frac{1}{s}\e^{-st}\right]_0^{\infty} \nonumber \\
+&= 0 - \left(-\frac{1}{s}\right) = \frac{1}{s} \quad \text{for } \mathrm{Re}(s) > 0
+\label{eq:step_transform}
+\end{align}
+
+\subsubsection{Ramp Function}
+
+For $f(t) = t \cdot u(t)$:
+\begin{align}
+\Laplace\{t\} &= \int_0^{\infty} t\e^{-st}\,\diff t
+\end{align}
+Using integration by parts with $u = t$ and $\diff v = \e^{-st}\diff t$:
+\begin{align}
+\Laplace\{t\} &= \left[-\frac{t}{s}\e^{-st}\right]_0^{\infty} + \frac{1}{s}\int_0^{\infty}\e^{-st}\,\diff t \nonumber \\
+&= 0 + \frac{1}{s}\cdot\frac{1}{s} = \frac{1}{s^2}
+\label{eq:ramp_transform}
+\end{align}
+
+\subsubsection{Exponential Function}
+
+For $f(t) = \e^{-at}u(t)$:
+\begin{align}
+\Laplace\{\e^{-at}\} &= \int_0^{\infty} \e^{-at}\e^{-st}\,\diff t = \int_0^{\infty} \e^{-(s+a)t}\,\diff t \nonumber \\
+&= \left[-\frac{1}{s+a}\e^{-(s+a)t}\right]_0^{\infty} = \frac{1}{s+a}
+\label{eq:exp_transform}
+\end{align}
+valid for $\mathrm{Re}(s) > -a$.
+
+\subsubsection{Sinusoidal Functions}
+
+Using Euler's formula, $\cos(\omega t) = \frac{1}{2}(\e^{\j\omega t} + \e^{-\j\omega t})$:
+\begin{align}
+\Laplace\{\cos(\omega t)\} &= \frac{1}{2}\left(\frac{1}{s - \j\omega} + \frac{1}{s + \j\omega}\right) \nonumber \\
+&= \frac{1}{2}\cdot\frac{2s}{s^2 + \omega^2} = \frac{s}{s^2 + \omega^2}
+\label{eq:cos_transform}
+\end{align}
+
+Similarly:
+\begin{equation}
+\Laplace\{\sin(\omega t)\} = \frac{\omega}{s^2 + \omega^2}
+\label{eq:sin_transform}
+\end{equation}
+
+\subsection{Essential Transform Properties}
+
+\begin{property}[Linearity]
+For constants $a$ and $b$:
+\begin{equation}
+\Laplace\{af(t) + bg(t)\} = aF(s) + bG(s)
+\end{equation}
+\end{property}
+
+\begin{property}[Differentiation in Time]
+\label{prop:differentiation}
+\begin{equation}
+\Laplace\left\{\frac{\diff f}{\diff t}\right\} = sF(s) - f(0^-)
+\label{eq:diff_property}
+\end{equation}
+where $f(0^-)$ denotes the initial value just before $t = 0$.
+\end{property}
+
+\begin{proof}
+Using integration by parts with the definition \eqref{eq:laplace_def}:
+\begin{align}
+\Laplace\left\{\frac{\diff f}{\diff t}\right\} &= \int_0^{\infty} \frac{\diff f}{\diff t}\e^{-st}\,\diff t \nonumber \\
+&= \left[f(t)\e^{-st}\right]_0^{\infty} + s\int_0^{\infty} f(t)\e^{-st}\,\diff t \nonumber \\
+&= 0 - f(0^-) + sF(s) = sF(s) - f(0^-)
+\end{align}
+assuming $f(t)$ grows slower than $\e^{\sigma t}$ for some $\sigma$.
+\end{proof}
+
+Applying this property twice:
+\begin{equation}
+\Laplace\left\{\frac{\diff^2 f}{\diff t^2}\right\} = s^2F(s) - sf(0^-) - \dot{f}(0^-)
+\label{eq:second_diff}
+\end{equation}
+
+\begin{property}[Integration in Time]
+\begin{equation}
+\Laplace\left\{\int_0^t f(\tau)\,\diff\tau\right\} = \frac{F(s)}{s}
+\end{equation}
+\end{property}
+
+\begin{property}[Frequency Shift]
+\begin{equation}
+\Laplace\{\e^{-at}f(t)\} = F(s+a)
+\end{equation}
+\end{property}
+
+\begin{property}[Time Delay]
+\begin{equation}
+\Laplace\{f(t-\tau)u(t-\tau)\} = \e^{-\tau s}F(s)
+\end{equation}
+\end{property}
+
+\begin{property}[Final Value Theorem]
+If $\lim_{t\to\infty}f(t)$ exists and is finite:
+\begin{equation}
+\lim_{t\to\infty}f(t) = \lim_{s\to 0}sF(s)
+\label{eq:final_value}
+\end{equation}
+\end{property}
+
+\begin{property}[Initial Value Theorem]
+\begin{equation}
+\lim_{t\to 0^+}f(t) = \lim_{s\to\infty}sF(s)
+\end{equation}
+\end{property}
+
+\begin{table}[h]
+\centering
+\caption{Common Laplace Transform Pairs}
+\label{tab:laplace_pairs}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Time Function} $f(t)$, $t \geq 0$ & \textbf{Laplace Transform} $F(s)$ \\
+\midrule
+$\delta(t)$ (unit impulse) & $1$ \\
+$u(t)$ (unit step) & $\dfrac{1}{s}$ \\
+$t$ (ramp) & $\dfrac{1}{s^2}$ \\
+$t^n$ & $\dfrac{n!}{s^{n+1}}$ \\
+$\e^{-at}$ & $\dfrac{1}{s+a}$ \\
+$t\e^{-at}$ & $\dfrac{1}{(s+a)^2}$ \\
+$\sin(\omega t)$ & $\dfrac{\omega}{s^2+\omega^2}$ \\
+$\cos(\omega t)$ & $\dfrac{s}{s^2+\omega^2}$ \\
+$\e^{-at}\sin(\omega t)$ & $\dfrac{\omega}{(s+a)^2+\omega^2}$ \\
+$\e^{-at}\cos(\omega t)$ & $\dfrac{s+a}{(s+a)^2+\omega^2}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{The Transfer Function}
+\label{sec:transfer_function_def}
+
+\begin{definition}[Transfer Function]
+The \textit{transfer function} of a linear time-invariant (LTI) system is the ratio of the Laplace transform of the output to the Laplace transform of the input, assuming all initial conditions are zero:
+\begin{equation}
+G(s) = \frac{Y(s)}{U(s)}\bigg|_{\text{zero ICs}}
+\label{eq:tf_def}
+\end{equation}
+\end{definition}
+
+The transfer function completely characterizes the input-output behavior of an LTI system. Given any input $U(s)$, the output is simply:
+\begin{equation}
+Y(s) = G(s)U(s)
+\end{equation}
+
+\subsection{Derivation: Mass-Spring-Damper System}
+\label{sec:msd_derivation}
+
+Consider the canonical mechanical system shown in Figure~\ref{fig:msd_system}: a mass $m$ connected to a spring with stiffness $k$ and a damper with coefficient $b$. An external force $f(t)$ is applied, and we seek the displacement $x(t)$.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    spring/.style={thick, decorate, decoration={zigzag, segment length=4, amplitude=2.5}},
+    damper/.style={thick, decoration={markings, mark connection node=dmark, mark=at position 0.5 with {\node (dmark) [thick, minimum width=3mm, minimum height=5mm, draw, fill=gray!30] {};}}, decorate},
+    ground/.style={fill, pattern=north east lines, draw=none, minimum width=0.5cm, minimum height=0.3cm},
+]
+
+% Ground
+\fill[pattern=north east lines] (-0.5,0) rectangle (0,3);
+\draw[thick] (0,0) -- (0,3);
+
+% Mass
+\node[draw, thick, minimum width=1.5cm, minimum height=1.5cm, fill=blue!20] (mass) at (3,1.5) {$m$};
+
+% Spring
+\draw[spring] (0,2.25) -- (mass.west |- 0,2.25);
+\node[above] at (1.5,2.25) {$k$};
+
+% Damper
+\draw[thick] (0,0.75) -- (0.75,0.75);
+\draw[thick] (0.75,0.5) rectangle (1.5,1);
+\draw[thick] (1.5,0.75) -- (mass.west |- 0,0.75);
+\node[below] at (1.1,0.5) {$b$};
+
+% Force arrow
+\draw[-Stealth, very thick, red] (mass.east) -- ++(1.2,0) node[right] {$f(t)$};
+
+% Displacement
+\draw[|-|] (3,-0.5) -- (4.5,-0.5) node[midway, below] {$x(t)$};
+
+\end{tikzpicture}
+\caption{Mass-spring-damper system. The displacement $x(t)$ is measured from the equilibrium position.}
+\label{fig:msd_system}
+\end{figure}
+
+Newton's second law gives:
+\begin{equation}
+m\ddot{x} + b\dot{x} + kx = f(t)
+\label{eq:msd_ode}
+\end{equation}
+
+Taking the Laplace transform with zero initial conditions ($x(0) = \dot{x}(0) = 0$):
+\begin{equation}
+m[s^2X(s)] + b[sX(s)] + k[X(s)] = F(s)
+\end{equation}
+
+Factoring out $X(s)$:
+\begin{equation}
+(ms^2 + bs + k)X(s) = F(s)
+\end{equation}
+
+The transfer function from force to displacement is:
+\begin{equation}
+\boxed{G(s) = \frac{X(s)}{F(s)} = \frac{1}{ms^2 + bs + k} = \frac{1/m}{s^2 + (b/m)s + k/m}}
+\label{eq:msd_tf}
+\end{equation}
+
+Introducing the standard second-order parameters:
+\begin{equation}
+\omega_n = \sqrt{\frac{k}{m}} \quad \text{(natural frequency)}, \qquad \zeta = \frac{b}{2\sqrt{km}} \quad \text{(damping ratio)}
+\end{equation}
+
+we can write:
+\begin{equation}
+G(s) = \frac{\omega_n^2/k}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\label{eq:msd_standard}
+\end{equation}
+
+\subsection{Poles and Zeros}
+\label{sec:poles_zeros}
+
+A transfer function can be written in factored form:
+\begin{equation}
+G(s) = K\frac{(s-z_1)(s-z_2)\cdots(s-z_m)}{(s-p_1)(s-p_2)\cdots(s-p_n)} = K\frac{\prod_{i=1}^{m}(s-z_i)}{\prod_{j=1}^{n}(s-p_j)}
+\label{eq:pole_zero_form}
+\end{equation}
+
+\begin{definition}[Poles and Zeros]
+The \textit{zeros} $z_1, z_2, \ldots, z_m$ are the roots of the numerator polynomial; they are values of $s$ where $G(s) = 0$. The \textit{poles} $p_1, p_2, \ldots, p_n$ are the roots of the denominator polynomial; they are values of $s$ where $G(s) \to \infty$.
+\end{definition}
+
+\subsubsection{Physical Meaning of Poles}
+
+The poles of a system determine its natural response---the behavior when excited by an impulse or released from initial conditions. Each pole $p_i$ contributes a term $\e^{p_i t}$ to the time response.
+
+\begin{itemize}
+    \item \textbf{Real negative pole} ($p = -a$, $a > 0$): Contributes $\e^{-at}$, a decaying exponential. The system is stable.
+    \item \textbf{Real positive pole} ($p = a$, $a > 0$): Contributes $\e^{at}$, a growing exponential. The system is unstable.
+    \item \textbf{Complex conjugate poles} ($p = -\sigma \pm \j\omega_d$): Contribute $\e^{-\sigma t}[\cos(\omega_d t) + \sin(\omega_d t)]$, a damped oscillation when $\sigma > 0$.
+    \item \textbf{Poles on imaginary axis} ($p = \pm\j\omega$): Contribute sustained oscillations $\cos(\omega t)$. The system is marginally stable.
+\end{itemize}
+
+\begin{theorem}[Stability from Poles]
+A linear time-invariant system is \textbf{BIBO stable} (bounded input yields bounded output) if and only if all poles have strictly negative real parts, i.e., all poles lie in the open left half of the complex plane.
+\end{theorem}
+
+\subsubsection{Physical Meaning of Zeros}
+
+Zeros affect how the system responds to inputs at different frequencies:
+\begin{itemize}
+    \item At a frequency corresponding to a zero, the system output is blocked or attenuated.
+    \item Zeros in the right half-plane cause \textit{non-minimum phase} behavior, including initial response in the opposite direction of the final response.
+\end{itemize}
+
+\subsubsection{Pole-Zero Plot}
+
+The \textit{pole-zero plot} displays poles (marked with $\times$) and zeros (marked with $\circ$) in the complex $s$-plane. This visualization immediately reveals stability and dominant dynamics.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[scale=1.2]
+    % Axes
+    \draw[-Stealth] (-3.5,0) -- (1.5,0) node[right] {$\mathrm{Re}(s)$};
+    \draw[-Stealth] (0,-2.5) -- (0,2.5) node[above] {$\mathrm{Im}(s)$};
+
+    % Left half plane shading
+    \fill[green!10] (-3.5,-2.5) rectangle (0,2.5);
+    \node at (-2.5,2) {\footnotesize Stable};
+    \node at (0.8,2) {\footnotesize Unstable};
+
+    % Grid
+    \draw[gray!30, thin] (-3,-2.5) -- (-3,2.5);
+    \draw[gray!30, thin] (-2,-2.5) -- (-2,2.5);
+    \draw[gray!30, thin] (-1,-2.5) -- (-1,2.5);
+    \draw[gray!30, thin] (1,-2.5) -- (1,2.5);
+
+    % Poles (X marks)
+    \node[cross out, draw=blue, thick, minimum size=5pt] at (-2,1.5) {};
+    \node[cross out, draw=blue, thick, minimum size=5pt] at (-2,-1.5) {};
+    \node[cross out, draw=blue, thick, minimum size=5pt] at (-0.5,0) {};
+
+    % Zero (O mark)
+    \draw[red, thick] (-1,0) circle (4pt);
+
+    % Labels
+    \node[blue, above right] at (-1.9,1.5) {\footnotesize $-2+1.5\j$};
+    \node[red, below] at (-1,-0.2) {\footnotesize $z=-1$};
+    \node[blue, below] at (-0.5,-0.2) {\footnotesize $p=-0.5$};
+
+    % j omega markers
+    \node[left] at (0,1) {\footnotesize $\j$};
+    \node[left] at (0,2) {\footnotesize $2\j$};
+    \node[left] at (0,-1) {\footnotesize $-\j$};
+
+    % sigma markers
+    \node[below] at (-1,0) {};
+    \node[below] at (-2,0) {\footnotesize $-2$};
+    \node[below] at (1,0) {\footnotesize $1$};
+\end{tikzpicture}
+\caption{Pole-zero plot for $G(s) = \frac{s+1}{(s+0.5)(s^2+4s+6.25)}$. Poles at $s = -0.5$ and $s = -2 \pm 1.5\j$ (all in left half-plane: stable). Zero at $s = -1$.}
+\label{fig:pole_zero_plot}
+\end{figure}
+
+\subsection{Block Diagram Algebra}
+\label{sec:block_algebra}
+
+Block diagrams provide a graphical representation of system interconnections. The fundamental elements are shown in Figure~\ref{fig:block_elements}.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, thick, minimum height=0.8cm, minimum width=1.2cm, fill=blue!10},
+    sum/.style={circle, draw, thick, minimum size=0.5cm},
+    arrow/.style={-Stealth, thick}
+]
+
+% Block
+\node[block] (block) at (0,0) {$G(s)$};
+\draw[arrow] (-1.5,0) -- (block) node[midway, above] {$U$};
+\draw[arrow] (block) -- (1.5,0) node[midway, above] {$Y$};
+\node[below=0.3cm] at (0,-0.4) {(a) Block};
+
+% Summing junction
+\node[sum] (sum) at (4,0) {};
+\draw (sum.center) -- ++(0.15,0.15) -- ++(-0.3,-0.3);
+\draw (sum.center) -- ++(-0.15,0.15) -- ++(0.3,-0.3);
+\draw[arrow] (2.5,0) -- (sum) node[midway, above] {$U_1$};
+\draw[arrow] (4,1) -- (sum) node[midway, right] {$U_2$};
+\draw[arrow] (sum) -- (5.5,0) node[midway, above] {$Y$};
+\node[below left, font=\footnotesize] at (sum.west) {$+$};
+\node[above left, font=\footnotesize] at (sum.north) {$\pm$};
+\node[below=0.3cm] at (4,-0.4) {(b) Summer};
+
+% Takeoff point
+\fill (8,0) circle (2pt);
+\draw[arrow] (6.5,0) -- (9.5,0) node[midway, above] {$Y$};
+\draw[arrow] (8,0) -- (8,-1) node[midway, right] {$Y$};
+\node[below=0.3cm] at (8,-1.2) {(c) Takeoff};
+
+\end{tikzpicture}
+\caption{Block diagram elements: (a) transfer function block, (b) summing junction, (c) signal takeoff point.}
+\label{fig:block_elements}
+\end{figure}
+
+\subsubsection{Series (Cascade) Connection}
+
+When systems are connected in series:
+\begin{equation}
+\boxed{G_{\text{series}}(s) = G_1(s)G_2(s)}
+\label{eq:series}
+\end{equation}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, thick, minimum height=0.8cm, minimum width=1.2cm, fill=blue!10},
+    arrow/.style={-Stealth, thick}
+]
+\node[block] (G1) {$G_1$};
+\node[block, right=1cm of G1] (G2) {$G_2$};
+\draw[arrow] (-1.2,0) -- (G1) node[midway, above] {$U$};
+\draw[arrow] (G1) -- (G2);
+\draw[arrow] (G2) -- ++(1.2,0) node[midway, above] {$Y$};
+
+\node at (3.5,0) {$=$};
+
+\node[block, right=0.5cm] (Geq) at (4,0) {$G_1 G_2$};
+\draw[arrow] (3.3,0) -- (Geq);
+\draw[arrow] (Geq) -- ++(1.2,0);
+\end{tikzpicture}
+\caption{Series connection of two blocks.}
+\end{figure}
+
+\subsubsection{Parallel Connection}
+
+When systems are connected in parallel:
+\begin{equation}
+\boxed{G_{\text{parallel}}(s) = G_1(s) + G_2(s)}
+\label{eq:parallel}
+\end{equation}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, thick, minimum height=0.8cm, minimum width=1.2cm, fill=blue!10},
+    sum/.style={circle, draw, thick, minimum size=0.4cm},
+    arrow/.style={-Stealth, thick}
+]
+% Input
+\node (in) at (-1,0) {};
+\fill (-0.5,0) circle (2pt);
+
+% Upper path
+\node[block] (G1) at (1.5,0.8) {$G_1$};
+% Lower path
+\node[block] (G2) at (1.5,-0.8) {$G_2$};
+
+% Sum
+\node[sum] (sum) at (3.5,0) {};
+\draw (sum.center) -- ++(0.1,0.1) -- ++(-0.2,-0.2);
+\draw (sum.center) -- ++(-0.1,0.1) -- ++(0.2,-0.2);
+
+\draw[arrow] (-1.5,0) -- (-0.5,0) node[midway, above] {$U$};
+\draw[thick] (-0.5,0) -- (-0.5,0.8) -- (G1);
+\draw[thick] (-0.5,0) -- (-0.5,-0.8) -- (G2);
+\draw[arrow] (G1) -- (3.5,0.8) -- (sum);
+\draw[arrow] (G2) -- (3.5,-0.8) -- (sum);
+\draw[arrow] (sum) -- ++(1.2,0) node[midway, above] {$Y$};
+
+\node at (5.5,0) {$=$};
+
+\node[block] (Geq) at (7.5,0) {$G_1 + G_2$};
+\draw[arrow] (6.3,0) -- (Geq);
+\draw[arrow] (Geq) -- ++(1.2,0);
+\end{tikzpicture}
+\caption{Parallel connection of two blocks.}
+\end{figure}
+
+\subsubsection{Negative Feedback Connection}
+
+The fundamental feedback configuration:
+\begin{equation}
+\boxed{G_{\text{closed}}(s) = \frac{G(s)}{1 + G(s)H(s)}}
+\label{eq:feedback}
+\end{equation}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, thick, minimum height=0.8cm, minimum width=1.2cm, fill=blue!10},
+    sum/.style={circle, draw, thick, minimum size=0.4cm},
+    arrow/.style={-Stealth, thick}
+]
+% Summing junction
+\node[sum] (sum) at (0,0) {};
+\draw (sum.center) -- ++(0.1,0.1) -- ++(-0.2,-0.2);
+\draw (sum.center) -- ++(-0.1,0.1) -- ++(0.2,-0.2);
+\node[above left, font=\footnotesize] at (sum.north west) {$+$};
+\node[below left, font=\footnotesize] at (sum.south west) {$-$};
+
+% Forward path
+\node[block] (G) at (2,0) {$G(s)$};
+\draw[arrow] (-1.5,0) -- (sum) node[midway, above] {$R$};
+\draw[arrow] (sum) -- (G) node[midway, above] {$E$};
+\draw[arrow] (G) -- (4,0) node[midway, above] {$Y$};
+
+% Feedback path
+\fill (3.5,0) circle (2pt);
+\node[block] (H) at (2,-1.5) {$H(s)$};
+\draw[thick] (3.5,0) -- (3.5,-1.5) -- (H);
+\draw[arrow] (H) -- (0,-1.5) -- (sum);
+
+\end{tikzpicture}
+\caption{Negative feedback configuration. The closed-loop transfer function is $Y/R = G/(1+GH)$.}
+\label{fig:feedback}
+\end{figure}
+
+\begin{proof}[Derivation of Feedback Formula]
+From the block diagram:
+\begin{align}
+E(s) &= R(s) - H(s)Y(s) \\
+Y(s) &= G(s)E(s) = G(s)[R(s) - H(s)Y(s)]
+\end{align}
+Solving for $Y(s)$:
+\begin{align}
+Y(s) + G(s)H(s)Y(s) &= G(s)R(s) \\
+Y(s)[1 + G(s)H(s)] &= G(s)R(s) \\
+\frac{Y(s)}{R(s)} &= \frac{G(s)}{1 + G(s)H(s)}
+\end{align}
+\end{proof}
+
+For unity feedback ($H(s) = 1$):
+\begin{equation}
+G_{\text{closed}}(s) = \frac{G(s)}{1 + G(s)}
+\end{equation}
+
+\subsection{Mason's Gain Formula (Simplified)}
+\label{sec:mason}
+
+For complex block diagrams with multiple loops, \textit{Mason's gain formula} provides a systematic method to find the overall transfer function without repeated block diagram reduction.
+
+For a system with forward paths and feedback loops, the transfer function is:
+\begin{equation}
+G(s) = \frac{\sum_k P_k \Delta_k}{\Delta}
+\label{eq:mason}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $P_k$ = gain of the $k$-th forward path
+    \item $\Delta$ = determinant = $1 - \sum L_i + \sum L_iL_j - \sum L_iL_jL_k + \cdots$
+    \item $L_i$ = gain of the $i$-th individual loop
+    \item $L_iL_j$ = product of gains of non-touching loops $i$ and $j$
+    \item $\Delta_k$ = cofactor of $P_k$ (determinant with loops touching $P_k$ removed)
+\end{itemize}
+
+\begin{example}[Mason's Formula Application]
+Consider the block diagram in Figure~\ref{fig:mason_example}.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, thick, minimum height=0.7cm, minimum width=0.9cm, fill=blue!10},
+    sum/.style={circle, draw, thick, minimum size=0.35cm},
+    arrow/.style={-Stealth, thick},
+    scale=0.9
+]
+\node[sum] (s1) at (0,0) {};
+\node[block] (G1) at (1.5,0) {$G_1$};
+\node[sum] (s2) at (3,0) {};
+\node[block] (G2) at (4.5,0) {$G_2$};
+\node[block] (G3) at (6,0) {$G_3$};
+
+\draw[arrow] (-1,0) -- (s1) node[midway, above] {$R$};
+\draw[arrow] (s1) -- (G1);
+\draw[arrow] (G1) -- (s2);
+\draw[arrow] (s2) -- (G2);
+\draw[arrow] (G2) -- (G3);
+\draw[arrow] (G3) -- (7.5,0) node[midway, above] {$Y$};
+
+% Feedback loops
+\node[block] (H1) at (4.5,-1.2) {$H_1$};
+\node[block] (H2) at (3,-2) {$H_2$};
+
+\fill (7,0) circle (2pt);
+\draw[thick] (7,0) -- (7,-2) -- (H2);
+\draw[arrow] (H2) -- (0,-2) -- (s1);
+
+\fill (5.7,0) circle (2pt);
+\draw[thick] (5.7,0) -- (5.7,-1.2) -- (H1);
+\draw[arrow] (H1) -- (3,-1.2) -- (s2);
+
+\node[below left, font=\tiny] at (s1.south west) {$-$};
+\node[below left, font=\tiny] at (s2.south west) {$-$};
+\end{tikzpicture}
+\caption{Block diagram for Mason's formula example.}
+\label{fig:mason_example}
+\end{figure}
+
+\textbf{Forward path:} $P_1 = G_1G_2G_3$
+
+\textbf{Loops:}
+\begin{itemize}
+    \item $L_1 = -G_2G_3H_1$ (inner loop)
+    \item $L_2 = -G_1G_2G_3H_2$ (outer loop)
+\end{itemize}
+
+These loops touch (share node), so there are no non-touching loop products.
+
+\textbf{Determinant:} $\Delta = 1 - L_1 - L_2 = 1 + G_2G_3H_1 + G_1G_2G_3H_2$
+
+\textbf{Cofactor:} $\Delta_1 = 1$ (all loops touch the forward path)
+
+\textbf{Transfer function:}
+\begin{equation}
+G(s) = \frac{P_1\Delta_1}{\Delta} = \frac{G_1G_2G_3}{1 + G_2G_3H_1 + G_1G_2G_3H_2}
+\end{equation}
+\end{example}
+
+%=============================================================================
+\section{Practical Experiment: RC Low-Pass Filter}
+\label{sec:experiment}
+%=============================================================================
+
+This experiment provides hands-on verification of transfer function theory using a simple RC low-pass filter---the most fundamental dynamic circuit.
+
+\subsection{Theory and Transfer Function Derivation}
+
+\begin{figure}[h]
+\centering
+\begin{circuitikz}[american]
+    \draw (0,0) to[R, l=$R$, o-] (3,0)
+          to[C, l=$C$, -o] (3,-2)
+          -- (0,-2) to[open, o-o] (0,0);
+    \draw (0,0) to[open, v=$v_{\text{in}}(t)$] (0,-2);
+    \draw (3,0) to[open, v^=$v_{\text{out}}(t)$] (3,-2);
+
+    \node[left] at (0,0) {$+$};
+    \node[left] at (0,-2) {$-$};
+    \node[right] at (3,0) {$+$};
+    \node[right] at (3,-2) {$-$};
+\end{circuitikz}
+\caption{RC low-pass filter circuit. The output voltage is taken across the capacitor.}
+\label{fig:rc_circuit}
+\end{figure}
+
+For the RC circuit in Figure~\ref{fig:rc_circuit}, Kirchhoff's voltage law gives:
+\begin{equation}
+v_{\text{in}}(t) = Ri(t) + v_{\text{out}}(t)
+\end{equation}
+
+The capacitor current-voltage relationship is:
+\begin{equation}
+i(t) = C\frac{\diff v_{\text{out}}}{\diff t}
+\end{equation}
+
+Substituting:
+\begin{equation}
+v_{\text{in}} = RC\frac{\diff v_{\text{out}}}{\diff t} + v_{\text{out}}
+\label{eq:rc_ode}
+\end{equation}
+
+Taking the Laplace transform with zero initial conditions:
+\begin{equation}
+V_{\text{in}}(s) = RC \cdot sV_{\text{out}}(s) + V_{\text{out}}(s) = (RCs + 1)V_{\text{out}}(s)
+\end{equation}
+
+The transfer function is:
+\begin{equation}
+\boxed{H(s) = \frac{V_{\text{out}}(s)}{V_{\text{in}}(s)} = \frac{1}{RCs + 1} = \frac{1}{\tau s + 1}}
+\label{eq:rc_tf}
+\end{equation}
+
+where $\tau = RC$ is the time constant.
+
+\subsubsection{Frequency Response}
+
+Substituting $s = \j\omega$ yields the frequency response:
+\begin{equation}
+H(\j\omega) = \frac{1}{1 + \j\omega RC} = \frac{1}{1 + \j(\omega/\omega_c)}
+\end{equation}
+
+where the \textit{cutoff frequency} is:
+\begin{equation}
+\boxed{\omega_c = \frac{1}{RC} \quad \text{or} \quad f_c = \frac{1}{2\pi RC}}
+\label{eq:cutoff}
+\end{equation}
+
+The magnitude and phase are:
+\begin{align}
+|H(\j\omega)| &= \frac{1}{\sqrt{1 + (\omega/\omega_c)^2}} \label{eq:magnitude}\\
+\angle H(\j\omega) &= -\arctan(\omega/\omega_c) \label{eq:phase}
+\end{align}
+
+At $\omega = \omega_c$: $|H| = 1/\sqrt{2} \approx 0.707$ ($-3$ dB) and $\angle H = -45°$.
+
+\subsection{Hardware Implementation}
+
+\subsubsection{Required Components}
+\begin{itemize}
+    \item Resistor: $R = 10\text{ k}\Omega$
+    \item Capacitor: $C = 100\text{ nF}$ (0.1 $\mu$F)
+    \item Breadboard and jumper wires
+    \item Arduino Uno (or similar microcontroller)
+    \item OR: Function generator and oscilloscope
+\end{itemize}
+
+With these values, the theoretical cutoff frequency is:
+\begin{equation}
+f_c = \frac{1}{2\pi \times 10000 \times 100 \times 10^{-9}} = \frac{1}{2\pi \times 0.001} \approx 159.2 \text{ Hz}
+\end{equation}
+
+\subsubsection{Arduino-Based Measurement Procedure}
+
+\begin{enumerate}
+    \item \textbf{Circuit Assembly:} Connect the RC filter with Arduino's PWM output (pin 9) as input and analog input (A0) measuring $v_{\text{out}}$.
+
+    \item \textbf{Generate Test Frequencies:} Use the \texttt{tone()} function or direct timer manipulation to generate square waves at frequencies from 10 Hz to 10 kHz.
+
+    \item \textbf{Measure Response:} For each frequency, measure the peak-to-peak amplitude of the output relative to the input.
+
+    \item \textbf{Calculate Gain:} $|H(f)| = V_{\text{out,pp}} / V_{\text{in,pp}}$
+
+    \item \textbf{Find Cutoff:} Identify the frequency where gain drops to 0.707 ($-3$ dB).
+\end{enumerate}
+
+\subsubsection{Function Generator Method (Preferred)}
+
+\begin{enumerate}
+    \item Apply sinusoidal input from function generator (1 V$_{\text{pp}}$)
+    \item Sweep frequency: 10, 20, 50, 100, 159, 200, 500, 1000, 2000, 5000 Hz
+    \item Measure output amplitude and phase on oscilloscope
+    \item Plot Bode diagram (magnitude in dB vs. log frequency)
+\end{enumerate}
+
+\subsection{Expected Results and Analysis}
+
+\begin{table}[h]
+\centering
+\caption{Theoretical frequency response for RC filter ($f_c = 159.2$ Hz)}
+\label{tab:rc_response}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+\textbf{Frequency (Hz)} & $\omega/\omega_c$ & \textbf{Gain} $|H|$ & \textbf{Gain (dB)} \\
+\midrule
+10 & 0.063 & 0.998 & $-0.02$ \\
+50 & 0.314 & 0.954 & $-0.41$ \\
+100 & 0.628 & 0.847 & $-1.44$ \\
+159 & 1.000 & 0.707 & $-3.01$ \\
+200 & 1.257 & 0.622 & $-4.12$ \\
+500 & 3.142 & 0.303 & $-10.4$ \\
+1000 & 6.283 & 0.157 & $-16.1$ \\
+5000 & 31.42 & 0.032 & $-30.0$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Compare measured values to theory. Typical discrepancies arise from:
+\begin{itemize}
+    \item Component tolerances (resistors typically $\pm 5\%$, capacitors $\pm 10\%$)
+    \item Oscilloscope input capacitance (adds to $C$)
+    \item Function generator output impedance (adds to $R$)
+\end{itemize}
+
+\subsection{Alternative: Python/MATLAB Simulation}
+
+For those without laboratory equipment, the following Python code demonstrates transfer function concepts through simulation.
+
+\begin{lstlisting}[style=pythonstyle, caption={Python simulation of cascaded first-order systems}]
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import signal
+
+# Define two first-order transfer functions
+# G1(s) = 2/(s+1),  G2(s) = 3/(s+2)
+G1 = signal.TransferFunction([2], [1, 1])
+G2 = signal.TransferFunction([3], [1, 2])
+
+# Cascade: G(s) = G1(s) * G2(s)
+# Multiply numerators and convolve denominators
+num_cascade = np.convolve(G1.num, G2.num)
+den_cascade = np.convolve(G1.den, G2.den)
+G_cascade = signal.TransferFunction(num_cascade, den_cascade)
+
+print("G1(s) =", G1)
+print("G2(s) =", G2)
+print("G_cascade(s) =", G_cascade)
+
+# Verify: G(s) = 6 / (s^2 + 3s + 2) = 6 / [(s+1)(s+2)]
+
+# Step response comparison
+t = np.linspace(0, 10, 1000)
+t1, y1 = signal.step(G1, T=t)
+t2, y2 = signal.step(G2, T=t)
+tc, yc = signal.step(G_cascade, T=t)
+
+plt.figure(figsize=(10, 6))
+plt.subplot(2, 1, 1)
+plt.plot(t1, y1, 'b-', label='$G_1(s)$')
+plt.plot(t2, y2, 'g-', label='$G_2(s)$')
+plt.plot(tc, yc, 'r-', label='$G_1 G_2$ (cascade)', linewidth=2)
+plt.xlabel('Time (s)')
+plt.ylabel('Step Response')
+plt.legend()
+plt.grid(True)
+plt.title('Step Response of Individual and Cascaded Systems')
+
+# Bode plot
+plt.subplot(2, 1, 2)
+w = np.logspace(-2, 2, 500)
+w, mag_c, phase_c = signal.bode(G_cascade, w)
+plt.semilogx(w, mag_c)
+plt.xlabel('Frequency (rad/s)')
+plt.ylabel('Magnitude (dB)')
+plt.grid(True)
+plt.title('Bode Magnitude Plot of Cascade System')
+
+plt.tight_layout()
+plt.savefig('cascade_response.png', dpi=150)
+plt.show()
+\end{lstlisting}
+
+Running this code verifies that cascading $G_1(s) = 2/(s+1)$ and $G_2(s) = 3/(s+2)$ yields:
+\begin{equation}
+G(s) = G_1(s)G_2(s) = \frac{6}{(s+1)(s+2)} = \frac{6}{s^2 + 3s + 2}
+\end{equation}
+
+The poles of the cascade system are at $s = -1$ and $s = -2$, the combination of both individual system poles.
+
+%=============================================================================
+\section{Example Problems}
+\label{sec:examples}
+%=============================================================================
+
+\begin{example}[Transfer Function of an RLC Circuit]
+\label{ex:rlc}
+Find the transfer function $H(s) = V_{\text{out}}(s)/V_{\text{in}}(s)$ for the series RLC circuit where the output is taken across the capacitor.
+
+\begin{figure}[h]
+\centering
+\begin{circuitikz}[american]
+    \draw (0,0) to[R, l=$R$, o-] (2,0)
+          to[L, l=$L$] (4,0)
+          to[C, l=$C$, -o] (4,-2)
+          -- (0,-2) to[open, o-o] (0,0);
+    \draw (0,0) to[open, v=$v_{\text{in}}$] (0,-2);
+    \draw (4,0) to[open, v^=$v_{\text{out}}$] (4,-2);
+\end{circuitikz}
+\end{figure}
+
+\textbf{Solution:}
+
+Using voltage divider with impedances:
+\begin{equation}
+H(s) = \frac{Z_C}{Z_R + Z_L + Z_C} = \frac{1/(Cs)}{R + Ls + 1/(Cs)}
+\end{equation}
+
+Multiplying numerator and denominator by $Cs$:
+\begin{equation}
+H(s) = \frac{1}{RCs + LCs^2 + 1} = \frac{1}{LCs^2 + RCs + 1}
+\end{equation}
+
+Dividing by $LC$:
+\begin{equation}
+\boxed{H(s) = \frac{1/LC}{s^2 + (R/L)s + 1/LC} = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}}
+\end{equation}
+
+where $\omega_n = 1/\sqrt{LC}$ and $\zeta = \frac{R}{2}\sqrt{C/L}$.
+\end{example}
+
+\begin{example}[Block Diagram Reduction]
+\label{ex:block_reduction}
+Reduce the block diagram shown below to a single transfer function.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, thick, minimum height=0.7cm, minimum width=0.8cm, fill=blue!10},
+    sum/.style={circle, draw, thick, minimum size=0.35cm},
+    arrow/.style={-Stealth, thick},
+    scale=0.85
+]
+\node[sum] (s1) at (0,0) {};
+\node[block] (G1) at (1.5,0) {$2$};
+\node[sum] (s2) at (3,0) {};
+\node[block] (G2) at (4.5,0) {$\dfrac{1}{s}$};
+\node[block] (G3) at (6.5,0) {$\dfrac{1}{s+3}$};
+
+\draw[arrow] (-1.2,0) -- (s1) node[midway, above] {$R$};
+\draw[arrow] (s1) -- (G1);
+\draw[arrow] (G1) -- (s2);
+\draw[arrow] (s2) -- (G2);
+\draw[arrow] (G2) -- (G3);
+\draw[arrow] (G3) -- (8.2,0) node[midway, above] {$Y$};
+
+\node[block] (H1) at (4.5,-1.3) {$5$};
+\node[block] (H2) at (1.5,-2.2) {$1$};
+
+\fill (7.8,0) circle (2pt);
+\draw[thick] (7.8,0) -- (7.8,-2.2) -- (H2);
+\draw[arrow] (H2) -- (0,-2.2) -- (s1);
+
+\fill (6,0) circle (2pt);
+\draw[thick] (6,0) -- (6,-1.3) -- (H1);
+\draw[arrow] (H1) -- (3,-1.3) -- (s2);
+
+\node[below left, font=\tiny] at (s1.south west) {$-$};
+\node[below left, font=\tiny] at (s2.south west) {$-$};
+\end{tikzpicture}
+\end{figure}
+
+\textbf{Solution:}
+
+\textbf{Step 1:} Identify the inner loop (around $G_2 = 1/s$ with feedback $H_1 = 5$):
+\begin{equation}
+G_{\text{inner}} = \frac{G_2}{1 + G_2 H_1} = \frac{1/s}{1 + 5/s} = \frac{1/s}{(s+5)/s} = \frac{1}{s+5}
+\end{equation}
+
+\textbf{Step 2:} Combine in series with $G_1 = 2$ and $G_3 = 1/(s+3)$:
+\begin{equation}
+G_{\text{forward}} = G_1 \cdot G_{\text{inner}} \cdot G_3 = 2 \cdot \frac{1}{s+5} \cdot \frac{1}{s+3} = \frac{2}{(s+3)(s+5)}
+\end{equation}
+
+\textbf{Step 3:} Close the outer loop with $H_2 = 1$:
+\begin{equation}
+G(s) = \frac{G_{\text{forward}}}{1 + G_{\text{forward}} H_2} = \frac{\dfrac{2}{(s+3)(s+5)}}{1 + \dfrac{2}{(s+3)(s+5)}}
+\end{equation}
+
+\begin{equation}
+\boxed{G(s) = \frac{2}{(s+3)(s+5) + 2} = \frac{2}{s^2 + 8s + 17}}
+\end{equation}
+\end{example}
+
+\begin{example}[Pole-Zero Analysis]
+\label{ex:pole_zero}
+For the transfer function
+\begin{equation}
+G(s) = \frac{5(s+2)}{(s+1)(s^2 + 4s + 8)}
+\end{equation}
+find the poles and zeros, sketch the pole-zero plot, and determine if the system is stable.
+
+\textbf{Solution:}
+
+\textbf{Zeros:} Set numerator = 0: $s + 2 = 0 \Rightarrow z_1 = -2$
+
+\textbf{Poles:} Set denominator = 0:
+\begin{itemize}
+    \item From $(s+1)$: $p_1 = -1$
+    \item From $(s^2 + 4s + 8) = 0$: Using quadratic formula:
+    \begin{equation}
+    s = \frac{-4 \pm \sqrt{16-32}}{2} = \frac{-4 \pm \sqrt{-16}}{2} = -2 \pm 2\j
+    \end{equation}
+    So $p_2 = -2 + 2\j$ and $p_3 = -2 - 2\j$
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[scale=0.9]
+    \draw[-Stealth] (-4,0) -- (1,0) node[right] {$\mathrm{Re}(s)$};
+    \draw[-Stealth] (0,-3) -- (0,3) node[above] {$\mathrm{Im}(s)$};
+
+    \fill[green!10] (-4,-3) rectangle (0,3);
+
+    % Zero
+    \draw[red, thick] (-2,0) circle (4pt);
+    \node[red, below] at (-2,-0.2) {$-2$};
+
+    % Poles
+    \node[cross out, draw=blue, thick, minimum size=5pt] at (-1,0) {};
+    \node[blue, above] at (-1,0.2) {$-1$};
+
+    \node[cross out, draw=blue, thick, minimum size=5pt] at (-2,2) {};
+    \node[blue, right] at (-1.8,2) {$-2+2\j$};
+
+    \node[cross out, draw=blue, thick, minimum size=5pt] at (-2,-2) {};
+    \node[blue, right] at (-1.8,-2) {$-2-2\j$};
+
+    % Axis labels
+    \node[below] at (-3,0) {$-3$};
+    \node[left] at (0,2) {$2\j$};
+    \node[left] at (0,-2) {$-2\j$};
+\end{tikzpicture}
+\caption{Pole-zero plot for Example~\ref{ex:pole_zero}.}
+\end{figure}
+
+\textbf{Stability:} All poles have negative real parts (lie in the left half-plane), so the system is \textbf{stable}.
+\end{example}
+
+\begin{example}[Cascading Two First-Order Systems]
+\label{ex:cascade}
+Two first-order systems with transfer functions
+\begin{equation}
+G_1(s) = \frac{3}{s+2}, \quad G_2(s) = \frac{4}{s+5}
+\end{equation}
+are connected in series. Find the combined transfer function and the system poles.
+
+\textbf{Solution:}
+
+For series connection:
+\begin{equation}
+G(s) = G_1(s) \cdot G_2(s) = \frac{3}{s+2} \cdot \frac{4}{s+5} = \frac{12}{(s+2)(s+5)}
+\end{equation}
+
+Expanding:
+\begin{equation}
+\boxed{G(s) = \frac{12}{s^2 + 7s + 10}}
+\end{equation}
+
+\textbf{Poles:} $p_1 = -2$ (from $G_1$) and $p_2 = -5$ (from $G_2$)
+
+The cascade system inherits the poles of both subsystems. The DC gain is:
+\begin{equation}
+G(0) = \frac{12}{10} = 1.2
+\end{equation}
+\end{example}
+
+\begin{example}[Inverse Laplace Transform and Time Response]
+\label{ex:inverse_laplace}
+A system with transfer function
+\begin{equation}
+G(s) = \frac{10}{(s+1)(s+4)}
+\end{equation}
+is subjected to a unit step input. Find the output $y(t)$.
+
+\textbf{Solution:}
+
+The output in the $s$-domain is:
+\begin{equation}
+Y(s) = G(s)U(s) = \frac{10}{(s+1)(s+4)} \cdot \frac{1}{s} = \frac{10}{s(s+1)(s+4)}
+\end{equation}
+
+\textbf{Partial fraction expansion:}
+\begin{equation}
+\frac{10}{s(s+1)(s+4)} = \frac{A}{s} + \frac{B}{s+1} + \frac{C}{s+4}
+\end{equation}
+
+Multiplying both sides by $s(s+1)(s+4)$:
+\begin{equation}
+10 = A(s+1)(s+4) + Bs(s+4) + Cs(s+1)
+\end{equation}
+
+\textbf{Finding coefficients:}
+\begin{itemize}
+    \item $s = 0$: $10 = A(1)(4) \Rightarrow A = 10/4 = 2.5$
+    \item $s = -1$: $10 = B(-1)(3) \Rightarrow B = -10/3$
+    \item $s = -4$: $10 = C(-4)(-3) \Rightarrow C = 10/12 = 5/6$
+\end{itemize}
+
+Therefore:
+\begin{equation}
+Y(s) = \frac{2.5}{s} - \frac{10/3}{s+1} + \frac{5/6}{s+4}
+\end{equation}
+
+\textbf{Inverse Laplace transform:}
+\begin{equation}
+\boxed{y(t) = 2.5 - \frac{10}{3}\e^{-t} + \frac{5}{6}\e^{-4t}, \quad t \geq 0}
+\end{equation}
+
+\textbf{Verification:}
+\begin{itemize}
+    \item Initial value: $y(0) = 2.5 - 10/3 + 5/6 = 2.5 - 3.33 + 0.83 = 0$ \checkmark
+    \item Final value: $y(\infty) = 2.5$ (matches $\lim_{s\to 0}sY(s) = 10/4 = 2.5$) \checkmark
+\end{itemize}
+\end{example}
+
+%=============================================================================
+\section{Summary}
+\label{sec:summary}
+%=============================================================================
+
+This chapter has established the mathematical framework for analyzing linear time-invariant systems through transfer functions and block diagrams. The key concepts are:
+
+\begin{enumerate}
+    \item \textbf{Historical context:} Transfer functions evolved from Heaviside's operational calculus (1880s) through the formalization efforts of telephone engineers (1920s--30s), providing a powerful abstraction for system analysis.
+
+    \item \textbf{Laplace transform:} The integral transform $F(s) = \int_0^\infty f(t)\e^{-st}\,\diff t$ converts differential equations to algebraic equations in the complex variable $s$.
+
+    \item \textbf{Transfer function:} The ratio $G(s) = Y(s)/U(s)$ with zero initial conditions completely characterizes an LTI system's input-output behavior.
+
+    \item \textbf{Poles and zeros:} Poles determine natural response modes and stability; zeros shape the frequency response. All poles must have negative real parts for BIBO stability.
+
+    \item \textbf{Block diagram algebra:}
+    \begin{itemize}
+        \item Series: $G = G_1 G_2$
+        \item Parallel: $G = G_1 + G_2$
+        \item Feedback: $G = G_{\text{fwd}}/(1 + G_{\text{fwd}}H)$
+    \end{itemize}
+
+    \item \textbf{Practical verification:} Transfer function predictions can be validated experimentally using simple circuits like RC filters, comparing measured frequency response to theoretical calculations.
+\end{enumerate}
+
+The transfer function representation enables modular system design, frequency-domain analysis, and stability assessment---capabilities that form the foundation for the control system design methods developed in subsequent chapters.
+
+%=============================================================================
+\section*{Problems}
+\addcontentsline{toc}{section}{Problems}
+%=============================================================================
+
+\begin{enumerate}
+    \item Find the Laplace transform of $f(t) = t^2\e^{-3t}$ using transform properties.
+
+    \item Derive the transfer function for the mechanical system shown below, where $x$ is the displacement output and $F$ is the force input.
+
+    \item For $G(s) = \dfrac{s+3}{s^2+5s+6}$, find the poles and zeros, and determine the partial fraction expansion.
+
+    \item Reduce the following block diagram to a single transfer function:
+    [Block diagram with forward path $G_1G_2G_3$ and two feedback loops]
+
+    \item An RC high-pass filter has transfer function $H(s) = \dfrac{RCs}{RCs+1}$. Sketch the Bode magnitude plot and find the cutoff frequency.
+
+    \item Using the final value theorem, find the steady-state error for a unity feedback system with $G(s) = \dfrac{10}{s(s+2)}$ subjected to a unit ramp input.
+
+    \item A system has poles at $s = -1 \pm 2\j$ and a zero at $s = -3$. Write the transfer function (with DC gain = 1) and sketch the step response qualitatively.
+
+    \item Design (choose $R$ and $C$ values for) an RC low-pass filter with cutoff frequency $f_c = 1$ kHz.
+
+    \item Apply Mason's gain formula to find the transfer function of the signal flow graph with three forward paths and two non-touching loops.
+
+    \item For the RLC circuit of Example~\ref{ex:rlc}, find component values $R$, $L$, $C$ that give $\omega_n = 100$ rad/s and $\zeta = 0.5$.
+\end{enumerate}
+
+%=============================================================================
+% Bibliography would go here in a full textbook
+%=============================================================================
+

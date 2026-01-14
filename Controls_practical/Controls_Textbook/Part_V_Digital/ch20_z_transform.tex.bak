@@ -1,0 +1,1368 @@
+% Chapter 20: Z-Transform and Discrete Stability
+% A complete IEEE-formatted LaTeX chapter for a control systems textbook
+% Self-contained document
+
+\documentclass[12pt,twoside]{book}
+
+% Essential packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes,calc,patterns,decorations.markings}
+\usepackage{circuitikz}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+
+% IEEE-style formatting
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0.5em}
+
+% Theorem environments
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[chapter]
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}{Lemma}[chapter]
+\newtheorem{example}{Example}[chapter]
+\newtheorem{remark}{Remark}[chapter]
+
+% Code listing style
+\lstdefinestyle{arduino}{
+    language=C++,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!50!black},
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    numbersep=8pt,
+    backgroundcolor=\color{gray!10},
+    frame=single,
+    rulecolor=\color{black},
+    tabsize=2,
+    breaklines=true,
+    breakatwhitespace=true,
+    captionpos=b,
+    morekeywords={pinMode,analogRead,analogWrite,Serial,begin,println,delay,float}
+}
+
+% Header and footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\nouppercase{\leftmark}}
+\fancyhead[RO]{\nouppercase{\rightmark}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Custom commands
+\newcommand{\ztrans}{\mathcal{Z}}
+\newcommand{\laplace}{\mathcal{L}}
+\newcommand{\real}{\text{Re}}
+\newcommand{\imag}{\text{Im}}
+
+\begin{document}
+
+\setcounter{chapter}{19}
+
+\chapter{Z-Transform and Discrete Stability}
+
+\section{Historical Motivation and Development}
+
+The transition from continuous-time to discrete-time control systems represents one of the most significant paradigm shifts in the history of control engineering. This transformation was driven by the fundamental limitations of the Laplace transform when applied to sampled-data systems and the inexorable march toward digital computation. Understanding this historical context provides essential insight into why the z-transform became the cornerstone of modern digital control theory.
+
+\subsection{The Problem with Sampled Signals}
+
+In continuous-time systems, the Laplace transform provides an elegant framework for analyzing linear time-invariant systems. Given a continuous signal $x(t)$, its Laplace transform
+\begin{equation}
+X(s) = \int_0^{\infty} x(t) e^{-st} \, dt
+\end{equation}
+transforms differential equations into algebraic ones, making system analysis tractable. However, when signals are sampled at discrete time intervals---a necessity in any digital implementation---the Laplace framework encounters fundamental difficulties.
+
+Consider a continuous signal $x(t)$ sampled at intervals of $T$ seconds. The sampled signal can be represented mathematically as
+\begin{equation}
+x^*(t) = \sum_{n=0}^{\infty} x(nT) \delta(t - nT)
+\end{equation}
+where $\delta(t)$ is the Dirac delta function. Taking the Laplace transform yields
+\begin{equation}
+X^*(s) = \sum_{n=0}^{\infty} x(nT) e^{-snT}
+\end{equation}
+
+This expression, while mathematically valid, exhibits a troublesome property: it is periodic in the imaginary direction with period $j\omega_s$, where $\omega_s = 2\pi/T$ is the sampling frequency. This periodicity leads to aliasing phenomena and makes direct application of standard Laplace techniques problematic. The need for a more natural mathematical framework for discrete-time systems was evident.
+
+\subsection{Witold Hurewicz and the Birth of the Z-Transform (1947)}
+
+The resolution to this dilemma came from an unexpected source. Witold Hurewicz (1904--1956), a Polish-American mathematician better known for his contributions to algebraic topology and homotopy theory, made a pivotal contribution to control theory during his work on fire-control systems during World War II.
+
+While at the MIT Radiation Laboratory, Hurewicz recognized that the substitution $z = e^{sT}$ in the starred Laplace transform would eliminate the periodicity problem and yield a more tractable mathematical object. This substitution transforms Equation (3) into
+\begin{equation}
+X(z) = \sum_{n=0}^{\infty} x[n] z^{-n}
+\end{equation}
+where we adopt the notation $x[n] = x(nT)$ to emphasize the discrete nature of the sequence.
+
+This transformation, which Hurewicz developed in 1947, has several remarkable properties:
+\begin{itemize}
+    \item It converts difference equations into algebraic equations, just as the Laplace transform converts differential equations.
+    \item The region of convergence is an annular region in the complex z-plane, rather than a half-plane.
+    \item Stability analysis becomes geometric: stable systems have all poles inside the unit circle.
+\end{itemize}
+
+Hurewicz's work, published in his analysis of sampled-data systems, established the mathematical foundation upon which all subsequent digital control theory would be built. Tragically, Hurewicz died in 1956 in a fall during a mathematical conference in Mexico, cutting short a brilliant career that spanned pure mathematics and engineering applications.
+
+\subsection{Eliahu Jury and the Stability Criterion (1958)}
+
+Once the z-transform provided the proper mathematical framework for discrete systems, the question of stability analysis became paramount. For continuous systems, the Routh-Hurwitz criterion provides an algebraic test to determine whether all roots of a polynomial lie in the left half of the s-plane. But for discrete systems, stability requires all roots to lie inside the unit circle---a fundamentally different geometric condition.
+
+Eliahu Ibraham Jury (1923--2022), an Iraqi-American engineer working at the University of California, Berkeley, developed the discrete analog of the Routh-Hurwitz criterion in 1958. Jury, who had emigrated from Baghdad to pursue graduate studies in the United States, recognized that the bilinear transformation could map the unit circle to the imaginary axis, potentially allowing application of Routh-Hurwitz methods. However, he developed a more direct approach.
+
+The Jury stability test operates directly on the coefficients of the characteristic polynomial
+\begin{equation}
+D(z) = a_n z^n + a_{n-1} z^{n-1} + \cdots + a_1 z + a_0
+\end{equation}
+and constructs a triangular array analogous to the Routh array. The test provides necessary and sufficient conditions for all roots to lie within the unit circle without explicitly computing the roots.
+
+Jury's contribution extended beyond the stability test. He authored the influential textbook ``Theory and Application of the Z-Transform Method'' (1964), which became the standard reference for a generation of control engineers. His work established the complete theoretical framework for discrete-time control system analysis and design.
+
+\subsection{The Digital Revolution in Control}
+
+The theoretical developments of Hurewicz and Jury found immediate practical application as digital computers began to replace analog controllers. The advantages were compelling:
+\begin{itemize}
+    \item \textbf{Flexibility}: Control algorithms could be modified by changing software rather than hardware.
+    \item \textbf{Precision}: Digital computation eliminated drift and component variation.
+    \item \textbf{Complexity}: Sophisticated control strategies became implementable.
+    \item \textbf{Integration}: Digital controllers could interface directly with digital sensors and actuators.
+\end{itemize}
+
+By the 1970s, digital control had become the norm in aerospace, process control, and manufacturing. Today, virtually all control systems are implemented digitally, from the antilock brakes in automobiles to the flight control systems in aircraft to the temperature regulators in buildings. The z-transform and discrete stability theory developed by Hurewicz and Jury remain the essential analytical tools.
+
+\subsection{The Fundamental Mapping: $z = e^{sT}$}
+
+The relationship between the s-plane and the z-plane through the mapping $z = e^{sT}$ is central to understanding discrete-time control. This mapping, which motivated Hurewicz's original development, has profound geometric implications.
+
+For a point $s = \sigma + j\omega$ in the s-plane:
+\begin{equation}
+z = e^{sT} = e^{(\sigma + j\omega)T} = e^{\sigma T} e^{j\omega T} = e^{\sigma T} \angle \omega T
+\end{equation}
+
+This reveals that:
+\begin{itemize}
+    \item The real part $\sigma$ determines the magnitude: $|z| = e^{\sigma T}$
+    \item The imaginary part $\omega$ determines the angle: $\angle z = \omega T$
+\end{itemize}
+
+The implications for stability are immediate and elegant:
+\begin{itemize}
+    \item \textbf{Left half-plane} ($\sigma < 0$): Maps to $|z| < 1$ (inside unit circle)
+    \item \textbf{Imaginary axis} ($\sigma = 0$): Maps to $|z| = 1$ (unit circle)
+    \item \textbf{Right half-plane} ($\sigma > 0$): Maps to $|z| > 1$ (outside unit circle)
+\end{itemize}
+
+This mapping preserves the stability interpretation: stable continuous-time poles become stable discrete-time poles, and the unit circle becomes the discrete-time stability boundary, analogous to the imaginary axis in continuous time.
+
+%==============================================================================
+\section{Modern Applications}
+%==============================================================================
+
+The z-transform and discrete-time analysis have become indispensable across a remarkable range of modern applications. What began as a tool for sampled-data control systems has evolved into a fundamental technique spanning signal processing, embedded systems, and even financial modeling.
+
+\subsection{Digital Filter Design}
+
+Digital filters form the backbone of modern signal processing. The z-transform provides the natural framework for their analysis and design.
+
+\textbf{Infinite Impulse Response (IIR) Filters:} These filters have transfer functions of the form
+\begin{equation}
+H(z) = \frac{\sum_{k=0}^{M} b_k z^{-k}}{1 + \sum_{k=1}^{N} a_k z^{-k}}
+\end{equation}
+The poles of $H(z)$ must lie inside the unit circle for stability. IIR filters can achieve sharp frequency responses with relatively few coefficients but require careful design to ensure stability.
+
+\textbf{Finite Impulse Response (FIR) Filters:} With transfer functions $H(z) = \sum_{k=0}^{M} b_k z^{-k}$, FIR filters have all poles at the origin and are inherently stable. They can be designed with exactly linear phase, critical for applications requiring phase coherence.
+
+\subsection{Embedded Control Systems}
+
+Modern embedded controllers---from automotive engine control units to industrial programmable logic controllers---implement control algorithms in discrete time. A typical embedded control loop executes at a fixed sampling rate, reading sensors, computing control actions, and updating actuators at each sample instant.
+
+The z-transform provides the tools to:
+\begin{itemize}
+    \item Convert continuous-time controller designs to discrete implementations
+    \item Analyze the effects of finite sampling rates
+    \item Ensure stability under computational delays
+    \item Design controllers directly in discrete time
+\end{itemize}
+
+\subsection{Digital Signal Processors}
+
+Specialized digital signal processor (DSP) architectures are optimized for the multiply-accumulate operations central to discrete-time signal processing. The z-transform analysis directly informs DSP algorithm implementation, with transfer function coefficients becoming the multiplier values in hardware or software realizations.
+
+\subsection{Discrete-Time Financial Models}
+
+The mathematics of discrete-time systems has found application far beyond engineering. In quantitative finance, discrete-time models for asset prices, interest rates, and derivatives pricing employ techniques directly analogous to z-transform analysis. The stability of financial models---ensuring that simulated prices remain bounded and realistic---parallels the stability analysis of control systems.
+
+%==============================================================================
+\section{Mathematical Foundation}
+%==============================================================================
+
+We now develop the complete mathematical framework of the z-transform, establishing the definitions, properties, and techniques essential for discrete-time system analysis.
+
+\subsection{Definition of the Z-Transform}
+
+\begin{definition}[Z-Transform]
+The z-transform of a discrete-time sequence $x[n]$, defined for $n \geq 0$, is
+\begin{equation}
+X(z) = \ztrans\{x[n]\} = \sum_{n=0}^{\infty} x[n] z^{-n}
+\end{equation}
+where $z$ is a complex variable. This is the \emph{one-sided} or \emph{unilateral} z-transform, appropriate for causal sequences.
+\end{definition}
+
+The z-transform exists in a region of the complex z-plane where the infinite series converges. For most sequences of engineering interest, this region of convergence (ROC) is the exterior of a circle: $|z| > r$ for some $r \geq 0$.
+
+\begin{definition}[Two-Sided Z-Transform]
+For sequences defined for all integers, the \emph{bilateral} z-transform is
+\begin{equation}
+X(z) = \sum_{n=-\infty}^{\infty} x[n] z^{-n}
+\end{equation}
+The ROC for bilateral transforms is typically an annular region $r_1 < |z| < r_2$.
+\end{definition}
+
+\subsection{Z-Transforms of Common Sequences}
+
+\begin{theorem}[Unit Step Sequence]
+For the unit step sequence $u[n] = 1$ for $n \geq 0$:
+\begin{equation}
+\ztrans\{u[n]\} = \sum_{n=0}^{\infty} z^{-n} = \frac{1}{1 - z^{-1}} = \frac{z}{z-1}, \quad |z| > 1
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The series $\sum_{n=0}^{\infty} z^{-n}$ is a geometric series with ratio $z^{-1}$. It converges for $|z^{-1}| < 1$, i.e., $|z| > 1$, with sum $1/(1-z^{-1})$.
+\end{proof}
+
+\begin{theorem}[Exponential Sequence]
+For the exponential sequence $x[n] = a^n u[n]$:
+\begin{equation}
+\ztrans\{a^n u[n]\} = \sum_{n=0}^{\infty} a^n z^{-n} = \sum_{n=0}^{\infty} (az^{-1})^n = \frac{1}{1 - az^{-1}} = \frac{z}{z-a}, \quad |z| > |a|
+\end{equation}
+\end{theorem}
+
+\begin{theorem}[Ramp Sequence]
+For the ramp sequence $x[n] = n \cdot u[n]$:
+\begin{equation}
+\ztrans\{n \cdot u[n]\} = \frac{z}{(z-1)^2}, \quad |z| > 1
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+We use the differentiation property. Starting from $\ztrans\{u[n]\} = z/(z-1)$ and noting that $n \cdot a^n = -a \frac{d}{da}(a^n)$, we employ
+\begin{equation}
+\ztrans\{n \cdot x[n]\} = -z \frac{d}{dz} X(z)
+\end{equation}
+Applying this to $X(z) = z/(z-1)$:
+\begin{equation}
+-z \frac{d}{dz}\left(\frac{z}{z-1}\right) = -z \cdot \frac{(z-1) - z}{(z-1)^2} = -z \cdot \frac{-1}{(z-1)^2} = \frac{z}{(z-1)^2}
+\end{equation}
+\end{proof}
+
+\begin{theorem}[Sinusoidal Sequences]
+For sinusoidal sequences with $\Omega = \omega T$ (discrete frequency):
+\begin{align}
+\ztrans\{\cos(\Omega n) u[n]\} &= \frac{z(z - \cos\Omega)}{z^2 - 2z\cos\Omega + 1}, \quad |z| > 1 \\
+\ztrans\{\sin(\Omega n) u[n]\} &= \frac{z \sin\Omega}{z^2 - 2z\cos\Omega + 1}, \quad |z| > 1
+\end{align}
+\end{theorem}
+
+\begin{proof}
+Using Euler's formula: $\cos(\Omega n) = \frac{1}{2}(e^{j\Omega n} + e^{-j\Omega n})$ and $\sin(\Omega n) = \frac{1}{2j}(e^{j\Omega n} - e^{-j\Omega n})$. Applying the exponential transform:
+\begin{equation}
+\ztrans\{e^{j\Omega n} u[n]\} = \frac{z}{z - e^{j\Omega}}
+\end{equation}
+The results follow from combining conjugate pairs and simplifying.
+\end{proof}
+
+\begin{theorem}[Damped Sinusoids]
+For damped sinusoidal sequences $x[n] = r^n \cos(\Omega n) u[n]$:
+\begin{equation}
+\ztrans\{r^n \cos(\Omega n) u[n]\} = \frac{z(z - r\cos\Omega)}{z^2 - 2rz\cos\Omega + r^2}, \quad |z| > r
+\end{equation}
+\end{theorem}
+
+\subsection{Properties of the Z-Transform}
+
+The z-transform possesses properties analogous to those of the Laplace transform, making it a powerful analytical tool.
+
+\begin{theorem}[Linearity]
+For sequences $x[n]$ and $y[n]$ with z-transforms $X(z)$ and $Y(z)$:
+\begin{equation}
+\ztrans\{\alpha x[n] + \beta y[n]\} = \alpha X(z) + \beta Y(z)
+\end{equation}
+\end{theorem}
+
+\begin{theorem}[Time Shift (Delay)]
+For a sequence $x[n]$ with z-transform $X(z)$:
+\begin{equation}
+\ztrans\{x[n-k]\} = z^{-k} X(z), \quad k > 0
+\end{equation}
+assuming $x[n] = 0$ for $n < 0$.
+\end{theorem}
+
+This property is fundamental: \textbf{multiplication by $z^{-1}$ represents a unit delay}. This makes the z-transform natural for analyzing systems described by difference equations, where delays appear explicitly.
+
+\begin{theorem}[Time Advance]
+For a causal sequence:
+\begin{equation}
+\ztrans\{x[n+1]\} = z X(z) - z x[0]
+\end{equation}
+More generally:
+\begin{equation}
+\ztrans\{x[n+k]\} = z^k X(z) - \sum_{m=0}^{k-1} z^{k-m} x[m]
+\end{equation}
+\end{theorem}
+
+\begin{theorem}[Convolution]
+If $y[n] = x[n] * h[n] = \sum_{k=0}^{n} x[k] h[n-k]$, then:
+\begin{equation}
+Y(z) = X(z) H(z)
+\end{equation}
+\end{theorem}
+
+This convolution property is the foundation of transfer function analysis: the output transform equals the input transform multiplied by the system transfer function.
+
+\begin{theorem}[Initial Value Theorem]
+If $X(z)$ is the z-transform of $x[n]$:
+\begin{equation}
+x[0] = \lim_{z \to \infty} X(z)
+\end{equation}
+\end{theorem}
+
+\begin{theorem}[Final Value Theorem]
+If $x[n]$ has a finite limit as $n \to \infty$ and $(z-1)X(z)$ has no poles outside or on the unit circle except possibly at $z=1$:
+\begin{equation}
+\lim_{n \to \infty} x[n] = \lim_{z \to 1} (z-1) X(z)
+\end{equation}
+\end{theorem}
+
+\begin{table}[H]
+\centering
+\caption{Summary of Z-Transform Properties}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Property} & \textbf{Time Domain} & \textbf{Z-Domain} \\
+\midrule
+Linearity & $\alpha x[n] + \beta y[n]$ & $\alpha X(z) + \beta Y(z)$ \\
+Time delay & $x[n-k]$ & $z^{-k} X(z)$ \\
+Time advance & $x[n+1]$ & $z X(z) - z x[0]$ \\
+Scaling & $a^n x[n]$ & $X(z/a)$ \\
+Time reversal & $x[-n]$ & $X(z^{-1})$ \\
+Convolution & $x[n] * h[n]$ & $X(z) H(z)$ \\
+Multiplication by $n$ & $n \cdot x[n]$ & $-z \frac{dX(z)}{dz}$ \\
+Accumulation & $\sum_{k=0}^{n} x[k]$ & $\frac{z}{z-1} X(z)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Common Z-Transform Pairs}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Sequence} $x[n]$ & \textbf{Z-Transform} $X(z)$ & \textbf{ROC} \\
+\midrule
+$\delta[n]$ (unit impulse) & $1$ & All $z$ \\
+$u[n]$ (unit step) & $\dfrac{z}{z-1}$ & $|z| > 1$ \\
+$a^n u[n]$ & $\dfrac{z}{z-a}$ & $|z| > |a|$ \\
+$n \cdot u[n]$ & $\dfrac{z}{(z-1)^2}$ & $|z| > 1$ \\
+$n \cdot a^n u[n]$ & $\dfrac{az}{(z-a)^2}$ & $|z| > |a|$ \\
+$\cos(\Omega n) u[n]$ & $\dfrac{z(z-\cos\Omega)}{z^2 - 2z\cos\Omega + 1}$ & $|z| > 1$ \\
+$\sin(\Omega n) u[n]$ & $\dfrac{z\sin\Omega}{z^2 - 2z\cos\Omega + 1}$ & $|z| > 1$ \\
+$r^n \cos(\Omega n) u[n]$ & $\dfrac{z(z-r\cos\Omega)}{z^2 - 2rz\cos\Omega + r^2}$ & $|z| > r$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Inverse Z-Transform}
+
+The inverse z-transform recovers the time-domain sequence from its z-domain representation. While the formal definition involves a contour integral:
+\begin{equation}
+x[n] = \frac{1}{2\pi j} \oint_C X(z) z^{n-1} \, dz
+\end{equation}
+practical computation typically uses one of three methods.
+
+\subsubsection{Partial Fraction Expansion}
+
+For rational z-transforms, partial fraction expansion is the most common approach.
+
+\begin{example}
+Find the inverse z-transform of
+\begin{equation}
+X(z) = \frac{2z^2 - 1.5z}{z^2 - 1.5z + 0.5}
+\end{equation}
+
+\textbf{Solution:} First, factor the denominator:
+\begin{equation}
+z^2 - 1.5z + 0.5 = (z - 1)(z - 0.5)
+\end{equation}
+
+For partial fractions, we work with $X(z)/z$:
+\begin{equation}
+\frac{X(z)}{z} = \frac{2z - 1.5}{(z-1)(z-0.5)} = \frac{A}{z-1} + \frac{B}{z-0.5}
+\end{equation}
+
+Solving: $A = \frac{2(1) - 1.5}{1 - 0.5} = \frac{0.5}{0.5} = 1$ and $B = \frac{2(0.5) - 1.5}{0.5 - 1} = \frac{-0.5}{-0.5} = 1$
+
+Therefore:
+\begin{equation}
+X(z) = \frac{z}{z-1} + \frac{z}{z-0.5}
+\end{equation}
+
+Taking the inverse transform:
+\begin{equation}
+x[n] = u[n] + (0.5)^n u[n] = [1 + (0.5)^n] u[n]
+\end{equation}
+\end{example}
+
+\subsubsection{Power Series Expansion}
+
+For complex expressions or computational purposes, direct long division yields the sequence values.
+
+\begin{example}
+Find the first few terms of the inverse z-transform of $X(z) = z/(z - 0.5)$ by long division.
+
+\textbf{Solution:} Rewrite as $X(z) = 1/(1 - 0.5z^{-1})$ and expand:
+\begin{equation}
+X(z) = 1 + 0.5z^{-1} + 0.25z^{-2} + 0.125z^{-3} + \cdots
+\end{equation}
+
+Reading off coefficients: $x[0] = 1$, $x[1] = 0.5$, $x[2] = 0.25$, $x[3] = 0.125$, confirming $x[n] = (0.5)^n$.
+\end{example}
+
+\subsection{Discrete Transfer Functions}
+
+The transfer function of a discrete-time linear time-invariant system relates the z-transforms of output and input:
+\begin{equation}
+H(z) = \frac{Y(z)}{U(z)}
+\end{equation}
+
+Consider the general difference equation:
+\begin{equation}
+y[n] + a_1 y[n-1] + \cdots + a_N y[n-N] = b_0 u[n] + b_1 u[n-1] + \cdots + b_M u[n-M]
+\end{equation}
+
+Taking z-transforms with zero initial conditions:
+\begin{equation}
+Y(z)(1 + a_1 z^{-1} + \cdots + a_N z^{-N}) = U(z)(b_0 + b_1 z^{-1} + \cdots + b_M z^{-M})
+\end{equation}
+
+The transfer function is:
+\begin{equation}
+H(z) = \frac{b_0 + b_1 z^{-1} + \cdots + b_M z^{-M}}{1 + a_1 z^{-1} + \cdots + a_N z^{-N}} = \frac{b_0 z^N + b_1 z^{N-1} + \cdots + b_M z^{N-M}}{z^N + a_1 z^{N-1} + \cdots + a_N}
+\end{equation}
+
+\subsection{S-Plane to Z-Plane Mapping}
+
+The fundamental relationship $z = e^{sT}$ maps the s-plane to the z-plane. Understanding this mapping is essential for converting continuous-time designs to discrete time.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.2]
+    % S-plane
+    \begin{scope}[xshift=-4cm]
+        \draw[->] (-2.5,0) -- (2.5,0) node[right] {$\sigma$};
+        \draw[->] (0,-2.5) -- (0,2.5) node[above] {$j\omega$};
+        \node at (0,-3) {\textbf{S-Plane}};
+
+        % Left half-plane (stable region)
+        \fill[blue!20] (-2.3,-2.3) rectangle (0,2.3);
+        \node at (-1.2,0) {Stable};
+
+        % Right half-plane (unstable region)
+        \fill[red!20] (0,-2.3) rectangle (2.3,2.3);
+        \node at (1.2,0) {Unstable};
+
+        % Imaginary axis
+        \draw[thick,green!50!black] (0,-2.3) -- (0,2.3);
+
+        % Sample points
+        \fill[blue] (-1,1) circle (2pt) node[above left] {$s_1$};
+        \fill[red] (0.5,0.5) circle (2pt) node[above right] {$s_2$};
+        \fill[green!50!black] (0,1.5) circle (2pt) node[right] {$s_3$};
+
+        % Frequency markers
+        \draw[dashed] (-2.3,1.57) -- (2.3,1.57);
+        \node[left] at (-2.3,1.57) {\small $\omega_s/2$};
+        \draw[dashed] (-2.3,-1.57) -- (2.3,-1.57);
+        \node[left] at (-2.3,-1.57) {\small $-\omega_s/2$};
+    \end{scope}
+
+    % Arrow
+    \draw[->,ultra thick] (-0.8,0) -- (0.8,0) node[midway,above] {$z = e^{sT}$};
+
+    % Z-plane
+    \begin{scope}[xshift=4cm]
+        \draw[->] (-2.5,0) -- (2.5,0) node[right] {$\real(z)$};
+        \draw[->] (0,-2.5) -- (0,2.5) node[above] {$\imag(z)$};
+        \node at (0,-3) {\textbf{Z-Plane}};
+
+        % Unit circle
+        \draw[thick,green!50!black] (0,0) circle (1.5);
+
+        % Inside unit circle (stable)
+        \fill[blue!20] (0,0) circle (1.5);
+        \node at (0,0) {Stable};
+
+        % Outside unit circle (unstable) - approximate with corners
+        \fill[red!20] (-2.3,-2.3) rectangle (2.3,2.3);
+        \fill[white] (0,0) circle (1.5);
+        \fill[blue!20] (0,0) circle (1.5);
+        \node at (1.9,1.9) {Unstable};
+
+        % Mapped points (approximate positions)
+        \fill[blue] (0.6,0.9) circle (2pt) node[above right] {$z_1$};
+        \fill[red] (1.6,0.5) circle (2pt) node[right] {$z_2$};
+        \fill[green!50!black] (0,1.5) circle (2pt) node[above right] {$z_3$};
+
+        % Markings on unit circle
+        \node[below right] at (1.5,0) {\small $1$};
+        \node[above left] at (-1.5,0) {\small $-1$};
+    \end{scope}
+\end{tikzpicture}
+\caption{The mapping $z = e^{sT}$ transforms the s-plane to the z-plane. The left half-plane maps to the interior of the unit circle, the imaginary axis maps to the unit circle, and the right half-plane maps to the exterior of the unit circle.}
+\label{fig:s_to_z_mapping}
+\end{figure}
+
+\textbf{Key Properties of the Mapping:}
+
+\begin{enumerate}
+    \item \textbf{Left Half-Plane $\to$ Inside Unit Circle:} For $s = \sigma + j\omega$ with $\sigma < 0$:
+    \begin{equation}
+    |z| = |e^{sT}| = e^{\sigma T} < 1
+    \end{equation}
+
+    \item \textbf{Imaginary Axis $\to$ Unit Circle:} For $s = j\omega$:
+    \begin{equation}
+    |z| = |e^{j\omega T}| = 1
+    \end{equation}
+
+    \item \textbf{Right Half-Plane $\to$ Outside Unit Circle:} For $\sigma > 0$:
+    \begin{equation}
+    |z| = e^{\sigma T} > 1
+    \end{equation}
+
+    \item \textbf{Periodicity:} The mapping is periodic in $\omega$ with period $\omega_s = 2\pi/T$:
+    \begin{equation}
+    e^{s_1 T} = e^{s_2 T} \quad \text{if} \quad s_2 = s_1 + jk\omega_s, \quad k \in \mathbb{Z}
+    \end{equation}
+    This reflects the aliasing phenomenon: frequencies differing by multiples of the sampling frequency map to the same point in the z-plane.
+\end{enumerate}
+
+\subsection{Discrete Stability Criterion}
+
+\begin{theorem}[Discrete-Time Stability]
+A discrete-time LTI system with transfer function $H(z)$ is BIBO (bounded-input bounded-output) stable if and only if all poles of $H(z)$ lie strictly inside the unit circle:
+\begin{equation}
+|p_i| < 1 \quad \text{for all poles } p_i
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The impulse response of the system is $h[n] = \ztrans^{-1}\{H(z)\}$. For a pole at $z = p$ with $|p| < 1$, the corresponding impulse response term is proportional to $p^n$, which decays geometrically to zero. The system is BIBO stable if $\sum_{n=0}^{\infty} |h[n]| < \infty$, which requires all terms to decay, hence all poles must satisfy $|p| < 1$.
+\end{proof}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+    % Z-plane with unit circle
+    \begin{scope}[xshift=-5cm]
+        \draw[->] (-2.5,0) -- (2.5,0) node[right] {$\real(z)$};
+        \draw[->] (0,-2.5) -- (0,2.5) node[above] {$\imag(z)$};
+        \draw[thick,dashed] (0,0) circle (2);
+        \node at (2.2,-0.3) {$1$};
+
+        % Stable poles inside
+        \fill[blue] (0.8,0.6) circle (3pt);
+        \fill[blue] (0.8,-0.6) circle (3pt);
+        \fill[blue] (-0.5,0) circle (3pt);
+        \node[blue] at (0,-1.5) {Stable poles};
+        \node at (0,-3) {\textbf{(a) Stable System}};
+    \end{scope}
+
+    % Time response - stable
+    \begin{scope}[xshift=0cm]
+        \draw[->] (-0.5,0) -- (4,0) node[right] {$n$};
+        \draw[->] (0,-1) -- (0,2.5) node[above] {$y[n]$};
+
+        % Decaying response
+        \foreach \n in {0,1,...,15} {
+            \fill[blue] (0.22*\n, {1.5*exp(-0.2*\n)*cos(60*\n)}) circle (1.5pt);
+        }
+        \draw[blue,dashed,domain=0:3.5,samples=50] plot (\x, {1.5*exp(-0.6*\x)});
+        \draw[blue,dashed,domain=0:3.5,samples=50] plot (\x, {-1.5*exp(-0.6*\x)});
+        \node at (1.8,-2) {Decaying oscillation};
+    \end{scope}
+
+    % Z-plane with poles outside
+    \begin{scope}[xshift=-5cm,yshift=-7cm]
+        \draw[->] (-2.5,0) -- (2.5,0) node[right] {$\real(z)$};
+        \draw[->] (0,-2.5) -- (0,2.5) node[above] {$\imag(z)$};
+        \draw[thick,dashed] (0,0) circle (2);
+
+        % Unstable poles outside
+        \fill[red] (1.6,1.2) circle (3pt);
+        \fill[red] (1.6,-1.2) circle (3pt);
+        \node[red] at (0,-1.5) {Unstable poles};
+        \node at (0,-3) {\textbf{(b) Unstable System}};
+    \end{scope}
+
+    % Time response - unstable
+    \begin{scope}[xshift=0cm,yshift=-7cm]
+        \draw[->] (-0.5,0) -- (4,0) node[right] {$n$};
+        \draw[->] (0,-2) -- (0,2.5) node[above] {$y[n]$};
+
+        % Growing response
+        \foreach \n in {0,1,...,10} {
+            \pgfmathsetmacro{\yval}{0.3*exp(0.15*\n)*cos(50*\n)}
+            \ifdim\yval pt>2pt
+                \fill[red] (0.3*\n, 2) circle (1.5pt);
+            \else
+                \ifdim\yval pt<-2pt
+                    \fill[red] (0.3*\n, -2) circle (1.5pt);
+                \else
+                    \fill[red] (0.3*\n, \yval) circle (1.5pt);
+                \fi
+            \fi
+        }
+        \draw[red,dashed,domain=0:2.5,samples=50] plot (\x, {0.3*exp(0.5*\x)});
+        \draw[red,dashed,domain=0:2.5,samples=50] plot (\x, {-0.3*exp(0.5*\x)});
+        \node at (1.8,-2.5) {Growing oscillation};
+    \end{scope}
+\end{tikzpicture}
+\caption{Pole locations in the z-plane determine system stability. (a) Poles inside the unit circle produce decaying responses. (b) Poles outside the unit circle produce unbounded, growing responses.}
+\label{fig:pole_locations}
+\end{figure}
+
+\subsection{The Jury Stability Test}
+
+The Jury test provides an algebraic criterion for determining whether all roots of a polynomial lie inside the unit circle, analogous to the Routh-Hurwitz test for continuous systems.
+
+Consider the characteristic polynomial:
+\begin{equation}
+D(z) = a_n z^n + a_{n-1} z^{n-1} + \cdots + a_1 z + a_0, \quad a_n > 0
+\end{equation}
+
+\begin{theorem}[Jury Stability Criterion]
+The polynomial $D(z)$ has all roots inside the unit circle if and only if:
+\begin{enumerate}
+    \item $D(1) > 0$
+    \item $(-1)^n D(-1) > 0$
+    \item $|a_0| < a_n$
+    \item All entries in the first column of the Jury array (defined below) satisfy appropriate sign conditions.
+\end{enumerate}
+\end{theorem}
+
+\textbf{Construction of the Jury Array:}
+
+\begin{center}
+\begin{tabular}{c|ccccccc}
+Row & $z^0$ & $z^1$ & $z^2$ & $\cdots$ & $z^{n-2}$ & $z^{n-1}$ & $z^n$ \\
+\hline
+1 & $a_0$ & $a_1$ & $a_2$ & $\cdots$ & $a_{n-2}$ & $a_{n-1}$ & $a_n$ \\
+2 & $a_n$ & $a_{n-1}$ & $a_{n-2}$ & $\cdots$ & $a_2$ & $a_1$ & $a_0$ \\
+\hline
+3 & $b_0$ & $b_1$ & $b_2$ & $\cdots$ & $b_{n-2}$ & $b_{n-1}$ & \\
+4 & $b_{n-1}$ & $b_{n-2}$ & $b_{n-3}$ & $\cdots$ & $b_1$ & $b_0$ & \\
+\hline
+5 & $c_0$ & $c_1$ & $c_2$ & $\cdots$ & $c_{n-2}$ & & \\
+$\vdots$ & & & & & & & \\
+\end{tabular}
+\end{center}
+
+where
+\begin{equation}
+b_k = \begin{vmatrix} a_0 & a_{n-k} \\ a_n & a_k \end{vmatrix} = a_0 a_k - a_n a_{n-k}
+\end{equation}
+
+The stability conditions require:
+\begin{equation}
+|b_0| > |b_{n-1}|, \quad |c_0| > |c_{n-2}|, \quad \ldots
+\end{equation}
+
+\begin{example}[Jury Test Application]
+Determine stability for $D(z) = z^3 - 1.5z^2 + 0.7z - 0.1$.
+
+\textbf{Solution:}
+\begin{enumerate}
+    \item $D(1) = 1 - 1.5 + 0.7 - 0.1 = 0.1 > 0$ \checkmark
+    \item $D(-1) = -1 - 1.5 - 0.7 - 0.1 = -3.3$; $(-1)^3 D(-1) = 3.3 > 0$ \checkmark
+    \item $|a_0| = 0.1 < 1 = a_3$ \checkmark
+\end{enumerate}
+
+Constructing the array with $a_0 = -0.1$, $a_1 = 0.7$, $a_2 = -1.5$, $a_3 = 1$:
+
+Row 1: $-0.1, \quad 0.7, \quad -1.5, \quad 1$
+
+Row 2: $1, \quad -1.5, \quad 0.7, \quad -0.1$
+
+$b_0 = (-0.1)(1) - (1)(-0.1) = -0.1 + 0.1 = 0$...
+
+Since $b_0 = 0$, the test is inconclusive at this step, indicating a root on the unit circle. Indeed, this polynomial has a root at approximately $z = 0.2$, confirming stability, but numerical methods would be needed for a definitive answer in this edge case.
+\end{example}
+
+%==============================================================================
+\section{Practical Experiment: Digital Filter on Arduino}
+%==============================================================================
+
+This laboratory exercise demonstrates discrete-time stability concepts through a hands-on implementation of a first-order digital filter on an Arduino microcontroller. Students will observe how pole location affects system behavior and verify theoretical stability predictions.
+
+\subsection{Objectives}
+
+\begin{enumerate}
+    \item Implement a discrete-time transfer function as a difference equation
+    \item Experimentally verify the stability boundary at $|z| = 1$
+    \item Observe impulse response characteristics for stable and unstable poles
+    \item Compare discrete-time behavior to continuous-time equivalents
+\end{enumerate}
+
+\subsection{Theoretical Background}
+
+Consider the first-order discrete transfer function:
+\begin{equation}
+H(z) = \frac{b_0 + b_1 z^{-1}}{1 - a_1 z^{-1}} = \frac{b_0 z + b_1}{z - a_1}
+\end{equation}
+
+The corresponding difference equation is:
+\begin{equation}
+y[n] = a_1 y[n-1] + b_0 u[n] + b_1 u[n-1]
+\end{equation}
+
+The single pole is located at $z = a_1$. The stability criterion predicts:
+\begin{itemize}
+    \item $|a_1| < 1$: Stable (pole inside unit circle)
+    \item $|a_1| = 1$: Marginally stable (pole on unit circle)
+    \item $|a_1| > 1$: Unstable (pole outside unit circle)
+\end{itemize}
+
+\subsection{Required Components}
+
+\begin{itemize}
+    \item Arduino Uno or compatible microcontroller
+    \item USB cable for programming and serial communication
+    \item Computer with Arduino IDE and serial plotter
+    \item Pushbutton for impulse input (optional)
+    \item Potentiometer for real-time coefficient adjustment (optional)
+\end{itemize}
+
+\subsection{Arduino Implementation}
+
+\begin{lstlisting}[style=arduino,caption={Digital Filter Implementation on Arduino}]
+// Digital Filter Stability Demonstration
+// Implements: y[n] = a1*y[n-1] + b0*u[n] + b1*u[n-1]
+
+// Filter coefficients - modify a1 to change pole location
+float a1 = 0.8;    // Pole location (try: 0.5, 0.8, 0.95, 1.0, 1.05)
+float b0 = 1.0;    // Feedforward coefficient
+float b1 = 0.0;    // Feedforward coefficient (delayed input)
+
+// State variables
+float y_prev = 0.0;      // y[n-1]
+float u_prev = 0.0;      // u[n-1]
+float y_current = 0.0;   // y[n]
+
+// Timing
+unsigned long sampleTime = 50;  // Sample period in ms (20 Hz)
+unsigned long lastSample = 0;
+
+// Input state
+bool impulseApplied = false;
+int sampleCount = 0;
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(LED_BUILTIN, OUTPUT);
+
+    Serial.println("Digital Filter Stability Demo");
+    Serial.print("Pole location a1 = ");
+    Serial.println(a1);
+    Serial.print("Stability: ");
+    if (abs(a1) < 1.0) {
+        Serial.println("STABLE (|a1| < 1)");
+    } else if (abs(a1) == 1.0) {
+        Serial.println("MARGINALLY STABLE (|a1| = 1)");
+    } else {
+        Serial.println("UNSTABLE (|a1| > 1)");
+    }
+    Serial.println("\nSending 'i' applies unit impulse");
+    Serial.println("Sending 'r' resets the filter");
+    Serial.println("\nOutput format: sample, input, output");
+
+    delay(2000);
+}
+
+void loop() {
+    unsigned long currentTime = millis();
+
+    // Check for serial commands
+    if (Serial.available() > 0) {
+        char cmd = Serial.read();
+        if (cmd == 'i' || cmd == 'I') {
+            // Apply impulse
+            impulseApplied = true;
+            sampleCount = 0;
+            Serial.println("\n--- IMPULSE APPLIED ---");
+        } else if (cmd == 'r' || cmd == 'R') {
+            // Reset filter
+            y_prev = 0.0;
+            u_prev = 0.0;
+            y_current = 0.0;
+            impulseApplied = false;
+            sampleCount = 0;
+            Serial.println("\n--- FILTER RESET ---");
+        }
+    }
+
+    // Sample at fixed rate
+    if (currentTime - lastSample >= sampleTime) {
+        lastSample = currentTime;
+
+        // Generate input: impulse at n=0, zero otherwise
+        float u_current = 0.0;
+        if (impulseApplied && sampleCount == 0) {
+            u_current = 1.0;
+        }
+
+        // Compute filter output: y[n] = a1*y[n-1] + b0*u[n] + b1*u[n-1]
+        y_current = a1 * y_prev + b0 * u_current + b1 * u_prev;
+
+        // Limit output to prevent overflow (for demonstration)
+        if (y_current > 1000.0) y_current = 1000.0;
+        if (y_current < -1000.0) y_current = -1000.0;
+
+        // Output for serial plotter
+        if (impulseApplied && sampleCount < 100) {
+            Serial.print(sampleCount);
+            Serial.print(",");
+            Serial.print(u_current, 4);
+            Serial.print(",");
+            Serial.println(y_current, 6);
+
+            // Visual indicator
+            if (abs(y_current) > 0.01) {
+                digitalWrite(LED_BUILTIN, HIGH);
+            } else {
+                digitalWrite(LED_BUILTIN, LOW);
+            }
+        }
+
+        // Update state variables
+        y_prev = y_current;
+        u_prev = u_current;
+        sampleCount++;
+    }
+}
+\end{lstlisting}
+
+\subsection{Experimental Procedure}
+
+\begin{enumerate}
+    \item \textbf{Upload and Connect:} Upload the code to the Arduino and open the Serial Monitor at 115200 baud.
+
+    \item \textbf{Stable Pole Test ($a_1 = 0.8$):}
+    \begin{itemize}
+        \item Pole at $z = 0.8$, inside unit circle
+        \item Send 'i' to apply impulse
+        \item Observe: Output decays geometrically as $(0.8)^n$
+        \item Record: Number of samples to decay below 0.01
+    \end{itemize}
+
+    \item \textbf{Vary Stable Pole:}
+    \begin{itemize}
+        \item Modify $a_1$ to 0.5, 0.9, 0.95, 0.99
+        \item Observe: Closer to unit circle = slower decay
+        \item Record: Decay rates and settling times
+    \end{itemize}
+
+    \item \textbf{Marginally Stable Test ($a_1 = 1.0$):}
+    \begin{itemize}
+        \item Pole exactly on unit circle
+        \item Apply impulse
+        \item Observe: Output remains constant (does not decay)
+    \end{itemize}
+
+    \item \textbf{Unstable Pole Test ($a_1 = 1.05$):}
+    \begin{itemize}
+        \item Pole outside unit circle
+        \item Apply impulse
+        \item Observe: Output grows without bound (limited by code)
+        \item Note: Real unstable systems can damage hardware!
+    \end{itemize}
+
+    \item \textbf{Negative Pole Test ($a_1 = -0.8$):}
+    \begin{itemize}
+        \item Pole at $z = -0.8$ (negative real)
+        \item Apply impulse
+        \item Observe: Output alternates in sign while decaying
+        \item This produces oscillation at half the sampling frequency
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Expected Results}
+
+\begin{table}[H]
+\centering
+\caption{Expected Impulse Response Behavior}
+\begin{tabular}{cccc}
+\toprule
+\textbf{Pole} $a_1$ & \textbf{Location} & \textbf{Stability} & \textbf{Response} \\
+\midrule
+0.5 & Inside, real & Stable & Fast exponential decay \\
+0.8 & Inside, real & Stable & Moderate decay \\
+0.95 & Inside, near boundary & Stable & Slow decay \\
+1.0 & On circle & Marginal & Constant (no decay) \\
+1.05 & Outside & Unstable & Exponential growth \\
+$-0.8$ & Inside, negative & Stable & Alternating decay \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.9]
+    % Stable response a1 = 0.8
+    \begin{scope}[xshift=-6cm]
+        \draw[->] (-0.3,0) -- (4.5,0) node[right] {$n$};
+        \draw[->] (0,-0.3) -- (0,2.5) node[above] {$y[n]$};
+        \node at (2,-0.8) {$a_1 = 0.8$ (Stable)};
+
+        \foreach \n in {0,1,...,12} {
+            \pgfmathsetmacro{\yval}{2*pow(0.8,\n)}
+            \draw[blue,thick] (0.33*\n,0) -- (0.33*\n,\yval);
+            \fill[blue] (0.33*\n,\yval) circle (2pt);
+        }
+    \end{scope}
+
+    % Marginally stable a1 = 1.0
+    \begin{scope}
+        \draw[->] (-0.3,0) -- (4.5,0) node[right] {$n$};
+        \draw[->] (0,-0.3) -- (0,2.5) node[above] {$y[n]$};
+        \node at (2,-0.8) {$a_1 = 1.0$ (Marginal)};
+
+        \foreach \n in {0,1,...,12} {
+            \draw[orange,thick] (0.33*\n,0) -- (0.33*\n,1.5);
+            \fill[orange] (0.33*\n,1.5) circle (2pt);
+        }
+    \end{scope}
+
+    % Unstable a1 = 1.1
+    \begin{scope}[xshift=6cm]
+        \draw[->] (-0.3,0) -- (4.5,0) node[right] {$n$};
+        \draw[->] (0,-0.3) -- (0,2.5) node[above] {$y[n]$};
+        \node at (2,-0.8) {$a_1 = 1.1$ (Unstable)};
+
+        \foreach \n in {0,1,...,8} {
+            \pgfmathsetmacro{\yval}{0.5*pow(1.1,\n)}
+            \ifdim\yval pt>2.3pt
+                \draw[red,thick] (0.33*\n,0) -- (0.33*\n,2.3);
+                \fill[red] (0.33*\n,2.3) circle (2pt);
+            \else
+                \draw[red,thick] (0.33*\n,0) -- (0.33*\n,\yval);
+                \fill[red] (0.33*\n,\yval) circle (2pt);
+            \fi
+        }
+        \node[red] at (3.5,2) {$\to \infty$};
+    \end{scope}
+\end{tikzpicture}
+\caption{Impulse responses for different pole locations demonstrating stable, marginally stable, and unstable behavior.}
+\end{figure}
+
+\subsection{Comparison to Continuous-Time Equivalent}
+
+The discrete pole at $z = a_1$ corresponds to a continuous pole at:
+\begin{equation}
+s = \frac{1}{T} \ln(a_1)
+\end{equation}
+
+For $T = 0.05$ s (20 Hz sampling) and $a_1 = 0.8$:
+\begin{equation}
+s = \frac{1}{0.05} \ln(0.8) = 20 \times (-0.223) = -4.46 \text{ rad/s}
+\end{equation}
+
+The continuous-time system $H(s) = 1/(s + 4.46)$ has time constant $\tau = 1/4.46 = 0.224$ s. The discrete system settles in approximately $5\tau/T = 22$ samples, which students can verify experimentally.
+
+\subsection{Analysis Questions}
+
+\begin{enumerate}
+    \item How does the settling time change as the pole approaches the unit circle?
+    \item What is the relationship between the pole magnitude and the decay rate?
+    \item Why does a negative real pole produce alternating outputs?
+    \item What would happen with complex conjugate poles inside the unit circle?
+    \item How does the sampling rate affect the apparent response speed?
+\end{enumerate}
+
+%==============================================================================
+\section{Worked Examples}
+%==============================================================================
+
+\begin{example}[Z-Transform of Common Sequences]
+Find the z-transform of the sequence $x[n] = (3 \cdot 2^n - 2 \cdot 3^n) u[n]$.
+
+\textbf{Solution:} Using linearity:
+\begin{align}
+X(z) &= 3 \cdot \ztrans\{2^n u[n]\} - 2 \cdot \ztrans\{3^n u[n]\} \\
+&= 3 \cdot \frac{z}{z-2} - 2 \cdot \frac{z}{z-3} \\
+&= \frac{3z(z-3) - 2z(z-2)}{(z-2)(z-3)} \\
+&= \frac{3z^2 - 9z - 2z^2 + 4z}{(z-2)(z-3)} \\
+&= \frac{z^2 - 5z}{(z-2)(z-3)} = \frac{z(z-5)}{(z-2)(z-3)}
+\end{align}
+
+The ROC is $|z| > 3$ since we need both component series to converge.
+\end{example}
+
+\begin{example}[Continuous to Discrete Conversion with ZOH]
+Convert the continuous transfer function $G(s) = \frac{5}{s+2}$ to discrete time using the zero-order hold (ZOH) method with sampling period $T = 0.1$ s.
+
+\textbf{Solution:} The ZOH equivalent is:
+\begin{equation}
+G(z) = (1 - z^{-1}) \ztrans\left\{\frac{G(s)}{s}\right\}
+\end{equation}
+
+First, find $G(s)/s$:
+\begin{equation}
+\frac{G(s)}{s} = \frac{5}{s(s+2)} = \frac{5/2}{s} - \frac{5/2}{s+2}
+\end{equation}
+
+Taking the z-transform of the step response:
+\begin{equation}
+\ztrans\left\{\frac{G(s)}{s}\right\} = \frac{5}{2} \cdot \frac{z}{z-1} - \frac{5}{2} \cdot \frac{z}{z-e^{-2T}}
+\end{equation}
+
+With $T = 0.1$: $e^{-2(0.1)} = e^{-0.2} = 0.8187$
+
+\begin{equation}
+\ztrans\left\{\frac{G(s)}{s}\right\} = \frac{5}{2} \left(\frac{z}{z-1} - \frac{z}{z-0.8187}\right)
+\end{equation}
+
+Applying the ZOH formula:
+\begin{align}
+G(z) &= \frac{z-1}{z} \cdot \frac{5}{2} \cdot \frac{z[(z-0.8187) - (z-1)]}{(z-1)(z-0.8187)} \\
+&= \frac{5}{2} \cdot \frac{1-0.8187}{z-0.8187} \\
+&= \frac{5}{2} \cdot \frac{0.1813}{z-0.8187} \\
+&= \frac{0.4532}{z-0.8187}
+\end{align}
+
+Verification: The DC gain should match. For continuous: $G(0) = 5/2 = 2.5$. For discrete: $G(1) = 0.4532/(1-0.8187) = 0.4532/0.1813 = 2.5$ \checkmark
+\end{example}
+
+\begin{example}[Inverse Z-Transform Using Partial Fractions]
+Find the inverse z-transform of:
+\begin{equation}
+Y(z) = \frac{10z^2}{(z-0.5)(z-0.8)}
+\end{equation}
+
+\textbf{Solution:} First, divide by $z$:
+\begin{equation}
+\frac{Y(z)}{z} = \frac{10z}{(z-0.5)(z-0.8)}
+\end{equation}
+
+Partial fraction expansion:
+\begin{equation}
+\frac{10z}{(z-0.5)(z-0.8)} = \frac{A}{z-0.5} + \frac{B}{z-0.8}
+\end{equation}
+
+Finding coefficients:
+\begin{align}
+A &= \left.\frac{10z}{z-0.8}\right|_{z=0.5} = \frac{10(0.5)}{0.5-0.8} = \frac{5}{-0.3} = -\frac{50}{3} \\
+B &= \left.\frac{10z}{z-0.5}\right|_{z=0.8} = \frac{10(0.8)}{0.8-0.5} = \frac{8}{0.3} = \frac{80}{3}
+\end{align}
+
+Therefore:
+\begin{equation}
+Y(z) = -\frac{50}{3} \cdot \frac{z}{z-0.5} + \frac{80}{3} \cdot \frac{z}{z-0.8}
+\end{equation}
+
+Taking the inverse z-transform:
+\begin{equation}
+y[n] = \left(-\frac{50}{3}(0.5)^n + \frac{80}{3}(0.8)^n\right) u[n]
+\end{equation}
+
+Verification: $y[0] = -50/3 + 80/3 = 30/3 = 10$. From the initial value theorem: $\lim_{z\to\infty} Y(z) = \lim_{z\to\infty} \frac{10z^2}{z^2(1-0.5/z)(1-0.8/z)} = 10$ \checkmark
+\end{example}
+
+\begin{example}[S-Plane to Z-Plane Pole Mapping]
+A continuous-time system has poles at $s_1 = -3$ and $s_{2,3} = -1 \pm j2$. Find the corresponding z-plane pole locations for $T = 0.2$ s and determine stability.
+
+\textbf{Solution:} Using $z = e^{sT}$:
+
+For $s_1 = -3$:
+\begin{equation}
+z_1 = e^{-3 \times 0.2} = e^{-0.6} = 0.549
+\end{equation}
+
+For $s_2 = -1 + j2$:
+\begin{equation}
+z_2 = e^{(-1+j2) \times 0.2} = e^{-0.2} e^{j0.4} = 0.819 \angle 0.4 \text{ rad} = 0.819 \angle 22.9°
+\end{equation}
+
+In rectangular form: $z_2 = 0.819(\cos 0.4 + j\sin 0.4) = 0.755 + j0.319$
+
+For $s_3 = -1 - j2$:
+\begin{equation}
+z_3 = z_2^* = 0.755 - j0.319
+\end{equation}
+
+Stability check:
+\begin{itemize}
+    \item $|z_1| = 0.549 < 1$ \checkmark
+    \item $|z_2| = |z_3| = 0.819 < 1$ \checkmark
+\end{itemize}
+
+All poles are inside the unit circle, confirming the discrete system is stable (as expected, since the continuous system was stable).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.5]
+    % S-plane
+    \begin{scope}[xshift=-3cm]
+        \draw[->] (-2,0) -- (1,0) node[right] {$\sigma$};
+        \draw[->] (0,-1.8) -- (0,1.8) node[above] {$j\omega$};
+        \fill[blue] (-1.5,0) circle (2pt) node[below] {$s_1$};
+        \fill[blue] (-0.5,1) circle (2pt) node[above right] {$s_2$};
+        \fill[blue] (-0.5,-1) circle (2pt) node[below right] {$s_3$};
+        \node at (-0.5,-2.2) {S-Plane};
+    \end{scope}
+
+    % Arrow
+    \draw[->,thick] (-0.5,0) -- (0.5,0) node[midway,above] {$z=e^{sT}$};
+
+    % Z-plane
+    \begin{scope}[xshift=3cm]
+        \draw[->] (-1.5,0) -- (1.5,0) node[right] {$\real$};
+        \draw[->] (0,-1.5) -- (0,1.5) node[above] {$\imag$};
+        \draw[dashed] (0,0) circle (1);
+        \fill[blue] (0.549,0) circle (2pt) node[below right] {$z_1$};
+        \fill[blue] (0.755,0.319) circle (2pt) node[above right] {$z_2$};
+        \fill[blue] (0.755,-0.319) circle (2pt) node[below right] {$z_3$};
+        \node at (0,-2.2) {Z-Plane};
+    \end{scope}
+\end{tikzpicture}
+\caption{Mapping of continuous-time poles to discrete-time poles for Example 20.4.}
+\end{figure}
+\end{example}
+
+\begin{example}[Jury Stability Test]
+Use the Jury test to determine if all roots of $D(z) = z^3 + 0.2z^2 - 0.35z + 0.05$ lie inside the unit circle.
+
+\textbf{Solution:} Identify coefficients: $a_3 = 1$, $a_2 = 0.2$, $a_1 = -0.35$, $a_0 = 0.05$
+
+\textbf{Necessary Conditions:}
+
+1. $D(1) = 1 + 0.2 - 0.35 + 0.05 = 0.9 > 0$ \checkmark
+
+2. $(-1)^3 D(-1) = -(-1 + 0.2 + 0.35 + 0.05) = -(-0.4) = 0.4 > 0$ \checkmark
+
+3. $|a_0| = 0.05 < 1 = a_3$ \checkmark
+
+\textbf{Jury Array Construction:}
+
+Row 1: $0.05, \quad -0.35, \quad 0.2, \quad 1$
+
+Row 2: $1, \quad 0.2, \quad -0.35, \quad 0.05$
+
+Compute $b_k$ values:
+\begin{align}
+b_0 &= a_0 \cdot a_0 - a_3 \cdot a_3 = 0.05^2 - 1^2 = -0.9975 \\
+b_1 &= a_0 \cdot a_1 - a_3 \cdot a_2 = (0.05)(-0.35) - (1)(0.2) = -0.2175 \\
+b_2 &= a_0 \cdot a_2 - a_3 \cdot a_1 = (0.05)(0.2) - (1)(-0.35) = 0.36
+\end{align}
+
+Row 3: $-0.9975, \quad -0.2175, \quad 0.36$
+
+Row 4: $0.36, \quad -0.2175, \quad -0.9975$
+
+Check: $|b_0| = 0.9975 > |b_2| = 0.36$ \checkmark
+
+Compute $c_k$ values:
+\begin{align}
+c_0 &= b_0 \cdot b_0 - b_2 \cdot b_2 = 0.9975^2 - 0.36^2 = 0.995 - 0.1296 = 0.8654 \\
+c_1 &= b_0 \cdot b_1 - b_2 \cdot b_1 = b_1(b_0 - b_2) = -0.2175(-0.9975 - 0.36) = 0.295
+\end{align}
+
+Row 5: $0.8654, \quad 0.295$
+
+Check: $|c_0| = 0.8654 > |c_1| = 0.295$ \checkmark
+
+\textbf{Conclusion:} All conditions are satisfied. The polynomial has all roots inside the unit circle, and the system is stable.
+\end{example}
+
+\begin{example}[Complete Discrete System Analysis]
+A discrete-time control system has the closed-loop transfer function:
+\begin{equation}
+H(z) = \frac{0.2z + 0.15}{z^2 - 1.2z + 0.52}
+\end{equation}
+Analyze stability, find the poles, and sketch the impulse response character.
+
+\textbf{Solution:}
+
+\textbf{Pole Locations:}
+Using the quadratic formula for $z^2 - 1.2z + 0.52 = 0$:
+\begin{equation}
+z = \frac{1.2 \pm \sqrt{1.44 - 2.08}}{2} = \frac{1.2 \pm \sqrt{-0.64}}{2} = \frac{1.2 \pm j0.8}{2} = 0.6 \pm j0.4
+\end{equation}
+
+\textbf{Pole Magnitude:}
+\begin{equation}
+|z| = \sqrt{0.6^2 + 0.4^2} = \sqrt{0.36 + 0.16} = \sqrt{0.52} = 0.721
+\end{equation}
+
+Since $|z| = 0.721 < 1$, both poles are inside the unit circle. \textbf{The system is stable.}
+
+\textbf{Pole Angle:}
+\begin{equation}
+\theta = \arctan\left(\frac{0.4}{0.6}\right) = \arctan(0.667) = 33.7° = 0.588 \text{ rad}
+\end{equation}
+
+\textbf{Impulse Response Character:}
+
+The impulse response will be of the form:
+\begin{equation}
+h[n] = C \cdot r^n \cos(n\theta + \phi)
+\end{equation}
+where $r = 0.721$ (decay rate) and $\theta = 0.588$ rad/sample (oscillation frequency).
+
+Characteristics:
+\begin{itemize}
+    \item \textbf{Decay:} Each sample decays by factor $r = 0.721$
+    \item \textbf{Time constant:} $n_{0.37} = -1/\ln(0.721) = 3.06$ samples
+    \item \textbf{Oscillation period:} $2\pi/0.588 = 10.7$ samples
+    \item \textbf{Behavior:} Damped oscillation, stable convergence to zero
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.2]
+    % Z-plane
+    \begin{scope}[xshift=-4cm]
+        \draw[->] (-1.5,0) -- (1.5,0) node[right] {$\real$};
+        \draw[->] (0,-1.5) -- (0,1.5) node[above] {$\imag$};
+        \draw[dashed] (0,0) circle (1);
+        \fill[blue] (0.6,0.4) circle (2pt) node[above right] {$0.6+j0.4$};
+        \fill[blue] (0.6,-0.4) circle (2pt) node[below right] {$0.6-j0.4$};
+        \draw[dotted] (0,0) -- (0.6,0.4);
+        \node at (0.3,0.35) {\small $r=0.72$};
+    \end{scope}
+
+    % Impulse response
+    \begin{scope}[xshift=2cm]
+        \draw[->] (-0.3,0) -- (5,0) node[right] {$n$};
+        \draw[->] (0,-1.2) -- (0,1.5) node[above] {$h[n]$};
+
+        \foreach \n in {0,1,...,20} {
+            \pgfmathsetmacro{\yval}{1.2*pow(0.721,\n)*cos(33.7*\n)}
+            \draw[blue,thick] (0.22*\n,0) -- (0.22*\n,\yval);
+            \fill[blue] (0.22*\n,\yval) circle (1.5pt);
+        }
+        \draw[red,dashed,domain=0:4.5,samples=50] plot (\x, {1.2*exp(-1.5*\x)});
+        \draw[red,dashed,domain=0:4.5,samples=50] plot (\x, {-1.2*exp(-1.5*\x)});
+    \end{scope}
+\end{tikzpicture}
+\caption{Z-plane poles and corresponding damped oscillatory impulse response for Example 20.6.}
+\end{figure}
+\end{example}
+
+%==============================================================================
+\section{Chapter Summary}
+%==============================================================================
+
+This chapter has established the z-transform as the fundamental tool for discrete-time control system analysis. The key concepts are:
+
+\begin{enumerate}
+    \item \textbf{Historical Development:} The z-transform emerged from Hurewicz's work on sampled-data systems (1947) and was complemented by Jury's stability criterion (1958), providing a complete framework for discrete-time analysis.
+
+    \item \textbf{Definition and Properties:} The z-transform $X(z) = \sum_{n=0}^{\infty} x[n] z^{-n}$ converts sequences to functions of a complex variable, with properties paralleling the Laplace transform.
+
+    \item \textbf{S-Plane to Z-Plane Mapping:} The transformation $z = e^{sT}$ maps:
+    \begin{itemize}
+        \item Left half-plane $\to$ inside unit circle (stable)
+        \item Imaginary axis $\to$ unit circle (stability boundary)
+        \item Right half-plane $\to$ outside unit circle (unstable)
+    \end{itemize}
+
+    \item \textbf{Stability Criterion:} A discrete-time system is stable if and only if all poles of its transfer function satisfy $|p_i| < 1$.
+
+    \item \textbf{Jury Test:} Provides an algebraic method to determine whether all roots of a polynomial lie inside the unit circle without computing roots explicitly.
+
+    \item \textbf{Practical Implementation:} Discrete transfer functions are implemented as difference equations, with pole location directly determining stability and response characteristics.
+\end{enumerate}
+
+The z-transform methodology is essential for modern digital control, enabling rigorous analysis and design of systems implemented on microcontrollers, DSPs, and computers.
+
+%==============================================================================
+\section{Problems}
+%==============================================================================
+
+\begin{enumerate}
+    \item Find the z-transform of $x[n] = (n+1)(0.5)^n u[n]$.
+
+    \item Determine the inverse z-transform of $X(z) = \frac{z^2 + 2z}{(z-0.5)(z-0.25)}$.
+
+    \item A continuous system has transfer function $G(s) = \frac{10}{(s+1)(s+5)}$. Convert to discrete time using ZOH with $T = 0.1$ s.
+
+    \item Apply the Jury test to determine stability of $D(z) = z^4 - 0.5z^3 + 0.3z^2 - 0.1z + 0.02$.
+
+    \item A discrete system has poles at $z = 0.8 \pm j0.4$. Find:
+    \begin{enumerate}
+        \item The pole magnitude and angle
+        \item The equivalent continuous-time pole locations for $T = 0.05$ s
+        \item The approximate settling time in samples
+    \end{enumerate}
+
+    \item Design a first-order discrete filter with time constant equivalent to $\tau = 0.2$ s for a sampling rate of 100 Hz. Verify stability.
+
+    \item The difference equation $y[n] = 1.5y[n-1] - 0.56y[n-2] + u[n]$ represents a discrete system. Find the transfer function, pole locations, and determine stability.
+
+    \item Using the Arduino experiment as a guide, predict and sketch the impulse response for a filter with $a_1 = -0.9$. Explain the alternating behavior.
+
+    \item Prove that the final value theorem fails when there are poles on or outside the unit circle.
+
+    \item A digital controller samples at 50 Hz. What is the maximum continuous-time natural frequency that can be represented without aliasing? What z-plane angle corresponds to this frequency?
+\end{enumerate}
+
+%==============================================================================
+% Bibliography
+%==============================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{hurewicz1947}
+W. Hurewicz, ``Filters and servo systems with pulsed data,'' in \textit{Theory of Servomechanisms}, H. M. James, N. B. Nichols, and R. S. Phillips, Eds. New York: McGraw-Hill, 1947, ch. 5.
+
+\bibitem{jury1958}
+E. I. Jury, ``A stability test for linear discrete systems in table form,'' \textit{Proc. IRE}, vol. 46, no. 6, pp. 1349--1350, June 1958.
+
+\bibitem{jury1964}
+E. I. Jury, \textit{Theory and Application of the Z-Transform Method}. New York: Wiley, 1964.
+
+\bibitem{ragazzini1958}
+J. R. Ragazzini and G. F. Franklin, \textit{Sampled-Data Control Systems}. New York: McGraw-Hill, 1958.
+
+\bibitem{oppenheim1989}
+A. V. Oppenheim and R. W. Schafer, \textit{Discrete-Time Signal Processing}. Englewood Cliffs, NJ: Prentice-Hall, 1989.
+
+\bibitem{franklin1998}
+G. F. Franklin, J. D. Powell, and M. L. Workman, \textit{Digital Control of Dynamic Systems}, 3rd ed. Menlo Park, CA: Addison-Wesley, 1998.
+
+\bibitem{ogata1995}
+K. Ogata, \textit{Discrete-Time Control Systems}, 2nd ed. Englewood Cliffs, NJ: Prentice-Hall, 1995.
+
+\bibitem{astrom1997}
+K. J. \r{A}str\"{o}m and B. Wittenmark, \textit{Computer-Controlled Systems: Theory and Design}, 3rd ed. Upper Saddle River, NJ: Prentice-Hall, 1997.
+
+\end{thebibliography}
+
+\end{document}

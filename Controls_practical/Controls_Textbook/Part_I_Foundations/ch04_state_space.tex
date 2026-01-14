@@ -1,0 +1,1108 @@
+
+\title{Chapter 4: State-Space Representation}
+\author{Control Systems: A Practical Approach}
+\maketitle
+
+\section*{Chapter Overview}
+\addcontentsline{toc}{section}{Chapter Overview}
+
+This chapter introduces state-space representation, the modern foundation of control theory. We begin with the historical context that motivated its development, explore its mathematical framework, and conclude with a hands-on laboratory experiment using a two-mass system. By the end of this chapter, you will understand why state-space methods revolutionized control engineering and how to apply them to multi-variable systems.
+
+\vspace{1em}
+\noindent\textbf{Learning Objectives:}
+\begin{itemize}[noitemsep]
+    \item Understand the historical development and motivation for state-space methods
+    \item Define state variables and formulate state-space models
+    \item Convert between transfer function and state-space representations
+    \item Analyze system dynamics using eigenvalues and the state transition matrix
+    \item Apply state-space modeling to practical multi-body systems
+\end{itemize}
+
+%==============================================================================
+\section{Historical Development and Motivation}
+%==============================================================================
+
+\subsection{The Limitations of Classical Control}
+
+By the late 1950s, control engineering had reached a critical impasse. The classical methods developed by Bode, Nyquist, and others---while elegant and powerful for single-input, single-output (SISO) systems---proved inadequate for the increasingly complex engineering challenges of the post-war era. Transfer function methods, the cornerstone of classical control, suffered from fundamental limitations:
+
+\begin{enumerate}
+    \item \textbf{MIMO Complexity:} For systems with multiple inputs and outputs, transfer functions become unwieldy matrices of rational polynomials, losing the intuitive interpretation that made them valuable.
+
+    \item \textbf{Initial Conditions:} Transfer functions assume zero initial conditions, making them ill-suited for trajectory planning or systems that must operate from arbitrary starting points.
+
+    \item \textbf{Internal Behavior:} Transfer functions describe only input-output relationships, potentially hiding unstable internal dynamics---a phenomenon later formalized as ``observability'' and ``controllability.''
+
+    \item \textbf{Time-Varying Systems:} Classical methods assume linear time-invariant (LTI) systems; extending them to time-varying systems required fundamental reformulation.
+\end{enumerate}
+
+\subsection{Rudolf Kalman and the State-Space Revolution}
+
+Rudolf Emil Kalman (1930--2016), a Hungarian-American mathematician and electrical engineer, transformed control theory with a series of landmark papers published between 1960 and 1963. Working first at the Research Institute for Advanced Studies (RIAS) in Baltimore and later at Stanford University, Kalman developed what would become known as \textit{modern control theory}.
+
+Kalman's key insight was deceptively simple yet profound: rather than describing a system by its input-output relationship, describe it by its \textit{internal state}---a minimal set of variables that, together with knowledge of future inputs, completely determines the system's future behavior.
+
+\begin{quote}
+\textit{``The state of a system at time $t_0$ is the minimal amount of information at $t_0$ which, together with the input for $t \geq t_0$, uniquely determines the behavior of the system for all $t \geq t_0$.''}\\
+\hfill---Rudolf Kalman, 1960
+\end{quote}
+
+This concept, while mathematically precise, had deep physical intuition. Consider a swinging pendulum: knowing only its current position is insufficient to predict its future motion. We must also know its velocity. Together, position and velocity constitute the pendulum's state---the minimal information required to predict its future trajectory.
+
+Kalman's 1960 paper ``A New Approach to Linear Filtering and Prediction Problems'' introduced the celebrated Kalman filter, while his 1960 work ``On the General Theory of Control Systems'' established the concepts of controllability and observability---properties that determine whether a system can be steered to desired states and whether its internal states can be inferred from measurements.
+
+\subsection{The Space Race Imperative}
+
+The timing of Kalman's theoretical developments proved fortuitous. The Soviet Union's launch of Sputnik in 1957 had galvanized American investment in aerospace technology, and NASA's Apollo program demanded control systems of unprecedented sophistication.
+
+Spacecraft guidance presented precisely the challenges that classical control could not address:
+
+\begin{itemize}
+    \item \textbf{Multiple Coupled Variables:} A spacecraft's position and orientation in three-dimensional space require tracking at least twelve state variables (position, velocity, attitude, and angular rates).
+
+    \item \textbf{Sensor Fusion:} Navigation required combining measurements from multiple imperfect sensors---gyroscopes, accelerometers, star trackers, and radar---each with different noise characteristics and update rates.
+
+    \item \textbf{Fuel Optimality:} With strictly limited fuel, controllers had to minimize thrust usage while achieving precise trajectory corrections.
+
+    \item \textbf{Real-Time Computation:} All calculations had to execute on primitive onboard computers with kilobytes of memory and kilohertz clock speeds.
+\end{itemize}
+
+Stanley Schmidt at NASA Ames Research Center recognized the potential of Kalman's work and implemented the first practical Kalman filter for the Apollo navigation computer. The filter elegantly solved the sensor fusion problem, optimally combining noisy measurements to estimate the spacecraft's true state. This application demonstrated that state-space methods were not merely theoretical curiosities but practical tools for solving real engineering problems.
+
+\subsection{Parallel Soviet Developments}
+
+Remarkably, Soviet mathematicians developed complementary theories almost simultaneously. Lev Pontryagin (1908--1988), despite losing his eyesight at age 14, became one of the twentieth century's greatest mathematicians. His 1956 formulation of the \textit{maximum principle} provided necessary conditions for optimal control---determining control inputs that minimize cost functionals subject to state-space dynamics.
+
+While Kalman approached control from an estimation and stochastic perspective, Pontryagin's work emphasized deterministic optimal control. The two approaches proved deeply complementary: Kalman's filter estimates the current state from noisy measurements, while Pontryagin's maximum principle determines optimal control actions given known states. Together, they form the foundation of modern optimal control and estimation theory.
+
+The Cold War's competitive pressure ironically accelerated progress on both sides, with each nation's advances spurring the other to greater efforts. International conferences in the 1960s gradually broke down barriers, allowing the synthesis of Eastern and Western approaches into a unified modern control theory.
+
+\subsection{Connections to Classical Physics}
+
+State-space methods, while novel in control engineering, connected to much older mathematical traditions. William Rowan Hamilton's reformulation of classical mechanics in the 1830s had introduced phase space---the space of generalized positions and momenta---as the natural setting for dynamical systems. Hamilton's equations,
+\begin{align}
+    \dot{q}_i &= \frac{\partial H}{\partial p_i}, & \dot{p}_i &= -\frac{\partial H}{\partial q_i},
+\end{align}
+where $H$ is the Hamiltonian (total energy) and $(q_i, p_i)$ are generalized coordinates and momenta, are precisely state-space equations in disguise.
+
+This connection is no coincidence. Physical systems conserve information about their state: knowing a system's complete state at one instant determines its state at all future instants (for deterministic systems). State-space control theory formalized this physical intuition and extended it to systems with external inputs and outputs.
+
+The eigenvalue analysis central to state-space methods similarly connects to the normal modes of vibration studied by physicists since the eighteenth century. When we diagonalize the state matrix $\mat{A}$, we decompose complex coupled dynamics into independent modal behaviors---each evolving according to its own time constant.
+
+%==============================================================================
+\section{Modern Applications}
+%==============================================================================
+
+State-space methods have become ubiquitous in modern engineering. We highlight several domains where their advantages prove decisive.
+
+\subsection{Aerospace Guidance and Navigation}
+
+Modern aircraft and spacecraft rely entirely on state-space control. The F-16 fighter's fly-by-wire system uses state feedback to stabilize an intentionally unstable airframe, providing maneuverability impossible with classical control. Commercial aircraft autopilots estimate aircraft state (position, velocity, attitude) using Kalman filters that fuse GPS, inertial navigation, and air data measurements.
+
+Spacecraft applications have grown increasingly sophisticated. Mars rovers navigate autonomously using state estimation to track their position across terrain lacking GPS infrastructure. Satellite constellations maintain precise formations using decentralized state-space controllers that coordinate dozens of spacecraft.
+
+\subsection{Robotic Manipulation}
+
+Industrial and research robots exemplify MIMO control challenges. A six-axis robot arm has twelve state variables (six joint angles and six joint velocities) with highly coupled, nonlinear dynamics. State-space methods enable:
+
+\begin{itemize}
+    \item \textbf{Computed Torque Control:} Linearization of nonlinear dynamics about the current state, enabling linear state feedback.
+    \item \textbf{State Estimation:} Kalman filters combine joint encoder measurements with dynamic models to estimate unmeasured states like joint velocities.
+    \item \textbf{Trajectory Optimization:} Pontryagin's maximum principle determines time-optimal or energy-optimal joint trajectories.
+\end{itemize}
+
+\subsection{Economic and Financial Modeling}
+
+State-space methods have transformed quantitative economics. Macroeconomic models treat unobservable quantities (``potential GDP,'' ``natural unemployment rate'') as state variables estimated from observable data (measured GDP, employment statistics) using Kalman filtering. Central banks worldwide use such models for monetary policy analysis.
+
+In finance, state-space models capture time-varying volatility, enabling better risk management and derivative pricing. The ``stochastic volatility'' models underlying modern options pricing are fundamentally state-space formulations with volatility as a hidden state.
+
+\subsection{Power Grid State Estimation}
+
+Electrical power grids comprise thousands of interconnected generators, transmission lines, and loads. Grid operators must continuously estimate the system state (bus voltages and phase angles throughout the network) from sparse measurements. State estimation algorithms, direct descendants of Kalman's work, process measurements from across the grid to provide operators with situational awareness.
+
+Smart grid technologies extend these methods to distribution networks, enabling integration of distributed solar generation, electric vehicles, and demand response---all requiring estimation and control of previously unmonitored network states.
+
+%==============================================================================
+\section{Mathematical Foundation}
+%==============================================================================
+
+\subsection{State Variable Definition}
+
+We now formalize the concepts introduced historically. Consider a dynamic system whose behavior evolves over time in response to inputs.
+
+\begin{definition}[State]
+The \textbf{state} of a system at time $t_0$ is the minimum set of numbers $x_1(t_0), x_2(t_0), \ldots, x_n(t_0)$ such that knowledge of these numbers and the input $u(t)$ for $t \geq t_0$ completely determines the system's behavior for all $t \geq t_0$.
+\end{definition}
+
+The state variables are collected into a \textbf{state vector}:
+\begin{equation}
+    \state(t) = \begin{bmatrix} x_1(t) \\ x_2(t) \\ \vdots \\ x_n(t) \end{bmatrix} \in \Real^n
+\end{equation}
+
+The integer $n$ is the \textbf{order} of the system, and the $n$-dimensional space containing all possible state vectors is the \textbf{state space}.
+
+\begin{example}[Simple Pendulum]
+A simple pendulum's motion is governed by $\ddot{\theta} + (g/L)\sin\theta = 0$. To predict future motion, we need:
+\begin{itemize}
+    \item $x_1 = \theta$ (angular position)
+    \item $x_2 = \dot{\theta}$ (angular velocity)
+\end{itemize}
+Knowing only $\theta$ is insufficient---we cannot distinguish a pendulum at rest from one passing through the same angle with high velocity.
+\end{example}
+
+\subsection{Standard State-Space Form}
+
+For linear time-invariant (LTI) systems, the state-space representation takes a standard matrix form:
+
+\begin{equation}
+\boxed{
+\begin{aligned}
+    \stateder(t) &= \mat{A}\state(t) + \mat{B}\inputvec(t) & &\text{(State Equation)}\\
+    \outputvec(t) &= \mat{C}\state(t) + \mat{D}\inputvec(t) & &\text{(Output Equation)}
+\end{aligned}
+}
+\label{eq:state_space_standard}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\state(t) \in \Real^n$ is the state vector
+    \item $\inputvec(t) \in \Real^m$ is the input vector
+    \item $\outputvec(t) \in \Real^p$ is the output vector
+    \item $\mat{A} \in \Real^{n \times n}$ is the \textbf{system matrix} (or state matrix)
+    \item $\mat{B} \in \Real^{n \times m}$ is the \textbf{input matrix}
+    \item $\mat{C} \in \Real^{p \times n}$ is the \textbf{output matrix}
+    \item $\mat{D} \in \Real^{p \times m}$ is the \textbf{feedthrough matrix} (often zero)
+\end{itemize}
+
+The state equation is a system of $n$ coupled first-order ordinary differential equations. The output equation is algebraic, specifying which combinations of states and inputs are measured.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[auto, node distance=2cm, >=latex, scale=0.9, transform shape]
+    % Blocks
+    \node [draw, rectangle, minimum height=1.2cm, minimum width=1.5cm] (B) {$\mat{B}$};
+    \node [draw, circle, right=1.2cm of B, inner sep=2pt] (sum1) {$+$};
+    \node [draw, rectangle, right=1cm of sum1, minimum height=1.2cm, minimum width=1.8cm] (int) {$\displaystyle\int$};
+    \node [draw, rectangle, right=1.5cm of int, minimum height=1.2cm, minimum width=1.5cm] (C) {$\mat{C}$};
+    \node [draw, circle, right=1.2cm of C, inner sep=2pt] (sum2) {$+$};
+    \node [draw, rectangle, below=1.5cm of int, minimum height=1.2cm, minimum width=1.5cm] (A) {$\mat{A}$};
+    \node [draw, rectangle, above=0.8cm of sum2, minimum height=1.2cm, minimum width=1.5cm] (D) {$\mat{D}$};
+
+    % Input and output
+    \node [left=1.2cm of B] (input) {$\inputvec(t)$};
+    \node [right=1.2cm of sum2] (output) {$\outputvec(t)$};
+
+    % State labels
+    \node [above=0.15cm of int] (xdot) {$\stateder$};
+    \node [above right=0.1cm and 0.5cm of int] (x) {$\state$};
+
+    % Arrows
+    \draw [->] (input) -- (B);
+    \draw [->] (B) -- (sum1);
+    \draw [->] (sum1) -- (int);
+    \draw [->] (int) -- (C);
+    \draw [->] (C) -- (sum2);
+    \draw [->] (sum2) -- (output);
+
+    % Feedback path
+    \coordinate (fb1) at ($(int.east)+(0.6,0)$);
+    \draw [->] (fb1) |- (A);
+    \draw [->] (A) -| (sum1);
+
+    % Feedthrough path
+    \coordinate (ff1) at ($(B.west)+(-0.4,0)$);
+    \draw [->] (ff1) |- (D);
+    \draw [->] (D) -| (sum2);
+
+\end{tikzpicture}
+\caption{Block diagram of state-space representation. The integrator block converts $\stateder$ to $\state$. The feedback through $\mat{A}$ creates the coupled dynamics, while $\mat{D}$ provides direct feedthrough from input to output.}
+\label{fig:state_space_block}
+\end{figure}
+
+\subsection{Converting Differential Equations to State-Space Form}
+
+Any $n$th-order linear ODE can be converted to $n$ first-order equations in state-space form. The procedure is systematic:
+
+\textbf{General Procedure:}
+\begin{enumerate}
+    \item Identify the highest derivative of the output in the differential equation.
+    \item Choose state variables as the output and its successive derivatives.
+    \item Write each derivative as a function of states and inputs.
+    \item Assemble into matrix form.
+\end{enumerate}
+
+\begin{example}[Second-Order System]
+Consider the general second-order ODE:
+\begin{equation}
+    \ddot{y} + a_1\dot{y} + a_0 y = b_0 u
+\end{equation}
+
+\textbf{Step 1:} Choose state variables:
+\begin{align}
+    x_1 &= y \\
+    x_2 &= \dot{y}
+\end{align}
+
+\textbf{Step 2:} Express derivatives:
+\begin{align}
+    \dot{x}_1 &= x_2 \\
+    \dot{x}_2 &= \ddot{y} = -a_0 y - a_1 \dot{y} + b_0 u = -a_0 x_1 - a_1 x_2 + b_0 u
+\end{align}
+
+\textbf{Step 3:} Write in matrix form:
+\begin{equation}
+    \begin{bmatrix} \dot{x}_1 \\ \dot{x}_2 \end{bmatrix} =
+    \begin{bmatrix} 0 & 1 \\ -a_0 & -a_1 \end{bmatrix}
+    \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} +
+    \begin{bmatrix} 0 \\ b_0 \end{bmatrix} u
+\end{equation}
+
+If we measure $y$ directly:
+\begin{equation}
+    y = \begin{bmatrix} 1 & 0 \end{bmatrix} \begin{bmatrix} x_1 \\ x_2 \end{bmatrix}
+\end{equation}
+\end{example}
+
+\subsection{Example: Mass-Spring-Damper System}
+
+Consider the canonical mass-spring-damper system shown in Fig.~\ref{fig:mass_spring_damper}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.0]
+    % Wall
+    \fill [pattern=north east lines] (-0.3,-0.5) rectangle (0,1.5);
+    \draw [thick] (0,-0.5) -- (0,1.5);
+
+    % Spring
+    \draw [thick, decorate, decoration={zigzag, segment length=6, amplitude=4}]
+        (0,1.1) -- (2.2,1.1);
+    \node [above] at (1.1,1.3) {$k$};
+
+    % Damper
+    \draw [thick] (0,0.4) -- (0.8,0.4);
+    \draw [thick] (0.8,0.1) rectangle (1.4,0.7);
+    \draw [thick] (1.4,0.4) -- (2.2,0.4);
+    \fill [gray!30] (0.85,0.15) rectangle (1.35,0.65);
+    \node [below] at (1.1,0) {$b$};
+
+    % Mass
+    \draw [thick, fill=blue!20] (2.2,0) rectangle (3.4,1.5);
+    \node at (2.8,0.75) {$m$};
+
+    % Ground
+    \fill [pattern=north east lines] (1.8,-0.3) rectangle (4,-0.1);
+    \draw [thick] (1.8,-0.1) -- (4,-0.1);
+
+    % Wheels
+    \draw [thick] (2.4,-0.1) circle (0.15);
+    \draw [thick] (3.2,-0.1) circle (0.15);
+
+    % Force arrow
+    \draw [->, thick, red] (3.4,0.75) -- (4.4,0.75);
+    \node [right, red] at (4.4,0.75) {$F(t)$};
+
+    % Position
+    \draw [<->] (2.8,-0.8) -- (3.8,-0.8);
+    \node [below] at (3.3,-0.8) {$x$};
+
+\end{tikzpicture}
+\caption{Mass-spring-damper system with mass $m$, spring constant $k$, damping coefficient $b$, and applied force $F(t)$.}
+\label{fig:mass_spring_damper}
+\end{figure}
+
+Newton's second law gives:
+\begin{equation}
+    m\ddot{x} + b\dot{x} + kx = F(t)
+\end{equation}
+
+\textbf{State Variables:}
+\begin{align}
+    x_1 &= x \quad \text{(position)} \\
+    x_2 &= \dot{x} \quad \text{(velocity)}
+\end{align}
+
+\textbf{State Equations:}
+\begin{align}
+    \dot{x}_1 &= x_2 \\
+    \dot{x}_2 &= -\frac{k}{m}x_1 - \frac{b}{m}x_2 + \frac{1}{m}F
+\end{align}
+
+\textbf{Matrix Form:}
+\begin{equation}
+    \begin{bmatrix} \dot{x}_1 \\ \dot{x}_2 \end{bmatrix} =
+    \underbrace{\begin{bmatrix} 0 & 1 \\ -\frac{k}{m} & -\frac{b}{m} \end{bmatrix}}_{\mat{A}}
+    \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} +
+    \underbrace{\begin{bmatrix} 0 \\ \frac{1}{m} \end{bmatrix}}_{\mat{B}} F
+    \label{eq:msd_state_space}
+\end{equation}
+
+If we measure position:
+\begin{equation}
+    y = \underbrace{\begin{bmatrix} 1 & 0 \end{bmatrix}}_{\mat{C}} \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} + \underbrace{[0]}_{\mat{D}} F
+\end{equation}
+
+\textbf{Numerical Example:} Let $m = 1$ kg, $b = 0.5$ N$\cdot$s/m, $k = 2$ N/m:
+\begin{equation}
+    \mat{A} = \begin{bmatrix} 0 & 1 \\ -2 & -0.5 \end{bmatrix}, \quad
+    \mat{B} = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+    \mat{C} = \begin{bmatrix} 1 & 0 \end{bmatrix}, \quad
+    \mat{D} = [0]
+\end{equation}
+
+\subsection{Transfer Function to State-Space Conversion}
+
+The transfer function and state-space representations are related by:
+\begin{equation}
+\boxed{
+    G(s) = \mat{C}(s\mat{I} - \mat{A})^{-1}\mat{B} + \mat{D}
+}
+\label{eq:tf_ss_relation}
+\end{equation}
+
+\textbf{Derivation:} Taking the Laplace transform of the state equations (assuming zero initial conditions):
+\begin{align}
+    s\state(s) &= \mat{A}\state(s) + \mat{B}U(s) \\
+    (s\mat{I} - \mat{A})\state(s) &= \mat{B}U(s) \\
+    \state(s) &= (s\mat{I} - \mat{A})^{-1}\mat{B}U(s)
+\end{align}
+
+Substituting into the output equation:
+\begin{align}
+    Y(s) &= \mat{C}\state(s) + \mat{D}U(s) \\
+         &= \mat{C}(s\mat{I} - \mat{A})^{-1}\mat{B}U(s) + \mat{D}U(s) \\
+         &= \left[\mat{C}(s\mat{I} - \mat{A})^{-1}\mat{B} + \mat{D}\right]U(s)
+\end{align}
+
+Therefore, $G(s) = Y(s)/U(s) = \mat{C}(s\mat{I} - \mat{A})^{-1}\mat{B} + \mat{D}$.
+
+\begin{example}[Transfer Function from State-Space]
+For the mass-spring-damper with $m=1$, $b=0.5$, $k=2$:
+\begin{align}
+    s\mat{I} - \mat{A} &= \begin{bmatrix} s & -1 \\ 2 & s+0.5 \end{bmatrix}
+\end{align}
+
+The inverse is:
+\begin{align}
+    (s\mat{I} - \mat{A})^{-1} &= \frac{1}{s(s+0.5)+2} \begin{bmatrix} s+0.5 & 1 \\ -2 & s \end{bmatrix}
+    = \frac{1}{s^2+0.5s+2} \begin{bmatrix} s+0.5 & 1 \\ -2 & s \end{bmatrix}
+\end{align}
+
+Computing $G(s) = \mat{C}(s\mat{I}-\mat{A})^{-1}\mat{B}$:
+\begin{align}
+    G(s) &= \begin{bmatrix} 1 & 0 \end{bmatrix}
+    \frac{1}{s^2+0.5s+2} \begin{bmatrix} s+0.5 & 1 \\ -2 & s \end{bmatrix}
+    \begin{bmatrix} 0 \\ 1 \end{bmatrix} \\
+    &= \frac{1}{s^2+0.5s+2} \begin{bmatrix} 1 & 0 \end{bmatrix} \begin{bmatrix} 1 \\ s \end{bmatrix} \\
+    &= \frac{1}{s^2+0.5s+2}
+\end{align}
+\end{example}
+
+\subsection{Eigenvalues and System Poles}
+
+A fundamental result connects the eigenvalues of $\mat{A}$ to the transfer function poles:
+
+\begin{theorem}
+The poles of $G(s) = \mat{C}(s\mat{I}-\mat{A})^{-1}\mat{B} + \mat{D}$ are a subset of the eigenvalues of $\mat{A}$.
+\end{theorem}
+
+\textbf{Proof Sketch:} The matrix $(s\mat{I}-\mat{A})^{-1}$ has the form $\text{adj}(s\mat{I}-\mat{A})/\det(s\mat{I}-\mat{A})$. The denominator $\det(s\mat{I}-\mat{A})$ is the characteristic polynomial of $\mat{A}$, whose roots are the eigenvalues of $\mat{A}$. Pole-zero cancellations may occur, so the transfer function poles are a subset of the eigenvalues.
+
+\textbf{Physical Interpretation:} Eigenvalues of $\mat{A}$ determine natural modes of the unforced system. For stable systems, all eigenvalues must have negative real parts.
+
+\begin{example}[Eigenvalue Analysis]
+For our mass-spring-damper:
+\begin{equation}
+    \det(s\mat{I} - \mat{A}) = \det\begin{bmatrix} s & -1 \\ 2 & s+0.5 \end{bmatrix} = s^2 + 0.5s + 2 = 0
+\end{equation}
+
+Using the quadratic formula:
+\begin{equation}
+    \lambda_{1,2} = \frac{-0.5 \pm \sqrt{0.25 - 8}}{2} = -0.25 \pm j1.39
+\end{equation}
+
+The eigenvalues are complex conjugates with negative real parts ($-0.25$), indicating:
+\begin{itemize}
+    \item \textbf{Stable system} (negative real part)
+    \item \textbf{Oscillatory response} (nonzero imaginary part)
+    \item \textbf{Damped oscillation frequency:} $\omega_d = 1.39$ rad/s
+    \item \textbf{Time constant:} $\tau = 1/0.25 = 4$ s
+\end{itemize}
+\end{example}
+
+\subsection{State Transition Matrix}
+
+The solution to the homogeneous state equation $\stateder = \mat{A}\state$ is:
+\begin{equation}
+    \state(t) = e^{\mat{A}t}\state(0)
+\end{equation}
+
+where $e^{\mat{A}t}$ is the \textbf{state transition matrix} (or matrix exponential), defined by the series:
+\begin{equation}
+\boxed{
+    e^{\mat{A}t} = \mat{I} + \mat{A}t + \frac{(\mat{A}t)^2}{2!} + \frac{(\mat{A}t)^3}{3!} + \cdots = \sum_{k=0}^{\infty} \frac{(\mat{A}t)^k}{k!}
+}
+\end{equation}
+
+\textbf{Key Properties:}
+\begin{enumerate}
+    \item $e^{\mat{A} \cdot 0} = \mat{I}$
+    \item $\frac{\diff}{\diff t}e^{\mat{A}t} = \mat{A}e^{\mat{A}t} = e^{\mat{A}t}\mat{A}$
+    \item $e^{\mat{A}(t_1+t_2)} = e^{\mat{A}t_1}e^{\mat{A}t_2}$
+    \item $(e^{\mat{A}t})^{-1} = e^{-\mat{A}t}$
+\end{enumerate}
+
+The state transition matrix propagates the state forward in time: $\state(t) = e^{\mat{A}(t-t_0)}\state(t_0)$.
+
+\textbf{Computation Methods:}
+\begin{enumerate}
+    \item \textbf{Laplace Transform:} $e^{\mat{A}t} = \mathcal{L}^{-1}\{(s\mat{I}-\mat{A})^{-1}\}$
+    \item \textbf{Eigenvalue Decomposition:} If $\mat{A} = \mat{V}\mat{\Lambda}\mat{V}^{-1}$, then $e^{\mat{A}t} = \mat{V}e^{\mat{\Lambda}t}\mat{V}^{-1}$
+    \item \textbf{Cayley-Hamilton:} For $n \times n$ matrix, $e^{\mat{A}t}$ is a polynomial of degree $n-1$ in $\mat{A}$
+\end{enumerate}
+
+\subsection{Complete Solution with Forcing}
+
+For the forced system $\stateder = \mat{A}\state + \mat{B}\inputvec$, the complete solution is:
+
+\begin{equation}
+\boxed{
+    \state(t) = \underbrace{e^{\mat{A}t}\state(0)}_{\text{zero-input response}} + \underbrace{\int_0^t e^{\mat{A}(t-\tau)}\mat{B}\inputvec(\tau)\,\diff\tau}_{\text{zero-state response}}
+}
+\label{eq:complete_solution}
+\end{equation}
+
+This is the \textbf{variation of parameters} formula. The first term represents the natural response from initial conditions; the second term (a convolution integral) represents the forced response.
+
+\textbf{Derivation:} Multiply the state equation by $e^{-\mat{A}t}$:
+\begin{align}
+    e^{-\mat{A}t}\stateder - e^{-\mat{A}t}\mat{A}\state &= e^{-\mat{A}t}\mat{B}\inputvec \\
+    \frac{\diff}{\diff t}\left(e^{-\mat{A}t}\state\right) &= e^{-\mat{A}t}\mat{B}\inputvec
+\end{align}
+
+Integrating from 0 to $t$:
+\begin{align}
+    e^{-\mat{A}t}\state(t) - \state(0) &= \int_0^t e^{-\mat{A}\tau}\mat{B}\inputvec(\tau)\,\diff\tau \\
+    \state(t) &= e^{\mat{A}t}\state(0) + \int_0^t e^{\mat{A}(t-\tau)}\mat{B}\inputvec(\tau)\,\diff\tau
+\end{align}
+
+%==============================================================================
+\section{Laboratory Experiment: Two-Mass System}
+%==============================================================================
+
+\subsection{Objective}
+
+This experiment demonstrates state-space modeling using a coupled two-mass system. Unlike the single mass-spring-damper, this system has four state variables and exhibits richer dynamics including two distinct natural frequencies. Students will:
+
+\begin{enumerate}
+    \item Build a physical two-mass system
+    \item Derive and validate a state-space model
+    \item Observe the complexity this system would have in transfer function form
+    \item Compare model predictions with measured responses
+\end{enumerate}
+
+\subsection{Apparatus}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.85]
+    % Track
+    \fill [gray!20] (0,-0.3) rectangle (12,0);
+    \draw [thick] (0,0) -- (12,0);
+    \draw [thick] (0,-0.3) -- (12,-0.3);
+
+    % Left wall
+    \fill [pattern=north east lines] (-0.3,-0.3) rectangle (0,2);
+    \draw [thick] (0,-0.3) -- (0,2);
+
+    % Cart 1
+    \draw [thick, fill=blue!25] (1.5,0.1) rectangle (3.5,1.5);
+    \node at (2.5,0.8) {$m_1$};
+    \draw [thick, fill=gray] (1.8,0.1) circle (0.2);
+    \draw [thick, fill=gray] (3.2,0.1) circle (0.2);
+
+    % Spring 1 (wall to cart 1)
+    \draw [thick, decorate, decoration={zigzag, segment length=5, amplitude=3}]
+        (0,1) -- (1.5,1);
+    \node [above] at (0.75,1.1) {$k_1$};
+
+    % Cart 2
+    \draw [thick, fill=red!25] (6.5,0.1) rectangle (8.5,1.5);
+    \node at (7.5,0.8) {$m_2$};
+    \draw [thick, fill=gray] (6.8,0.1) circle (0.2);
+    \draw [thick, fill=gray] (8.2,0.1) circle (0.2);
+
+    % Spring 2 (between carts)
+    \draw [thick, decorate, decoration={zigzag, segment length=5, amplitude=3}]
+        (3.5,1) -- (6.5,1);
+    \node [above] at (5,1.1) {$k_2$};
+
+    % Dampers (simplified representation)
+    \draw [thick] (0,0.4) -- (0.5,0.4);
+    \draw [thick] (0.5,0.2) rectangle (1,0.6);
+    \draw [thick] (1,0.4) -- (1.5,0.4);
+    \node [below] at (0.75,-0.1) {$b_1$};
+
+    \draw [thick] (3.5,0.4) -- (4.5,0.4);
+    \draw [thick] (4.5,0.2) rectangle (5.5,0.6);
+    \draw [thick] (5.5,0.4) -- (6.5,0.4);
+    \node [below] at (5,-0.1) {$b_2$};
+
+    % Position markers
+    \draw [<->] (2.5,-0.8) -- (4,-0.8);
+    \node [below] at (3.25,-0.8) {$x_1$};
+    \draw [<->] (7.5,-0.8) -- (9,-0.8);
+    \node [below] at (8.25,-0.8) {$x_2$};
+
+    % Force arrow
+    \draw [->, thick, red] (8.5,0.8) -- (10,0.8);
+    \node [right, red] at (10,0.8) {$F(t)$};
+
+    % Sensors
+    \draw [thick, fill=green!30] (2.3,1.5) rectangle (2.7,2);
+    \node [above] at (2.5,2) {\small Encoder 1};
+    \draw [thick, fill=green!30] (7.3,1.5) rectangle (7.7,2);
+    \node [above] at (7.5,2) {\small Encoder 2};
+
+\end{tikzpicture}
+\caption{Two-mass experimental setup. Carts $m_1$ and $m_2$ are coupled by spring $k_2$ and damper $b_2$. Cart $m_1$ is also connected to a fixed wall by $k_1$ and $b_1$. Force $F(t)$ is applied to $m_2$. Encoders measure positions $x_1$ and $x_2$.}
+\label{fig:two_mass_setup}
+\end{figure}
+
+\textbf{Required Components:}
+\begin{itemize}
+    \item Two carts (3D printed or commercial dynamics carts, $m_1 \approx m_2 \approx 0.5$ kg)
+    \item Linear track (drawer slides or commercial air track, length $\geq$ 1 m)
+    \item Two springs ($k_1, k_2 \approx 10$--50 N/m)
+    \item Rotary encoders or ultrasonic distance sensors for position measurement
+    \item Solenoid or motor for applying controlled force $F(t)$
+    \item Data acquisition system (Arduino, myRIO, or similar)
+    \item Computer with MATLAB/Python for analysis
+\end{itemize}
+
+\textbf{3D Printing Notes:} Cart designs should include:
+\begin{itemize}
+    \item Low-friction wheel mounts compatible with track
+    \item Spring attachment points
+    \item Encoder wheel mount or reflector for distance sensor
+    \item Estimated print time: 2--3 hours per cart at 0.2 mm layer height
+\end{itemize}
+
+\subsection{System Modeling}
+
+\textbf{Equations of Motion:}
+
+Applying Newton's second law to each mass:
+\begin{align}
+    m_1\ddot{x}_1 &= -k_1 x_1 - b_1\dot{x}_1 + k_2(x_2-x_1) + b_2(\dot{x}_2-\dot{x}_1) \\
+    m_2\ddot{x}_2 &= -k_2(x_2-x_1) - b_2(\dot{x}_2-\dot{x}_1) + F
+\end{align}
+
+Rearranging:
+\begin{align}
+    m_1\ddot{x}_1 &= -(k_1+k_2)x_1 + k_2 x_2 - (b_1+b_2)\dot{x}_1 + b_2\dot{x}_2 \\
+    m_2\ddot{x}_2 &= k_2 x_1 - k_2 x_2 + b_2\dot{x}_1 - b_2\dot{x}_2 + F
+\end{align}
+
+\textbf{State Variables:}
+\begin{equation}
+    \state = \begin{bmatrix} x_1 \\ \dot{x}_1 \\ x_2 \\ \dot{x}_2 \end{bmatrix} =
+    \begin{bmatrix} \text{position of } m_1 \\ \text{velocity of } m_1 \\ \text{position of } m_2 \\ \text{velocity of } m_2 \end{bmatrix}
+\end{equation}
+
+\textbf{State-Space Form:}
+\begin{equation}
+    \stateder = \begin{bmatrix}
+        0 & 1 & 0 & 0 \\
+        -\frac{k_1+k_2}{m_1} & -\frac{b_1+b_2}{m_1} & \frac{k_2}{m_1} & \frac{b_2}{m_1} \\
+        0 & 0 & 0 & 1 \\
+        \frac{k_2}{m_2} & \frac{b_2}{m_2} & -\frac{k_2}{m_2} & -\frac{b_2}{m_2}
+    \end{bmatrix} \state +
+    \begin{bmatrix} 0 \\ 0 \\ 0 \\ \frac{1}{m_2} \end{bmatrix} F
+    \label{eq:two_mass_state_space}
+\end{equation}
+
+If we measure both positions:
+\begin{equation}
+    \outputvec = \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} =
+    \begin{bmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & 1 & 0 \end{bmatrix} \state
+\end{equation}
+
+\textbf{Numerical Example:} Let $m_1 = m_2 = 0.5$ kg, $k_1 = k_2 = 20$ N/m, $b_1 = b_2 = 0.5$ N$\cdot$s/m:
+\begin{equation}
+    \mat{A} = \begin{bmatrix}
+        0 & 1 & 0 & 0 \\
+        -80 & -2 & 40 & 1 \\
+        0 & 0 & 0 & 1 \\
+        40 & 1 & -40 & -1
+    \end{bmatrix}, \quad
+    \mat{B} = \begin{bmatrix} 0 \\ 0 \\ 0 \\ 2 \end{bmatrix}
+\end{equation}
+
+\subsection{Transfer Function Comparison}
+
+To appreciate the elegance of state-space, consider the transfer function from $F$ to $x_1$:
+\begin{equation}
+    G_1(s) = \frac{X_1(s)}{F(s)} = \frac{k_2 + b_2 s}{(m_1 s^2 + (b_1+b_2)s + k_1+k_2)(m_2 s^2 + b_2 s + k_2) - (k_2 + b_2 s)^2}
+\end{equation}
+
+This fourth-order transfer function, with its complicated coefficient expressions, obscures the physical structure evident in the state-space model. For larger systems (three or more masses), transfer functions become impractical while state-space remains systematic.
+
+\subsection{Experimental Procedure}
+
+\begin{enumerate}
+    \item \textbf{Parameter Identification:}
+    \begin{itemize}
+        \item Weigh carts to determine $m_1$, $m_2$
+        \item Measure spring constants by hanging known masses
+        \item Estimate damping from free oscillation decay
+    \end{itemize}
+
+    \item \textbf{Model Validation:}
+    \begin{itemize}
+        \item Displace cart 2 and release (initial condition response)
+        \item Record $x_1(t)$ and $x_2(t)$
+        \item Simulate state-space model with same initial conditions
+        \item Compare simulated and measured trajectories
+    \end{itemize}
+
+    \item \textbf{Forced Response:}
+    \begin{itemize}
+        \item Apply step force to cart 2
+        \item Apply sinusoidal force at various frequencies
+        \item Identify resonant frequencies (should match eigenvalue imaginary parts)
+    \end{itemize}
+
+    \item \textbf{Phase Portrait Analysis:}
+    \begin{itemize}
+        \item Plot $x_1$ vs $\dot{x}_1$ (cart 1 phase plane)
+        \item Plot $x_2$ vs $\dot{x}_2$ (cart 2 phase plane)
+        \item Observe spiral trajectories indicating damped oscillation
+    \end{itemize}
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.9]
+    \begin{scope}
+        % Axes
+        \draw [->] (-3,0) -- (3,0) node [right] {$x_1$};
+        \draw [->] (0,-3) -- (0,3) node [above] {$\dot{x}_1$};
+
+        % Spiral trajectory
+        \draw [thick, blue, ->] plot [smooth, domain=0:720, samples=200]
+            ({2.5*exp(-0.02*\x)*cos(\x)}, {2.5*exp(-0.02*\x)*sin(\x)});
+
+        % Initial point
+        \fill [red] (2.5,0) circle (3pt);
+        \node [right] at (2.5,0.3) {$t=0$};
+
+        % Equilibrium
+        \fill [black] (0,0) circle (2pt);
+
+        \node at (0,-3.8) {(a) Phase portrait for cart 1};
+    \end{scope}
+
+    \begin{scope}[xshift=8cm]
+        % Axes
+        \draw [->] (-3,0) -- (3,0) node [right] {$x_2$};
+        \draw [->] (0,-3) -- (0,3) node [above] {$\dot{x}_2$};
+
+        % Spiral trajectory (different phase)
+        \draw [thick, red, ->] plot [smooth, domain=0:720, samples=200]
+            ({2*exp(-0.025*\x)*cos(\x+45)}, {2*exp(-0.025*\x)*sin(\x+45)});
+
+        % Initial point
+        \fill [blue] ({2*cos(45)},{2*sin(45)}) circle (3pt);
+        \node [above right] at ({2*cos(45)},{2*sin(45)}) {$t=0$};
+
+        % Equilibrium
+        \fill [black] (0,0) circle (2pt);
+
+        \node at (0,-3.8) {(b) Phase portrait for cart 2};
+    \end{scope}
+\end{tikzpicture}
+\caption{Phase portraits showing state trajectories in position-velocity space. Both carts exhibit spiral trajectories converging to equilibrium, characteristic of stable underdamped systems. The trajectories' shapes encode eigenvalue information: spiral rate indicates damping, rotation rate indicates oscillation frequency.}
+\label{fig:phase_portraits}
+\end{figure}
+
+\subsection{Expected Results}
+
+For the nominal parameters, the system matrix eigenvalues are approximately:
+\begin{align}
+    \lambda_{1,2} &\approx -0.5 \pm j4.5 \quad \text{(first mode: in-phase motion)} \\
+    \lambda_{3,4} &\approx -1.5 \pm j10.5 \quad \text{(second mode: out-of-phase motion)}
+\end{align}
+
+Students should observe:
+\begin{itemize}
+    \item Two distinct oscillation frequencies in free response
+    \item Beating phenomenon when both modes are excited
+    \item Larger damping (faster decay) for the higher-frequency mode
+    \item Model predictions matching experiments within 10--15\% (friction effects)
+\end{itemize}
+
+\subsection{Discussion Questions}
+
+\begin{enumerate}
+    \item Why does the system have four eigenvalues while a single mass has only two?
+    \item What physical motion corresponds to each eigenvalue pair?
+    \item How would adding a third mass change the model complexity in state-space vs. transfer function form?
+    \item What advantages does measuring both $x_1$ and $x_2$ provide over measuring only one position?
+\end{enumerate}
+
+%==============================================================================
+\section{Worked Examples}
+%==============================================================================
+
+\subsection{Example 1: Converting an ODE to State-Space Form}
+
+\textbf{Problem:} Convert the following third-order ODE to state-space form:
+\begin{equation}
+    \dddot{y} + 6\ddot{y} + 11\dot{y} + 6y = 6u
+\end{equation}
+
+\textbf{Solution:}
+
+\textit{Step 1:} Define state variables as the output and its derivatives:
+\begin{align}
+    x_1 &= y \\
+    x_2 &= \dot{y} \\
+    x_3 &= \ddot{y}
+\end{align}
+
+\textit{Step 2:} Express each derivative:
+\begin{align}
+    \dot{x}_1 &= x_2 \\
+    \dot{x}_2 &= x_3 \\
+    \dot{x}_3 &= \dddot{y} = -6y - 11\dot{y} - 6\ddot{y} + 6u = -6x_1 - 11x_2 - 6x_3 + 6u
+\end{align}
+
+\textit{Step 3:} Write in matrix form:
+\begin{equation}
+    \stateder = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -6 & -11 & -6 \end{bmatrix} \state +
+    \begin{bmatrix} 0 \\ 0 \\ 6 \end{bmatrix} u
+\end{equation}
+\begin{equation}
+    y = \begin{bmatrix} 1 & 0 & 0 \end{bmatrix} \state
+\end{equation}
+
+This is called the \textbf{controllable canonical form} or \textbf{phase-variable form}.
+
+\textit{Verification:} The characteristic polynomial is:
+\begin{equation}
+    \det(s\mat{I} - \mat{A}) = s^3 + 6s^2 + 11s + 6 = (s+1)(s+2)(s+3)
+\end{equation}
+matching the original ODE's characteristic equation. \hfill $\blacksquare$
+
+\subsection{Example 2: State-Space to Transfer Function}
+
+\textbf{Problem:} Find the transfer function for the system:
+\begin{equation}
+    \mat{A} = \begin{bmatrix} -3 & 1 \\ 0 & -2 \end{bmatrix}, \quad
+    \mat{B} = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+    \mat{C} = \begin{bmatrix} 1 & 1 \end{bmatrix}, \quad
+    \mat{D} = [0]
+\end{equation}
+
+\textbf{Solution:}
+
+\textit{Step 1:} Compute $s\mat{I} - \mat{A}$:
+\begin{equation}
+    s\mat{I} - \mat{A} = \begin{bmatrix} s+3 & -1 \\ 0 & s+2 \end{bmatrix}
+\end{equation}
+
+\textit{Step 2:} Find the inverse:
+\begin{equation}
+    (s\mat{I} - \mat{A})^{-1} = \frac{1}{(s+3)(s+2)} \begin{bmatrix} s+2 & 1 \\ 0 & s+3 \end{bmatrix}
+\end{equation}
+
+\textit{Step 3:} Compute $\mat{C}(s\mat{I}-\mat{A})^{-1}\mat{B}$:
+\begin{align}
+    G(s) &= \frac{1}{(s+3)(s+2)} \begin{bmatrix} 1 & 1 \end{bmatrix}
+    \begin{bmatrix} s+2 & 1 \\ 0 & s+3 \end{bmatrix}
+    \begin{bmatrix} 0 \\ 1 \end{bmatrix} \\
+    &= \frac{1}{(s+3)(s+2)} \begin{bmatrix} s+2 & s+4 \end{bmatrix}
+    \begin{bmatrix} 0 \\ 1 \end{bmatrix} \\
+    &= \frac{s+4}{(s+3)(s+2)} = \frac{s+4}{s^2+5s+6}
+\end{align}
+
+The system has poles at $s=-2$ and $s=-3$ (eigenvalues of $\mat{A}$) and a zero at $s=-4$.
+\hfill $\blacksquare$
+
+\subsection{Example 3: Eigenvalue Analysis and Stability}
+
+\textbf{Problem:} Analyze the stability of the system with:
+\begin{equation}
+    \mat{A} = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}
+\end{equation}
+
+\textbf{Solution:}
+
+\textit{Step 1:} Find eigenvalues from $\det(s\mat{I} - \mat{A}) = 0$:
+\begin{align}
+    \det\begin{bmatrix} s & -1 \\ 2 & s+3 \end{bmatrix} &= s(s+3) + 2 = s^2 + 3s + 2 = 0 \\
+    (s+1)(s+2) &= 0 \\
+    \lambda_1 = -1, \quad \lambda_2 &= -2
+\end{align}
+
+\textit{Step 2:} Interpret results:
+\begin{itemize}
+    \item Both eigenvalues are real and negative
+    \item The system is \textbf{asymptotically stable}
+    \item Response is \textbf{overdamped} (no oscillations)
+    \item Time constants: $\tau_1 = 1$ s, $\tau_2 = 0.5$ s
+    \item Dominant (slower) mode: $\lambda_1 = -1$
+\end{itemize}
+
+\textit{Step 3:} Find eigenvectors for modal analysis:
+
+For $\lambda_1 = -1$: $(\mat{A} - \lambda_1\mat{I})\vect{v}_1 = \vect{0}$
+\begin{equation}
+    \begin{bmatrix} 1 & 1 \\ -2 & -2 \end{bmatrix}\vect{v}_1 = \vect{0} \Rightarrow
+    \vect{v}_1 = \begin{bmatrix} 1 \\ -1 \end{bmatrix}
+\end{equation}
+
+For $\lambda_2 = -2$:
+\begin{equation}
+    \begin{bmatrix} 2 & 1 \\ -2 & -1 \end{bmatrix}\vect{v}_2 = \vect{0} \Rightarrow
+    \vect{v}_2 = \begin{bmatrix} 1 \\ -2 \end{bmatrix}
+\end{equation}
+
+The general solution is:
+\begin{equation}
+    \state(t) = c_1 e^{-t}\begin{bmatrix} 1 \\ -1 \end{bmatrix} +
+    c_2 e^{-2t}\begin{bmatrix} 1 \\ -2 \end{bmatrix}
+\end{equation}
+where $c_1$, $c_2$ depend on initial conditions. \hfill $\blacksquare$
+
+\subsection{Example 4: DC Motor State-Space Model}
+
+\textbf{Problem:} Derive a state-space model for a DC motor that includes both electrical and mechanical dynamics.
+
+\textbf{System Description:}
+A DC motor has:
+\begin{itemize}
+    \item Armature circuit: resistance $R$, inductance $L$, back-EMF $e_b = K_e\omega$
+    \item Mechanical load: inertia $J$, friction $b$, torque $\tau = K_t i_a$
+    \item Input: armature voltage $v_a$
+    \item Output: angular velocity $\omega$
+\end{itemize}
+
+\textbf{Solution:}
+
+\textit{Step 1:} Write governing equations.
+
+Electrical (Kirchhoff's voltage law):
+\begin{equation}
+    v_a = Ri_a + L\frac{di_a}{dt} + K_e\omega
+\end{equation}
+
+Mechanical (Newton's second law for rotation):
+\begin{equation}
+    J\frac{d\omega}{dt} = K_t i_a - b\omega
+\end{equation}
+
+\textit{Step 2:} Choose state variables:
+\begin{align}
+    x_1 &= i_a \quad \text{(armature current)} \\
+    x_2 &= \omega \quad \text{(angular velocity)}
+\end{align}
+
+\textit{Step 3:} Rewrite as first-order equations:
+\begin{align}
+    \dot{x}_1 = \frac{di_a}{dt} &= -\frac{R}{L}i_a - \frac{K_e}{L}\omega + \frac{1}{L}v_a \\
+    &= -\frac{R}{L}x_1 - \frac{K_e}{L}x_2 + \frac{1}{L}v_a \\
+    \dot{x}_2 = \frac{d\omega}{dt} &= \frac{K_t}{J}i_a - \frac{b}{J}\omega \\
+    &= \frac{K_t}{J}x_1 - \frac{b}{J}x_2
+\end{align}
+
+\textit{Step 4:} State-space form:
+\begin{equation}
+    \stateder = \begin{bmatrix} -\frac{R}{L} & -\frac{K_e}{L} \\[6pt] \frac{K_t}{J} & -\frac{b}{J} \end{bmatrix} \state +
+    \begin{bmatrix} \frac{1}{L} \\[6pt] 0 \end{bmatrix} v_a
+\end{equation}
+\begin{equation}
+    y = \omega = \begin{bmatrix} 0 & 1 \end{bmatrix} \state
+\end{equation}
+
+\textbf{Numerical Example:} Let $R = 1\ \Omega$, $L = 0.5$ H, $K_e = K_t = 0.1$ V$\cdot$s/rad, $J = 0.01$ kg$\cdot$m$^2$, $b = 0.1$ N$\cdot$m$\cdot$s/rad:
+
+\begin{equation}
+    \mat{A} = \begin{bmatrix} -2 & -0.2 \\ 10 & -10 \end{bmatrix}, \quad
+    \mat{B} = \begin{bmatrix} 2 \\ 0 \end{bmatrix}, \quad
+    \mat{C} = \begin{bmatrix} 0 & 1 \end{bmatrix}
+\end{equation}
+
+Eigenvalues: $\lambda_{1,2} = -6 \pm j4$ (stable, underdamped). \hfill $\blacksquare$
+
+\subsection{Example 5: Different State Variable Choices}
+
+\textbf{Problem:} Show that different state variable choices yield equivalent models for the system:
+\begin{equation}
+    \ddot{y} + 3\dot{y} + 2y = u
+\end{equation}
+
+\textbf{Solution:}
+
+\textit{Choice A: Phase variables} ($x_1 = y$, $x_2 = \dot{y}$):
+\begin{equation}
+    \stateder = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix} \state + \begin{bmatrix} 0 \\ 1 \end{bmatrix} u, \quad
+    y = \begin{bmatrix} 1 & 0 \end{bmatrix} \state
+\end{equation}
+
+\textit{Choice B: Modal coordinates.} First, diagonalize $\mat{A}$ from Choice A.
+
+Eigenvalues: $\lambda_1 = -1$, $\lambda_2 = -2$.
+
+Eigenvector matrix and its inverse:
+\begin{equation}
+    \mat{V} = \begin{bmatrix} 1 & 1 \\ -1 & -2 \end{bmatrix}, \quad
+    \mat{V}^{-1} = \begin{bmatrix} 2 & 1 \\ -1 & -1 \end{bmatrix}
+\end{equation}
+
+Define new states $\vect{z} = \mat{V}^{-1}\state$:
+\begin{align}
+    \dot{\vect{z}} &= \mat{V}^{-1}\mat{A}\mat{V}\vect{z} + \mat{V}^{-1}\mat{B}u \\
+    &= \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix} \vect{z} + \begin{bmatrix} 1 \\ -1 \end{bmatrix} u
+\end{align}
+\begin{equation}
+    y = \mat{C}\mat{V}\vect{z} = \begin{bmatrix} 1 & 1 \end{bmatrix} \vect{z}
+\end{equation}
+
+\textit{Verification:} Both representations yield the same transfer function:
+\begin{equation}
+    G(s) = \frac{1}{s^2+3s+2} = \frac{1}{(s+1)(s+2)}
+\end{equation}
+
+\textbf{Key Insight:} The diagonal form reveals independent first-order dynamics:
+\begin{align}
+    \dot{z}_1 &= -z_1 + u \quad \text{(mode 1, $\tau = 1$ s)} \\
+    \dot{z}_2 &= -2z_2 - u \quad \text{(mode 2, $\tau = 0.5$ s)}
+\end{align}
+
+State-space representations related by a coordinate transformation $\state = \mat{T}\tilde{\state}$ are called \textbf{equivalent realizations}. They share the same input-output behavior (transfer function) but may differ in numerical properties, physical interpretability, or controller design convenience. \hfill $\blacksquare$
+
+%==============================================================================
+\section{Chapter Summary}
+%==============================================================================
+
+This chapter introduced state-space representation, the foundation of modern control theory. Key concepts include:
+
+\begin{enumerate}
+    \item \textbf{Historical Context:} State-space methods emerged in the 1960s through the work of Kalman and Pontryagin, driven by aerospace applications requiring MIMO control and optimal estimation.
+
+    \item \textbf{State Definition:} The state is the minimal information needed to predict future system behavior given future inputs.
+
+    \item \textbf{Standard Form:} LTI systems are described by $\stateder = \mat{A}\state + \mat{B}\inputvec$ and $\outputvec = \mat{C}\state + \mat{D}\inputvec$.
+
+    \item \textbf{Transfer Function Connection:} $G(s) = \mat{C}(s\mat{I}-\mat{A})^{-1}\mat{B} + \mat{D}$, with poles as a subset of $\mat{A}$'s eigenvalues.
+
+    \item \textbf{State Transition Matrix:} The solution $\state(t) = e^{\mat{A}t}\state(0) + \int_0^t e^{\mat{A}(t-\tau)}\mat{B}\inputvec(\tau)\diff\tau$ separates initial condition and forced responses.
+
+    \item \textbf{Eigenvalue Significance:} Eigenvalues determine stability (real part) and oscillation frequency (imaginary part).
+\end{enumerate}
+
+\textbf{Looking Ahead:} Chapter 5 will introduce controllability and observability---properties that determine whether state-space models can be effectively controlled and estimated. Chapter 6 will develop state feedback and pole placement methods for controller design.
+
+%==============================================================================
+\section{Problems}
+%==============================================================================
+
+\subsection{Conceptual Problems}
+
+\begin{enumerate}
+    \item Explain why knowing only the output $y(t_0)$ is generally insufficient to predict future system behavior, even with knowledge of all future inputs.
+
+    \item A system has transfer function $G(s) = \frac{s+2}{(s+1)(s+3)}$. What is the minimum order of any state-space realization? Explain.
+
+    \item Can two different physical systems have identical transfer functions but different state-space models? Provide an example or explain why not.
+\end{enumerate}
+
+\subsection{Computational Problems}
+
+\begin{enumerate}[resume]
+    \item Convert to state-space form: $\dddot{y} + 4\ddot{y} + 5\dot{y} + 2y = 3u + \dot{u}$
+
+    \item Find the transfer function for:
+    \begin{equation*}
+        \mat{A} = \begin{bmatrix} -1 & 2 \\ 0 & -3 \end{bmatrix}, \quad
+        \mat{B} = \begin{bmatrix} 1 \\ 1 \end{bmatrix}, \quad
+        \mat{C} = \begin{bmatrix} 1 & 0 \end{bmatrix}, \quad
+        \mat{D} = [0]
+    \end{equation*}
+
+    \item Compute the eigenvalues and classify the stability:
+    \begin{equation*}
+        \mat{A} = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -6 & -11 & -6 \end{bmatrix}
+    \end{equation*}
+
+    \item For the mass-spring-damper with $m = 2$ kg, $b = 4$ N$\cdot$s/m, $k = 10$ N/m:
+    \begin{enumerate}
+        \item Write the state-space model
+        \item Find eigenvalues and interpret physically
+        \item Compute the state transition matrix $e^{\mat{A}t}$
+        \item Find $\state(t)$ for $\state(0) = [1\ 0]^T$
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Design Problems}
+
+\begin{enumerate}[resume]
+    \item An inverted pendulum on a cart has linearized dynamics:
+    \begin{equation*}
+        \mat{A} = \begin{bmatrix} 0 & 1 & 0 & 0 \\ 0 & 0 & -mg/M & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & (M+m)g/(ML) & 0 \end{bmatrix}
+    \end{equation*}
+    With $M = 1$ kg, $m = 0.1$ kg, $L = 0.5$ m, $g = 9.81$ m/s$^2$:
+    \begin{enumerate}
+        \item Find the eigenvalues
+        \item Is the system stable? If not, which modes are unstable?
+        \item What does this imply about control requirements?
+    \end{enumerate}
+
+    \item Design a two-mass laboratory experiment different from the one presented. Specify:
+    \begin{enumerate}
+        \item Physical configuration
+        \item State variables
+        \item Measurement sensors
+        \item Expected eigenvalue structure
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{MATLAB/Python Problems}
+
+\begin{enumerate}[resume]
+    \item Using MATLAB or Python, simulate the two-mass system from Section IV with initial conditions $\state(0) = [0.1\ 0\ 0\ 0]^T$ (cart 1 displaced). Plot:
+    \begin{enumerate}
+        \item $x_1(t)$ and $x_2(t)$ vs. time
+        \item Phase portraits for both carts
+        \item Animation of cart motion
+    \end{enumerate}
+
+    \item Implement the DC motor model from Example 4. Apply a step voltage input and plot:
+    \begin{enumerate}
+        \item Current $i_a(t)$ and velocity $\omega(t)$
+        \item Phase portrait ($i_a$ vs. $\omega$)
+        \item Compare with the transfer function step response
+    \end{enumerate}
+\end{enumerate}
+
+%==============================================================================
+\section*{Further Reading}
+\addcontentsline{toc}{section}{Further Reading}
+%==============================================================================
+
+\begin{itemize}
+    \item R. E. Kalman, ``A New Approach to Linear Filtering and Prediction Problems,'' \textit{Journal of Basic Engineering}, vol. 82, pp. 35--45, 1960. [The foundational Kalman filter paper]
+
+    \item R. E. Kalman, ``On the General Theory of Control Systems,'' \textit{Proceedings of the First IFAC Congress}, Moscow, 1960. [Introduction of controllability and observability]
+
+    \item L. S. Pontryagin et al., \textit{The Mathematical Theory of Optimal Processes}, Interscience Publishers, 1962. [The maximum principle]
+
+    \item C. T. Chen, \textit{Linear System Theory and Design}, 4th ed., Oxford University Press, 2012. [Comprehensive modern treatment]
+
+    \item K. Ogata, \textit{Modern Control Engineering}, 5th ed., Prentice Hall, 2010. [Accessible introduction with many examples]
+\end{itemize}
+

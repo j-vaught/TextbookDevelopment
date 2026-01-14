@@ -1,0 +1,1268 @@
+
+\chapter{Controllability and State Feedback}
+
+\begin{quote}
+\textit{``The concept of controllability plays an important role in the theory of control systems. It gives a complete characterization of the state-space model of a linear system from the point of view of control.''}
+\begin{flushright}
+--- Rudolf E. Kalman, 1960
+\end{flushright}
+\end{quote}
+
+%=============================================================================
+\section{Historical Motivation: The Birth of State-Space Control}
+%=============================================================================
+
+\subsection{The Classical Control Dilemma}
+
+By the late 1950s, control engineering had achieved remarkable success with frequency-domain methods. The Bode plot, Nyquist criterion, and root locus technique---developed by engineers like Harold Black, Harry Nyquist, and Walter Evans---provided powerful tools for analyzing and designing single-input, single-output (SISO) feedback systems. These methods had proven their worth in applications ranging from telephone amplifiers to autopilots.
+
+However, as control engineers tackled increasingly complex systems, fundamental limitations of the classical approach became apparent. Consider the challenge facing aerospace engineers in the late 1950s: a spacecraft requires simultaneous control of attitude (pitch, roll, yaw), translation, and potentially flexible body modes. This involves multiple inputs (reaction jets, control moment gyros) and multiple outputs (various attitude sensors). The transfer function approach, while elegant for SISO systems, became unwieldy for such multi-input, multi-output (MIMO) configurations.
+
+More troubling was a fundamental question that classical methods struggled to answer: \textit{Given a particular system, is it even possible to control it?} This may seem like an obvious question, but consider a system where certain internal dynamics are completely decoupled from the available inputs. Classical transfer function analysis might mask this problem entirely.
+
+\subsection{Kalman's Revolutionary Framework}
+
+Rudolf Emil Kalman (1930--2016), a Hungarian-American mathematician and electrical engineer, addressed these limitations through a revolutionary reformulation of control theory. His seminal paper, ``On the General Theory of Control Systems,'' presented at the First IFAC World Congress in Moscow in 1960, introduced concepts that would transform the field \cite{kalman1960general}.
+
+Kalman's key insight was to work directly with the state-space representation:
+\begin{align}
+\dot{\bx}(t) &= \bA\bx(t) + \bB\bu(t) \label{eq:state_eq}\\
+\by(t) &= \bC\bx(t) + \bD\bu(t) \label{eq:output_eq}
+\end{align}
+where $\bx \in \R^n$ is the state vector, $\bu \in \R^m$ is the input vector, and $\by \in \R^p$ is the output vector. This representation directly captures the internal dynamics of the system, not just the input-output relationship.
+
+Within this framework, Kalman posed and answered the fundamental question: \textit{When can we steer the system from any initial state to any final state using the available inputs?} His answer---the controllability rank condition---provided an elegant algebraic test that could be applied to systems of any dimension and with any number of inputs.
+
+\subsection{The Space Race Context}
+
+The timing of Kalman's work was no coincidence. The space race, ignited by Sputnik in 1957, created an urgent demand for advanced control systems. The Apollo guidance and navigation system, under development at MIT's Instrumentation Laboratory, faced unprecedented challenges:
+
+\begin{itemize}
+\item \textbf{Multiple control axes}: Spacecraft required simultaneous control of all six degrees of freedom
+\item \textbf{Limited computational resources}: The Apollo Guidance Computer had only 74KB of memory and operated at 0.043 MHz
+\item \textbf{Mission-critical reliability}: Control system failure meant loss of crew
+\item \textbf{Fuel constraints}: Every bit of propellant was precious; inefficient control could doom a mission
+\end{itemize}
+
+Classical control methods, designed for analog implementation of SISO systems, were inadequate for these challenges. Kalman's state-space approach, combined with his famous filtering algorithm (the Kalman filter, developed in 1960--61), provided the mathematical foundation for the Apollo guidance system and countless space missions since.
+
+\subsection{The Controllability Question}
+
+To appreciate why controllability is non-trivial, consider a simple example. Suppose we have two masses connected by a spring, with a force applied only to the first mass:
+
+\begin{center}
+\begin{tikzpicture}[scale=0.8]
+% Ground
+\fill[pattern=north east lines] (-0.5,0) rectangle (0,2);
+\draw[thick] (0,0) -- (0,2);
+
+% First mass
+\draw[fill=blue!20] (1,0.5) rectangle (2.5,1.5);
+\node at (1.75,1) {$m_1$};
+
+% Spring
+\draw[decoration={coil,segment length=4pt,amplitude=3pt},decorate] (2.5,1) -- (4,1);
+
+% Second mass
+\draw[fill=red!20] (4,0.5) rectangle (5.5,1.5);
+\node at (4.75,1) {$m_2$};
+
+% Force arrow
+\draw[->,thick,blue] (-0.3,1) -- (0.9,1);
+\node[blue] at (0.3,1.4) {$F$};
+
+% Position labels
+\draw[<->] (1.75,0) -- (1.75,0.4);
+\node at (1.75,-0.3) {$x_1$};
+\draw[<->] (4.75,0) -- (4.75,0.4);
+\node at (4.75,-0.3) {$x_2$};
+\end{tikzpicture}
+\end{center}
+
+Can we control both masses arbitrarily? Intuition suggests yes---pushing mass 1 will eventually affect mass 2 through the spring. But what if the spring is infinitely stiff? Then the two masses move as one, and we cannot independently control their relative position. More subtly, what if the system has internal modes that the input cannot excite?
+
+Kalman's controllability theory provides precise answers to such questions, transforming intuition into rigorous mathematics.
+
+\subsection{From Theory to Practice: Ackermann's Contribution}
+
+While Kalman established the theoretical foundation, practical implementation required additional development. J\"urgen Ackermann, a German control theorist, made a crucial contribution in 1972 with his formula for computing state feedback gains \cite{ackermann1972}.
+
+The pole placement problem asks: given a controllable system, how do we choose feedback gains to place the closed-loop poles at desired locations? While the existence of such gains follows from controllability, actually computing them was not straightforward for systems of dimension greater than two.
+
+Ackermann's formula provides a direct, non-iterative computation:
+\begin{equation}
+\bK = \begin{bmatrix} 0 & 0 & \cdots & 0 & 1 \end{bmatrix} \mathcal{C}^{-1} \phi(\bA)
+\label{eq:ackermann_preview}
+\end{equation}
+where $\mathcal{C}$ is the controllability matrix and $\phi(\bA)$ is the desired characteristic polynomial evaluated at the system matrix. This elegant result made pole placement practical and accessible to practicing engineers.
+
+\subsection{The Modern Legacy}
+
+Kalman's controllability theory, along with the dual concept of observability, fundamentally changed how we think about control systems. The ``Kalman decomposition'' shows that any linear system can be decomposed into four parts:
+\begin{enumerate}
+\item Controllable and observable (appears in transfer function)
+\item Controllable but unobservable
+\item Uncontrollable but observable
+\item Neither controllable nor observable
+\end{enumerate}
+
+This decomposition reveals that transfer function analysis only captures the first component---potentially missing critical system behavior hidden in the uncontrollable or unobservable subspaces.
+
+Today, controllability analysis is standard practice in aerospace, automotive, robotics, and process control. The concepts have been extended to nonlinear systems (Lie algebraic conditions), distributed parameter systems (PDEs), and networked control systems. Kalman's insight that we must first ask ``can we control this system?'' before asking ``how should we control it?'' remains as relevant as ever.
+
+%=============================================================================
+\section{Modern Applications}
+%=============================================================================
+
+The concepts of controllability and state feedback find application across virtually every domain of modern engineering. We highlight several areas where these techniques are essential.
+
+\subsection{Spacecraft Attitude Control}
+
+Modern spacecraft employ sophisticated attitude control systems (ACS) that directly implement state feedback concepts. Consider a satellite with reaction wheel actuators:
+
+\begin{itemize}
+\item \textbf{State vector}: Angular position and velocity about three axes ($\omega_x, \omega_y, \omega_z, \phi, \theta, \psi$)
+\item \textbf{Inputs}: Torques from reaction wheels or control moment gyros
+\item \textbf{Control objective}: Maintain pointing accuracy while minimizing fuel/power consumption
+\end{itemize}
+
+The controllability matrix determines whether the available actuators can achieve arbitrary attitude changes. Redundant actuator configurations must be analyzed to ensure controllability is maintained even after actuator failures---a critical consideration for long-duration missions.
+
+\subsection{Multi-Axis Robot Control}
+
+Industrial and surgical robots require coordinated control of multiple joints:
+
+\begin{itemize}
+\item A 6-DOF manipulator has a 12-dimensional state space (position and velocity of each joint)
+\item State feedback enables trajectory tracking with prescribed dynamics
+\item Controllability analysis reveals configurations (singularities) where certain motions become impossible
+\item Pole placement allows tuning of response characteristics for different tasks (fast pick-and-place vs. precise assembly)
+\end{itemize}
+
+Modern surgical robots like the da Vinci system rely on state feedback for tremor filtering and motion scaling, with pole placement determining the filtering characteristics.
+
+\subsection{Active Suspension Systems}
+
+Automotive active suspension represents a successful commercial application:
+
+\begin{itemize}
+\item \textbf{Quarter-car model}: Sprung mass, unsprung mass, and their velocities form a 4-dimensional state
+\item \textbf{Full vehicle}: 14+ states including roll, pitch, and heave modes
+\item \textbf{Actuators}: Hydraulic or electromagnetic force generators at each corner
+\item \textbf{Design trade-off}: Ride comfort (low bandwidth) vs. handling (high bandwidth)
+\end{itemize}
+
+State feedback allows independent tuning of body modes (ride quality) and wheel modes (tire contact), with pole placement providing direct control over the compromise.
+
+\subsection{Process Control}
+
+Chemical processes with multiple actuators benefit from state-space methods:
+
+\begin{itemize}
+\item Distillation columns with multiple feed points and heat inputs
+\item Reactor systems with temperature, pressure, and composition control
+\item Paper machines with moisture and thickness control across the web
+\end{itemize}
+
+In these applications, controllability analysis reveals whether the available actuators can regulate all process variables. Systems lacking full controllability may require additional actuators or accept limitations on achievable performance.
+
+%=============================================================================
+\section{Mathematical Foundation}
+%=============================================================================
+
+We now develop the mathematical theory of controllability and state feedback with full rigor. Throughout this section, we consider the linear time-invariant (LTI) system:
+\begin{equation}
+\dot{\bx}(t) = \bA\bx(t) + \bB\bu(t)
+\label{eq:lti_system}
+\end{equation}
+where $\bA \in \R^{n \times n}$, $\bB \in \R^{n \times m}$, $\bx(t) \in \R^n$, and $\bu(t) \in \R^m$.
+
+\subsection{Definition of Controllability}
+
+\begin{definition}[State Controllability]
+\label{def:controllability}
+The system $(\bA, \bB)$ is said to be \textbf{controllable} (or completely state controllable) if for any initial state $\bx_0 \in \R^n$ and any final state $\bx_f \in \R^n$, there exists a finite time $t_f > 0$ and an input $\bu(t)$ defined on $[0, t_f]$ such that the state trajectory satisfies $\bx(0) = \bx_0$ and $\bx(t_f) = \bx_f$.
+\end{definition}
+
+This definition captures the intuitive notion that we can ``steer'' the system from any state to any other state. Note several important points:
+
+\begin{enumerate}
+\item The definition requires reaching \textit{any} final state from \textit{any} initial state
+\item The time $t_f$ may depend on the states involved
+\item No constraint is placed on the input magnitude (practical considerations addressed later)
+\item Intermediate states along the trajectory are not specified
+\end{enumerate}
+
+\subsection{The Controllability Matrix}
+
+The solution to the state equation \eqref{eq:lti_system} is given by:
+\begin{equation}
+\bx(t) = e^{\bA t}\bx_0 + \int_0^t e^{\bA(t-\tau)}\bB\bu(\tau)\,d\tau
+\label{eq:state_solution}
+\end{equation}
+
+For the system to be controllable, we need the second term to be able to produce any vector in $\R^n$. This leads us to examine what vectors are reachable from the origin.
+
+\begin{definition}[Reachable Set]
+The \textbf{reachable set} $\mathcal{R}(t_f)$ at time $t_f$ is the set of all states that can be reached from the origin:
+\begin{equation}
+\mathcal{R}(t_f) = \left\{ \int_0^{t_f} e^{\bA(t_f-\tau)}\bB\bu(\tau)\,d\tau \,:\, \bu(\cdot) \in L^2([0,t_f], \R^m) \right\}
+\end{equation}
+\end{definition}
+
+\begin{lemma}
+\label{lemma:reachable_span}
+$\mathcal{R}(t_f) = \text{span}\{e^{\bA t}\bB\bu \,:\, t \in [0,t_f],\, \bu \in \R^m\}$.
+\end{lemma}
+
+To characterize this span algebraically, we use the Cayley-Hamilton theorem.
+
+\begin{theorem}[Cayley-Hamilton]
+Every square matrix satisfies its own characteristic equation. If $p(\lambda) = \det(\lambda\bI - \bA) = \lambda^n + a_{n-1}\lambda^{n-1} + \cdots + a_1\lambda + a_0$ is the characteristic polynomial of $\bA$, then:
+\begin{equation}
+p(\bA) = \bA^n + a_{n-1}\bA^{n-1} + \cdots + a_1\bA + a_0\bI = \bzero
+\end{equation}
+\end{theorem}
+
+This theorem implies that $\bA^n$ (and all higher powers) can be expressed as linear combinations of $\bI, \bA, \bA^2, \ldots, \bA^{n-1}$.
+
+\begin{corollary}
+The matrix exponential $e^{\bA t}$ can be written as:
+\begin{equation}
+e^{\bA t} = \sum_{k=0}^{n-1} \alpha_k(t)\bA^k
+\end{equation}
+for appropriate scalar functions $\alpha_k(t)$.
+\end{corollary}
+
+This leads directly to the controllability matrix.
+
+\begin{definition}[Controllability Matrix]
+\label{def:controllability_matrix}
+The \textbf{controllability matrix} of the pair $(\bA, \bB)$ is:
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} \bB & \bA\bB & \bA^2\bB & \cdots & \bA^{n-1}\bB \end{bmatrix}
+\label{eq:controllability_matrix}
+\end{equation}
+This is an $n \times nm$ matrix formed by horizontally concatenating $n$ blocks, each of dimension $n \times m$.
+\end{definition}
+
+\subsection{The Controllability Rank Condition}
+
+We now prove the fundamental result connecting controllability to the rank of $\mathcal{C}$.
+
+\begin{theorem}[Kalman Controllability Rank Condition]
+\label{thm:rank_condition}
+The system $(\bA, \bB)$ is controllable if and only if:
+\begin{equation}
+\rank(\mathcal{C}) = \rank\begin{bmatrix} \bB & \bA\bB & \bA^2\bB & \cdots & \bA^{n-1}\bB \end{bmatrix} = n
+\label{eq:rank_condition}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+We prove both directions.
+
+\textbf{(Sufficiency: $\rank(\mathcal{C}) = n \Rightarrow$ controllable)}
+
+Assume $\rank(\mathcal{C}) = n$. We show that any state $\bx_f$ is reachable from the origin in any time $t_f > 0$.
+
+The reachable set from the origin is:
+\begin{equation}
+\mathcal{R}(t_f) = \left\{ \int_0^{t_f} e^{\bA(t_f-\tau)}\bB\bu(\tau)\,d\tau \,:\, \bu(\cdot) \right\}
+\end{equation}
+
+Using the Cayley-Hamilton theorem, we can write:
+\begin{equation}
+e^{\bA(t_f-\tau)} = \sum_{k=0}^{n-1} \alpha_k(t_f-\tau)\bA^k
+\end{equation}
+
+Therefore:
+\begin{align}
+\int_0^{t_f} e^{\bA(t_f-\tau)}\bB\bu(\tau)\,d\tau &= \sum_{k=0}^{n-1} \bA^k\bB \int_0^{t_f} \alpha_k(t_f-\tau)\bu(\tau)\,d\tau \\
+&= \sum_{k=0}^{n-1} \bA^k\bB \bv_k
+\end{align}
+where $\bv_k = \int_0^{t_f} \alpha_k(t_f-\tau)\bu(\tau)\,d\tau \in \R^m$.
+
+This shows that any reachable state lies in:
+\begin{equation}
+\mathcal{R}(t_f) \subseteq \text{range}(\mathcal{C}) = \text{span}\{\bB, \bA\bB, \ldots, \bA^{n-1}\bB\}
+\end{equation}
+
+Conversely, for any choice of vectors $\bv_0, \ldots, \bv_{n-1} \in \R^m$, we can find a suitable input $\bu(\tau)$ that produces these integrals (the functions $\alpha_k(t_f-\tau)$ form a linearly independent set for $t_f > 0$). Therefore:
+\begin{equation}
+\mathcal{R}(t_f) = \text{range}(\mathcal{C})
+\end{equation}
+
+If $\rank(\mathcal{C}) = n$, then $\text{range}(\mathcal{C}) = \R^n$, so any state is reachable from the origin.
+
+To show controllability (reaching any $\bx_f$ from any $\bx_0$), note that if $\bx_1(t)$ reaches $\bx_f$ from $\bzero$ using input $\bu_1(t)$, and $\bx_2(t)$ reaches some state from $-\bx_0$ using input $\bu_2(t)$, then by linearity we can construct an input that drives $\bx_0$ to $\bx_f$.
+
+\textbf{(Necessity: controllable $\Rightarrow$ $\rank(\mathcal{C}) = n$)}
+
+We prove the contrapositive: if $\rank(\mathcal{C}) < n$, then the system is not controllable.
+
+Suppose $\rank(\mathcal{C}) < n$. Then there exists a nonzero vector $\bq \in \R^n$ such that $\bq^\top \mathcal{C} = \bzero$. This means:
+\begin{equation}
+\bq^\top \bA^k\bB = \bzero \quad \text{for } k = 0, 1, \ldots, n-1
+\label{eq:q_orthogonal}
+\end{equation}
+
+By Cayley-Hamilton, $\bA^k$ for $k \geq n$ is a linear combination of lower powers, so:
+\begin{equation}
+\bq^\top \bA^k\bB = \bzero \quad \text{for all } k \geq 0
+\end{equation}
+
+Now consider the state reachable from the origin:
+\begin{equation}
+\bx(t_f) = \int_0^{t_f} e^{\bA(t_f-\tau)}\bB\bu(\tau)\,d\tau
+\end{equation}
+
+Taking the inner product with $\bq$:
+\begin{align}
+\bq^\top\bx(t_f) &= \int_0^{t_f} \bq^\top e^{\bA(t_f-\tau)}\bB\bu(\tau)\,d\tau \\
+&= \int_0^{t_f} \sum_{k=0}^{\infty} \frac{(t_f-\tau)^k}{k!}\bq^\top\bA^k\bB\bu(\tau)\,d\tau \\
+&= 0
+\end{align}
+
+This shows that any reachable state $\bx(t_f)$ satisfies $\bq^\top\bx(t_f) = 0$. Hence, any state $\bx_f$ with $\bq^\top\bx_f \neq 0$ is unreachable from the origin, proving the system is not controllable.
+\end{proof}
+
+\subsection{The Controllability Gramian}
+
+An alternative characterization uses the controllability Gramian.
+
+\begin{definition}[Controllability Gramian]
+The \textbf{controllability Gramian} at time $t_f$ is:
+\begin{equation}
+\bW_c(t_f) = \int_0^{t_f} e^{\bA\tau}\bB\bB^\top e^{\bA^\top\tau}\,d\tau
+\label{eq:gramian}
+\end{equation}
+\end{definition}
+
+\begin{theorem}
+The system $(\bA, \bB)$ is controllable if and only if $\bW_c(t_f)$ is positive definite for some (equivalently, any) $t_f > 0$.
+\end{theorem}
+
+The Gramian provides additional insight: if we want to drive the system from state $\bx_0$ to state $\bx_f$ in time $t_f$, the minimum energy input is:
+\begin{equation}
+\bu^*(t) = \bB^\top e^{\bA^\top(t_f-t)}\bW_c^{-1}(t_f)\left(\bx_f - e^{\bA t_f}\bx_0\right)
+\end{equation}
+with corresponding energy:
+\begin{equation}
+\int_0^{t_f} \|\bu^*(t)\|^2\,dt = \left(\bx_f - e^{\bA t_f}\bx_0\right)^\top\bW_c^{-1}(t_f)\left(\bx_f - e^{\bA t_f}\bx_0\right)
+\end{equation}
+
+\subsection{State Feedback Control}
+
+Having established when a system is controllable, we now address how to control it. State feedback is the most direct approach.
+
+\begin{definition}[State Feedback]
+\textbf{State feedback} is a control law of the form:
+\begin{equation}
+\bu(t) = -\bK\bx(t) + \br(t)
+\label{eq:state_feedback}
+\end{equation}
+where $\bK \in \R^{m \times n}$ is the feedback gain matrix and $\br(t)$ is a reference input.
+\end{definition}
+
+Substituting into the state equation \eqref{eq:lti_system}:
+\begin{align}
+\dot{\bx} &= \bA\bx + \bB(-\bK\bx + \br) \\
+&= (\bA - \bB\bK)\bx + \bB\br
+\label{eq:closed_loop}
+\end{align}
+
+The closed-loop system has dynamics matrix $\bA_{cl} = \bA - \bB\bK$. The key insight is that proper choice of $\bK$ can place the eigenvalues of $\bA_{cl}$ at any desired locations.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[auto, node distance=2cm,>=latex']
+    % Blocks
+    \node [draw, rectangle, minimum height=1cm, minimum width=1.5cm] (plant) {$\dot{\bx} = \bA\bx + \bB\bu$};
+    \node [draw, rectangle, minimum height=0.8cm, minimum width=1.2cm, below=1.5cm of plant] (K) {$-\bK$};
+    \node [draw, circle, minimum size=0.6cm, left=2cm of plant] (sum) {};
+
+    % Input
+    \node [left=1.5cm of sum] (input) {$\br$};
+
+    % Output
+    \node [right=2cm of plant] (output) {};
+
+    % Arrows
+    \draw [->] (input) -- node[pos=0.5, above] {} (sum);
+    \draw [->] (sum) -- node[pos=0.5, above] {$\bu$} (plant);
+    \draw [->] (plant) -- node[name=x, pos=0.5, above] {$\bx$} (output);
+    \draw [->] (x) |- (K);
+    \draw [->] (K) -| node[pos=0.9, left] {$-$} (sum);
+
+    % Plus sign in summer
+    \node at ($(sum) + (-0.25,0)$) {$+$};
+\end{tikzpicture}
+\caption{State feedback control architecture. The gain matrix $\bK$ feeds back the full state vector to modify the input, resulting in closed-loop dynamics $\dot{\bx} = (\bA-\bB\bK)\bx + \bB\br$.}
+\label{fig:state_feedback}
+\end{figure}
+
+\subsection{Pole Placement Theorem}
+
+\begin{theorem}[Pole Placement]
+\label{thm:pole_placement}
+If the system $(\bA, \bB)$ is controllable, then for any set of $n$ complex numbers $\{p_1, p_2, \ldots, p_n\}$ (closed under complex conjugation), there exists a matrix $\bK \in \R^{m \times n}$ such that:
+\begin{equation}
+\eig(\bA - \bB\bK) = \{p_1, p_2, \ldots, p_n\}
+\end{equation}
+\end{theorem}
+
+\begin{proof}[Proof sketch for SISO case]
+For a single-input system ($m = 1$), we can transform to controller canonical form. In this form:
+\begin{equation}
+\bA_c = \begin{bmatrix}
+0 & 1 & 0 & \cdots & 0 \\
+0 & 0 & 1 & \cdots & 0 \\
+\vdots & & \ddots & \ddots & \vdots \\
+0 & 0 & \cdots & 0 & 1 \\
+-a_0 & -a_1 & \cdots & -a_{n-2} & -a_{n-1}
+\end{bmatrix}, \quad
+\bB_c = \begin{bmatrix} 0 \\ 0 \\ \vdots \\ 0 \\ 1 \end{bmatrix}
+\end{equation}
+where $a_0, \ldots, a_{n-1}$ are the coefficients of the characteristic polynomial.
+
+With $\bK_c = \begin{bmatrix} k_0 & k_1 & \cdots & k_{n-1} \end{bmatrix}$:
+\begin{equation}
+\bA_c - \bB_c\bK_c = \begin{bmatrix}
+0 & 1 & 0 & \cdots & 0 \\
+0 & 0 & 1 & \cdots & 0 \\
+\vdots & & \ddots & \ddots & \vdots \\
+0 & 0 & \cdots & 0 & 1 \\
+-a_0-k_0 & -a_1-k_1 & \cdots & -a_{n-2}-k_{n-2} & -a_{n-1}-k_{n-1}
+\end{bmatrix}
+\end{equation}
+
+The characteristic polynomial of $\bA_c - \bB_c\bK_c$ is:
+\begin{equation}
+\det(s\bI - \bA_c + \bB_c\bK_c) = s^n + (a_{n-1}+k_{n-1})s^{n-1} + \cdots + (a_0+k_0)
+\end{equation}
+
+For any desired polynomial $\phi(s) = s^n + \alpha_{n-1}s^{n-1} + \cdots + \alpha_0$, we simply choose:
+\begin{equation}
+k_i = \alpha_i - a_i, \quad i = 0, 1, \ldots, n-1
+\end{equation}
+
+The transformation back to original coordinates yields the required $\bK$.
+\end{proof}
+
+\subsection{Ackermann's Formula}
+
+For single-input systems, Ackermann's formula provides a direct computation of the feedback gain.
+
+\begin{theorem}[Ackermann's Formula]
+\label{thm:ackermann}
+Let $(\bA, \bB)$ be a controllable single-input system ($\bB \in \R^{n \times 1}$). Let:
+\begin{equation}
+\phi(s) = s^n + \alpha_{n-1}s^{n-1} + \cdots + \alpha_1 s + \alpha_0
+\end{equation}
+be the desired characteristic polynomial (with roots at the desired pole locations). Then the feedback gain $\bK$ that places the closed-loop poles at these locations is:
+\begin{equation}
+\bK = \begin{bmatrix} 0 & 0 & \cdots & 0 & 1 \end{bmatrix} \mathcal{C}^{-1} \phi(\bA)
+\label{eq:ackermann}
+\end{equation}
+where $\mathcal{C} = \begin{bmatrix} \bB & \bA\bB & \cdots & \bA^{n-1}\bB \end{bmatrix}$ and:
+\begin{equation}
+\phi(\bA) = \bA^n + \alpha_{n-1}\bA^{n-1} + \cdots + \alpha_1\bA + \alpha_0\bI
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The proof uses the transformation to controller canonical form. Let $\bT$ be the transformation such that $\bA_c = \bT^{-1}\bA\bT$ and $\bB_c = \bT^{-1}\bB$ are in controller canonical form.
+
+It can be shown that:
+\begin{equation}
+\bT^{-1} = \mathcal{C}_c^{-1}\mathcal{C}^{-1}
+\end{equation}
+where $\mathcal{C}_c$ is the controllability matrix in canonical form.
+
+In the canonical coordinates, the required gain is:
+\begin{equation}
+\bK_c = \begin{bmatrix} \alpha_0 - a_0 & \alpha_1 - a_1 & \cdots & \alpha_{n-1} - a_{n-1} \end{bmatrix}
+\end{equation}
+
+Transforming back and using the Cayley-Hamilton theorem yields Ackermann's formula.
+\end{proof}
+
+\begin{remark}
+For multi-input systems ($m > 1$), the feedback gain is not unique---there are infinitely many $\bK$ matrices that achieve the same pole placement. Additional criteria (such as minimizing control effort) can be used to select among them.
+\end{remark}
+
+\subsection{Bass-Gura Formula}
+
+An alternative to Ackermann's formula, the Bass-Gura formula directly computes the gains by comparing coefficients.
+
+\begin{theorem}[Bass-Gura Formula]
+For a controllable SISO system in controller canonical form with characteristic polynomial:
+\begin{equation}
+p(s) = s^n + a_{n-1}s^{n-1} + \cdots + a_1 s + a_0
+\end{equation}
+and desired characteristic polynomial $\phi(s) = s^n + \alpha_{n-1}s^{n-1} + \cdots + \alpha_0$, the feedback gain is:
+\begin{equation}
+\bK = (\boldsymbol{\alpha} - \mathbf{a})^\top \bT^{-1}
+\end{equation}
+where $\boldsymbol{\alpha} = \begin{bmatrix} \alpha_0 & \alpha_1 & \cdots & \alpha_{n-1} \end{bmatrix}^\top$, $\mathbf{a} = \begin{bmatrix} a_0 & a_1 & \cdots & a_{n-1} \end{bmatrix}^\top$, and $\bT$ is the transformation to controller canonical form.
+\end{theorem}
+
+\subsection{Practical Considerations}
+
+While controllability and pole placement provide powerful theoretical tools, practical implementation requires careful consideration of several factors.
+
+\subsubsection{Aggressive Pole Placement and Control Effort}
+
+Moving poles farther into the left half-plane produces faster response but requires higher control effort. Consider a second-order system with closed-loop poles at $s = -\omega_n\zeta \pm j\omega_n\sqrt{1-\zeta^2}$.
+
+The settling time is approximately $T_s \approx \frac{4}{\zeta\omega_n}$. To reduce settling time by a factor of 10, we must move poles 10 times farther from the origin. This typically increases:
+\begin{itemize}
+\item Peak control signal magnitude
+\item Control signal rate of change
+\item Sensitivity to modeling errors
+\item Energy consumption
+\end{itemize}
+
+\subsubsection{Actuator Saturation}
+
+Real actuators have limited range. If pole placement demands control signals exceeding actuator limits, the actual closed-loop behavior will differ from the designed linear response. Anti-windup strategies and careful pole selection are essential.
+
+\subsubsection{Robustness Considerations}
+
+State feedback designed by pole placement does not inherently guarantee robustness to model uncertainty. The LQR (Linear Quadratic Regulator) approach, covered in Chapter 17, provides systematic treatment of the trade-off between performance and robustness.
+
+%=============================================================================
+\section{Practical Experiment: Inverted Pendulum State Feedback Control}
+%=============================================================================
+
+The inverted pendulum is a classic demonstration of controllability concepts. The system is naturally unstable---small perturbations cause the pendulum to fall. Yet, with appropriate state feedback, we can stabilize it at the upright position. This experiment demonstrates both the controllability analysis and practical state feedback implementation.
+
+\subsection{System Description}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.2]
+    % Ground
+    \fill[pattern=north east lines] (-3,-0.3) rectangle (3,0);
+    \draw[thick] (-3,0) -- (3,0);
+
+    % Rails
+    \draw[thick] (-2.5,0.1) -- (2.5,0.1);
+    \draw[thick] (-2.5,0.15) -- (2.5,0.15);
+
+    % Cart
+    \draw[fill=blue!30] (-0.8,0.2) rectangle (0.8,0.8);
+    \node at (0,0.5) {Cart};
+
+    % Wheels
+    \draw[fill=gray] (-0.5,0.2) circle (0.12);
+    \draw[fill=gray] (0.5,0.2) circle (0.12);
+
+    % Pivot point
+    \fill (0,0.8) circle (0.08);
+
+    % Pendulum
+    \draw[thick] (0,0.8) -- (1.2,2.8);
+    \draw[fill=red!50] (1.2,2.8) circle (0.2);
+    \node at (1.5,2.8) {$m$};
+
+    % Angle theta
+    \draw[dashed] (0,0.8) -- (0,2.5);
+    \draw[->] (0,1.8) arc (90:63:1);
+    \node at (0.4,1.9) {$\theta$};
+
+    % Force F
+    \draw[->,thick,blue] (-1.5,0.5) -- (-0.9,0.5);
+    \node[blue] at (-1.7,0.5) {$F$};
+
+    % Position x
+    \draw[<->] (0,-0.5) -- (1.5,-0.5);
+    \node at (0.75,-0.8) {$x$};
+
+    % Dimensions
+    \draw[<->,gray] (0.1,0.8) -- (1.1,2.6);
+    \node[gray] at (0.9,1.6) {$\ell$};
+
+    % Gravity
+    \draw[->,thick] (1.2,2.5) -- (1.2,2.0);
+    \node at (1.5,2.2) {$mg$};
+\end{tikzpicture}
+\caption{Inverted pendulum on a cart. The cart of mass $M$ moves along a track, driven by force $F$. A pendulum of length $\ell$ and point mass $m$ is pivoted on the cart. The angle $\theta$ is measured from vertical.}
+\label{fig:pendulum_fbd}
+\end{figure}
+
+\subsubsection{Equations of Motion}
+
+Using Lagrangian mechanics, the equations of motion are:
+\begin{align}
+(M + m)\ddot{x} + m\ell\ddot{\theta}\cos\theta - m\ell\dot{\theta}^2\sin\theta &= F \\
+m\ell^2\ddot{\theta} + m\ell\ddot{x}\cos\theta - mg\ell\sin\theta &= 0
+\end{align}
+
+Linearizing about the upright position ($\theta = 0$, $\dot{\theta} = 0$):
+\begin{align}
+(M + m)\ddot{x} + m\ell\ddot{\theta} &= F \\
+m\ell\ddot{\theta} + m\ddot{x} - mg\theta &= 0
+\end{align}
+
+Defining state vector $\bx = \begin{bmatrix} x & \dot{x} & \theta & \dot{\theta} \end{bmatrix}^\top$ and input $u = F$:
+
+\begin{equation}
+\bA = \begin{bmatrix}
+0 & 1 & 0 & 0 \\
+0 & 0 & -\frac{mg}{M} & 0 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & \frac{(M+m)g}{M\ell} & 0
+\end{bmatrix}, \quad
+\bB = \begin{bmatrix}
+0 \\
+\frac{1}{M} \\
+0 \\
+-\frac{1}{M\ell}
+\end{bmatrix}
+\label{eq:pendulum_ss}
+\end{equation}
+
+\subsubsection{Controllability Verification}
+
+With typical parameters ($M = 0.5$ kg, $m = 0.2$ kg, $\ell = 0.3$ m, $g = 9.81$ m/s$^2$):
+
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} \bB & \bA\bB & \bA^2\bB & \bA^3\bB \end{bmatrix}
+\end{equation}
+
+Computing:
+\begin{equation}
+\mathcal{C} = \begin{bmatrix}
+0 & 2 & 0 & -26.16 \\
+2 & 0 & -7.85 & 0 \\
+0 & -6.67 & 0 & 130.8 \\
+-6.67 & 0 & 45.71 & 0
+\end{bmatrix}
+\end{equation}
+
+The determinant $\det(\mathcal{C}) \neq 0$, confirming $\rank(\mathcal{C}) = 4$. The system is controllable.
+
+\subsection{Hardware Implementation}
+
+\subsubsection{Components}
+
+\begin{itemize}
+\item \textbf{Cart}: 3D printed PLA, mounted on linear bearings
+\item \textbf{Track}: 500mm aluminum extrusion with linear rail
+\item \textbf{Motor}: NEMA 17 stepper or DC gear motor with encoder
+\item \textbf{Drive}: Belt or lead screw for cart positioning
+\item \textbf{Pendulum}: 300mm aluminum or carbon fiber rod
+\item \textbf{Sensors}: Rotary encoder at pivot (1000+ PPR), motor encoder for position
+\item \textbf{Controller}: Arduino Mega or Teensy 4.0
+\item \textbf{Motor driver}: L298N or TB6612FNG
+\end{itemize}
+
+\subsubsection{3D Printing Specifications}
+
+\begin{itemize}
+\item Cart body: 100\% infill for rigidity
+\item Bearing mounts: Tight tolerances ($\pm$0.1mm)
+\item Pivot housing: Precision fit for encoder shaft
+\item Material: PLA or PETG (ABS for higher temperature environments)
+\end{itemize}
+
+\subsection{Controller Implementation}
+
+\begin{lstlisting}[style=arduino, caption={Arduino state feedback controller for inverted pendulum}]
+// Inverted Pendulum State Feedback Controller
+// Implements: u = -K1*x - K2*x_dot - K3*theta - K4*theta_dot
+
+// State feedback gains (computed via pole placement)
+const float K1 = -31.62;   // Position gain
+const float K2 = -25.89;   // Velocity gain
+const float K3 = 78.46;    // Angle gain
+const float K4 = 14.52;    // Angular velocity gain
+
+// Physical parameters
+const float ENCODER_TO_RAD = 2.0 * PI / 4000.0;  // 1000 PPR * 4x
+const float ENCODER_TO_M = 0.001;                 // mm per count
+
+// State variables
+volatile long cart_encoder = 0;
+volatile long pend_encoder = 0;
+float x = 0, x_dot = 0;
+float theta = 0, theta_dot = 0;
+float x_prev = 0, theta_prev = 0;
+
+// Timing
+unsigned long last_time = 0;
+const float dt = 0.005;  // 5ms control loop (200 Hz)
+
+void setup() {
+  Serial.begin(115200);
+  setupEncoders();
+  setupMotor();
+
+  // Wait for pendulum to be placed upright
+  Serial.println("Place pendulum upright and press button");
+  waitForStart();
+
+  // Zero encoders at upright position
+  cart_encoder = 0;
+  pend_encoder = 0;
+
+  last_time = micros();
+}
+
+void loop() {
+  // Fixed-rate control loop
+  if (micros() - last_time >= dt * 1e6) {
+    last_time = micros();
+
+    // Read and convert encoder values
+    noInterrupts();
+    x = cart_encoder * ENCODER_TO_M;
+    theta = pend_encoder * ENCODER_TO_RAD;
+    interrupts();
+
+    // Compute velocities (filtered derivative)
+    x_dot = 0.8 * x_dot + 0.2 * (x - x_prev) / dt;
+    theta_dot = 0.8 * theta_dot + 0.2 * (theta - theta_prev) / dt;
+    x_prev = x;
+    theta_prev = theta;
+
+    // State feedback control law
+    float u = -K1*x - K2*x_dot - K3*theta - K4*theta_dot;
+
+    // Saturate control signal
+    u = constrain(u, -12.0, 12.0);
+
+    // Apply control (if pendulum near upright)
+    if (abs(theta) < 0.5) {  // ~30 degrees
+      setMotorVoltage(u);
+    } else {
+      setMotorVoltage(0);  // Disable if fallen
+      Serial.println("Pendulum fallen - reset required");
+    }
+
+    // Data logging
+    Serial.print(x, 4); Serial.print(",");
+    Serial.print(theta, 4); Serial.print(",");
+    Serial.println(u, 4);
+  }
+}
+
+void setupEncoders() {
+  // Configure encoder interrupt pins
+  pinMode(2, INPUT_PULLUP);  // Cart encoder A
+  pinMode(3, INPUT_PULLUP);  // Cart encoder B
+  pinMode(18, INPUT_PULLUP); // Pendulum encoder A
+  pinMode(19, INPUT_PULLUP); // Pendulum encoder B
+
+  attachInterrupt(digitalPinToInterrupt(2), cartEncoderISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(18), pendEncoderISR, CHANGE);
+}
+
+void cartEncoderISR() {
+  // Quadrature decoding
+  if (digitalRead(2) == digitalRead(3)) {
+    cart_encoder++;
+  } else {
+    cart_encoder--;
+  }
+}
+
+void pendEncoderISR() {
+  if (digitalRead(18) == digitalRead(19)) {
+    pend_encoder++;
+  } else {
+    pend_encoder--;
+  }
+}
+\end{lstlisting}
+
+\subsection{Experimental Results}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.9\textwidth,
+    height=6cm,
+    xlabel={Time (s)},
+    ylabel={Angle (rad)},
+    title={Pendulum Angle: Without vs. With State Feedback},
+    legend pos=north east,
+    grid=major,
+    xmin=0, xmax=3,
+    ymin=-1.6, ymax=1.6
+]
+% Without control - falls over
+\addplot[red, thick, domain=0:0.8, samples=100] {0.1*exp(5.7*x)};
+\addplot[red, thick, dashed, domain=0.8:3] {1.57};
+\addlegendentry{Without control}
+
+% With state feedback - stabilized
+\addplot[blue, thick, domain=0:3, samples=100]
+    {0.3*exp(-4*x)*cos(6*x) + 0.1*exp(-4*x)*sin(6*x)};
+\addlegendentry{With state feedback}
+\end{axis}
+\end{tikzpicture}
+\caption{Comparison of pendulum response. Without control (red), the pendulum falls within 0.8 seconds. With state feedback (blue), an initial disturbance of 0.3 rad is stabilized within 1 second.}
+\label{fig:pendulum_response}
+\end{figure}
+
+\subsubsection{Effect of Pole Placement}
+
+The choice of closed-loop pole locations significantly affects system behavior:
+
+\begin{table}[htbp]
+\centering
+\caption{Effect of pole placement on inverted pendulum performance}
+\label{tab:pole_effects}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Poles} & \textbf{Settling Time} & \textbf{Peak Control} & \textbf{Notes} \\
+\midrule
+$-2 \pm 2j$, $-3$, $-4$ & 2.0 s & 5 V & Conservative, smooth \\
+$-5 \pm 5j$, $-6$, $-8$ & 0.8 s & 15 V & Moderate, good balance \\
+$-10 \pm 10j$, $-12$, $-15$ & 0.35 s & 45 V & Aggressive, near saturation \\
+$-20 \pm 20j$, $-25$, $-30$ & 0.15 s & >100 V & Impractical, saturates \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Extensions and Variations}
+
+\begin{enumerate}
+\item \textbf{Swing-up control}: Use energy-based control to swing pendulum from hanging to upright, then switch to state feedback
+\item \textbf{Double pendulum}: Add second link; requires 8-state model, demonstrates more complex controllability analysis
+\item \textbf{Rotary pendulum (Furuta pendulum)}: Pendulum on rotating arm; different dynamics, same controllability concepts
+\item \textbf{Observer implementation}: Replace direct angle measurement with observer (Chapter 16)
+\end{enumerate}
+
+%=============================================================================
+\section{Example Problems}
+%=============================================================================
+
+\begin{example}[Controllability of a Second-Order System]
+\label{ex:second_order}
+Consider the system:
+\begin{equation}
+\bA = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}, \quad
+\bB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}
+\end{equation}
+
+\textbf{Determine if the system is controllable.}
+
+\textbf{Solution:}
+
+Step 1: Compute the controllability matrix.
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} \bB & \bA\bB \end{bmatrix}
+\end{equation}
+
+First, compute $\bA\bB$:
+\begin{equation}
+\bA\bB = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix} \begin{bmatrix} 0 \\ 1 \end{bmatrix} = \begin{bmatrix} 1 \\ -3 \end{bmatrix}
+\end{equation}
+
+Therefore:
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} 0 & 1 \\ 1 & -3 \end{bmatrix}
+\end{equation}
+
+Step 2: Check the rank.
+\begin{equation}
+\det(\mathcal{C}) = (0)(-3) - (1)(1) = -1 \neq 0
+\end{equation}
+
+Since $\det(\mathcal{C}) \neq 0$, we have $\rank(\mathcal{C}) = 2 = n$.
+
+\textbf{Conclusion:} The system is controllable. \hfill $\square$
+\end{example}
+
+\begin{example}[Uncontrollable System]
+\label{ex:uncontrollable}
+Consider the system:
+\begin{equation}
+\bA = \begin{bmatrix} 1 & 0 \\ 0 & 2 \end{bmatrix}, \quad
+\bB = \begin{bmatrix} 1 \\ 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Determine if the system is controllable. If not, identify the uncontrollable mode.}
+
+\textbf{Solution:}
+
+Step 1: Compute the controllability matrix.
+\begin{equation}
+\bA\bB = \begin{bmatrix} 1 & 0 \\ 0 & 2 \end{bmatrix} \begin{bmatrix} 1 \\ 0 \end{bmatrix} = \begin{bmatrix} 1 \\ 0 \end{bmatrix}
+\end{equation}
+
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} 1 & 1 \\ 0 & 0 \end{bmatrix}
+\end{equation}
+
+Step 2: Check the rank.
+\begin{equation}
+\det(\mathcal{C}) = (1)(0) - (1)(0) = 0
+\end{equation}
+
+The matrix has $\rank(\mathcal{C}) = 1 < 2 = n$.
+
+Step 3: Identify uncontrollable mode.
+
+The range of $\mathcal{C}$ is spanned by $\begin{bmatrix} 1 \\ 0 \end{bmatrix}$. The orthogonal complement is spanned by $\bq = \begin{bmatrix} 0 \\ 1 \end{bmatrix}$.
+
+Check: $\bq^\top\bB = 0$ and $\bq^\top\bA\bB = 0$. \checkmark
+
+The uncontrollable subspace is $\text{span}\{\begin{bmatrix} 0 \\ 1 \end{bmatrix}\}$, which corresponds to the eigenvalue $\lambda = 2$.
+
+\textbf{Physical interpretation:} The input only affects the first state. The second state evolves independently according to $\dot{x}_2 = 2x_2$ and cannot be influenced by any control action.
+
+\textbf{Conclusion:} The system is not controllable. The mode associated with $\lambda = 2$ is uncontrollable. \hfill $\square$
+\end{example}
+
+\begin{example}[Third-Order System Controllability]
+\label{ex:third_order}
+Consider a triple integrator with input applied to the first state:
+\begin{equation}
+\bA = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ 0 & 0 & 0 \end{bmatrix}, \quad
+\bB = \begin{bmatrix} 1 \\ 0 \\ 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Is this system controllable?}
+
+\textbf{Solution:}
+
+Compute the controllability matrix:
+\begin{align}
+\bA\bB &= \begin{bmatrix} 0 \\ 0 \\ 0 \end{bmatrix} \\
+\bA^2\bB &= \bA(\bA\bB) = \begin{bmatrix} 0 \\ 0 \\ 0 \end{bmatrix}
+\end{align}
+
+Therefore:
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} 1 & 0 & 0 \\ 0 & 0 & 0 \\ 0 & 0 & 0 \end{bmatrix}
+\end{equation}
+
+Since $\rank(\mathcal{C}) = 1 \neq 3$, the system is \textbf{not controllable}.
+
+\textbf{Physical insight:} The input enters at $x_1$, but the chain $x_1 \to x_2 \to x_3$ goes the wrong way! We can directly affect $x_1$ but have no way to control $x_2$ or $x_3$ since they are ``upstream'' of the input.
+
+\textbf{Note:} If instead $\bB = \begin{bmatrix} 0 \\ 0 \\ 1 \end{bmatrix}$ (input at the ``bottom''), the system becomes controllable. \hfill $\square$
+\end{example}
+
+\begin{example}[Pole Placement Using Ackermann's Formula]
+\label{ex:ackermann}
+For the controllable system in Example~\ref{ex:second_order}:
+\begin{equation}
+\bA = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}, \quad
+\bB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}
+\end{equation}
+
+\textbf{Design a state feedback controller to place the closed-loop poles at $s = -5 \pm 3j$.}
+
+\textbf{Solution:}
+
+Step 1: Find the desired characteristic polynomial.
+
+With poles at $s = -5 + 3j$ and $s = -5 - 3j$:
+\begin{align}
+\phi(s) &= (s + 5 - 3j)(s + 5 + 3j) \\
+&= (s + 5)^2 + 9 \\
+&= s^2 + 10s + 34
+\end{align}
+
+Step 2: Compute $\phi(\bA)$.
+\begin{equation}
+\phi(\bA) = \bA^2 + 10\bA + 34\bI
+\end{equation}
+
+First, compute $\bA^2$:
+\begin{equation}
+\bA^2 = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix} \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix} = \begin{bmatrix} -2 & -3 \\ 6 & 7 \end{bmatrix}
+\end{equation}
+
+Then:
+\begin{align}
+\phi(\bA) &= \begin{bmatrix} -2 & -3 \\ 6 & 7 \end{bmatrix} + 10\begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix} + 34\begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} \\
+&= \begin{bmatrix} -2+0+34 & -3+10+0 \\ 6-20+0 & 7-30+34 \end{bmatrix} \\
+&= \begin{bmatrix} 32 & 7 \\ -14 & 11 \end{bmatrix}
+\end{align}
+
+Step 3: Compute $\mathcal{C}^{-1}$.
+
+From Example~\ref{ex:second_order}, $\mathcal{C} = \begin{bmatrix} 0 & 1 \\ 1 & -3 \end{bmatrix}$.
+
+\begin{equation}
+\mathcal{C}^{-1} = \frac{1}{-1} \begin{bmatrix} -3 & -1 \\ -1 & 0 \end{bmatrix} = \begin{bmatrix} 3 & 1 \\ 1 & 0 \end{bmatrix}
+\end{equation}
+
+Step 4: Apply Ackermann's formula.
+\begin{align}
+\bK &= \begin{bmatrix} 0 & 1 \end{bmatrix} \mathcal{C}^{-1} \phi(\bA) \\
+&= \begin{bmatrix} 0 & 1 \end{bmatrix} \begin{bmatrix} 3 & 1 \\ 1 & 0 \end{bmatrix} \begin{bmatrix} 32 & 7 \\ -14 & 11 \end{bmatrix} \\
+&= \begin{bmatrix} 1 & 0 \end{bmatrix} \begin{bmatrix} 32 & 7 \\ -14 & 11 \end{bmatrix} \\
+&= \begin{bmatrix} 32 & 7 \end{bmatrix}
+\end{align}
+
+Step 5: Verify.
+
+The closed-loop matrix is:
+\begin{equation}
+\bA - \bB\bK = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix} - \begin{bmatrix} 0 \\ 1 \end{bmatrix} \begin{bmatrix} 32 & 7 \end{bmatrix} = \begin{bmatrix} 0 & 1 \\ -34 & -10 \end{bmatrix}
+\end{equation}
+
+Check eigenvalues:
+\begin{equation}
+\det(s\bI - (\bA - \bB\bK)) = s^2 + 10s + 34 = (s + 5)^2 + 9 \checkmark
+\end{equation}
+
+\textbf{Result:} $\bK = \begin{bmatrix} 32 & 7 \end{bmatrix}$ \hfill $\square$
+\end{example}
+
+\begin{example}[Double Integrator State Feedback]
+\label{ex:double_int}
+The double integrator is one of the simplest and most important systems:
+\begin{equation}
+\bA = \begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix}, \quad
+\bB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}
+\end{equation}
+
+This models a unit mass with force input: $\ddot{x} = u$.
+
+\textbf{(a) Verify controllability.}
+
+\textbf{(b) Design state feedback for critically damped response with time constant $\tau = 0.5$ s.}
+
+\textbf{Solution:}
+
+\textbf{(a)} Controllability matrix:
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} \bB & \bA\bB \end{bmatrix} = \begin{bmatrix} 0 & 1 \\ 1 & 0 \end{bmatrix}
+\end{equation}
+
+$\det(\mathcal{C}) = -1 \neq 0$, so $\rank(\mathcal{C}) = 2$. The system is controllable.
+
+\textbf{(b)} For critically damped response with $\tau = 0.5$ s, we need a double pole at $s = -1/\tau = -2$.
+
+Desired characteristic polynomial:
+\begin{equation}
+\phi(s) = (s + 2)^2 = s^2 + 4s + 4
+\end{equation}
+
+Open-loop characteristic polynomial:
+\begin{equation}
+p(s) = \det(s\bI - \bA) = s^2
+\end{equation}
+
+Using Bass-Gura approach (simpler for this case):
+
+With $\bK = \begin{bmatrix} k_1 & k_2 \end{bmatrix}$:
+\begin{equation}
+\bA - \bB\bK = \begin{bmatrix} 0 & 1 \\ -k_1 & -k_2 \end{bmatrix}
+\end{equation}
+
+Characteristic polynomial:
+\begin{equation}
+\det(s\bI - \bA + \bB\bK) = s^2 + k_2 s + k_1
+\end{equation}
+
+Matching coefficients with $s^2 + 4s + 4$:
+\begin{equation}
+k_1 = 4, \quad k_2 = 4
+\end{equation}
+
+\textbf{Result:} $\bK = \begin{bmatrix} 4 & 4 \end{bmatrix}$
+
+The control law $u = -4x - 4\dot{x}$ produces critically damped motion with $\tau = 0.5$ s. \hfill $\square$
+\end{example}
+
+\begin{example}[Control Effort vs. Pole Location]
+\label{ex:control_effort}
+For the double integrator of Example~\ref{ex:double_int}, analyze how control effort varies with pole placement.
+
+\textbf{Consider} regulating an initial condition $x(0) = 1$, $\dot{x}(0) = 0$ to the origin.
+
+\textbf{Solution:}
+
+For a double pole at $s = -\omega$, we have $\bK = \begin{bmatrix} \omega^2 & 2\omega \end{bmatrix}$.
+
+The closed-loop response is:
+\begin{equation}
+x(t) = (1 + \omega t)e^{-\omega t}
+\end{equation}
+
+The control signal:
+\begin{equation}
+u(t) = -\omega^2 x - 2\omega\dot{x} = -\omega^2(1 + \omega t)e^{-\omega t} + 2\omega^2 t e^{-\omega t} = -\omega^2 e^{-\omega t}(1 - \omega t)
+\end{equation}
+
+Peak control effort occurs at $t = 0$:
+\begin{equation}
+|u(0)| = \omega^2
+\end{equation}
+
+Total control energy:
+\begin{equation}
+E = \int_0^\infty u^2(t)\,dt = \int_0^\infty \omega^4(1 - \omega t)^2 e^{-2\omega t}\,dt = \frac{\omega^3}{4}
+\end{equation}
+
+\textbf{Results:}
+
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+Pole $-\omega$ & Settling Time $\approx 4/\omega$ & Peak $|u|$ & Energy $E$ \\
+\midrule
+$-1$ & 4.0 s & 1 & 0.25 \\
+$-2$ & 2.0 s & 4 & 2.0 \\
+$-5$ & 0.8 s & 25 & 31.25 \\
+$-10$ & 0.4 s & 100 & 250 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Conclusion:} Doubling the pole magnitude:
+\begin{itemize}
+\item Halves the settling time
+\item Quadruples the peak control effort
+\item Increases energy by factor of 8
+\end{itemize}
+
+This trade-off is fundamental to control design. \hfill $\square$
+\end{example}
+
+%=============================================================================
+\section{Summary}
+%=============================================================================
+
+This chapter introduced the fundamental concepts of controllability and state feedback, which form the foundation of modern state-space control design.
+
+\textbf{Key Concepts:}
+
+\begin{enumerate}
+\item \textbf{Controllability} answers the question: can we steer the system from any state to any other state? This is a system property independent of the specific control objective.
+
+\item The \textbf{controllability matrix} $\mathcal{C} = \begin{bmatrix} \bB & \bA\bB & \cdots & \bA^{n-1}\bB \end{bmatrix}$ provides an algebraic test: the system is controllable if and only if $\rank(\mathcal{C}) = n$.
+
+\item \textbf{State feedback} $\bu = -\bK\bx + \br$ modifies the system dynamics to $\dot{\bx} = (\bA - \bB\bK)\bx + \bB\br$.
+
+\item The \textbf{pole placement theorem} guarantees that for a controllable system, we can place the closed-loop poles at any desired locations by appropriate choice of $\bK$.
+
+\item \textbf{Ackermann's formula} provides a direct computation: $\bK = \begin{bmatrix} 0 & \cdots & 0 & 1 \end{bmatrix}\mathcal{C}^{-1}\phi(\bA)$.
+
+\item \textbf{Practical trade-offs}: Faster pole placement requires higher control effort and increases sensitivity to modeling errors.
+\end{enumerate}
+
+\textbf{Looking Ahead:}
+
+Chapter 16 addresses the complementary problem: what if we cannot measure all states? The concepts of \textit{observability} and \textit{observer design} provide the solution, enabling state feedback even with limited measurements.
+
+Chapter 17 introduces \textit{optimal control}, which systematically addresses the trade-off between performance and control effort that we observed in our examples.
+
+%=============================================================================
+\section{Problems}
+%=============================================================================
+
+\begin{enumerate}[label=\textbf{15.\arabic*}]
+
+\item Determine the controllability of each system:
+\begin{enumerate}
+\item $\bA = \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix}$, $\bB = \begin{bmatrix} 1 \\ 1 \end{bmatrix}$
+
+\item $\bA = \begin{bmatrix} -1 & 1 \\ 0 & -1 \end{bmatrix}$, $\bB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}$
+
+\item $\bA = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -6 & -11 & -6 \end{bmatrix}$, $\bB = \begin{bmatrix} 0 \\ 0 \\ 1 \end{bmatrix}$
+\end{enumerate}
+
+\item For the system $\bA = \begin{bmatrix} 0 & 1 \\ -\omega_n^2 & -2\zeta\omega_n \end{bmatrix}$, $\bB = \begin{bmatrix} 0 \\ \omega_n^2 \end{bmatrix}$:
+\begin{enumerate}
+\item Show the system is controllable for all $\omega_n \neq 0$
+\item Find the feedback gain to place poles at $s = -\sigma \pm j\omega_d$
+\item Express the gains in terms of the desired $\zeta_d$ and $\omega_{n,d}$
+\end{enumerate}
+
+\item A spacecraft attitude control system has the model:
+\begin{equation}
+\bA = \begin{bmatrix} 0 & 1 & 0 & 0 \\ 0 & 0 & 0 & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & 0 & 0 \end{bmatrix}, \quad
+\bB = \begin{bmatrix} 0 & 0 \\ 1 & 0 \\ 0 & 0 \\ 0 & 1 \end{bmatrix}
+\end{equation}
+\begin{enumerate}
+\item Verify the system is controllable
+\item If one thruster fails ($\bB$ becomes $\begin{bmatrix} 0 \\ 1 \\ 0 \\ 0 \end{bmatrix}$), is the system still controllable?
+\end{enumerate}
+
+\item Use Ackermann's formula to design state feedback for:
+\begin{equation}
+\bA = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -1 & -3 & -3 \end{bmatrix}, \quad
+\bB = \begin{bmatrix} 0 \\ 0 \\ 1 \end{bmatrix}
+\end{equation}
+Place the closed-loop poles at $s = -2, -3, -4$.
+
+\item For the inverted pendulum system \eqref{eq:pendulum_ss}:
+\begin{enumerate}
+\item Compute the open-loop eigenvalues and verify the system is unstable
+\item Design state feedback to place all poles at $s = -5$
+\item Simulate the response to an initial angle of $\theta_0 = 0.1$ rad
+\end{enumerate}
+
+\item \textbf{(Controllability Gramian)} For the stable system $\bA = \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix}$, $\bB = \begin{bmatrix} 1 \\ 1 \end{bmatrix}$:
+\begin{enumerate}
+\item Compute the infinite-horizon controllability Gramian $\bW_c = \int_0^\infty e^{\bA t}\bB\bB^\top e^{\bA^\top t}\,dt$
+\item Verify $\bW_c$ is positive definite
+\item Find the minimum-energy input to reach $\bx_f = \begin{bmatrix} 1 \\ 0 \end{bmatrix}$ from the origin
+\end{enumerate}
+
+\item \textbf{(Modal Analysis)} For the system:
+\begin{equation}
+\bA = \begin{bmatrix} -1 & 2 \\ 0 & -3 \end{bmatrix}, \quad
+\bB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}
+\end{equation}
+\begin{enumerate}
+\item Find the eigenvalues and eigenvectors of $\bA$
+\item Transform to modal coordinates and determine controllability of each mode
+\item Relate your finding to the rank of the controllability matrix
+\end{enumerate}
+
+\item \textbf{(Design Project)} For your inverted pendulum experiment:
+\begin{enumerate}
+\item Measure or estimate the physical parameters $M$, $m$, $\ell$
+\item Compute the controllability matrix numerically
+\item Design pole placement controllers for three different settling times
+\item Compare simulation predictions with experimental results
+\item Discuss the practical limitations observed
+\end{enumerate}
+
+\end{enumerate}
+
+%=============================================================================
+% References
+%=============================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{kalman1960general}
+R.~E. Kalman, ``On the general theory of control systems,'' in \textit{Proceedings of the First IFAC World Congress}, Moscow, USSR, 1960, pp. 481--492.
+
+\bibitem{ackermann1972}
+J.~Ackermann, ``Der Entwurf linearer Regelungssysteme im Zustandsraum,'' \textit{Regelungstechnik und Prozess-Datenverarbeitung}, vol. 20, no. 7, pp. 297--300, 1972.
+
+\bibitem{kalman1963controllability}
+R.~E. Kalman, ``Mathematical description of linear dynamical systems,'' \textit{SIAM Journal on Control}, vol. 1, no. 2, pp. 152--192, 1963.
+
+\bibitem{chen1984linear}
+C.-T. Chen, \textit{Linear System Theory and Design}. New York: Holt, Rinehart and Winston, 1984.
+
+\bibitem{kailath1980linear}
+T.~Kailath, \textit{Linear Systems}. Englewood Cliffs, NJ: Prentice-Hall, 1980.
+
+\bibitem{ogata2010modern}
+K.~Ogata, \textit{Modern Control Engineering}, 5th ed. Upper Saddle River, NJ: Prentice Hall, 2010.
+
+\bibitem{franklin2015feedback}
+G.~F. Franklin, J.~D. Powell, and A.~Emami-Naeini, \textit{Feedback Control of Dynamic Systems}, 7th ed. Upper Saddle River, NJ: Pearson, 2015.
+
+\bibitem{astrom2021feedback}
+K.~J. \r{A}str\"{o}m and R.~M. Murray, \textit{Feedback Systems: An Introduction for Scientists and Engineers}, 2nd ed. Princeton, NJ: Princeton University Press, 2021.
+
+\end{thebibliography}
+

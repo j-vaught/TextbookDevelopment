@@ -1,0 +1,532 @@
+
+This appendix presents algorithmic pseudocode for the core implementation components of the reinforcement learning-based synthetic data optimization framework. The algorithms are specified with sufficient detail to enable direct implementation while remaining agnostic to specific programming language idioms. All procedures assume access to standard numerical computing libraries for linear algebra, probability distributions, and deep learning operations.
+
+\section{Optuna Optimization Framework}
+\label{sec:optuna_implementation}
+
+The Optuna framework provides the primary optimization infrastructure for Bayesian hyperparameter search over synthetic data generation parameters. The following algorithms detail the study configuration, trial execution, and pruning integration that form the backbone of the optimization pipeline.
+
+\subsection{Study Initialization and Configuration}
+
+The optimization study must be configured with appropriate sampler, pruner, and objective specifications before commencing the parameter search campaign.
+
+\begin{algorithm}[H]
+\caption{Optuna Study Initialization}
+\label{alg:optuna_init}
+\begin{algorithmic}[1]
+\Require Maximum trials $T_{\max}$, pruning configuration, storage backend
+\Ensure Configured Optuna study object
+\State \textbf{Initialize} TPE sampler with $n_{\text{startup}} \gets 10$ random trials
+\State \textbf{Configure} sampler with multivariate kernel density estimation enabled
+\State \textbf{Set} sampler seed for reproducibility
+\State \textbf{Initialize} Hyperband pruner with parameters:
+\State \hspace{1em} $\eta \gets 3$ \Comment{Reduction factor for successive halving}
+\State \hspace{1em} $s_{\max} \gets 4$ \Comment{Maximum number of brackets}
+\State \hspace{1em} $r_{\min} \gets 1$ \Comment{Minimum resource allocation}
+\State \textbf{Create} study with direction $\gets$ ``maximize''
+\State \textbf{Configure} study with sampler and pruner instances
+\State \textbf{Set} study user attributes:
+\State \hspace{1em} optimization\_target $\gets$ ``mAP@0.5''
+\State \hspace{1em} validation\_set\_size $\gets$ 50
+\State \hspace{1em} bootstrap\_samples $\gets$ 1000
+\State \textbf{Return} configured study object
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Trial Objective Function}
+
+Each trial samples a synthetic data configuration, generates training data, trains a YOLO detector, and evaluates performance on the real-world validation set.
+
+\begin{algorithm}[H]
+\caption{Optuna Trial Objective Function}
+\label{alg:optuna_objective}
+\begin{algorithmic}[1]
+\Require Trial object $t$, synthetic generator $G$, YOLO trainer $\mathcal{T}$, validation set $\mathcal{V}$
+\Ensure Objective value (mAP score)
+\State \textbf{Sample} synthetic parameters $\boldsymbol{\theta} \gets \Call{SampleParameters}{t}$
+\State \textbf{Generate} synthetic dataset $\mathcal{D}_{\text{syn}} \gets G(\boldsymbol{\theta})$
+\State \textbf{Initialize} YOLO model $M$ with pretrained weights
+\For{epoch $e \gets 1$ \textbf{to} $E_{\max}$}
+    \State \textbf{Train} model: $M \gets \mathcal{T}.\text{step}(M, \mathcal{D}_{\text{syn}})$
+    \If{$e \mod e_{\text{report}} = 0$}
+        \State $\text{mAP}_{\text{intermediate}} \gets \Call{Evaluate}{M, \mathcal{V}}$
+        \State \textbf{Report} intermediate value to trial: $t.\text{report}(\text{mAP}_{\text{intermediate}}, e)$
+        \If{$t.\text{should\_prune}()$}
+            \State \textbf{Raise} TrialPruned exception
+        \EndIf
+    \EndIf
+\EndFor
+\State $\text{mAP}_{\text{final}} \gets \Call{Evaluate}{M, \mathcal{V}}$
+\State $\text{CI}_{\text{low}}, \text{CI}_{\text{high}} \gets \Call{BootstrapCI}{M, \mathcal{V}, B=1000}$
+\State \textbf{Store} trial attributes:
+\State \hspace{1em} $t.\text{set\_user\_attr}(``\text{mAP\_ci\_low}'', \text{CI}_{\text{low}})$
+\State \hspace{1em} $t.\text{set\_user\_attr}(``\text{mAP\_ci\_high}'', \text{CI}_{\text{high}})$
+\State \textbf{Return} $\text{mAP}_{\text{final}}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Parameter Sampling Procedure}
+
+The parameter sampling procedure leverages Optuna's suggest methods to sample from the defined parameter space with appropriate handling of conditional and hierarchical parameters.
+
+\begin{algorithm}[H]
+\caption{Synthetic Parameter Sampling}
+\label{alg:sample_params}
+\begin{algorithmic}[1]
+\Require Trial object $t$
+\Ensure Parameter configuration dictionary $\boldsymbol{\theta}$
+\State $\boldsymbol{\theta} \gets \{\}$
+\State \Comment{Lighting and illumination parameters}
+\State $\boldsymbol{\theta}[\text{ambient\_intensity}] \gets t.\text{suggest\_float}(0.1, 0.9)$
+\State $\boldsymbol{\theta}[\text{directional\_intensity}] \gets t.\text{suggest\_float}(0.2, 1.5)$
+\State $\boldsymbol{\theta}[\text{light\_color\_temp}] \gets t.\text{suggest\_int}(3000, 8000)$
+\State $\boldsymbol{\theta}[\text{shadow\_softness}] \gets t.\text{suggest\_float}(0.0, 1.0)$
+\State \Comment{Object placement parameters}
+\State $\boldsymbol{\theta}[\text{num\_objects}] \gets t.\text{suggest\_int}(1, 20)$
+\State $\boldsymbol{\theta}[\text{occlusion\_ratio}] \gets t.\text{suggest\_float}(0.0, 0.7)$
+\State $\boldsymbol{\theta}[\text{scale\_min}] \gets t.\text{suggest\_float}(0.3, 0.8)$
+\State $\boldsymbol{\theta}[\text{scale\_max}] \gets t.\text{suggest\_float}(\boldsymbol{\theta}[\text{scale\_min}], 1.5)$
+\State \Comment{Domain randomization parameters}
+\State $\boldsymbol{\theta}[\text{texture\_variation}] \gets t.\text{suggest\_float}(0.0, 1.0)$
+\State $\boldsymbol{\theta}[\text{background\_diversity}] \gets t.\text{suggest\_categorical}([\text{low}, \text{medium}, \text{high}])$
+\State $\boldsymbol{\theta}[\text{noise\_std}] \gets t.\text{suggest\_float}(0.0, 0.1)$
+\State $\boldsymbol{\theta}[\text{blur\_sigma}] \gets t.\text{suggest\_float}(0.0, 2.0)$
+\State \Comment{Camera parameters}
+\State $\boldsymbol{\theta}[\text{fov\_degrees}] \gets t.\text{suggest\_float}(30.0, 90.0)$
+\State $\boldsymbol{\theta}[\text{camera\_height\_var}] \gets t.\text{suggest\_float}(0.0, 0.5)$
+\State $\boldsymbol{\theta}[\text{camera\_angle\_var}] \gets t.\text{suggest\_float}(0.0, 30.0)$
+\State \textbf{Return} $\boldsymbol{\theta}$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Synthetic Parameter Space Definition}
+\label{sec:param_space}
+
+The complete synthetic data generation parameter space encompasses multiple interdependent categories that must be jointly optimized. The following algorithm specifies the full parameter space structure employed throughout the optimization campaigns documented in this textbook.
+
+\begin{algorithm}[H]
+\caption{Complete Parameter Space Definition}
+\label{alg:param_space}
+\begin{algorithmic}[1]
+\Require None
+\Ensure Parameter space specification $\mathcal{P}$
+\State $\mathcal{P} \gets \Call{CreateParameterSpace}{}$
+\State \Comment{Category 1: Scene composition}
+\State $\mathcal{P}.\text{add\_int}(\text{num\_objects\_per\_image}, 1, 25, \text{default}=8)$
+\State $\mathcal{P}.\text{add\_float}(\text{min\_object\_scale}, 0.1, 0.5, \text{default}=0.2)$
+\State $\mathcal{P}.\text{add\_float}(\text{max\_object\_scale}, 0.3, 2.0, \text{default}=1.0)$
+\State $\mathcal{P}.\text{add\_float}(\text{placement\_grid\_noise}, 0.0, 1.0, \text{default}=0.5)$
+\State $\mathcal{P}.\text{add\_float}(\text{depth\_variation}, 0.0, 1.0, \text{default}=0.3)$
+\State $\mathcal{P}.\text{add\_float}(\text{max\_occlusion\_fraction}, 0.0, 0.8, \text{default}=0.4)$
+\State \Comment{Category 2: Illumination model}
+\State $\mathcal{P}.\text{add\_float}(\text{ambient\_light\_intensity}, 0.05, 0.95, \text{default}=0.3)$
+\State $\mathcal{P}.\text{add\_float}(\text{key\_light\_intensity}, 0.1, 2.0, \text{default}=0.8)$
+\State $\mathcal{P}.\text{add\_float}(\text{fill\_light\_ratio}, 0.0, 1.0, \text{default}=0.4)$
+\State $\mathcal{P}.\text{add\_int}(\text{color\_temperature\_kelvin}, 2500, 10000, \text{default}=5500)$
+\State $\mathcal{P}.\text{add\_float}(\text{light\_direction\_variance}, 0.0, 180.0, \text{default}=45.0)$
+\State $\mathcal{P}.\text{add\_bool}(\text{enable\_hdri\_lighting}, \text{default}=\text{True})$
+\State \Comment{Category 3: Material and texture properties}
+\State $\mathcal{P}.\text{add\_float}(\text{specular\_intensity}, 0.0, 1.0, \text{default}=0.3)$
+\State $\mathcal{P}.\text{add\_float}(\text{roughness\_variation}, 0.0, 1.0, \text{default}=0.5)$
+\State $\mathcal{P}.\text{add\_float}(\text{texture\_scale\_factor}, 0.5, 2.0, \text{default}=1.0)$
+\State $\mathcal{P}.\text{add\_float}(\text{color\_jitter\_magnitude}, 0.0, 0.5, \text{default}=0.15)$
+\State \Comment{Category 4: Camera simulation}
+\State $\mathcal{P}.\text{add\_float}(\text{focal\_length\_mm}, 20.0, 100.0, \text{default}=50.0)$
+\State $\mathcal{P}.\text{add\_float}(\text{sensor\_noise\_std}, 0.0, 0.15, \text{default}=0.03)$
+\State $\mathcal{P}.\text{add\_float}(\text{motion\_blur\_amount}, 0.0, 5.0, \text{default}=0.5)$
+\State $\mathcal{P}.\text{add\_float}(\text{chromatic\_aberration}, 0.0, 0.02, \text{default}=0.005)$
+\State $\mathcal{P}.\text{add\_float}(\text{vignetting\_strength}, 0.0, 0.5, \text{default}=0.1)$
+\State \Comment{Category 5: Domain randomization intensity}
+\State $\mathcal{P}.\text{add\_float}(\text{background\_randomization}, 0.0, 1.0, \text{default}=0.7)$
+\State $\mathcal{P}.\text{add\_float}(\text{distractor\_density}, 0.0, 1.0, \text{default}=0.3)$
+\State $\mathcal{P}.\text{add\_float}(\text{weather\_effect\_probability}, 0.0, 1.0, \text{default}=0.2)$
+\State $\mathcal{P}.\text{add\_categorical}(\text{augmentation\_level}, [\text{none}, \text{light}, \text{medium}, \text{heavy}])$
+\State \textbf{Return} $\mathcal{P}$
+\end{algorithmic}
+\end{algorithm}
+
+\section{YOLO Training Configuration}
+\label{sec:yolo_config}
+
+The YOLO training procedure must be carefully configured to balance computational efficiency with model capacity. The following algorithms specify the training loop and configuration management procedures.
+
+\begin{algorithm}[H]
+\caption{YOLO Training Configuration Setup}
+\label{alg:yolo_config}
+\begin{algorithmic}[1]
+\Require Model variant $v \in \{\text{yolov8n}, \text{yolov8s}, \text{yolov8m}, \text{yolov8l}, \text{yolov8x}\}$
+\Require Number of classes $C$, image size $S$
+\Ensure Training configuration dictionary
+\State $\text{config} \gets \{\}$
+\State \Comment{Model architecture settings}
+\State $\text{config}[\text{model}] \gets v$
+\State $\text{config}[\text{nc}] \gets C$ \Comment{Number of classes}
+\State $\text{config}[\text{imgsz}] \gets S$ \Comment{Input image size}
+\State $\text{config}[\text{pretrained}] \gets \text{True}$
+\State \Comment{Training hyperparameters}
+\State $\text{config}[\text{epochs}] \gets 100$
+\State $\text{config}[\text{batch}] \gets 16$
+\State $\text{config}[\text{optimizer}] \gets \text{``AdamW''}$
+\State $\text{config}[\text{lr0}] \gets 0.01$ \Comment{Initial learning rate}
+\State $\text{config}[\text{lrf}] \gets 0.01$ \Comment{Final learning rate factor}
+\State $\text{config}[\text{momentum}] \gets 0.937$
+\State $\text{config}[\text{weight\_decay}] \gets 0.0005$
+\State $\text{config}[\text{warmup\_epochs}] \gets 3.0$
+\State $\text{config}[\text{warmup\_momentum}] \gets 0.8$
+\State $\text{config}[\text{warmup\_bias\_lr}] \gets 0.1$
+\State \Comment{Loss function weights}
+\State $\text{config}[\text{box}] \gets 7.5$ \Comment{Box loss weight}
+\State $\text{config}[\text{cls}] \gets 0.5$ \Comment{Classification loss weight}
+\State $\text{config}[\text{dfl}] \gets 1.5$ \Comment{Distribution focal loss weight}
+\State \Comment{Data augmentation settings}
+\State $\text{config}[\text{hsv\_h}] \gets 0.015$ \Comment{Hue augmentation}
+\State $\text{config}[\text{hsv\_s}] \gets 0.7$ \Comment{Saturation augmentation}
+\State $\text{config}[\text{hsv\_v}] \gets 0.4$ \Comment{Value augmentation}
+\State $\text{config}[\text{degrees}] \gets 0.0$ \Comment{Rotation range}
+\State $\text{config}[\text{translate}] \gets 0.1$ \Comment{Translation fraction}
+\State $\text{config}[\text{scale}] \gets 0.5$ \Comment{Scale augmentation}
+\State $\text{config}[\text{shear}] \gets 0.0$ \Comment{Shear angle}
+\State $\text{config}[\text{flipud}] \gets 0.0$ \Comment{Vertical flip probability}
+\State $\text{config}[\text{fliplr}] \gets 0.5$ \Comment{Horizontal flip probability}
+\State $\text{config}[\text{mosaic}] \gets 1.0$ \Comment{Mosaic augmentation probability}
+\State $\text{config}[\text{mixup}] \gets 0.0$ \Comment{Mixup augmentation probability}
+\State \textbf{Return} config
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{YOLO Training Execution Loop}
+\label{alg:yolo_training}
+\begin{algorithmic}[1]
+\Require Configuration config, synthetic dataset $\mathcal{D}_{\text{syn}}$, validation set $\mathcal{V}$
+\Require Callback function for intermediate reporting $\text{callback}$
+\Ensure Trained model $M$, training history $\mathcal{H}$
+\State $M \gets \Call{LoadPretrainedModel}{\text{config}[\text{model}]}$
+\State $\mathcal{H} \gets []$ \Comment{Training history}
+\State $\text{optimizer} \gets \Call{CreateOptimizer}{M.\text{parameters}(), \text{config}}$
+\State $\text{scheduler} \gets \Call{CreateLRScheduler}{\text{optimizer}, \text{config}}$
+\State $\text{train\_loader} \gets \Call{CreateDataLoader}{\mathcal{D}_{\text{syn}}, \text{config}[\text{batch}]}$
+\For{epoch $e \gets 1$ \textbf{to} $\text{config}[\text{epochs}]$}
+    \State $M.\text{train}()$
+    \State $\text{epoch\_loss} \gets 0$
+    \For{batch $(\mathbf{X}, \mathbf{Y})$ \textbf{in} train\_loader}
+        \State $\text{optimizer}.\text{zero\_grad}()$
+        \State $\hat{\mathbf{Y}} \gets M(\mathbf{X})$
+        \State $\mathcal{L} \gets \Call{ComputeYOLOLoss}{\hat{\mathbf{Y}}, \mathbf{Y}, \text{config}}$
+        \State $\mathcal{L}.\text{backward}()$
+        \State $\Call{ClipGradNorm}{M.\text{parameters}(), \text{max\_norm}=10.0}$
+        \State $\text{optimizer}.\text{step}()$
+        \State $\text{epoch\_loss} \gets \text{epoch\_loss} + \mathcal{L}.\text{item}()$
+    \EndFor
+    \State $\text{scheduler}.\text{step}()$
+    \State \Comment{Periodic validation}
+    \If{$e \mod 5 = 0$}
+        \State $M.\text{eval}()$
+        \State $\text{metrics} \gets \Call{Evaluate}{M, \mathcal{V}}$
+        \State $\mathcal{H}.\text{append}((e, \text{epoch\_loss}, \text{metrics}))$
+        \State $\text{callback}(e, \text{metrics})$
+    \EndIf
+\EndFor
+\State \textbf{Return} $M$, $\mathcal{H}$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Reward Computation Module}
+\label{sec:reward_computation}
+
+The reward signal that guides optimization must integrate multiple performance metrics while accounting for computational constraints. The following algorithm specifies the composite reward function computation.
+
+\begin{algorithm}[H]
+\caption{Composite Reward Function Computation}
+\label{alg:reward_computation}
+\begin{algorithmic}[1]
+\Require Trained model $M$, validation set $\mathcal{V}$, real feature distribution $\mathcal{F}_{\text{real}}$
+\Require Synthetic dataset $\mathcal{D}_{\text{syn}}$, reward weights $\mathbf{w} = (w_{\text{mAP}}, w_{\text{eff}}, w_{\text{MMD}})$
+\Ensure Composite reward value $r$
+\State \Comment{Primary performance metric}
+\State $\text{mAP}_{50} \gets \Call{ComputeMAP}{M, \mathcal{V}, \text{iou\_threshold}=0.5}$
+\State $\text{mAP}_{50:95} \gets \Call{ComputeMAP}{M, \mathcal{V}, \text{iou\_thresholds}=[0.5, 0.55, \ldots, 0.95]}$
+\State \Comment{Per-class performance analysis}
+\State $\text{mAP\_per\_class} \gets \Call{ComputeMAPPerClass}{M, \mathcal{V}}$
+\State $\text{class\_balance\_penalty} \gets \Call{ComputeClassImbalance}{\text{mAP\_per\_class}}$
+\State \Comment{Efficiency metrics}
+\State $T_{\text{inference}} \gets \Call{MeasureInferenceTime}{M, \text{num\_samples}=100}$
+\State $\text{efficiency\_score} \gets \exp(-T_{\text{inference}} / T_{\text{target}})$
+\State \Comment{Domain alignment metric via MMD}
+\State $\mathcal{F}_{\text{syn}} \gets \Call{ExtractFeatures}{M.\text{backbone}, \mathcal{D}_{\text{syn}}}$
+\State $\text{MMD}^2 \gets \Call{ComputeMMDSquared}{\mathcal{F}_{\text{syn}}, \mathcal{F}_{\text{real}}}$
+\State $\text{domain\_score} \gets \exp(-\lambda_{\text{MMD}} \cdot \text{MMD}^2)$
+\State \Comment{Compute composite reward}
+\State $r_{\text{mAP}} \gets 0.7 \cdot \text{mAP}_{50} + 0.3 \cdot \text{mAP}_{50:95}$
+\State $r_{\text{balanced}} \gets r_{\text{mAP}} - \alpha_{\text{balance}} \cdot \text{class\_balance\_penalty}$
+\State $r \gets w_{\text{mAP}} \cdot r_{\text{balanced}} + w_{\text{eff}} \cdot \text{efficiency\_score} + w_{\text{MMD}} \cdot \text{domain\_score}$
+\State \textbf{Return} $r$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Mean Average Precision Computation}
+\label{alg:map_computation}
+\begin{algorithmic}[1]
+\Require Model $M$, validation set $\mathcal{V} = \{(\mathbf{x}_i, \mathbf{y}_i)\}_{i=1}^{n}$, IoU threshold $\tau$
+\Ensure mAP score
+\State $\text{all\_detections} \gets []$
+\State $\text{all\_ground\_truths} \gets []$
+\For{$(\mathbf{x}, \mathbf{y})$ \textbf{in} $\mathcal{V}$}
+    \State $\hat{\mathbf{y}} \gets M(\mathbf{x})$ \Comment{Get predictions}
+    \State $\text{all\_detections}.\text{extend}(\hat{\mathbf{y}})$
+    \State $\text{all\_ground\_truths}.\text{extend}(\mathbf{y})$
+\EndFor
+\State $\text{AP\_per\_class} \gets []$
+\For{class $c \gets 1$ \textbf{to} $C$}
+    \State $\text{dets}_c \gets \Call{FilterByClass}{\text{all\_detections}, c}$
+    \State $\text{gts}_c \gets \Call{FilterByClass}{\text{all\_ground\_truths}, c}$
+    \State \Call{SortByConfidence}{$\text{dets}_c$, \text{descending}=\text{True}}
+    \State $\text{TP} \gets [0] \times \text{len}(\text{dets}_c)$
+    \State $\text{FP} \gets [0] \times \text{len}(\text{dets}_c)$
+    \State $\text{matched\_gt} \gets \emptyset$
+    \For{$i \gets 1$ \textbf{to} $\text{len}(\text{dets}_c)$}
+        \State $\text{max\_iou} \gets 0$
+        \State $\text{best\_gt} \gets -1$
+        \For{$j$ \textbf{in} indices of $\text{gts}_c$ from same image}
+            \State $\text{iou} \gets \Call{ComputeIoU}{\text{dets}_c[i], \text{gts}_c[j]}$
+            \If{$\text{iou} > \text{max\_iou}$ \textbf{and} $j \notin \text{matched\_gt}$}
+                \State $\text{max\_iou} \gets \text{iou}$
+                \State $\text{best\_gt} \gets j$
+            \EndIf
+        \EndFor
+        \If{$\text{max\_iou} \geq \tau$}
+            \State $\text{TP}[i] \gets 1$
+            \State $\text{matched\_gt}.\text{add}(\text{best\_gt})$
+        \Else
+            \State $\text{FP}[i] \gets 1$
+        \EndIf
+    \EndFor
+    \State $\text{cumsum\_TP} \gets \Call{CumulativeSum}{\text{TP}}$
+    \State $\text{cumsum\_FP} \gets \Call{CumulativeSum}{\text{FP}}$
+    \State $\text{precision} \gets \text{cumsum\_TP} / (\text{cumsum\_TP} + \text{cumsum\_FP})$
+    \State $\text{recall} \gets \text{cumsum\_TP} / \text{len}(\text{gts}_c)$
+    \State $\text{AP}_c \gets \Call{ComputeAP}{\text{precision}, \text{recall}}$
+    \State $\text{AP\_per\_class}.\text{append}(\text{AP}_c)$
+\EndFor
+\State $\text{mAP} \gets \Call{Mean}{\text{AP\_per\_class}}$
+\State \textbf{Return} mAP
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{MMD Squared Computation}
+\label{alg:mmd_computation}
+\begin{algorithmic}[1]
+\Require Feature sets $\mathcal{F}_{\text{syn}} = \{\mathbf{f}_1^s, \ldots, \mathbf{f}_m^s\}$, $\mathcal{F}_{\text{real}} = \{\mathbf{f}_1^r, \ldots, \mathbf{f}_n^r\}$
+\Require Kernel bandwidth $\sigma$
+\Ensure Unbiased MMD squared estimate
+\State \Comment{Compute kernel matrices}
+\State $\mathbf{K}_{ss} \gets \mathbf{0}^{m \times m}$
+\State $\mathbf{K}_{rr} \gets \mathbf{0}^{n \times n}$
+\State $\mathbf{K}_{sr} \gets \mathbf{0}^{m \times n}$
+\For{$i \gets 1$ \textbf{to} $m$}
+    \For{$j \gets 1$ \textbf{to} $m$}
+        \State $\mathbf{K}_{ss}[i,j] \gets \exp\left(-\frac{\|\mathbf{f}_i^s - \mathbf{f}_j^s\|^2}{2\sigma^2}\right)$
+    \EndFor
+    \For{$j \gets 1$ \textbf{to} $n$}
+        \State $\mathbf{K}_{sr}[i,j] \gets \exp\left(-\frac{\|\mathbf{f}_i^s - \mathbf{f}_j^r\|^2}{2\sigma^2}\right)$
+    \EndFor
+\EndFor
+\For{$i \gets 1$ \textbf{to} $n$}
+    \For{$j \gets 1$ \textbf{to} $n$}
+        \State $\mathbf{K}_{rr}[i,j] \gets \exp\left(-\frac{\|\mathbf{f}_i^r - \mathbf{f}_j^r\|^2}{2\sigma^2}\right)$
+    \EndFor
+\EndFor
+\State \Comment{Compute unbiased estimator}
+\State $\text{term}_1 \gets \frac{1}{m(m-1)} \sum_{i \neq j} \mathbf{K}_{ss}[i,j]$
+\State $\text{term}_2 \gets \frac{1}{n(n-1)} \sum_{i \neq j} \mathbf{K}_{rr}[i,j]$
+\State $\text{term}_3 \gets \frac{2}{mn} \sum_{i,j} \mathbf{K}_{sr}[i,j]$
+\State $\widehat{\text{MMD}}^2 \gets \text{term}_1 + \text{term}_2 - \text{term}_3$
+\State \textbf{Return} $\widehat{\text{MMD}}^2$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Bootstrap Evaluation Function}
+\label{sec:bootstrap_eval}
+
+Reliable performance estimation on limited validation sets requires uncertainty quantification through bootstrap resampling. The following algorithm implements the BCa bootstrap confidence interval procedure.
+
+\begin{algorithm}[H]
+\caption{Bootstrap Confidence Interval Computation}
+\label{alg:bootstrap_ci}
+\begin{algorithmic}[1]
+\Require Model $M$, validation set $\mathcal{V}$, number of bootstrap samples $B$
+\Require Confidence level $1 - \alpha$
+\Ensure Point estimate $\hat{\theta}$, confidence interval $[\theta_{\text{low}}, \theta_{\text{high}}]$
+\State $\hat{\theta} \gets \Call{ComputeMAP}{M, \mathcal{V}}$ \Comment{Point estimate on full dataset}
+\State $\boldsymbol{\theta}^* \gets []$ \Comment{Bootstrap replicate storage}
+\For{$b \gets 1$ \textbf{to} $B$}
+    \State $\mathcal{V}^* \gets \Call{ResampleWithReplacement}{\mathcal{V}}$
+    \State $\theta^{*(b)} \gets \Call{ComputeMAP}{M, \mathcal{V}^*}$
+    \State $\boldsymbol{\theta}^*.\text{append}(\theta^{*(b)})$
+\EndFor
+\State \Comment{Bias correction factor}
+\State $\hat{z}_0 \gets \Phi^{-1}\left(\frac{\sum_{b=1}^{B} \mathbf{1}[\theta^{*(b)} < \hat{\theta}]}{B}\right)$
+\State \Comment{Acceleration factor via jackknife}
+\State $\boldsymbol{\theta}_{(-)} \gets []$
+\For{$i \gets 1$ \textbf{to} $|\mathcal{V}|$}
+    \State $\mathcal{V}_{(-i)} \gets \mathcal{V} \setminus \{(\mathbf{x}_i, \mathbf{y}_i)\}$
+    \State $\theta_{(-i)} \gets \Call{ComputeMAP}{M, \mathcal{V}_{(-i)}}$
+    \State $\boldsymbol{\theta}_{(-)}.\text{append}(\theta_{(-i)})$
+\EndFor
+\State $\bar{\theta}_{(\cdot)} \gets \Call{Mean}{\boldsymbol{\theta}_{(-)}}$
+\State $\text{num} \gets \sum_{i} (\bar{\theta}_{(\cdot)} - \theta_{(-i)})^3$
+\State $\text{denom} \gets 6 \cdot \left(\sum_{i} (\bar{\theta}_{(\cdot)} - \theta_{(-i)})^2\right)^{3/2}$
+\State $\hat{a} \gets \text{num} / \text{denom}$
+\State \Comment{Compute adjusted quantile levels}
+\State $z_{\alpha/2} \gets \Phi^{-1}(\alpha/2)$
+\State $z_{1-\alpha/2} \gets \Phi^{-1}(1 - \alpha/2)$
+\State $\alpha_1 \gets \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{\alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{\alpha/2})}\right)$
+\State $\alpha_2 \gets \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{1-\alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{1-\alpha/2})}\right)$
+\State \Comment{Extract confidence interval bounds}
+\State \Call{Sort}{$\boldsymbol{\theta}^*$}
+\State $\theta_{\text{low}} \gets \boldsymbol{\theta}^*[\lfloor \alpha_1 \cdot B \rfloor]$
+\State $\theta_{\text{high}} \gets \boldsymbol{\theta}^*[\lceil \alpha_2 \cdot B \rceil]$
+\State \textbf{Return} $\hat{\theta}$, $[\theta_{\text{low}}, \theta_{\text{high}}]$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Convergence Detection}
+\label{sec:convergence}
+
+Determining when the optimization campaign has converged to a satisfactory solution requires monitoring of performance metrics across iterations. The following algorithms implement patience-based early stopping and statistical convergence detection.
+
+\begin{algorithm}[H]
+\caption{Convergence Detection with Patience}
+\label{alg:convergence_patience}
+\begin{algorithmic}[1]
+\Require Performance history $\mathcal{H} = [(t_1, r_1), \ldots, (t_n, r_n)]$
+\Require Patience parameter $p$, minimum improvement threshold $\delta$
+\Ensure Boolean convergence indicator
+\If{$n < p$}
+    \State \textbf{Return} \textbf{False} \Comment{Insufficient history}
+\EndIf
+\State $r_{\text{best}} \gets \max_{i \in \{1, \ldots, n-p\}} r_i$
+\State $r_{\text{recent\_best}} \gets \max_{i \in \{n-p+1, \ldots, n\}} r_i$
+\If{$r_{\text{recent\_best}} - r_{\text{best}} < \delta$}
+    \State \textbf{Return} \textbf{True} \Comment{No significant improvement in patience window}
+\Else
+    \State \textbf{Return} \textbf{False}
+\EndIf
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Statistical Convergence Test}
+\label{alg:convergence_statistical}
+\begin{algorithmic}[1]
+\Require Recent performance values $\mathbf{r} = [r_{n-w+1}, \ldots, r_n]$ with window size $w$
+\Require Significance level $\alpha$, minimum variance threshold $\sigma_{\min}$
+\Ensure Boolean convergence indicator, convergence statistics
+\State $\bar{r} \gets \frac{1}{w} \sum_{i=1}^{w} r_i$ \Comment{Mean of recent window}
+\State $s^2 \gets \frac{1}{w-1} \sum_{i=1}^{w} (r_i - \bar{r})^2$ \Comment{Sample variance}
+\State $\text{se} \gets \sqrt{s^2 / w}$ \Comment{Standard error of mean}
+\State \Comment{Test for trend using linear regression}
+\State $\mathbf{t} \gets [1, 2, \ldots, w]$
+\State $\bar{t} \gets (w + 1) / 2$
+\State $\beta_1 \gets \frac{\sum_{i=1}^{w} (t_i - \bar{t})(r_i - \bar{r})}{\sum_{i=1}^{w} (t_i - \bar{t})^2}$ \Comment{Slope estimate}
+\State $\text{se}_{\beta_1} \gets \sqrt{\frac{s^2}{\sum_{i=1}^{w} (t_i - \bar{t})^2}}$
+\State $t_{\text{stat}} \gets |\beta_1| / \text{se}_{\beta_1}$
+\State $t_{\text{crit}} \gets \Call{TDistQuantile}{1 - \alpha/2, w-2}$
+\State \Comment{Convergence criteria}
+\State $\text{trend\_significant} \gets t_{\text{stat}} > t_{\text{crit}}$
+\State $\text{variance\_low} \gets s < \sigma_{\min}$
+\State $\text{converged} \gets (\neg \text{trend\_significant}) \wedge \text{variance\_low}$
+\State \textbf{Return} converged, $\{\bar{r}, s, \beta_1, t_{\text{stat}}\}$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Multi-Criteria Convergence Monitor}
+\label{alg:convergence_monitor}
+\begin{algorithmic}[1]
+\Require Study object with completed trials
+\Require Convergence parameters: patience $p$, window $w$, threshold $\delta$, max trials $T_{\max}$
+\Ensure Convergence status, recommended action
+\State $\mathcal{H} \gets \Call{GetTrialHistory}{\text{study}}$
+\State $n \gets |\mathcal{H}|$
+\State \Comment{Check maximum iteration limit}
+\If{$n \geq T_{\max}$}
+    \State \textbf{Return} ``CONVERGED'', ``Maximum iterations reached''
+\EndIf
+\State \Comment{Check patience-based criterion}
+\State $\text{patience\_converged} \gets \Call{ConvergencePatience}{\mathcal{H}, p, \delta}$
+\If{patience\_converged}
+    \State \textbf{Return} ``CONVERGED'', ``No improvement for $p$ trials''
+\EndIf
+\State \Comment{Check statistical criterion}
+\If{$n \geq w$}
+    \State $\mathbf{r}_{\text{recent}} \gets [r_{n-w+1}, \ldots, r_n]$
+    \State $\text{stat\_converged}, \text{stats} \gets \Call{StatisticalConvergence}{\mathbf{r}_{\text{recent}}}$
+    \If{stat\_converged}
+        \State \textbf{Return} ``CONVERGED'', ``Statistical convergence detected''
+    \EndIf
+\EndIf
+\State \Comment{Check absolute performance threshold}
+\State $r_{\text{best}} \gets \max \mathcal{H}$
+\If{$r_{\text{best}} \geq r_{\text{target}}$}
+    \State \textbf{Return} ``CONVERGED'', ``Target performance achieved''
+\EndIf
+\State \textbf{Return} ``CONTINUE'', ``Optimization in progress''
+\end{algorithmic}
+\end{algorithm}
+
+\section{Complete BOHB Integration}
+\label{sec:bohb_integration}
+
+The complete Bayesian Optimization with Hyperband (BOHB) integration combines all preceding components into a unified optimization loop. The following algorithm presents the full optimization procedure employed in the experimental studies documented throughout this textbook.
+
+\begin{algorithm}[H]
+\caption{Complete BOHB Optimization Campaign}
+\label{alg:bohb_complete}
+\begin{algorithmic}[1]
+\Require Synthetic generator $G$, real validation set $\mathcal{V}_{\text{real}}$
+\Require Budget configuration: max trials $T_{\max}$, max epochs $E_{\max}$
+\Require Convergence parameters: patience $p$, window $w$, threshold $\delta$
+\Ensure Optimal parameters $\boldsymbol{\theta}^*$, best model $M^*$, optimization history
+\State \Comment{Phase 1: Initialization}
+\State $\text{study} \gets \Call{InitializeStudy}{}$ \Comment{Algorithm \ref{alg:optuna_init}}
+\State $\mathcal{P} \gets \Call{DefineParameterSpace}{}$ \Comment{Algorithm \ref{alg:param_space}}
+\State $\mathcal{F}_{\text{real}} \gets \Call{ExtractFeatures}{\text{pretrained\_backbone}, \mathcal{V}_{\text{real}}}$
+\State $\text{best\_reward} \gets -\infty$
+\State $\text{converged} \gets \textbf{False}$
+\State \Comment{Phase 2: Optimization loop}
+\While{$\neg \text{converged}$}
+    \State \Comment{Create and execute trial}
+    \State $\text{trial} \gets \text{study}.\text{ask}()$
+    \State $\boldsymbol{\theta} \gets \Call{SampleParameters}{\text{trial}}$ \Comment{Algorithm \ref{alg:sample_params}}
+    \State $\mathcal{D}_{\text{syn}} \gets G(\boldsymbol{\theta})$
+    \State $\text{config} \gets \Call{CreateYOLOConfig}{}$ \Comment{Algorithm \ref{alg:yolo_config}}
+    \State $M, \mathcal{H}_{\text{train}} \gets \Call{TrainYOLO}{\text{config}, \mathcal{D}_{\text{syn}}, \mathcal{V}_{\text{real}}}$
+    \State $r \gets \Call{ComputeReward}{M, \mathcal{V}_{\text{real}}, \mathcal{F}_{\text{real}}, \mathcal{D}_{\text{syn}}}$ \Comment{Algorithm \ref{alg:reward_computation}}
+    \State $\hat{\theta}_{\text{mAP}}, \text{CI} \gets \Call{BootstrapCI}{M, \mathcal{V}_{\text{real}}}$ \Comment{Algorithm \ref{alg:bootstrap_ci}}
+    \State \Comment{Record trial results}
+    \State $\text{study}.\text{tell}(\text{trial}, r)$
+    \State $\text{trial}.\text{set\_user\_attr}(``\text{mAP}'', \hat{\theta}_{\text{mAP}})$
+    \State $\text{trial}.\text{set\_user\_attr}(``\text{CI}'', \text{CI})$
+    \State \Comment{Update best solution}
+    \If{$r > \text{best\_reward}$}
+        \State $\text{best\_reward} \gets r$
+        \State $\boldsymbol{\theta}^* \gets \boldsymbol{\theta}$
+        \State $M^* \gets M$
+    \EndIf
+    \State \Comment{Check convergence}
+    \State $\text{status}, \text{message} \gets \Call{CheckConvergence}{\text{study}, p, w, \delta, T_{\max}}$
+    \If{$\text{status} = \text{``CONVERGED''}$}
+        \State $\text{converged} \gets \textbf{True}$
+        \State \Call{LogMessage}{``Optimization converged: '' + message}
+    \EndIf
+\EndWhile
+\State \Comment{Phase 3: Final evaluation}
+\State $\hat{\theta}_{\text{final}}, \text{CI}_{\text{final}} \gets \Call{BootstrapCI}{M^*, \mathcal{V}_{\text{real}}, B=2000}$
+\State $\text{history} \gets \Call{ExtractStudyHistory}{\text{study}}$
+\State \textbf{Return} $\boldsymbol{\theta}^*$, $M^*$, history
+\end{algorithmic}
+\end{algorithm}
+

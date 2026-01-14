@@ -1,0 +1,388 @@
+
+This appendix provides detailed mathematical derivations for the key theoretical results employed throughout this textbook. The derivations are presented with sufficient rigor to support both pedagogical understanding and practical implementation, while maintaining accessibility for readers with graduate-level mathematical preparation.
+
+\section{Gaussian Process Regression Derivation}
+\label{sec:gp_derivation}
+
+The Gaussian Process framework provides the probabilistic foundation for Bayesian optimization of synthetic data generation parameters. We present a complete derivation of the posterior predictive distribution that enables principled uncertainty quantification over the objective function landscape.
+
+\subsection{Prior Specification}
+
+Consider an objective function $f: \mathcal{X} \rightarrow \mathbb{R}$ that maps synthetic data generation parameter configurations $\mathbf{x} \in \mathcal{X} \subseteq \mathbb{R}^d$ to scalar performance metrics such as mean Average Precision on real-world validation imagery. A Gaussian Process prior over this function space is specified by a mean function $m: \mathcal{X} \rightarrow \mathbb{R}$ and a covariance kernel $k: \mathcal{X} \times \mathcal{X} \rightarrow \mathbb{R}$, yielding the distributional assumption
+
+\begin{equation}
+f(\mathbf{x}) \sim \mathcal{GP}\left(m(\mathbf{x}), k(\mathbf{x}, \mathbf{x}')\right).
+\end{equation}
+
+The mean function is conventionally set to zero or to a constant reflecting prior beliefs about typical objective function values. The covariance kernel encodes assumptions regarding function smoothness, stationarity, and characteristic length scales. For synthetic data optimization, the Mat\'{e}rn kernel with $\nu = 5/2$ offers an effective balance between smoothness assumptions and representational flexibility:
+
+\begin{equation}
+k_{\text{Mat\'{e}rn}_{5/2}}(\mathbf{x}, \mathbf{x}') = \sigma_f^2 \left(1 + \sqrt{5}r + \frac{5}{3}r^2\right) \exp\left(-\sqrt{5}r\right),
+\end{equation}
+
+where $r = \sqrt{\sum_{i=1}^{d} \frac{(x_i - x'_i)^2}{\ell_i^2}}$ denotes the scaled Euclidean distance and $\{\ell_i\}_{i=1}^{d}$ represent per-dimension length scale parameters governing the characteristic variation scale of the objective function along each coordinate axis.
+
+\subsection{Posterior Derivation}
+
+Suppose we have observed function evaluations $\mathbf{y} = [y_1, \ldots, y_n]^\top$ at input locations $\mathbf{X} = [\mathbf{x}_1, \ldots, \mathbf{x}_n]^\top$, where each observation is corrupted by independent Gaussian noise: $y_i = f(\mathbf{x}_i) + \epsilon_i$ with $\epsilon_i \sim \mathcal{N}(0, \sigma_n^2)$. The joint distribution of the observed values $\mathbf{y}$ and the function value $f_*$ at a test point $\mathbf{x}_*$ follows a multivariate Gaussian:
+
+\begin{equation}
+\begin{bmatrix} \mathbf{y} \\ f_* \end{bmatrix} \sim \mathcal{N}\left(
+\begin{bmatrix} \mathbf{m} \\ m_* \end{bmatrix},
+\begin{bmatrix} \mathbf{K} + \sigma_n^2 \mathbf{I} & \mathbf{k}_* \\ \mathbf{k}_*^\top & k_{**} \end{bmatrix}
+\right),
+\end{equation}
+
+where $\mathbf{K}$ denotes the $n \times n$ Gram matrix with entries $K_{ij} = k(\mathbf{x}_i, \mathbf{x}_j)$, $\mathbf{k}_* = [k(\mathbf{x}_1, \mathbf{x}_*), \ldots, k(\mathbf{x}_n, \mathbf{x}_*)]^\top$ is the vector of covariances between the test point and training points, and $k_{**} = k(\mathbf{x}_*, \mathbf{x}_*)$ is the prior variance at the test location.
+
+Application of the standard conditioning formula for multivariate Gaussians yields the posterior predictive distribution:
+
+\begin{theorem}[Gaussian Process Posterior]
+\label{thm:gp_posterior}
+The posterior distribution of $f_*$ given observations $(\mathbf{X}, \mathbf{y})$ is Gaussian with mean and variance:
+\begin{align}
+\mu(\mathbf{x}_*) &= m(\mathbf{x}_*) + \mathbf{k}_*^\top \left(\mathbf{K} + \sigma_n^2 \mathbf{I}\right)^{-1} (\mathbf{y} - \mathbf{m}), \label{eq:gp_mean} \\
+\sigma^2(\mathbf{x}_*) &= k_{**} - \mathbf{k}_*^\top \left(\mathbf{K} + \sigma_n^2 \mathbf{I}\right)^{-1} \mathbf{k}_*. \label{eq:gp_variance}
+\end{align}
+\end{theorem}
+
+\begin{proof}
+The proof proceeds via direct application of the Gaussian conditioning identity. For a partitioned Gaussian random vector $[\mathbf{a}^\top, \mathbf{b}^\top]^\top$ with mean $[\boldsymbol{\mu}_a^\top, \boldsymbol{\mu}_b^\top]^\top$ and covariance $\begin{bmatrix} \boldsymbol{\Sigma}_{aa} & \boldsymbol{\Sigma}_{ab} \\ \boldsymbol{\Sigma}_{ba} & \boldsymbol{\Sigma}_{bb} \end{bmatrix}$, the conditional distribution of $\mathbf{b}$ given $\mathbf{a}$ is Gaussian with mean $\boldsymbol{\mu}_b + \boldsymbol{\Sigma}_{ba} \boldsymbol{\Sigma}_{aa}^{-1}(\mathbf{a} - \boldsymbol{\mu}_a)$ and covariance $\boldsymbol{\Sigma}_{bb} - \boldsymbol{\Sigma}_{ba} \boldsymbol{\Sigma}_{aa}^{-1} \boldsymbol{\Sigma}_{ab}$. Substituting the block components from the joint distribution above immediately yields equations \eqref{eq:gp_mean} and \eqref{eq:gp_variance}.
+\end{proof}
+
+The posterior mean $\mu(\mathbf{x}_*)$ provides a point prediction that interpolates the observed data while reverting to the prior mean in regions far from observations. The posterior variance $\sigma^2(\mathbf{x}_*)$ quantifies predictive uncertainty, achieving its minimum value (zero in the noise-free case) at observed locations and increasing as the test point moves away from the training data. This uncertainty quantification proves essential for acquisition function design in Bayesian optimization.
+
+\subsection{Computational Considerations}
+
+Direct computation of the posterior requires solving the linear system $(\mathbf{K} + \sigma_n^2 \mathbf{I})^{-1} \mathbf{y}$, which na\"{i}vely demands $\mathcal{O}(n^3)$ operations via Cholesky decomposition. For optimization campaigns involving hundreds of evaluations, this computational burden remains manageable. However, practitioners should be aware that the Cholesky factor $\mathbf{L}$ satisfying $\mathbf{L}\mathbf{L}^\top = \mathbf{K} + \sigma_n^2 \mathbf{I}$ can be computed once and reused for subsequent predictions, reducing the per-prediction cost to $\mathcal{O}(n^2)$ for forward and back substitution.
+
+\section{Expected Improvement Acquisition Function Derivation}
+\label{sec:ei_derivation}
+
+The Expected Improvement acquisition function provides a principled criterion for selecting the next evaluation point during Bayesian optimization. This section derives the closed-form expression that enables efficient computation and gradient-based optimization of the acquisition function.
+
+\subsection{Problem Formulation}
+
+Let $f^* = \max_{i \in \{1, \ldots, n\}} y_i$ denote the best objective value observed thus far. The improvement at a candidate point $\mathbf{x}$ is defined as the random variable
+
+\begin{equation}
+I(\mathbf{x}) = \max\left(f(\mathbf{x}) - f^*, 0\right),
+\end{equation}
+
+representing the gain achieved by evaluating at $\mathbf{x}$ if the resulting function value exceeds the current best. The Expected Improvement acquisition function is the expectation of this improvement under the Gaussian Process posterior:
+
+\begin{equation}
+\alpha_{\text{EI}}(\mathbf{x}) = \mathbb{E}\left[I(\mathbf{x}) \mid \mathbf{X}, \mathbf{y}\right].
+\end{equation}
+
+\subsection{Closed-Form Derivation}
+
+\begin{theorem}[Expected Improvement Formula]
+\label{thm:ei_formula}
+Under the Gaussian Process posterior $f(\mathbf{x}) \mid \mathbf{X}, \mathbf{y} \sim \mathcal{N}(\mu(\mathbf{x}), \sigma^2(\mathbf{x}))$, the Expected Improvement admits the closed-form expression:
+\begin{equation}
+\alpha_{\text{EI}}(\mathbf{x}) =
+\begin{cases}
+(\mu(\mathbf{x}) - f^*) \Phi(Z) + \sigma(\mathbf{x}) \phi(Z), & \text{if } \sigma(\mathbf{x}) > 0 \\
+0, & \text{if } \sigma(\mathbf{x}) = 0
+\end{cases}
+\end{equation}
+where $Z = \frac{\mu(\mathbf{x}) - f^*}{\sigma(\mathbf{x})}$, $\Phi(\cdot)$ denotes the standard normal cumulative distribution function, and $\phi(\cdot)$ denotes the standard normal probability density function.
+\end{theorem}
+
+\begin{proof}
+For $\sigma(\mathbf{x}) > 0$, define the standardized random variable $U = \frac{f(\mathbf{x}) - \mu(\mathbf{x})}{\sigma(\mathbf{x})} \sim \mathcal{N}(0, 1)$, so that $f(\mathbf{x}) = \mu(\mathbf{x}) + \sigma(\mathbf{x}) U$. The Expected Improvement becomes:
+
+\begin{align}
+\alpha_{\text{EI}}(\mathbf{x}) &= \mathbb{E}\left[\max(f(\mathbf{x}) - f^*, 0)\right] \\
+&= \mathbb{E}\left[\max(\mu(\mathbf{x}) + \sigma(\mathbf{x}) U - f^*, 0)\right] \\
+&= \mathbb{E}\left[\max\left(\sigma(\mathbf{x})\left(U + \frac{\mu(\mathbf{x}) - f^*}{\sigma(\mathbf{x})}\right), 0\right)\right] \\
+&= \sigma(\mathbf{x}) \mathbb{E}\left[\max(U + Z, 0)\right],
+\end{align}
+
+where $Z = \frac{\mu(\mathbf{x}) - f^*}{\sigma(\mathbf{x})}$. The expectation of the rectified Gaussian can be computed by integration:
+
+\begin{align}
+\mathbb{E}\left[\max(U + Z, 0)\right] &= \int_{-Z}^{\infty} (u + Z) \phi(u) \, du \\
+&= \int_{-Z}^{\infty} u \phi(u) \, du + Z \int_{-Z}^{\infty} \phi(u) \, du \\
+&= \left[-\phi(u)\right]_{-Z}^{\infty} + Z \Phi(Z) \\
+&= \phi(-Z) + Z \Phi(Z) \\
+&= \phi(Z) + Z \Phi(Z),
+\end{align}
+
+where the final equality exploits the symmetry $\phi(-Z) = \phi(Z)$. Multiplying by $\sigma(\mathbf{x})$ yields the stated result. When $\sigma(\mathbf{x}) = 0$, the posterior is deterministic at $\mu(\mathbf{x})$, and no improvement is possible if $\mu(\mathbf{x}) \leq f^*$.
+\end{proof}
+
+The Expected Improvement formula decomposes into two interpretable components. The first term $(\mu(\mathbf{x}) - f^*) \Phi(Z)$ represents exploitation, favoring points with high posterior mean predictions. The second term $\sigma(\mathbf{x}) \phi(Z)$ represents exploration, favoring points with high predictive uncertainty. The automatic balancing of these terms without explicit tuning parameters constitutes a principal advantage of the Expected Improvement criterion.
+
+\subsection{Gradient Computation}
+
+For gradient-based optimization of the acquisition function, we require the derivatives with respect to the input $\mathbf{x}$. Applying the chain rule:
+
+\begin{align}
+\frac{\partial \alpha_{\text{EI}}}{\partial \mathbf{x}} &= \frac{\partial \mu}{\partial \mathbf{x}} \Phi(Z) + (\mu - f^*) \phi(Z) \frac{\partial Z}{\partial \mathbf{x}} + \frac{\partial \sigma}{\partial \mathbf{x}} \phi(Z) + \sigma \phi'(Z) \frac{\partial Z}{\partial \mathbf{x}}.
+\end{align}
+
+Noting that $\frac{\partial Z}{\partial \mathbf{x}} = \frac{1}{\sigma} \frac{\partial \mu}{\partial \mathbf{x}} - \frac{Z}{\sigma} \frac{\partial \sigma}{\partial \mathbf{x}}$ and $\phi'(Z) = -Z \phi(Z)$, considerable simplification yields:
+
+\begin{equation}
+\frac{\partial \alpha_{\text{EI}}}{\partial \mathbf{x}} = \Phi(Z) \frac{\partial \mu}{\partial \mathbf{x}} + \phi(Z) \frac{\partial \sigma}{\partial \mathbf{x}}.
+\end{equation}
+
+This compact expression enables efficient gradient-based optimization of the acquisition function using L-BFGS-B or other quasi-Newton methods.
+
+\section{Bootstrap Confidence Interval Theory}
+\label{sec:bootstrap_derivation}
+
+When evaluating YOLO detector performance on limited real-world validation sets comprising approximately fifty images, point estimates of mean Average Precision may exhibit substantial variance. Bootstrap resampling provides a nonparametric approach to uncertainty quantification that requires no distributional assumptions beyond the representativeness of the validation sample.
+
+\subsection{Bootstrap Principle}
+
+Let $\mathcal{D} = \{(\mathbf{x}_1, \mathbf{y}_1), \ldots, (\mathbf{x}_n, \mathbf{y}_n)\}$ denote the validation dataset of $n$ image-annotation pairs, and let $\theta = T(\mathcal{D})$ denote a statistic of interest computed from this dataset (e.g., mean Average Precision). The bootstrap principle asserts that the sampling distribution of $\hat{\theta} - \theta$, where $\hat{\theta} = T(\mathcal{D})$ is computed from the observed sample and $\theta$ is the true population parameter, can be approximated by the distribution of $\hat{\theta}^* - \hat{\theta}$, where $\hat{\theta}^*$ is computed from bootstrap resamples.
+
+\begin{definition}[Bootstrap Resample]
+A bootstrap resample $\mathcal{D}^* = \{(\mathbf{x}_1^*, \mathbf{y}_1^*), \ldots, (\mathbf{x}_n^*, \mathbf{y}_n^*)\}$ is obtained by sampling $n$ observations uniformly at random with replacement from the original dataset $\mathcal{D}$.
+\end{definition}
+
+\subsection{Percentile Confidence Intervals}
+
+The percentile bootstrap confidence interval exploits the bootstrap approximation to construct intervals with specified coverage probability.
+
+\begin{theorem}[Percentile Bootstrap Interval]
+\label{thm:percentile_bootstrap}
+Let $\hat{\theta}^{*(1)}, \ldots, \hat{\theta}^{*(B)}$ denote bootstrap replicate statistics computed from $B$ independent resamples. Define $\hat{\theta}^*_{(\alpha)}$ as the $\alpha$-quantile of the empirical distribution of bootstrap replicates. The percentile bootstrap $100(1-\alpha)\%$ confidence interval is:
+\begin{equation}
+\text{CI}_{1-\alpha} = \left[\hat{\theta}^*_{(\alpha/2)}, \hat{\theta}^*_{(1-\alpha/2)}\right].
+\end{equation}
+\end{theorem}
+
+For mAP estimation with $n = 50$ validation images and $B = 1000$ bootstrap replicates, this procedure yields confidence intervals that accurately reflect the uncertainty inherent in performance evaluation on limited data. Empirical studies demonstrate that mAP estimates from fifty-image validation sets exhibit standard deviations of approximately 0.02 to 0.04 mAP units, necessitating the use of confidence intervals when comparing synthetic data configurations whose performance differences may fall within this noise margin.
+
+\subsection{Bias-Corrected and Accelerated Bootstrap}
+
+The percentile method can exhibit coverage errors when the bootstrap distribution is skewed or when the estimator exhibits bias. The bias-corrected and accelerated (BCa) bootstrap provides improved coverage through transformation-respecting adjustments.
+
+\begin{theorem}[BCa Confidence Interval]
+\label{thm:bca_bootstrap}
+The BCa $100(1-\alpha)\%$ confidence interval is given by:
+\begin{equation}
+\text{CI}_{1-\alpha}^{\text{BCa}} = \left[\hat{\theta}^*_{(\alpha_1)}, \hat{\theta}^*_{(\alpha_2)}\right],
+\end{equation}
+where the adjusted quantile levels are:
+\begin{align}
+\alpha_1 &= \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{\alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{\alpha/2})}\right), \\
+\alpha_2 &= \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{1-\alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{1-\alpha/2})}\right).
+\end{align}
+Here $\hat{z}_0 = \Phi^{-1}\left(\frac{\#\{\hat{\theta}^{*(b)} < \hat{\theta}\}}{B}\right)$ is the bias correction factor, and $\hat{a}$ is the acceleration constant estimated via jackknife:
+\begin{equation}
+\hat{a} = \frac{\sum_{i=1}^{n} (\bar{\theta}_{(\cdot)} - \hat{\theta}_{(-i)})^3}{6\left[\sum_{i=1}^{n} (\bar{\theta}_{(\cdot)} - \hat{\theta}_{(-i)})^2\right]^{3/2}},
+\end{equation}
+where $\hat{\theta}_{(-i)}$ denotes the statistic computed with the $i$-th observation removed and $\bar{\theta}_{(\cdot)} = \frac{1}{n} \sum_{i=1}^{n} \hat{\theta}_{(-i)}$.
+\end{theorem}
+
+The BCa method provides second-order accurate confidence intervals, meaning that coverage errors decrease as $\mathcal{O}(n^{-1})$ rather than $\mathcal{O}(n^{-1/2})$ as with the percentile method.
+
+\section{Maximum Mean Discrepancy Derivation}
+\label{sec:mmd_derivation}
+
+The Maximum Mean Discrepancy (MMD) provides a kernel-based measure of distributional divergence between synthetic and real image feature distributions. This metric serves as a component of the composite reward function, penalizing synthetic data configurations that produce feature distributions substantially different from real-world imagery.
+
+\subsection{Kernel Mean Embedding}
+
+Let $\mathcal{H}$ be a reproducing kernel Hilbert space (RKHS) associated with a positive definite kernel $k: \mathcal{X} \times \mathcal{X} \rightarrow \mathbb{R}$. The kernel mean embedding of a probability distribution $P$ on $\mathcal{X}$ is defined as:
+
+\begin{equation}
+\mu_P = \mathbb{E}_{\mathbf{x} \sim P}\left[k(\mathbf{x}, \cdot)\right] \in \mathcal{H}.
+\end{equation}
+
+For characteristic kernels such as the Gaussian RBF kernel $k(\mathbf{x}, \mathbf{x}') = \exp\left(-\frac{\|\mathbf{x} - \mathbf{x}'\|^2}{2\sigma^2}\right)$, the mapping $P \mapsto \mu_P$ is injective, ensuring that distinct distributions yield distinct embeddings.
+
+\subsection{MMD Definition and Properties}
+
+\begin{definition}[Maximum Mean Discrepancy]
+The Maximum Mean Discrepancy between distributions $P$ and $Q$ is the RKHS distance between their kernel mean embeddings:
+\begin{equation}
+\text{MMD}(P, Q) = \|\mu_P - \mu_Q\|_{\mathcal{H}}.
+\end{equation}
+\end{definition}
+
+Expanding the squared MMD using the reproducing property $\langle f, k(\mathbf{x}, \cdot) \rangle_{\mathcal{H}} = f(\mathbf{x})$:
+
+\begin{align}
+\text{MMD}^2(P, Q) &= \|\mu_P - \mu_Q\|_{\mathcal{H}}^2 \\
+&= \langle \mu_P, \mu_P \rangle_{\mathcal{H}} - 2\langle \mu_P, \mu_Q \rangle_{\mathcal{H}} + \langle \mu_Q, \mu_Q \rangle_{\mathcal{H}} \\
+&= \mathbb{E}_{\mathbf{x}, \mathbf{x}' \sim P}\left[k(\mathbf{x}, \mathbf{x}')\right] - 2\mathbb{E}_{\mathbf{x} \sim P, \mathbf{y} \sim Q}\left[k(\mathbf{x}, \mathbf{y})\right] + \mathbb{E}_{\mathbf{y}, \mathbf{y}' \sim Q}\left[k(\mathbf{y}, \mathbf{y}')\right].
+\end{align}
+
+\subsection{Unbiased Empirical Estimator}
+
+Given samples $\mathbf{X} = \{\mathbf{x}_1, \ldots, \mathbf{x}_m\}$ from $P$ (synthetic image features) and $\mathbf{Y} = \{\mathbf{y}_1, \ldots, \mathbf{y}_n\}$ from $Q$ (real image features), an unbiased estimator of $\text{MMD}^2$ is:
+
+\begin{theorem}[Unbiased MMD Estimator]
+\label{thm:mmd_estimator}
+The following statistic provides an unbiased estimate of $\text{MMD}^2(P, Q)$:
+\begin{equation}
+\widehat{\text{MMD}}^2_u = \frac{1}{m(m-1)} \sum_{i \neq j} k(\mathbf{x}_i, \mathbf{x}_j) - \frac{2}{mn} \sum_{i,j} k(\mathbf{x}_i, \mathbf{y}_j) + \frac{1}{n(n-1)} \sum_{i \neq j} k(\mathbf{y}_i, \mathbf{y}_j).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The proof proceeds by computing expectations of each sum. For the first term:
+\begin{equation}
+\mathbb{E}\left[\frac{1}{m(m-1)} \sum_{i \neq j} k(\mathbf{x}_i, \mathbf{x}_j)\right] = \frac{1}{m(m-1)} \cdot m(m-1) \cdot \mathbb{E}_{\mathbf{x}, \mathbf{x}' \sim P}\left[k(\mathbf{x}, \mathbf{x}')\right] = \mathbb{E}_{P \times P}[k].
+\end{equation}
+Analogous calculations for the remaining terms yield the result.
+\end{proof}
+
+In the context of synthetic data optimization, features are extracted from the penultimate layer of a pretrained backbone network (e.g., ResNet-50 or the YOLO backbone itself), and MMD is computed between synthetic and real feature distributions. Lower MMD values indicate closer alignment between synthetic and real imagery in feature space, suggesting improved domain transfer potential.
+
+\section{Policy Gradient Theorem Proof Sketch}
+\label{sec:policy_gradient}
+
+The policy gradient theorem provides the theoretical foundation for gradient-based optimization of parameterized policies in reinforcement learning. While the primary methodology advocated in this textbook employs Bayesian optimization, the policy gradient framework illuminates the mathematical structure of the optimization problem and motivates alternative algorithmic approaches.
+
+\subsection{Problem Setting}
+
+Consider an infinite-horizon discounted Markov Decision Process with state space $\mathcal{S}$, action space $\mathcal{A}$, transition dynamics $P(s' \mid s, a)$, reward function $r(s, a)$, and discount factor $\gamma \in [0, 1)$. A parameterized stochastic policy $\pi_\theta(a \mid s)$ defines the action selection distribution given the current state. The objective is to maximize the expected discounted return:
+
+\begin{equation}
+J(\theta) = \mathbb{E}_{\tau \sim \pi_\theta}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right],
+\end{equation}
+
+where $\tau = (s_0, a_0, s_1, a_1, \ldots)$ denotes a trajectory sampled under policy $\pi_\theta$.
+
+\subsection{Main Result}
+
+\begin{theorem}[Policy Gradient Theorem]
+\label{thm:policy_gradient}
+The gradient of the expected return with respect to policy parameters admits the form:
+\begin{equation}
+\nabla_\theta J(\theta) = \mathbb{E}_{\tau \sim \pi_\theta}\left[\sum_{t=0}^{\infty} \gamma^t \nabla_\theta \log \pi_\theta(a_t \mid s_t) Q^{\pi_\theta}(s_t, a_t)\right],
+\end{equation}
+where $Q^{\pi_\theta}(s, a) = \mathbb{E}_{\pi_\theta}\left[\sum_{k=0}^{\infty} \gamma^k r(s_{t+k}, a_{t+k}) \mid s_t = s, a_t = a\right]$ is the action-value function.
+\end{theorem}
+
+\begin{proof}[Proof Sketch]
+The proof proceeds by expressing the objective as an expectation over the stationary state distribution $d^{\pi_\theta}(s) = (1-\gamma) \sum_{t=0}^{\infty} \gamma^t P(s_t = s \mid \pi_\theta)$:
+
+\begin{equation}
+J(\theta) = \frac{1}{1-\gamma} \sum_{s \in \mathcal{S}} d^{\pi_\theta}(s) \sum_{a \in \mathcal{A}} \pi_\theta(a \mid s) r(s, a).
+\end{equation}
+
+Differentiating with respect to $\theta$ yields terms involving $\nabla_\theta d^{\pi_\theta}(s)$, which capture how the state visitation distribution changes with policy parameters. The key insight is that these terms can be absorbed into the $Q$-function formulation through the performance difference lemma, yielding the stated result without requiring explicit computation of $\nabla_\theta d^{\pi_\theta}(s)$.
+
+The log-derivative trick transforms the gradient of expectations into expectations of gradients:
+\begin{equation}
+\nabla_\theta \pi_\theta(a \mid s) = \pi_\theta(a \mid s) \nabla_\theta \log \pi_\theta(a \mid s),
+\end{equation}
+enabling Monte Carlo estimation from sampled trajectories.
+\end{proof}
+
+\subsection{Variance Reduction via Baselines}
+
+The policy gradient estimator exhibits high variance, motivating the introduction of state-dependent baselines. Subtracting a baseline $b(s)$ from the $Q$-function:
+
+\begin{equation}
+\nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta}\left[\sum_{t=0}^{\infty} \gamma^t \nabla_\theta \log \pi_\theta(a_t \mid s_t) \left(Q^{\pi_\theta}(s_t, a_t) - b(s_t)\right)\right].
+\end{equation}
+
+This modification preserves the expected gradient (since $\mathbb{E}_{a \sim \pi_\theta}[\nabla_\theta \log \pi_\theta(a \mid s)] = 0$) while potentially reducing variance. The optimal baseline choice $b(s) = V^{\pi_\theta}(s)$ yields the advantage function formulation $A^{\pi_\theta}(s, a) = Q^{\pi_\theta}(s, a) - V^{\pi_\theta}(s)$, which is employed in actor-critic algorithms.
+
+\section{TD3 Twin Q-Learning Convergence Analysis}
+\label{sec:td3_convergence}
+
+The Twin Delayed Deep Deterministic Policy Gradient (TD3) algorithm addresses overestimation bias in actor-critic methods through the use of twin Q-networks. This section provides a convergence analysis sketch for the Q-function learning component.
+
+\subsection{Overestimation Bias in Q-Learning}
+
+Standard Q-learning updates employ the maximum over action values: $Q(s, a) \leftarrow r + \gamma \max_{a'} Q(s', a')$. When the Q-function is approximated by a neural network $Q_\phi$, approximation errors $\epsilon(s, a) = Q_\phi(s, a) - Q^*(s, a)$ induce systematic overestimation:
+
+\begin{equation}
+\mathbb{E}\left[\max_{a'} Q_\phi(s', a')\right] \geq \max_{a'} Q^*(s', a'),
+\end{equation}
+
+with equality only when $\epsilon(s', a') = 0$ for all $a'$ or when all errors are perfectly correlated. This overestimation compounds across Bellman backups, potentially leading to divergent value estimates.
+
+\subsection{Twin Q-Learning Mechanism}
+
+TD3 maintains two independent Q-network approximators $Q_{\phi_1}$ and $Q_{\phi_2}$, using their minimum for target computation:
+
+\begin{equation}
+y = r + \gamma \min_{i \in \{1, 2\}} Q_{\phi'_i}(s', \pi_{\theta'}(s') + \epsilon),
+\end{equation}
+
+where $\phi'_1, \phi'_2, \theta'$ denote target network parameters and $\epsilon \sim \text{clip}(\mathcal{N}(0, \sigma), -c, c)$ provides target policy smoothing.
+
+\begin{proposition}[Bias Reduction]
+\label{prop:td3_bias}
+Under the assumption that $Q_{\phi_1}$ and $Q_{\phi_2}$ have independent, zero-mean approximation errors, the expected target value using the minimum operator is less than or equal to the expected target using either network alone:
+\begin{equation}
+\mathbb{E}\left[\min\{Q_{\phi_1}(s', a'), Q_{\phi_2}(s', a')\}\right] \leq \mathbb{E}\left[Q_{\phi_i}(s', a')\right], \quad i \in \{1, 2\}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+For any two random variables $X$ and $Y$, $\min\{X, Y\} \leq X$ and $\min\{X, Y\} \leq Y$ pointwise, hence $\mathbb{E}[\min\{X, Y\}] \leq \mathbb{E}[X]$ and $\mathbb{E}[\min\{X, Y\}] \leq \mathbb{E}[Y]$.
+\end{proof}
+
+While this proposition establishes that the minimum operator reduces expected values, the more subtle claim is that this reduction counteracts overestimation bias. Under conditions where approximation errors are approximately independent and centered, the minimum of two overestimating approximators yields values closer to the true Q-function than either approximator alone.
+
+\subsection{Convergence Conditions}
+
+Formal convergence analysis of TD3 requires assumptions on function approximation error bounds, Lipschitz continuity of the policy, and properties of the replay buffer sampling distribution. Under standard regularity conditions analogous to those employed in DQN convergence analysis, TD3 enjoys similar convergence guarantees to a neighborhood of the optimal policy, with the neighborhood size determined by function approximation capacity and sampling distribution coverage.
+
+The delayed policy updates in TD3 (updating the policy network less frequently than the Q-networks) ensure that the Q-function targets remain relatively stable during critic learning, reducing the non-stationarity that can destabilize actor-critic algorithms. This design choice trades sample efficiency for stability, a tradeoff that proves advantageous in the high-variance setting of synthetic data optimization where each policy evaluation requires expensive YOLO training cycles.
+
+\section{Hyperband Successive Halving Analysis}
+\label{sec:hyperband_analysis}
+
+The Hyperband algorithm provides multi-fidelity optimization through adaptive resource allocation based on successive halving. This section derives the resource allocation strategy and analyzes its efficiency properties.
+
+\subsection{Successive Halving Procedure}
+
+Consider $n$ configurations to be evaluated with a maximum budget of $R$ resources (e.g., training epochs). Successive halving proceeds by uniformly allocating resources across all configurations, then eliminating the bottom half based on intermediate performance:
+
+\begin{definition}[Successive Halving Schedule]
+Starting with $n$ configurations and maximum budget $R$, successive halving performs $\lceil \log_2(n) \rceil$ rounds. In round $i \in \{0, 1, \ldots, \lceil \log_2(n) \rceil - 1\}$:
+\begin{align}
+n_i &= \left\lfloor n \cdot 2^{-i} \right\rfloor \text{ configurations remain}, \\
+r_i &= R \cdot 2^{i - \lceil \log_2(n) \rceil + 1} \text{ resources allocated per configuration}.
+\end{align}
+\end{definition}
+
+\subsection{Total Resource Consumption}
+
+\begin{proposition}[Successive Halving Budget]
+\label{prop:sh_budget}
+The total resource consumption of successive halving with $n$ initial configurations and maximum budget $R$ is bounded by:
+\begin{equation}
+B_{\text{SH}} \leq n \cdot R \cdot \frac{\lceil \log_2(n) \rceil}{n}.
+\end{equation}
+More precisely, $B_{\text{SH}} \approx R \cdot \lceil \log_2(n) \rceil$ for large $n$.
+\end{proposition}
+
+\begin{proof}
+In each round $i$, approximately $n/2^i$ configurations are evaluated with budget $R/2^{\lceil \log_2(n) \rceil - i}$. The total budget across all rounds:
+\begin{equation}
+B_{\text{SH}} = \sum_{i=0}^{\lceil \log_2(n) \rceil - 1} \frac{n}{2^i} \cdot \frac{R}{2^{\lceil \log_2(n) \rceil - i}} = \sum_{i=0}^{\lceil \log_2(n) \rceil - 1} \frac{nR}{2^{\lceil \log_2(n) \rceil}} \approx R \cdot \lceil \log_2(n) \rceil.
+\end{equation}
+\end{proof}
+
+This logarithmic dependence on $n$ (rather than linear) enables aggressive early termination of unpromising configurations while ensuring that promising configurations receive sufficient resources for reliable performance discrimination.
+
+\subsection{Hyperband Bracket Structure}
+
+Hyperband addresses the exploration-exploitation tradeoff in successive halving by running multiple brackets with different $n/R$ trade-offs:
+
+\begin{equation}
+s_{\max} = \lfloor \log_\eta(R) \rfloor, \quad \text{where } \eta \text{ is the halving rate (typically } \eta = 3 \text{)}.
+\end{equation}
+
+Each bracket $s \in \{0, 1, \ldots, s_{\max}\}$ runs successive halving with:
+\begin{align}
+n_s &= \left\lceil \frac{s_{\max} + 1}{s + 1} \cdot \eta^s \right\rceil \text{ initial configurations}, \\
+r_s &= R \cdot \eta^{-s} \text{ minimum resource per configuration}.
+\end{align}
+
+High-$s$ brackets explore more configurations with aggressive early stopping, while low-$s$ brackets allocate more resources to fewer configurations. This bracket structure provides robustness to varying degrees of correlation between low-fidelity and full-fidelity performance.
+
