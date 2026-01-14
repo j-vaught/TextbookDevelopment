@@ -68,9 +68,11 @@ The system worked remarkably well under many conditions, but Sperry and his engi
 
 \subsection{Nicolas Minorsky: The First Theory of PID Control (1922)}
 
-The gap between engineering practice and theoretical understanding was bridged by Nicolas Minorsky, a Russian-American engineer working for the United States Navy. Minorsky had been tasked with improving the automatic steering systems used on naval vessels, and he approached the problem with a mathematician's rigor combined with an engineer's practical sensibility.
+\begin{historicalbox}[Nicolas Minorsky and the Birth of PID Theory]
+Nicolas Minorsky (1885--1970), a Russian-American engineer working for the United States Navy, bridged the gap between engineering practice and theoretical understanding. In his landmark 1922 paper, ``Directional Stability of Automatically Steered Bodies,'' published in the \textit{Journal of the American Society of Naval Engineers}, Minorsky provided the first complete theoretical analysis of what we now call PID control. He tested his three-term controller on the USS New Mexico in 1922, demonstrating that the ship could maintain its heading within $\pm 1/6$ of a degree---an unprecedented level of precision for the time.
+\end{historicalbox}
 
-In his landmark 1922 paper, ``Directional Stability of Automatically Steered Bodies,'' published in the \textit{Journal of the American Society of Naval Engineers}, Minorsky provided the first complete theoretical analysis of what we now call PID control \cite{minorsky1922}. His key insight came from observing how experienced helmsmen steered ships.
+Minorsky had been tasked with improving the automatic steering systems used on naval vessels, and he approached the problem with a mathematician's rigor combined with an engineer's practical sensibility. His key insight came from observing how experienced helmsmen steered ships.
 
 Minorsky noted that skilled helmsmen did not simply apply a rudder correction proportional to the current heading error. Instead, they applied a correction proportional to the current error (P action), applied additional correction when the error persisted over time (I action), and anticipated where the ship was heading based on how fast the error was changing (D action). This observation led Minorsky to propose the three-term controller:
 \begin{equation}
@@ -569,33 +571,26 @@ Increase $\Kd$ & Minor & Decrease & Decrease & No effect & Improve$^*$ \\
 
 \subsection{Practical Controller Forms}
 
-Not all applications require all three terms. Common reduced-order controllers include:
+Not all applications require all three terms. Table~\ref{tab:controller_forms} summarizes the common reduced-order controllers and their typical applications.
 
-\textbf{P Controller:} $C(s) = \Kp$
-\begin{itemize}
-    \item Simplest form; used when steady-state error is acceptable
-    \item Applications: non-critical level control, manual-like operation
-\end{itemize}
-
-\textbf{PI Controller:} $C(s) = \Kp + \dfrac{\Ki}{s} = \Kp\left(1 + \dfrac{1}{\Ti s}\right)$
-\begin{itemize}
-    \item Most common industrial controller
-    \item Eliminates steady-state error without noise amplification
-    \item Applications: flow control, pressure control, slow temperature loops
-\end{itemize}
-
-\textbf{PD Controller:} $C(s) = \Kp + \Kd s = \Kp(1 + \Td s)$
-\begin{itemize}
-    \item Improves transient response without affecting steady-state
-    \item Rarely used alone due to steady-state error
-    \item Applications: systems where overshoot is critical and error is tolerable
-\end{itemize}
-
-\textbf{PID Controller:} Full three-term controller
-\begin{itemize}
-    \item Used when both steady-state accuracy and fast transient response are required
-    \item Applications: precise temperature control, position control, process control
-\end{itemize}
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Practical Controller Forms}
+\label{tab:controller_forms}
+\begin{tabular}{lp{4cm}p{4.5cm}p{4cm}}
+\toprule
+\textbf{Type} & \textbf{Transfer Function} & \textbf{Characteristics} & \textbf{Applications} \\
+\midrule
+P & $C(s) = \Kp$ & Simplest form; used when steady-state error is acceptable & Non-critical level control, manual-like operation \\
+\addlinespace
+PI & $C(s) = \Kp + \dfrac{\Ki}{s}$ & Most common industrial controller; eliminates steady-state error without noise amplification & Flow control, pressure control, slow temperature loops \\
+\addlinespace
+PD & $C(s) = \Kp + \Kd s$ & Improves transient response without affecting steady-state; rarely used alone due to steady-state error & Systems where overshoot is critical and error is tolerable \\
+\addlinespace
+PID & Full three-term controller & Used when both steady-state accuracy and fast transient response are required & Precise temperature control, position control, process control \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 
 %=============================================================================
@@ -606,16 +601,7 @@ Theory comes alive through hands-on experimentation. In this section, we design,
 
 \subsection{System Overview}
 
-Our experimental setup controls the temperature of a small thermal mass (an aluminum block or water bath) using a resistive heating element. The system components are:
-
-\begin{itemize}
-    \item \textbf{Microcontroller}: Arduino Uno (or compatible)
-    \item \textbf{Temperature sensor}: 10k$\Omega$ NTC thermistor (or TMP36 analog sensor)
-    \item \textbf{Heating element}: 10$\Omega$, 10W power resistor
-    \item \textbf{Driver}: N-channel MOSFET (e.g., IRF520) for PWM control
-    \item \textbf{Thermal mass}: Small aluminum block (approximately $30 \times 30 \times 10$ mm)
-    \item \textbf{Power supply}: 12V, 2A DC supply
-\end{itemize}
+Our experimental setup controls the temperature of a small thermal mass (an aluminum block or water bath) using a resistive heating element. The system uses an Arduino Uno (or compatible) \textbf{microcontroller} to read a 10k$\Omega$ NTC \textbf{thermistor} (or TMP36 analog sensor) for temperature sensing. A 10$\Omega$, 10W power resistor serves as the \textbf{heating element}, driven by an N-channel \textbf{MOSFET} (e.g., IRF520) for PWM control. The \textbf{thermal mass} consists of a small aluminum block (approximately $30 \times 30 \times 10$ mm), and the system is powered by a 12V, 2A DC \textbf{power supply}.
 
 \begin{figure}[htbp]
 \centering
@@ -681,167 +667,96 @@ Our experimental setup controls the temperature of a small thermal mass (an alum
 
 \subsection{Software Implementation}
 
-The following Arduino code implements P, PI, and PID control with selectable modes:
+The following pseudocode implements P, PI, and PID control with selectable modes. Algorithm~\ref{alg:pid_init} shows the initialization procedure, Algorithm~\ref{alg:temp_read} presents the temperature reading function, and Algorithm~\ref{alg:pid_compute} details the core PID computation.
 
-\begin{lstlisting}[style=arduino, caption={Arduino PID Temperature Controller}]
-// PID Temperature Controller
-// Demonstrates P, PI, and PID control modes
+\begin{algorithm}[htbp]
+\caption{PID Controller Initialization}
+\label{alg:pid_init}
+\begin{algorithmic}[1]
+\State \textbf{Constants:} $R_{\text{series}} \gets 10000$, $R_{\text{nominal}} \gets 10000$, $T_{\text{nominal}} \gets 25$, $B \gets 3950$
+\State \textbf{Gains:} $K_p \gets 50$, $K_i \gets 0.5$, $K_d \gets 10$
+\State \textbf{Setpoint:} $T_{\text{setpoint}} \gets 50$ \Comment{Target temperature in Celsius}
+\State \textbf{Mode:} $\text{controlMode} \gets 2$ \Comment{0 = P, 1 = PI, 2 = PID}
+\State \textbf{State variables:} $\text{integral} \gets 0$, $e_{\text{prev}} \gets 0$, $t_{\text{prev}} \gets \Call{CurrentTime}{}$
+\State \textbf{Anti-windup limit:} $I_{\text{max}} \gets 500$
+\State Configure heater pin as output
+\State Initialize serial communication for data logging
+\end{algorithmic}
+\end{algorithm}
 
-// Pin definitions
-const int THERMISTOR_PIN = A0;
-const int HEATER_PIN = 9;
+\begin{algorithm}[htbp]
+\caption{Temperature Reading from Thermistor}
+\label{alg:temp_read}
+\begin{algorithmic}[1]
+\Require ADC reading from thermistor voltage divider
+\Ensure Temperature in degrees Celsius
+\State $V_{\text{raw}} \gets \Call{ReadADC}{\text{thermistor\_pin}}$
+\State $R_{\text{thermistor}} \gets R_{\text{series}} / (1023 / V_{\text{raw}} - 1)$ \Comment{Voltage divider equation}
+\State $x \gets \ln(R_{\text{thermistor}} / R_{\text{nominal}}) / B$ \Comment{Steinhart-Hart B-parameter model}
+\State $x \gets x + 1 / (T_{\text{nominal}} + 273.15)$
+\State $T_{\text{kelvin}} \gets 1 / x$
+\State \Return $T_{\text{kelvin}} - 273.15$ \Comment{Convert to Celsius}
+\end{algorithmic}
+\end{algorithm}
 
-// Thermistor parameters (10k NTC, B=3950)
-const float SERIES_RESISTOR = 10000.0;
-const float NOMINAL_RESISTANCE = 10000.0;
-const float NOMINAL_TEMP = 25.0;
-const float B_COEFFICIENT = 3950.0;
+\begin{algorithm}[htbp]
+\caption{PID Control Computation}
+\label{alg:pid_compute}
+\begin{algorithmic}[1]
+\Require Current temperature $T$, control mode, gains $(K_p, K_i, K_d)$
+\Ensure Control output $u$ (PWM value 0--255)
+\State $t_{\text{current}} \gets \Call{CurrentTime}{}$
+\State $\Delta t \gets (t_{\text{current}} - t_{\text{prev}}) / 1000$ \Comment{Time step in seconds}
+\If{$\Delta t \leq 0$}
+    \State \Return 0
+\EndIf
+\State $e \gets T_{\text{setpoint}} - T$ \Comment{Calculate error}
+\State $P \gets K_p \cdot e$ \Comment{Proportional term}
+\State $I \gets 0$
+\If{$\text{controlMode} \geq 1$} \Comment{Include integral action}
+    \State $\text{integral} \gets \text{integral} + e \cdot \Delta t$
+    \State $\text{integral} \gets \Call{Clamp}{\text{integral}, -I_{\text{max}}, I_{\text{max}}}$ \Comment{Anti-windup}
+    \State $I \gets K_i \cdot \text{integral}$
+\EndIf
+\State $D \gets 0$
+\If{$\text{controlMode} \geq 2$} \Comment{Include derivative action}
+    \State $\dot{e} \gets (e - e_{\text{prev}}) / \Delta t$
+    \State $D \gets K_d \cdot \dot{e}$
+\EndIf
+\State $e_{\text{prev}} \gets e$, $t_{\text{prev}} \gets t_{\text{current}}$ \Comment{Update state}
+\State $u \gets P + I + D$
+\State $u \gets \Call{Clamp}{u, 0, 255}$ \Comment{Constrain to valid PWM range}
+\State \Return $u$
+\end{algorithmic}
+\end{algorithm}
 
-// Control parameters
-float Kp = 50.0;    // Proportional gain
-float Ki = 0.5;     // Integral gain
-float Kd = 10.0;    // Derivative gain
-float setpoint = 50.0;  // Target temperature (C)
-
-// Control mode: 0=P, 1=PI, 2=PID
-int controlMode = 2;
-
-// State variables
-float integral = 0.0;
-float previousError = 0.0;
-unsigned long previousTime = 0;
-
-// Anti-windup limit
-const float INTEGRAL_MAX = 500.0;
-
-void setup() {
-  pinMode(HEATER_PIN, OUTPUT);
-  Serial.begin(9600);
-  previousTime = millis();
-
-  Serial.println("Time(ms),Setpoint,Temperature,Output,Error");
-}
-
-float readTemperature() {
-  int rawADC = analogRead(THERMISTOR_PIN);
-
-  // Convert to resistance
-  float resistance = SERIES_RESISTOR / (1023.0/rawADC - 1.0);
-
-  // Steinhart-Hart equation (simplified B-parameter)
-  float steinhart = resistance / NOMINAL_RESISTANCE;
-  steinhart = log(steinhart) / B_COEFFICIENT;
-  steinhart += 1.0 / (NOMINAL_TEMP + 273.15);
-  float tempK = 1.0 / steinhart;
-
-  return tempK - 273.15;  // Convert to Celsius
-}
-
-float computePID(float temperature) {
-  unsigned long currentTime = millis();
-  float dt = (currentTime - previousTime) / 1000.0;  // seconds
-
-  if (dt <= 0) return 0;
-
-  // Calculate error
-  float error = setpoint - temperature;
-
-  // Proportional term
-  float P_term = Kp * error;
-
-  // Integral term (with anti-windup)
-  float I_term = 0;
-  if (controlMode >= 1) {
-    integral += error * dt;
-    integral = constrain(integral, -INTEGRAL_MAX, INTEGRAL_MAX);
-    I_term = Ki * integral;
-  }
-
-  // Derivative term
-  float D_term = 0;
-  if (controlMode >= 2) {
-    float derivative = (error - previousError) / dt;
-    D_term = Kd * derivative;
-  }
-
-  // Update state
-  previousError = error;
-  previousTime = currentTime;
-
-  // Compute total output
-  float output = P_term + I_term + D_term;
-
-  // Clamp to valid PWM range
-  output = constrain(output, 0, 255);
-
-  return output;
-}
-
-void loop() {
-  // Read temperature
-  float temperature = readTemperature();
-
-  // Compute control output
-  float output = computePID(temperature);
-
-  // Apply to heater
-  analogWrite(HEATER_PIN, (int)output);
-
-  // Log data for plotting
-  Serial.print(millis());
-  Serial.print(",");
-  Serial.print(setpoint);
-  Serial.print(",");
-  Serial.print(temperature);
-  Serial.print(",");
-  Serial.print(output);
-  Serial.print(",");
-  Serial.println(setpoint - temperature);
-
-  delay(100);  // 10 Hz control loop
-}
-\end{lstlisting}
+\begin{algorithm}[htbp]
+\caption{PID Controller Main Loop}
+\label{alg:pid_main}
+\begin{algorithmic}[1]
+\Loop
+    \State $T \gets \Call{ReadTemperature}{}$ \Comment{Get current temperature}
+    \State $u \gets \Call{ComputePID}{T}$ \Comment{Calculate control output}
+    \State $\Call{SetHeaterPWM}{u}$ \Comment{Apply to actuator}
+    \State $\Call{LogData}{t, T_{\text{setpoint}}, T, u, e}$ \Comment{Record for analysis}
+    \State $\Call{Wait}{100\text{ ms}}$ \Comment{10 Hz control loop}
+\EndLoop
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Experimental Procedure}
 
-\textbf{Step 1: Characterize the Open-Loop System}
+\textbf{Step 1: Characterize the Open-Loop System.}
+Before implementing control, you must understand your plant. Apply a constant PWM signal (e.g., 128 corresponding to 50\% duty cycle) and record temperature versus time. From this response, identify the time constant $\tau$ as the time required to reach 63.2\% of the final value, and determine the steady-state gain $K$ as the temperature rise per unit PWM input.
 
-Before implementing control, understand your plant:
-\begin{enumerate}
-    \item Apply a constant PWM (e.g., 128 = 50\% duty cycle)
-    \item Record temperature versus time
-    \item Identify the time constant $\tau$ (time to reach 63.2\% of final value)
-    \item Identify the steady-state gain $K$ (temperature rise per unit PWM)
-\end{enumerate}
+\textbf{Step 2: P-Only Control.}
+Set the control mode to proportional-only operation. Start with a low proportional gain $\Kp$ (e.g., 10) and increase it gradually while observing the steady-state error (offset from setpoint). You will notice that higher $\Kp$ reduces the offset but never eliminates it entirely---this is the fundamental limitation of proportional control.
 
-\textbf{Step 2: P-Only Control}
+\textbf{Step 3: PI Control.}
+Enable integral action by switching to PI control mode while keeping the $\Kp$ value from Step 2. Start with a small integral gain $\Ki$ (e.g., 0.1) and increase it gradually. Observe how the steady-state error approaches zero as the integral term accumulates. Be aware that too much integral gain causes overshoot and oscillation.
 
-\begin{enumerate}
-    \item Set \texttt{controlMode = 0}
-    \item Start with low $\Kp$ (e.g., 10) and increase gradually
-    \item Observe the steady-state error (offset from setpoint)
-    \item Note: Higher $\Kp$ reduces but never eliminates the offset
-\end{enumerate}
-
-\textbf{Step 3: PI Control}
-
-\begin{enumerate}
-    \item Set \texttt{controlMode = 1}
-    \item Keep $\Kp$ from Step 2
-    \item Start with small $\Ki$ (e.g., 0.1) and increase
-    \item Observe the steady-state error approach zero
-    \item Note: Too much $\Ki$ causes overshoot and oscillation
-\end{enumerate}
-
-\textbf{Step 4: PID Control}
-
-\begin{enumerate}
-    \item Set \texttt{controlMode = 2}
-    \item Keep $\Kp$ and $\Ki$ from previous steps
-    \item Start with small $\Kd$ (e.g., 5) and increase
-    \item Observe reduced overshoot and faster settling
-    \item Note: Too much $\Kd$ may cause high-frequency oscillation (noise sensitivity)
-\end{enumerate}
+\textbf{Step 4: PID Control.}
+Enable full PID control while retaining the $\Kp$ and $\Ki$ values from previous steps. Start with a small derivative gain $\Kd$ (e.g., 5) and increase it gradually. Observe the reduced overshoot and faster settling time that derivative action provides. Note that excessive derivative gain may cause high-frequency oscillation due to noise sensitivity.
 
 \subsection{Expected Results}
 
@@ -894,7 +809,7 @@ Figure~\ref{fig:experimental_results} shows typical experimental results from th
 
 This section provides detailed worked examples that reinforce the theoretical concepts and prepare students for practical controller design.
 
-\begin{example}[Steady-State Error with P-Only Control]
+\begin{examplebox}[Steady-State Error with P-Only Control]
 \label{ex:p_only_error}
 A DC motor speed control system has the plant transfer function
 \begin{equation*}
@@ -927,9 +842,9 @@ Evaluating for each gain:
 \end{align*}
 
 \textbf{Observation:} Even with $\Kp = 20$, there is still nearly 1\% steady-state error. This can only be eliminated with integral action.
-\end{example}
+\end{examplebox}
 
-\begin{example}[Integral Action Eliminates Steady-State Error]
+\begin{examplebox}[Integral Action Eliminates Steady-State Error]
 \label{ex:pi_zero_error}
 For the same motor system as Example~\ref{ex:p_only_error}, show that a PI controller eliminates steady-state error.
 
@@ -961,7 +876,7 @@ e_{ss} = \lim_{s \to 0} \frac{s(s+2)}{s(s+2) + 10(\Kp s + \Ki)} = \frac{0 \cdot 
 \end{equation*}
 
 \textbf{Conclusion:} The integral action provides zero steady-state error for step inputs, regardless of the specific values of $\Kp$ and $\Ki$ (provided the closed-loop system is stable).
-\end{example}
+\end{examplebox}
 
 \begin{example}[Effect of Derivative Action on Damping]
 \label{ex:derivative_damping}
@@ -1039,11 +954,7 @@ L(s) = \frac{5\Kp(s + 1)}{s(s + 1)} = \frac{5\Kp}{s}
 
 \textbf{Step 2: Design for phase margin.}
 
-For $L(s) = 5\Kp/s$:
-\begin{itemize}
-    \item Phase: $\angle L(j\omega) = -90°$ for all $\omega$
-    \item Phase margin: $PM = 180° - 90° = 90°$ (satisfies requirement)
-\end{itemize}
+For $L(s) = 5\Kp/s$, the phase is $\angle L(j\omega) = -90°$ for all $\omega$, giving a phase margin of $PM = 180° - 90° = 90°$, which satisfies the requirement.
 
 At the gain crossover frequency $\omega_{gc}$:
 \begin{equation*}
@@ -1057,12 +968,7 @@ For reasonable bandwidth (say, $\omega_{gc} = 5$ rad/s), we choose $\Kp = 1$.
 \boxed{C(s) = 1 + \frac{1}{s} = \frac{s + 1}{s}}
 \end{equation*}
 
-Verification:
-\begin{itemize}
-    \item Steady-state error: Zero (Type 1 system)
-    \item Phase margin: 90° (exceeds 60° requirement)
-    \item Gain crossover: 5 rad/s
-\end{itemize}
+Verification confirms that the steady-state error is zero (Type 1 system), the phase margin of 90° exceeds the 60° requirement, and the gain crossover frequency is 5 rad/s.
 \end{example}
 
 \begin{example}[Closed-Loop Stability Analysis with PID]
@@ -1200,50 +1106,74 @@ This incremental form is preferred in practice because it automatically handles 
 \section{Chapter Summary}
 %=============================================================================
 
-This chapter has provided a comprehensive treatment of PID control, from its historical origins to modern implementation. The key concepts are:
+This chapter has provided a comprehensive treatment of PID control, from its historical origins to modern implementation.
 
-\begin{enumerate}
-    \item \textbf{Historical Development}: PID control evolved from practical ship steering problems (Sperry, 1911) through rigorous theoretical analysis (Minorsky, 1922) to widespread industrial adoption via pneumatic controllers (1930s--1940s).
+Regarding \textbf{historical development}, PID control evolved from practical ship steering problems (Sperry, 1911) through rigorous theoretical analysis (Minorsky, 1922) to widespread industrial adoption via pneumatic controllers (1930s--1940s).
 
-    \item \textbf{The PID Control Law}:
-    \begin{equation*}
-    u(t) = \Kp e(t) + \Ki \int_0^t e(\tau) d\tau + \Kd \frac{de(t)}{dt}
-    \end{equation*}
+The \textbf{PID control law} is expressed mathematically as:
+\begin{equation*}
+u(t) = \Kp e(t) + \Ki \int_0^t e(\tau) d\tau + \Kd \frac{de(t)}{dt}
+\end{equation*}
 
-    \item \textbf{Role of Each Term}:
-    \begin{itemize}
-        \item Proportional: Fast response, but cannot eliminate steady-state error
-        \item Integral: Eliminates steady-state error, but may cause overshoot
-        \item Derivative: Provides damping and anticipation, but amplifies noise
-    \end{itemize}
+Understanding the \textbf{role of each term} is essential. The proportional term provides fast response but cannot eliminate steady-state error. The integral term eliminates steady-state error but may cause overshoot. The derivative term provides damping and anticipation but amplifies noise.
 
-    \item \textbf{Practical Considerations}: Derivative filtering, anti-windup, and digital implementation are essential for real-world applications.
+From a \textbf{practical standpoint}, derivative filtering, anti-windup, and digital implementation are essential for real-world applications.
 
-    \item \textbf{PID Dominance}: The combination of simplicity, robustness, and versatility explains why PID controllers constitute over 90\% of all industrial control loops.
-\end{enumerate}
+Finally, \textbf{PID dominance} in industry is explained by the combination of simplicity, robustness, and versatility, which is why PID controllers constitute over 90\% of all industrial control loops.
 
 
+\newpage
 %=============================================================================
-\section{Problems}
+\section{Exercises}
 %=============================================================================
 
-\begin{enumerate}
-    \item A temperature control system has plant transfer function $G(s) = \dfrac{2}{5s + 1}$. Design a PI controller such that the closed-loop system has a damping ratio of 0.7 and zero steady-state error to step inputs.
+\begin{exercise}
+A temperature control system has plant transfer function $G(s) = \dfrac{2}{5s + 1}$. Design a PI controller such that the closed-loop system has a damping ratio of 0.7 and zero steady-state error to step inputs.
+\end{exercise}
 
-    \item For the system in Problem 1, add derivative action to achieve a settling time of less than 3 seconds while maintaining zero steady-state error.
+\begin{exercise}
+For the system in Exercise 1, add derivative action to achieve a settling time of less than 3 seconds while maintaining zero steady-state error.
+\end{exercise}
 
-    \item Prove that a Type 0 plant with P-only control always has non-zero steady-state error for step inputs, regardless of the proportional gain value.
+\begin{exercise}
+Prove that a Type 0 plant with P-only control always has non-zero steady-state error for step inputs, regardless of the proportional gain value.
+\end{exercise}
 
-    \item A quadrotor altitude controller uses the transfer function $G(s) = \dfrac{1}{s^2}$ (double integrator). Explain why P-only control is marginally stable and design a PD controller for stable operation with damping ratio $\zeta = 0.707$.
+\begin{exercise}
+A quadrotor altitude controller uses the transfer function $G(s) = \dfrac{1}{s^2}$ (double integrator). Explain why P-only control is marginally stable and design a PD controller for stable operation with damping ratio $\zeta = 0.707$.
+\end{exercise}
 
-    \item Using the Routh-Hurwitz criterion, determine the range of $\Ki$ for which the PI-controlled system with $G(s) = \dfrac{1}{s(s+1)(s+3)}$ and $\Kp = 2$ is stable.
+\begin{exercise}
+Using the Routh-Hurwitz criterion, determine the range of $\Ki$ for which the PI-controlled system with $G(s) = \dfrac{1}{s(s+1)(s+3)}$ and $\Kp = 2$ is stable.
+\end{exercise}
 
-    \item Implement a digital PID controller for an Arduino-based motor speed control system. The sampling rate is 100 Hz, and the desired response should have no more than 10\% overshoot with settling time under 0.5 seconds. Document your tuning procedure.
+\begin{exercise}
+Implement a digital PID controller for an Arduino-based motor speed control system. The sampling rate is 100 Hz, and the desired response should have no more than 10\% overshoot with settling time under 0.5 seconds. Document your tuning procedure.
+\end{exercise}
 
-    \item Research and explain three different anti-windup strategies for integral action. Compare their effectiveness for systems with significant actuator saturation.
+\begin{exercise}
+Research and explain three different anti-windup strategies for integral action. Compare their effectiveness for systems with significant actuator saturation.
+\end{exercise}
 
-    \item The Ziegler-Nichols tuning method (covered in Chapter 11) provides initial PID gains based on critical gain and period. For a system with critical gain $K_u = 10$ and critical period $T_u = 2$ s, calculate the Ziegler-Nichols PID parameters and discuss their expected performance characteristics.
-\end{enumerate}
+\begin{exercise}
+The Ziegler-Nichols tuning method (covered in Chapter 11) provides initial PID gains based on critical gain and period. For a system with critical gain $K_u = 10$ and critical period $T_u = 2$ s, calculate the Ziegler-Nichols PID parameters and discuss their expected performance characteristics.
+\end{exercise}
+
+\begin{exercise}
+Consider a liquid level control system with plant $G(s) = \dfrac{1}{s(s+1)}$. Design a PID controller to achieve zero steady-state error for step inputs while maintaining a phase margin of at least 45 degrees. Verify your design using Bode plot analysis.
+\end{exercise}
+
+\begin{exercise}
+Explain the physical interpretation of each PID term (proportional, integral, derivative) in the context of automotive cruise control. Why might derivative action be problematic in this application?
+\end{exercise}
+
+\begin{exercise}
+A servo motor position control system has the transfer function $G(s) = \dfrac{100}{s(s+10)}$. Compare the step response characteristics (rise time, overshoot, settling time) for P, PI, and PID controllers with appropriately tuned gains.
+\end{exercise}
+
+\begin{exercise}
+Derive the transfer function of an ideal PID controller in the frequency domain and explain how each term affects the Bode magnitude and phase plots.
+\end{exercise}
 
 
 %=============================================================================

@@ -29,17 +29,15 @@ Consider a simple double integrator system (representing a mass on a frictionles
 \dot{x} = \begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix} x + \begin{bmatrix} 0 \\ 1 \end{bmatrix} u
 \end{equation}
 
-We want to stabilize this system. Some options for closed-loop pole locations:
-\begin{itemize}
-    \item $s = -1 \pm j0$ (real poles at $-1$): Slow, gentle response
-    \item $s = -10 \pm j0$ (real poles at $-10$): Fast, aggressive response
-    \item $s = -5 \pm j5$ (complex poles): Faster with some overshoot
-    \item $s = -100 \pm j0$ (real poles at $-100$): Extremely fast---but at what cost?
-\end{itemize}
+We want to stabilize this system, and several options for closed-loop pole locations present themselves. Real poles at $s = -1$ yield a slow, gentle response, while real poles at $s = -10$ produce a fast, aggressive response. Complex poles at $s = -5 \pm j5$ offer faster dynamics with some overshoot. At the extreme, real poles at $s = -100$ would be extremely fast---but at what cost?
 
 Faster poles require larger control gains, which mean larger control signals. If our actuator is a DC motor with a 12V supply, demanding 500V is not merely impractical---it is impossible. Even if we could generate such voltages, the motor would saturate, the system would deviate from our linear model, and performance would degrade dramatically.
 
 Before 1960, control engineers faced this dilemma with only intuition and trial-and-error. An experienced designer might ``know'' that poles at $-5$ were ``about right'' for a particular application, but this knowledge was more art than science.
+
+\begin{historicalbox}[The Birth of Optimal Control Theory (1957--1960)]
+The foundations of optimal control emerged from remarkable parallel developments on both sides of the Iron Curtain. Rudolf Kalman (1960) introduced the Linear Quadratic Regulator problem, posing the revolutionary question: instead of arbitrarily choosing pole locations, can we define ``optimal'' mathematically and let the mathematics find the best controller? In the Soviet Union, Lev Pontryagin developed the Maximum Principle (1956--1962), using calculus of variations and costate variables. In the United States, Richard Bellman at RAND developed dynamic programming, exploiting the principle of optimality. For LQR, all three approaches converge to the same solution---the algebraic Riccati equation. The abstract mathematics found its most dramatic application in the Apollo program, where LQR principles guided the Lunar Module descent to the moon.
+\end{historicalbox}
 
 \subsection{Rudolf Kalman and the Birth of Optimal Control Theory}
 
@@ -98,14 +96,7 @@ On July 20, 1969, when Neil Armstrong guided Eagle to the Sea of Tranquility, he
 
 \subsection{Why LQR Matters Today}
 
-The elegance of LQR lies in its transformation of a vague design problem into a precise optimization problem:
-\begin{enumerate}
-    \item \textbf{Systematic design}: No more trial-and-error pole placement
-    \item \textbf{Guaranteed stability}: The optimal controller is guaranteed stable (for controllable systems)
-    \item \textbf{Tunable tradeoffs}: The weights $Q$ and $R$ provide intuitive tuning knobs
-    \item \textbf{Theoretical foundation}: Opens the door to more advanced methods (LQG, $H_\infty$, MPC)
-    \item \textbf{Computational tractability}: Requires solving only an algebraic matrix equation
-\end{enumerate}
+The elegance of LQR lies in its transformation of a vague design problem into a precise optimization problem. First, LQR provides \textbf{systematic design}, eliminating trial-and-error pole placement. Second, the optimal controller offers \textbf{guaranteed stability} for controllable systems. Third, the weights $Q$ and $R$ provide \textbf{tunable tradeoffs} that serve as intuitive tuning knobs. Fourth, LQR establishes a \textbf{theoretical foundation} that opens the door to more advanced methods such as LQG, $H_\infty$, and MPC. Finally, the method maintains \textbf{computational tractability}, requiring only the solution of an algebraic matrix equation.
 
 As we shall see, LQR is not merely a historical milestone but remains a cornerstone of modern control practice.
 
@@ -134,21 +125,11 @@ Multirotor aircraft (quadcopters, hexacopters) require sophisticated attitude co
 
 A quadrotor has 12 states (position, velocity, orientation, angular velocity) and 4 control inputs (motor thrusts). LQR provides a systematic way to design the 4$\times$12 gain matrix $K$ that would be nearly impossible to tune by hand.
 
-The cost function balances:
-\begin{itemize}
-    \item Attitude errors (roll, pitch, yaw deviations)
-    \item Position errors (hovering accuracy)
-    \item Motor commands (energy consumption, motor wear)
-\end{itemize}
+The cost function balances attitude errors (roll, pitch, and yaw deviations), position errors (hovering accuracy), and motor commands (which affect energy consumption and motor wear).
 
 \subsection{Economic Policy Optimization}
 
-LQR principles extend beyond engineering to economics. Central banks and governments face optimization problems remarkably similar to control systems:
-\begin{itemize}
-    \item \textbf{States}: Inflation rate, unemployment, GDP growth
-    \item \textbf{Controls}: Interest rates, government spending
-    \item \textbf{Objective}: Minimize deviation from target inflation and unemployment while avoiding drastic policy swings
-\end{itemize}
+LQR principles extend beyond engineering to economics. Central banks and governments face optimization problems remarkably similar to control systems. The \textbf{states} include the inflation rate, unemployment, and GDP growth, while the \textbf{controls} are interest rates and government spending. The \textbf{objective} is to minimize deviation from target inflation and unemployment while avoiding drastic policy swings.
 
 The economic cost function might be:
 \begin{equation}
@@ -160,22 +141,11 @@ where $\pi$ is inflation, $u$ is unemployment, $i$ is the interest rate, and sta
 
 Maintaining balance for a bipedal robot is a challenging control problem. The system is inherently unstable (like an inverted pendulum) and has many degrees of freedom. LQR provides a principled approach to synthesizing the complex coordination required.
 
-Boston Dynamics' Atlas robot and Honda's ASIMO both use optimal control principles derived from LQR. The cost function penalizes:
-\begin{itemize}
-    \item Center-of-mass deviation from the support polygon
-    \item Angular momentum (to prevent tipping)
-    \item Joint torques (to limit motor stress)
-    \item Joint velocities (for smooth motion)
-\end{itemize}
+Boston Dynamics' Atlas robot and Honda's ASIMO both use optimal control principles derived from LQR. The cost function penalizes center-of-mass deviation from the support polygon, angular momentum (to prevent tipping), joint torques (to limit motor stress), and joint velocities (for smooth motion).
 
 \subsection{Power Grid Frequency Regulation}
 
-Modern power grids must maintain frequency at exactly 50 Hz (or 60 Hz in North America) despite fluctuating demand. Generators across the grid must coordinate their output to maintain this balance. LQR-based automatic generation control (AGC) optimizes the tradeoff between:
-\begin{itemize}
-    \item Frequency deviation (state error)
-    \item Rate of change of power output (control effort)
-    \item Inter-area power flow (coupling between regions)
-\end{itemize}
+Modern power grids must maintain frequency at exactly 50 Hz (or 60 Hz in North America) despite fluctuating demand. Generators across the grid must coordinate their output to maintain this balance. LQR-based automatic generation control (AGC) optimizes the tradeoff between frequency deviation (state error), rate of change of power output (control effort), and inter-area power flow (coupling between regions).
 
 
 %% ============================================================================
@@ -193,25 +163,14 @@ Consider a linear time-invariant (LTI) system in state-space form:
 \dot{x}(t) = Ax(t) + Bu(t), \quad x(0) = x_0
 \label{eq:lqr_dynamics}
 \end{equation}
-where:
-\begin{itemize}
-    \item $x(t) \in \mathbb{R}^n$ is the state vector
-    \item $u(t) \in \mathbb{R}^m$ is the control input vector
-    \item $A \in \mathbb{R}^{n \times n}$ is the system matrix
-    \item $B \in \mathbb{R}^{n \times m}$ is the input matrix
-    \item $x_0$ is the initial state
-\end{itemize}
+where $x(t) \in \mathbb{R}^n$ is the state vector, $u(t) \in \mathbb{R}^m$ is the control input vector, $A \in \mathbb{R}^{n \times n}$ is the system matrix, $B \in \mathbb{R}^{n \times m}$ is the input matrix, and $x_0$ is the initial state.
 
 The \textbf{infinite-horizon LQR problem} seeks to find the control input $u(t)$ that minimizes the quadratic cost function:
 \begin{equation}
 \boxed{J = \int_0^\infty \left( x^T(t) Q x(t) + u^T(t) R u(t) \right) dt}
 \label{eq:lqr_cost}
 \end{equation}
-subject to the dynamics~\eqref{eq:lqr_dynamics}, where:
-\begin{itemize}
-    \item $Q \in \mathbb{R}^{n \times n}$ is a symmetric positive semi-definite matrix ($Q \geq 0$)
-    \item $R \in \mathbb{R}^{m \times m}$ is a symmetric positive definite matrix ($R > 0$)
-\end{itemize}
+subject to the dynamics~\eqref{eq:lqr_dynamics}, where $Q \in \mathbb{R}^{n \times n}$ is a symmetric positive semi-definite matrix ($Q \geq 0$) and $R \in \mathbb{R}^{m \times m}$ is a symmetric positive definite matrix ($R > 0$).
 
 \subsection{Interpretation of the Cost Function}
 
@@ -253,11 +212,7 @@ At each instant, the ``instantaneous cost'' is $q \cdot x^2 + r \cdot u^2$. If w
 
 In the multi-variable case, $x^T Q x$ and $u^T R u$ are quadratic forms. The matrix $Q$ defines the shape of the state penalty ellipsoid, while $R$ defines the control penalty ellipsoid.
 
-\textbf{Why $Q \geq 0$ but $R > 0$?}
-\begin{itemize}
-    \item $Q \geq 0$ (positive semi-definite): We may not care about all states. For example, if $Q = \text{diag}(1, 0)$, we penalize only the first state.
-    \item $R > 0$ (positive definite): We must penalize all control inputs. If $R$ were singular, the optimal control could become unbounded, leading to an ill-posed problem.
-\end{itemize}
+\textbf{Why $Q \geq 0$ but $R > 0$?} The matrix $Q$ is required only to be positive semi-definite because we may not care about all states. For example, if $Q = \text{diag}(1, 0)$, we penalize only the first state. In contrast, $R$ must be positive definite because we must penalize all control inputs. If $R$ were singular, the optimal control could become unbounded, leading to an ill-posed problem.
 
 \subsection{Solution via Calculus of Variations}
 
@@ -399,11 +354,7 @@ While LQR removes the arbitrary choice of pole locations, it introduces a new ch
 
 \subsubsection{Physical Interpretation}
 
-\begin{itemize}
-    \item \textbf{Large $Q$}: Heavily penalizes state deviation. The controller will be aggressive, driving states to zero quickly, even if it requires large control efforts.
-    \item \textbf{Large $R$}: Heavily penalizes control effort. The controller will be gentle, using small inputs, even if states take longer to converge.
-    \item \textbf{Relative scaling}: Only the ratio $Q/R$ matters. Scaling both by the same constant does not change the optimal controller.
-\end{itemize}
+A \textbf{large $Q$} heavily penalizes state deviation, causing the controller to be aggressive and drive states to zero quickly, even if it requires large control efforts. Conversely, a \textbf{large $R$} heavily penalizes control effort, making the controller gentle and using small inputs, even if states take longer to converge. Importantly, only the \textbf{relative scaling}---the ratio $Q/R$---matters. Scaling both by the same constant does not change the optimal controller.
 
 \subsubsection{Bryson's Rule}
 
@@ -413,12 +364,7 @@ Arthur Bryson proposed a practical rule for selecting diagonal $Q$ and $R$ matri
 \label{eq:bryson}
 \end{equation}
 
-\textbf{Example}: For an inverted pendulum:
-\begin{itemize}
-    \item Maximum acceptable angle: $15°$ ($\approx 0.26$ rad)
-    \item Maximum acceptable angular velocity: $50°$/s ($\approx 0.87$ rad/s)
-    \item Maximum acceptable voltage: 12 V
-\end{itemize}
+\textbf{Example}: For an inverted pendulum, suppose the maximum acceptable angle is $15°$ ($\approx 0.26$ rad), the maximum acceptable angular velocity is $50°$/s ($\approx 0.87$ rad/s), and the maximum acceptable voltage is 12 V.
 
 Using Bryson's rule:
 \begin{equation}
@@ -538,14 +484,7 @@ In this experiment, we implement LQR control on the same inverted pendulum hardw
 
 \subsection{Hardware Setup}
 
-The experimental apparatus consists of:
-\begin{itemize}
-    \item 3D-printed pendulum arm (30 cm length, 50 g mass)
-    \item DC motor with encoder (1000 counts/revolution)
-    \item Motor driver (H-bridge, 12V supply)
-    \item Arduino Mega microcontroller
-    \item MPU-6050 IMU for angle measurement (optional, for comparison)
-\end{itemize}
+The experimental apparatus consists of a 3D-printed pendulum arm (30 cm length, 50 g mass), a DC motor with encoder (1000 counts/revolution), a motor driver (H-bridge, 12V supply), an Arduino Mega microcontroller, and an MPU-6050 IMU for angle measurement (optional, for comparison).
 
 The setup is identical to Chapter 15, allowing direct performance comparison.
 
@@ -555,67 +494,51 @@ The linearized state-space model about the upright equilibrium is:
 \begin{equation}
 \dot{x} = \begin{bmatrix} 0 & 1 \\ \omega_0^2 & -b/J \end{bmatrix} x + \begin{bmatrix} 0 \\ K_m/J \end{bmatrix} u
 \end{equation}
-where:
-\begin{itemize}
-    \item $x = [\theta, \dot{\theta}]^T$ (angle and angular velocity)
-    \item $\omega_0 = \sqrt{g/l} \approx 5.7$ rad/s (for $l = 0.3$ m)
-    \item $b \approx 0.1$ N$\cdot$m$\cdot$s/rad (damping coefficient)
-    \item $J \approx 0.015$ kg$\cdot$m$^2$ (moment of inertia)
-    \item $K_m \approx 0.05$ N$\cdot$m/V (motor torque constant)
-\end{itemize}
+where $x = [\theta, \dot{\theta}]^T$ represents the angle and angular velocity, $\omega_0 = \sqrt{g/l} \approx 5.7$ rad/s is the natural frequency (for $l = 0.3$ m), $b \approx 0.1$ N$\cdot$m$\cdot$s/rad is the damping coefficient, $J \approx 0.015$ kg$\cdot$m$^2$ is the moment of inertia, and $K_m \approx 0.05$ N$\cdot$m/V is the motor torque constant.
 
 Numerically:
 \begin{equation}
 A = \begin{bmatrix} 0 & 1 \\ 32.7 & -6.67 \end{bmatrix}, \quad B = \begin{bmatrix} 0 \\ 3.33 \end{bmatrix}
 \end{equation}
 
-\subsection{LQR Design in Python}
+\subsection{LQR Design Procedure}
 
-\begin{lstlisting}[language=Python, caption={LQR design using Python control library}]
-import numpy as np
-from scipy import linalg
-import control
-
-# System matrices
-A = np.array([[0, 1], [32.7, -6.67]])
-B = np.array([[0], [3.33]])
-
-# Case 1: Balanced control (Bryson's rule)
-max_angle = 0.26  # 15 degrees in radians
-max_velocity = 0.87  # 50 deg/s in rad/s
-max_voltage = 12.0
-
-Q1 = np.diag([1/max_angle**2, 1/max_velocity**2])
-R1 = np.array([[1/max_voltage**2]])
-
-# Solve ARE and compute gain
-P1 = linalg.solve_continuous_are(A, B, Q1, R1)
-K1 = np.linalg.inv(R1) @ B.T @ P1
-
-# Case 2: Aggressive control (high Q)
-Q2 = 10 * Q1
-R2 = R1
-P2 = linalg.solve_continuous_are(A, B, Q2, R2)
-K2 = np.linalg.inv(R2) @ B.T @ P2
-
-# Case 3: Gentle control (high R)
-Q3 = Q1
-R3 = 10 * R1
-P3 = linalg.solve_continuous_are(A, B, Q3, R3)
-K3 = np.linalg.inv(R3) @ B.T @ P3
-
-print("Balanced: K =", K1.flatten())
-print("Aggressive: K =", K2.flatten())
-print("Gentle: K =", K3.flatten())
-
-# Closed-loop poles
-for i, (K, label) in enumerate([(K1, "Balanced"),
-                                  (K2, "Aggressive"),
-                                  (K3, "Gentle")]):
-    Acl = A - B @ K
-    poles = np.linalg.eigvals(Acl)
-    print(f"{label} poles: {poles}")
-\end{lstlisting}
+\begin{algorithm}[H]
+\caption{LQR Controller Design}
+\begin{algorithmic}[1]
+\State \textbf{Input:} System matrices $A$, $B$; weighting matrices $Q$, $R$
+\State \textbf{Output:} Optimal gain matrix $K$, closed-loop poles
+\State
+\State \Comment{Define system matrices}
+\State $A \gets \begin{bmatrix} 0 & 1 \\ 32.7 & -6.67 \end{bmatrix}$, \quad $B \gets \begin{bmatrix} 0 \\ 3.33 \end{bmatrix}$
+\State
+\State \Comment{Case 1: Balanced control using Bryson's rule}
+\State $\text{maxAngle} \gets 0.26$ \Comment{15 degrees in radians}
+\State $\text{maxVelocity} \gets 0.87$ \Comment{50 deg/s in rad/s}
+\State $\text{maxVoltage} \gets 12.0$
+\State $Q_1 \gets \text{diag}(1/\text{maxAngle}^2, 1/\text{maxVelocity}^2)$
+\State $R_1 \gets 1/\text{maxVoltage}^2$
+\State $P_1 \gets \text{SolveContinuousARE}(A, B, Q_1, R_1)$
+\State $K_1 \gets R_1^{-1} B^T P_1$
+\State
+\State \Comment{Case 2: Aggressive control (high Q)}
+\State $Q_2 \gets 10 \cdot Q_1$, \quad $R_2 \gets R_1$
+\State $P_2 \gets \text{SolveContinuousARE}(A, B, Q_2, R_2)$
+\State $K_2 \gets R_2^{-1} B^T P_2$
+\State
+\State \Comment{Case 3: Gentle control (high R)}
+\State $Q_3 \gets Q_1$, \quad $R_3 \gets 10 \cdot R_1$
+\State $P_3 \gets \text{SolveContinuousARE}(A, B, Q_3, R_3)$
+\State $K_3 \gets R_3^{-1} B^T P_3$
+\State
+\State \Comment{Compute closed-loop poles for each case}
+\For{each $(K_i, \text{label})$ in $\{(K_1, \text{Balanced}), (K_2, \text{Aggressive}), (K_3, \text{Gentle})\}$}
+    \State $A_{cl} \gets A - B K_i$
+    \State $\text{poles} \gets \text{Eigenvalues}(A_{cl})$
+    \State \textbf{output} label, $K_i$, poles
+\EndFor
+\end{algorithmic}
+\end{algorithm}
 
 \textbf{Output:}
 \begin{verbatim}
@@ -627,102 +550,62 @@ Aggressive poles: [-6.89+8.21j, -6.89-8.21j]
 Gentle poles: [-2.31+4.02j, -2.31-4.02j]
 \end{verbatim}
 
-\subsection{Arduino Implementation}
+\subsection{Microcontroller Implementation}
 
-\begin{lstlisting}[language=C++, caption={Arduino code for LQR inverted pendulum}]
-// LQR Inverted Pendulum Control
-// Chapter 17 Experiment
-
-#include <Encoder.h>
-
-// Hardware pins
-const int MOTOR_PWM = 9;
-const int MOTOR_DIR1 = 7;
-const int MOTOR_DIR2 = 8;
-Encoder pendulumEncoder(2, 3);
-
-// System parameters
-const float COUNTS_PER_RAD = 1000.0 / (2.0 * PI);
-const float DT = 0.005;  // 5 ms sample time
-
-// LQR gains (select one set)
-// Balanced:
-float K1 = 38.46;
-float K2 = 7.52;
-
-// Aggressive (uncomment to use):
-// float K1 = 67.21;
-// float K2 = 12.89;
-
-// Gentle (uncomment to use):
-// float K1 = 21.54;
-// float K2 = 4.23;
-
-// State variables
-float theta = 0;
-float theta_prev = 0;
-float theta_dot = 0;
-float alpha = 0.8;  // Low-pass filter coefficient
-
-void setup() {
-    Serial.begin(115200);
-    pinMode(MOTOR_PWM, OUTPUT);
-    pinMode(MOTOR_DIR1, OUTPUT);
-    pinMode(MOTOR_DIR2, OUTPUT);
-
-    // Wait for pendulum to be placed upright
-    delay(3000);
-    pendulumEncoder.write(0);
-}
-
-void loop() {
-    static unsigned long lastTime = 0;
-    unsigned long now = micros();
-
-    if (now - lastTime >= (unsigned long)(DT * 1e6)) {
-        lastTime = now;
-
-        // Read angle
-        long counts = pendulumEncoder.read();
-        theta = counts / COUNTS_PER_RAD;
-
-        // Estimate velocity with low-pass filter
-        float theta_dot_raw = (theta - theta_prev) / DT;
-        theta_dot = alpha * theta_dot + (1 - alpha) * theta_dot_raw;
-        theta_prev = theta;
-
-        // LQR control law: u = -K*x
-        float u = -(K1 * theta + K2 * theta_dot);
-
-        // Saturate to motor limits
-        u = constrain(u, -12.0, 12.0);
-
-        // Apply to motor
-        setMotor(u);
-
-        // Log data
-        Serial.print(theta, 4);
-        Serial.print(",");
-        Serial.print(theta_dot, 4);
-        Serial.print(",");
-        Serial.println(u, 4);
-    }
-}
-
-void setMotor(float voltage) {
-    int pwmVal = abs(voltage) * 255 / 12.0;
-    pwmVal = constrain(pwmVal, 0, 255);
-
-    if (voltage > 0) {
-        digitalWrite(MOTOR_DIR1, HIGH);
-        digitalWrite(MOTOR_DIR2, LOW);
-    } else {
-        digitalWrite(MOTOR_DIR1, LOW);
-        digitalWrite(MOTOR_DIR2, HIGH);
-    }
-    analogWrite(MOTOR_PWM, pwmVal);
-}
-\end{lstlisting}
+\begin{algorithm}[H]
+\caption{LQR Inverted Pendulum Real-Time Control}
+\begin{algorithmic}[1]
+\State \textbf{Constants:}
+\State \quad $\text{COUNTS\_PER\_RAD} \gets 1000 / (2\pi)$
+\State \quad $\Delta t \gets 0.005$ \Comment{5 ms sample time}
+\State \quad $K_1 \gets 38.46$, $K_2 \gets 7.52$ \Comment{Balanced LQR gains}
+\State \quad $\alpha \gets 0.8$ \Comment{Low-pass filter coefficient}
+\State
+\State \textbf{Variables:}
+\State \quad $\theta \gets 0$, $\theta_{\text{prev}} \gets 0$, $\dot{\theta} \gets 0$
+\State
+\Procedure{Initialize}{}
+    \State Configure motor PWM and direction pins as outputs
+    \State Initialize encoder on interrupt pins
+    \State Wait for pendulum to be placed upright
+    \State Reset encoder count to zero
+\EndProcedure
+\State
+\Procedure{ControlLoop}{}
+    \While{true}
+        \If{elapsed time $\geq \Delta t$}
+            \State \Comment{Read angle from encoder}
+            \State $\text{counts} \gets \text{ReadEncoder}()$
+            \State $\theta \gets \text{counts} / \text{COUNTS\_PER\_RAD}$
+            \State
+            \State \Comment{Estimate velocity with low-pass filter}
+            \State $\dot{\theta}_{\text{raw}} \gets (\theta - \theta_{\text{prev}}) / \Delta t$
+            \State $\dot{\theta} \gets \alpha \cdot \dot{\theta} + (1 - \alpha) \cdot \dot{\theta}_{\text{raw}}$
+            \State $\theta_{\text{prev}} \gets \theta$
+            \State
+            \State \Comment{Apply LQR control law}
+            \State $u \gets -(K_1 \cdot \theta + K_2 \cdot \dot{\theta})$
+            \State
+            \State \Comment{Saturate to motor voltage limits}
+            \State $u \gets \text{Clamp}(u, -12.0, 12.0)$
+            \State
+            \State \Comment{Apply voltage to motor}
+            \State \Call{SetMotorVoltage}{$u$}
+        \EndIf
+    \EndWhile
+\EndProcedure
+\State
+\Procedure{SetMotorVoltage}{$V$}
+    \State $\text{pwmValue} \gets |V| \times 255 / 12.0$
+    \If{$V > 0$}
+        \State Set motor direction forward
+    \Else
+        \State Set motor direction reverse
+    \EndIf
+    \State Apply PWM signal with value pwmValue
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Experimental Results}
 
@@ -800,16 +683,7 @@ Figure~\ref{fig:lqr_comparison} shows the experimental results comparing the thr
 
 \subsection{Discussion}
 
-Key observations from the experiment:
-\begin{enumerate}
-    \item \textbf{Aggressive control} ($Q/R = 10$): Fastest settling time ($\approx 0.5$ s) but highest peak voltage ($\approx 10$ V), approaching saturation.
-
-    \item \textbf{Balanced control} (Bryson's rule): Good compromise with settling time $\approx 1$ s and peak voltage $\approx 6$ V.
-
-    \item \textbf{Gentle control} ($Q/R = 0.1$): Slowest response ($\approx 2$ s settling) but peak voltage only $\approx 3$ V, leaving significant headroom.
-
-    \item \textbf{Comparison to pole placement}: The balanced LQR and the manually-tuned pole placement from Chapter 15 performed similarly, but LQR required no trial-and-error---the weights directly encoded the performance/effort tradeoff.
-\end{enumerate}
+The experiment yielded several key observations. \textbf{Aggressive control} ($Q/R = 10$) produced the fastest settling time (approximately 0.5 s) but required the highest peak voltage (approximately 10 V), approaching saturation. \textbf{Balanced control} using Bryson's rule achieved a good compromise with settling time of approximately 1 s and peak voltage of approximately 6 V. \textbf{Gentle control} ($Q/R = 0.1$) exhibited the slowest response (approximately 2 s settling) but peak voltage of only approximately 3 V, leaving significant headroom for disturbance rejection. In \textbf{comparison to pole placement}, the balanced LQR and the manually-tuned pole placement from Chapter 15 performed similarly, but LQR required no trial-and-error---the weights directly encoded the performance/effort tradeoff.
 
 \textbf{Practical insight}: For systems where actuator limits are a concern, gentle LQR provides a natural way to reduce control effort while maintaining stability. This is difficult to achieve with pole placement alone.
 
@@ -820,8 +694,7 @@ Key observations from the experiment:
 \section{Example Problems}
 \label{sec:lqr_examples}
 
-\subsection{Example 17.1: LQR for a Double Integrator}
-
+\begin{examplebox}[Example 17.1: LQR for a Double Integrator]
 \textbf{Problem}: Consider the double integrator (mass on frictionless surface):
 \begin{equation}
 \ddot{y} = u \implies \dot{x} = \begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix} x + \begin{bmatrix} 0 \\ 1 \end{bmatrix} u
@@ -874,8 +747,9 @@ The closed-loop poles are:
 \end{equation}
 
 \textbf{Verification}: Both poles have negative real parts, confirming stability. $\blacksquare$
+\end{examplebox}
 
-\subsection{Example 17.2: Effect of $Q$ and $R$ on Poles}
+\begin{examplebox}[Example 17.2: Effect of $Q$ and $R$ on Poles]
 
 \textbf{Problem}: For the double integrator, investigate how the closed-loop poles change as the ratio $q/r$ varies, where $Q = qI$ and $R = r$.
 
@@ -901,14 +775,10 @@ $q/r$ & Closed-loop Poles & Natural Frequency $\omega_n$ \\
 \end{tabular}
 \end{table}
 
-\textbf{Observations}:
-\begin{itemize}
-    \item Poles lie on a $45°$ line from the origin (constant damping ratio $\zeta = 0.866$)
-    \item As $q/r$ increases, poles move away from origin (faster response)
-    \item The natural frequency scales as $\omega_n \propto (q/r)^{1/4}$
-\end{itemize}
+\textbf{Observations}: The poles lie on a $45°$ line from the origin, corresponding to a constant damping ratio $\zeta = 0.866$. As $q/r$ increases, the poles move away from the origin, yielding faster response. Furthermore, the natural frequency scales as $\omega_n \propto (q/r)^{1/4}$.
 
 This $45°$ line is a characteristic feature of LQR for the double integrator---it is the optimal locus. $\blacksquare$
+\end{examplebox}
 
 \subsection{Example 17.3: Applying Bryson's Rule}
 
@@ -1032,23 +902,19 @@ s = \frac{3.146 \pm \sqrt{9.90 - 13.53}}{2} = 1.573 \pm j0.953
 
 Wait---these have \textit{positive} real parts! Let us recheck the calculation.
 
-\textbf{Recheck}: Using Python:
-\begin{lstlisting}[language=Python]
-import numpy as np
-from scipy.linalg import solve_continuous_are
+\textbf{Recheck}: Using numerical computation:
 
-A = np.array([[1, 2], [0, 3]])
-B = np.array([[0], [1]])
-Q = np.eye(2)
-R = np.array([[1]])
-
-P = solve_continuous_are(A, B, Q, R)
-K = np.linalg.inv(R) @ B.T @ P
-Acl = A - B @ K
-print("P =", P)
-print("K =", K)
-print("Closed-loop eigenvalues:", np.linalg.eigvals(Acl))
-\end{lstlisting}
+\begin{algorithm}[H]
+\caption{Verify ARE Solution for Unstable System}
+\begin{algorithmic}[1]
+\State \textbf{Input:} $A = \begin{bmatrix} 1 & 2 \\ 0 & 3 \end{bmatrix}$, $B = \begin{bmatrix} 0 \\ 1 \end{bmatrix}$, $Q = I_2$, $R = 1$
+\State $P \gets \text{SolveContinuousARE}(A, B, Q, R)$
+\State $K \gets R^{-1} B^T P$
+\State $A_{cl} \gets A - B K$
+\State $\text{eigenvalues} \gets \text{Eigenvalues}(A_{cl})$
+\State \textbf{output} $P$, $K$, eigenvalues
+\end{algorithmic}
+\end{algorithm}
 
 \textbf{Output}:
 \begin{verbatim}
@@ -1102,7 +968,7 @@ Each axis has identical control characteristics, which is appropriate for symmet
 
 \subsection{Key Equations}
 
-\begin{tcolorbox}[colback=blue!5!white, colframe=blue!75!black, title=LQR Key Equations]
+\begin{tcolorbox}[colback=blue!5!white, colframe=blue!75!black, title=LQR Key Equations, sharp corners]
 
 \textbf{Cost Function:}
 \begin{equation}
@@ -1143,38 +1009,56 @@ Q_{ii} = \frac{1}{(\text{max } x_i)^2}, \quad R_{jj} = \frac{1}{(\text{max } u_j
 
 \subsection{Key Concepts}
 
-\begin{enumerate}
-    \item \textbf{LQR transforms pole placement} from an art (where to place poles?) into a science (define what ``optimal'' means, let math find the best).
+\textbf{LQR transforms pole placement} from an art (where to place poles?) into a science (define what ``optimal'' means and let mathematics find the best solution). \textbf{The cost function} balances state performance ($x^T Q x$) against control effort ($u^T R u$), and only the ratio $Q/R$ matters. \textbf{The ARE} is a nonlinear matrix equation whose solution $P$ determines the optimal gain $K = R^{-1}B^T P$. \textbf{Stability is guaranteed} for controllable systems---the LQR solution automatically produces a stable closed-loop system. \textbf{Bryson's rule} provides a physically motivated starting point for tuning $Q$ and $R$. Finally, the \textbf{historical significance} of LQR cannot be overstated: Kalman (1960), Pontryagin, and Bellman laid the foundations, and Apollo lunar descent guidance employed LQR principles.
 
-    \item \textbf{The cost function} balances state performance ($x^T Q x$) against control effort ($u^T R u$). Only the ratio $Q/R$ matters.
-
-    \item \textbf{The ARE} is a nonlinear matrix equation whose solution $P$ determines the optimal gain $K = R^{-1}B^T P$.
-
-    \item \textbf{Stability is guaranteed} for controllable systems---the LQR solution automatically produces a stable closed-loop system.
-
-    \item \textbf{Bryson's rule} provides a physically motivated starting point for tuning $Q$ and $R$.
-
-    \item \textbf{Historical significance}: Kalman (1960), Pontryagin, and Bellman laid the foundations. Apollo lunar descent used LQR principles.
-\end{enumerate}
-
+\newpage
 \section{Exercises}
 \label{sec:lqr_exercises}
 
-\begin{enumerate}
-    \item \textbf{(Manual ARE solution)} Solve the ARE by hand for the first-order system $\dot{x} = ax + bu$ with $Q = q$ and $R = r$, where $a > 0$ (unstable). Show that $P = \frac{a + \sqrt{a^2 + qb^2/r}}{b^2/r}$ and verify the closed-loop pole is negative.
+\begin{exercise}
+\textbf{(Manual ARE solution)} Solve the ARE by hand for the first-order system $\dot{x} = ax + bu$ with $Q = q$ and $R = r$, where $a > 0$ (unstable). Show that $P = \frac{a + \sqrt{a^2 + qb^2/r}}{b^2/r}$ and verify the closed-loop pole is negative.
+\end{exercise}
 
-    \item \textbf{(Numerical investigation)} For the inverted pendulum model in Section~\ref{sec:lqr_experiment}, vary $Q$ from $0.1I$ to $100I$ while keeping $R = 1$. Plot the closed-loop poles and the peak control effort (for initial condition $x_0 = [0.1, 0]^T$) as functions of $Q$.
+\begin{exercise}
+\textbf{(Numerical investigation)} For the inverted pendulum model in Section~\ref{sec:lqr_experiment}, vary $Q$ from $0.1I$ to $100I$ while keeping $R = 1$. Plot the closed-loop poles and the peak control effort (for initial condition $x_0 = [0.1, 0]^T$) as functions of $Q$.
+\end{exercise}
 
-    \item \textbf{(Bryson's rule application)} A robot arm joint has maximum acceptable position error $0.01$ rad, maximum velocity error $0.1$ rad/s, and maximum torque $5$ N$\cdot$m. Using Bryson's rule, determine $Q$ and $R$. Compare with LQR using $Q = I$, $R = 1$---which design requires less control effort?
+\begin{exercise}
+\textbf{(Bryson's rule application)} A robot arm joint has maximum acceptable position error $0.01$ rad, maximum velocity error $0.1$ rad/s, and maximum torque $5$ N$\cdot$m. Using Bryson's rule, determine $Q$ and $R$. Compare with LQR using $Q = I$, $R = 1$---which design requires less control effort?
+\end{exercise}
 
-    \item \textbf{(Pareto frontier)} For a double integrator with $Q = qI$ and $R = 1$, compute $J_x$ and $J_u$ (the state and control components of the cost) for $q \in \{0.1, 1, 10, 100\}$ with initial condition $x_0 = [1, 0]^T$. Plot the Pareto frontier.
+\begin{exercise}
+\textbf{(Pareto frontier)} For a double integrator with $Q = qI$ and $R = 1$, compute $J_x$ and $J_u$ (the state and control components of the cost) for $q \in \{0.1, 1, 10, 100\}$ with initial condition $x_0 = [1, 0]^T$. Plot the Pareto frontier.
+\end{exercise}
 
-    \item \textbf{(Cross-weighting)} The standard LQR cost can be extended to include a cross-term: $J = \int_0^\infty (x^T Q x + 2x^T N u + u^T R u) dt$. Derive the modified ARE and optimal gain for this case.
+\begin{exercise}
+\textbf{(Cross-weighting)} The standard LQR cost can be extended to include a cross-term: $J = \int_0^\infty (x^T Q x + 2x^T N u + u^T R u) dt$. Derive the modified ARE and optimal gain for this case.
+\end{exercise}
 
-    \item \textbf{(Discrete-time LQR)} For the discrete-time system $x_{k+1} = Fx_k + Gu_k$ with cost $J = \sum_{k=0}^\infty (x_k^T Q x_k + u_k^T R u_k)$, derive the discrete-time ARE and optimal gain. Implement in Python and compare with continuous-time LQR for a sampled system.
+\begin{exercise}
+\textbf{(Discrete-time LQR)} For the discrete-time system $x_{k+1} = Fx_k + Gu_k$ with cost $J = \sum_{k=0}^\infty (x_k^T Q x_k + u_k^T R u_k)$, derive the discrete-time ARE and optimal gain. Implement numerically and compare with continuous-time LQR for a sampled system.
+\end{exercise}
 
-    \item \textbf{(Laboratory)} Implement the LQR controller from Section~\ref{sec:lqr_experiment} on an actual inverted pendulum or simulation. Experimentally verify the Pareto tradeoff by measuring settling time and peak voltage for at least three different $Q/R$ ratios.
-\end{enumerate}
+\begin{exercise}
+\textbf{(Laboratory)} Implement the LQR controller from Section~\ref{sec:lqr_experiment} on an actual inverted pendulum or simulation. Experimentally verify the Pareto tradeoff by measuring settling time and peak voltage for at least three different $Q/R$ ratios.
+\end{exercise}
+
+\begin{exercise}
+\textbf{(Multi-input LQR)} Consider a planar spacecraft with two thrusters:
+\begin{equation}
+A = \begin{bmatrix} 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & 0 & 0 \\ 0 & 0 & 0 & 0 \end{bmatrix}, \quad
+B = \begin{bmatrix} 0 & 0 \\ 0 & 0 \\ 1 & 0 \\ 0 & 1 \end{bmatrix}
+\end{equation}
+Design an LQR controller with $Q = \text{diag}(10, 10, 1, 1)$ and $R = I$. Compute the optimal gain matrix and verify stability.
+\end{exercise}
+
+\begin{exercise}
+\textbf{(Tracking problem)} Extend the LQR formulation to track a constant reference $r$ rather than regulate to zero. Derive the modified control law $u = -Kx + K_r r$ where $K_r$ is a feedforward gain.
+\end{exercise}
+
+\begin{exercise}
+\textbf{(Robustness analysis)} For the double integrator with LQR design ($Q = I$, $R = 1$), compute the gain margin and phase margin of the closed-loop system. Compare with the classical ``guaranteed margins'' of LQR: gain margin $\geq$ 6 dB and phase margin $\geq$ 60°.
+\end{exercise}
 
 
 %% ============================================================================
@@ -1182,18 +1066,5 @@ Q_{ii} = \frac{1}{(\text{max } x_i)^2}, \quad R_{jj} = \frac{1}{(\text{max } u_j
 %% ============================================================================
 \section*{Further Reading}
 
-\begin{itemize}
-    \item R.~E.~Kalman, ``Contributions to the Theory of Optimal Control,'' \textit{Bol. Soc. Mat. Mexicana}, vol.~5, pp.~102--119, 1960.
+The foundational work on LQR appears in R.~E.~Kalman's ``Contributions to the Theory of Optimal Control,'' published in \textit{Bol. Soc. Mat. Mexicana}, vol.~5, pp.~102--119, 1960. For the maximum principle approach, see L.~S.~Pontryagin, V.~G.~Boltyanskii, R.~V.~Gamkrelidze, and E.~F.~Mishchenko, \textit{The Mathematical Theory of Optimal Processes}, Interscience Publishers, 1962. Dynamic programming foundations are presented in R.~Bellman, \textit{Dynamic Programming}, Princeton University Press, 1957. A comprehensive treatment of linear quadratic methods can be found in B.~D.~O.~Anderson and J.~B.~Moore, \textit{Optimal Control: Linear Quadratic Methods}, Prentice-Hall, 1990. For practical applications, consult A.~E.~Bryson and Y.-C.~Ho, \textit{Applied Optimal Control}, Hemisphere Publishing, 1975. A modern introduction suitable for both scientists and engineers is K.~J.~Astrom and R.~M.~Murray, \textit{Feedback Systems: An Introduction for Scientists and Engineers}, Princeton University Press, 2021, Chapter 7.
 
-    \item L.~S.~Pontryagin, V.~G.~Boltyanskii, R.~V.~Gamkrelidze, and E.~F.~Mishchenko, \textit{The Mathematical Theory of Optimal Processes}, Interscience Publishers, 1962.
-
-    \item R.~Bellman, \textit{Dynamic Programming}, Princeton University Press, 1957.
-
-    \item B.~D.~O.~Anderson and J.~B.~Moore, \textit{Optimal Control: Linear Quadratic Methods}, Prentice-Hall, 1990.
-
-    \item A.~E.~Bryson and Y.-C.~Ho, \textit{Applied Optimal Control}, Hemisphere Publishing, 1975.
-
-    \item K.~J.~Astrom and R.~M.~Murray, \textit{Feedback Systems: An Introduction for Scientists and Engineers}, Princeton University Press, 2021, Chapter 7.
-\end{itemize}
-
-\end{chapter}

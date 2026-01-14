@@ -5,9 +5,6 @@
 \chapter{What is Control?}
 \label{ch:what_is_control}
 
-\begin{abstract}
-This chapter introduces the fundamental concepts of control systems through historical context, mathematical foundations, and practical experimentation. We trace the origins of feedback control from ancient water clocks through the Industrial Revolution, establish the mathematical framework distinguishing open-loop from closed-loop systems, and provide hands-on laboratory exercises using modern microcontrollers and sensors.
-\end{abstract}
 
 %=============================================================================
 \section{Historical Motivation: The Birth of Automatic Control}
@@ -18,6 +15,10 @@ The science of automatic control did not emerge from abstract mathematical inqui
 
 \subsection{The Ktesibios Water Clock (c. 270 BC)}
 \label{subsec:ktesibios}
+
+\begin{historicalbox}[The First Feedback Controller]
+The earliest known feedback control device was invented by Ctesibius of Alexandria (also written Ktesibios), a Greek inventor and mathematician working in Ptolemaic Egypt around 270 BC. His ingenious water clock, or \textit{clepsydra}, solved a problem that had plagued timekeeping for millennia. Ktesibios was the son of a barber and initially followed his father's trade before becoming one of the most prolific inventors of the ancient world. His contributions extended beyond the water clock to include the pipe organ (hydraulis), force pump, and various pneumatic devices. The float valve mechanism he invented for the clepsydra represents humanity's first documented automatic control system---a remarkable achievement that predates the Industrial Revolution by over two millennia.
+\end{historicalbox}
 
 The earliest known feedback control device was invented by Ctesibius of Alexandria (also written Ktesibios), a Greek inventor and mathematician working in Ptolemaic Egypt around 270 BC. His ingenious water clock, or \textit{clepsydra}, solved a problem that had plagued timekeeping for millennia.
 
@@ -154,24 +155,36 @@ where $Y(s) = \mathcal{L}\{y(t)\}$ and $U(s) = \mathcal{L}\{u(t)\}$.
 
 Control systems are represented using block diagrams, a graphical notation with several standard elements. Blocks represent transfer functions, with input entering from the left and output exiting to the right. Arrows indicate signal flow direction. Summing junctions, depicted as circles with $\Sigma$ or $+/-$ symbols, add or subtract signals. Pickoff points, shown as filled circles, duplicate a signal for routing to multiple destinations.
 
-% Description of block diagram for TikZ implementation
+% Open-loop block diagram
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.9\textwidth}{
-\textbf{TikZ Block Diagram: Open-Loop System}\\[1em]
-Draw a horizontal signal flow with these elements (left to right):
-\begin{enumerate}
-    \item Arrow labeled ``$R(s)$'' entering from left
-    \item Block labeled ``Controller $K$''
-    \item Arrow labeled ``$U(s)$'' between blocks
-    \item Summing junction with ``$+$'' from controller and ``$+$'' from above
-    \item Arrow entering summing junction from above, labeled ``$D(s)$'' (disturbance)
-    \item Block labeled ``Plant $G(s)$''
-    \item Arrow exiting right, labeled ``$Y(s)$''
-\end{enumerate}
-No feedback path---signal flows only left to right.
-}}
-\caption{Open-loop control system block diagram (to be rendered in TikZ)}
+\begin{tikzpicture}[auto, node distance=2.5cm, >=latex',
+    block/.style={rectangle, draw, minimum height=2em, minimum width=3em},
+    sum/.style={circle, draw, inner sep=0pt, minimum size=6mm},
+    input/.style={coordinate},
+    output/.style={coordinate}]
+    % Blocks
+    \node [input, name=rinput] (rinput) {};
+    \node [block, right of=rinput] (controller) {$K$};
+    \node [sum, right of=controller, node distance=2cm] (sum1) {};
+    \node [block, right of=sum1, node distance=2cm] (plant) {$G(s)$};
+    \node [output, right of=plant] (output) {};
+
+    % Disturbance input
+    \node [input, above of=sum1, node distance=1.5cm] (disturbance) {};
+
+    % Connections
+    \draw [->] (rinput) -- node {$R(s)$} (controller);
+    \draw [->] (controller) -- node {$U(s)$} (sum1);
+    \draw [->] (sum1) -- (plant);
+    \draw [->] (plant) -- node {$Y(s)$} (output);
+    \draw [->] (disturbance) -- node {$D(s)$} (sum1);
+
+    % Sum labels
+    \node at (sum1.south east) {\small $+$};
+    \node at (sum1.north) {\small $+$};
+\end{tikzpicture}
+\caption{Open-loop control system block diagram. The reference input $R(s)$ passes through the controller $K$ to produce the control signal $U(s)$, which combines with the disturbance $D(s)$ at the plant input. No feedback path exists.}
 \label{fig:openloop_block}
 \end{figure}
 
@@ -196,39 +209,52 @@ G(s) K = 1 \quad \Rightarrow \quad K = \frac{1}{G(s)} = G^{-1}(s)
 \label{eq:openloop_ideal}
 \end{equation}
 
-This inverse controller approach has severe limitations:
-\begin{enumerate}
-    \item The plant $G(s)$ must be exactly known
-    \item The plant must be minimum-phase (no right-half-plane zeros) for stable inversion
-    \item Any model error $\Delta G$ causes proportional output error
-    \item Disturbances $D(s)$ appear directly at the output, amplified by $G(s)$
-\end{enumerate}
+This inverse controller approach has severe limitations. The plant $G(s)$ must be exactly known, and the plant must be minimum-phase (having no right-half-plane zeros) for stable inversion. Any model error $\Delta G$ causes proportional output error, and disturbances $D(s)$ appear directly at the output, amplified by $G(s)$.
 
 \subsection{Closed-Loop Control Analysis}
 
 In closed-loop control, the error between reference and measured output drives the controller:
 
-% Description of closed-loop block diagram
+% Closed-loop block diagram
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.9\textwidth}{
-\textbf{TikZ Block Diagram: Closed-Loop System}\\[1em]
-Draw the standard feedback configuration:
-\begin{enumerate}
-    \item Arrow labeled ``$R(s)$'' entering summing junction from left
-    \item Summing junction with ``$+$'' from $R(s)$ and ``$-$'' from feedback path (below)
-    \item Arrow labeled ``$E(s)$'' from summing junction to Controller
-    \item Block labeled ``Controller $K(s)$''
-    \item Arrow labeled ``$U(s)$'' to second summing junction
-    \item Second summing junction with ``$+$'' from controller and ``$+$'' from disturbance $D(s)$
-    \item Block labeled ``Plant $G(s)$''
-    \item Arrow labeled ``$Y(s)$'' exiting right
-    \item Pickoff point on output arrow
-    \item Feedback path going down, then left, containing block ``$H(s)$'' (sensor)
-    \item Feedback path connects to negative input of first summing junction
-\end{enumerate}
-}}
-\caption{Closed-loop control system block diagram (to be rendered in TikZ)}
+\begin{tikzpicture}[auto, node distance=2cm, >=latex',
+    block/.style={rectangle, draw, minimum height=2em, minimum width=3em},
+    sum/.style={circle, draw, inner sep=0pt, minimum size=6mm},
+    input/.style={coordinate},
+    output/.style={coordinate}]
+    % Blocks
+    \node [input] (rinput) {};
+    \node [sum, right of=rinput] (sum1) {};
+    \node [block, right of=sum1] (controller) {$K(s)$};
+    \node [sum, right of=controller] (sum2) {};
+    \node [block, right of=sum2] (plant) {$G(s)$};
+    \node [output, right of=plant, node distance=2.5cm] (output) {};
+
+    % Feedback path
+    \node [block, below of=plant, node distance=1.5cm] (sensor) {$H(s)$};
+
+    % Disturbance
+    \node [input, above of=sum2, node distance=1.5cm] (dist) {};
+
+    % Forward path connections
+    \draw [->] (rinput) -- node[pos=0.2] {$R(s)$} (sum1);
+    \draw [->] (sum1) -- node {$E(s)$} (controller);
+    \draw [->] (controller) -- node {$U(s)$} (sum2);
+    \draw [->] (sum2) -- (plant);
+    \draw [->] (plant) -- node [name=y, pos=0.7] {$Y(s)$} (output);
+    \draw [->] (dist) -- node {$D(s)$} (sum2);
+
+    % Feedback path
+    \draw [->] (y) |- (sensor);
+    \draw [->] (sensor) -| node[pos=0.9] {\small $-$} (sum1);
+
+    % Sum labels
+    \node at (sum1.north east) {\small $+$};
+    \node at (sum2.south east) {\small $+$};
+    \node at (sum2.north) {\small $+$};
+\end{tikzpicture}
+\caption{Closed-loop control system block diagram. The error $E(s) = R(s) - H(s)Y(s)$ drives the controller, and the feedback path through sensor $H(s)$ enables automatic disturbance rejection.}
 \label{fig:closedloop_block}
 \end{figure}
 
@@ -266,7 +292,7 @@ L(s) \triangleq G(s) K(s) H(s)
 
 Then the closed-loop transfer functions are:
 
-\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,title=Fundamental Closed-Loop Transfer Functions]
+\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,title=Fundamental Closed-Loop Transfer Functions,sharp corners]
 \textbf{Reference to Output (Complementary Sensitivity):}
 \begin{equation}
 T(s) = \frac{Y(s)}{R(s)} = \frac{G(s) K(s)}{1 + L(s)}
@@ -367,16 +393,16 @@ K_a &= \lim_{s \to 0} s^2 \cdot L(s) && \text{(acceleration constant)} \label{eq
 \centering
 \caption{Steady-State Error for Different System Types}
 \label{tab:steady_state_error}
-\begin{tabular}{|c|c|c|c|}
-\hline
+\begin{tabular}{cccc}
+\toprule
 \textbf{System Type} & \textbf{Step Input} $R(s) = 1/s$ & \textbf{Ramp Input} $R(s) = 1/s^2$ & \textbf{Parabolic} $R(s) = 1/s^3$ \\
-\hline
+\midrule
 Type 0 & $\dfrac{1}{1+K_p}$ & $\infty$ & $\infty$ \\[2ex]
-\hline
+\midrule
 Type 1 & 0 & $\dfrac{1}{K_v}$ & $\infty$ \\[2ex]
-\hline
+\midrule
 Type 2 & 0 & 0 & $\dfrac{1}{K_a}$ \\[2ex]
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -389,13 +415,7 @@ This laboratory exercise demonstrates the fundamental difference between open-lo
 
 \subsection{Learning Objectives}
 
-Upon completion of this laboratory, students will be able to:
-\begin{enumerate}
-    \item Explain why open-loop control fails under disturbances and model uncertainty
-    \item Implement a basic closed-loop position controller using encoder feedback
-    \item Measure and compare steady-state error, disturbance rejection, and repeatability
-    \item Tune a proportional controller gain and observe its effects
-\end{enumerate}
+Upon completion of this laboratory, students will be able to explain why open-loop control fails under disturbances and model uncertainty, implement a basic closed-loop position controller using encoder feedback, measure and compare steady-state error, disturbance rejection, and repeatability, and tune a proportional controller gain while observing its effects on system behavior.
 
 \subsection{Required Components}
 
@@ -403,10 +423,10 @@ Upon completion of this laboratory, students will be able to:
 \centering
 \caption{Bill of Materials for Motor Control Laboratory}
 \label{tab:bom}
-\begin{tabular}{|l|l|l|}
-\hline
+\begin{tabular}{lll}
+\toprule
 \textbf{Component} & \textbf{Specification} & \textbf{Qty} \\
-\hline
+\midrule
 Arduino Uno or Nano & ATmega328P microcontroller & 1 \\
 DC Motor with Encoder & 12V, 200+ PPR quadrature encoder & 1 \\
 Motor Driver & L298N or TB6612FNG H-bridge & 1 \\
@@ -416,282 +436,179 @@ Breadboard & Full-size & 1 \\
 Jumper Wires & Male-male, assorted & 20 \\
 Position Indicator & Pointer or dial attached to motor shaft & 1 \\
 Reference Scale & Printed protractor or degree markings & 1 \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
-Optional for advanced experiments:
-\begin{itemize}
-    \item 3D-printed dial with degree markings for motor shaft
-    \item Second potentiometer for setpoint adjustment
-    \item Serial plotting software (Arduino Serial Plotter or Processing)
-\end{itemize}
+For advanced experiments, optional components include a 3D-printed dial with degree markings for the motor shaft, a second potentiometer for setpoint adjustment, and serial plotting software such as Arduino Serial Plotter or Processing.
 
 \subsection{Wiring Configuration}
 
-\begin{figure}[htbp]
+\begin{table}[htbp]
 \centering
-\fbox{\parbox{0.9\textwidth}{
-\textbf{Wiring Diagram Description (for TikZ or Fritzing):}
-
-\textbf{Power Connections:}
-\begin{itemize}
-    \item 12V supply $\rightarrow$ Motor driver VCC
-    \item Motor driver GND $\rightarrow$ Common ground $\rightarrow$ Arduino GND
-    \item Arduino 5V $\rightarrow$ Potentiometer outer terminal 1
-    \item Arduino GND $\rightarrow$ Potentiometer outer terminal 2
-\end{itemize}
-
-\textbf{Motor Driver to Arduino:}
-\begin{itemize}
-    \item Driver IN1 $\rightarrow$ Arduino D5 (PWM)
-    \item Driver IN2 $\rightarrow$ Arduino D6 (PWM)
-    \item Driver ENA $\rightarrow$ Arduino D9 (PWM) or jumper to 5V
-\end{itemize}
-
-\textbf{Encoder to Arduino:}
-\begin{itemize}
-    \item Encoder VCC $\rightarrow$ Arduino 5V
-    \item Encoder GND $\rightarrow$ Arduino GND
-    \item Encoder A $\rightarrow$ Arduino D2 (interrupt capable)
-    \item Encoder B $\rightarrow$ Arduino D3 (interrupt capable)
-\end{itemize}
-
-\textbf{Potentiometer:}
-\begin{itemize}
-    \item Potentiometer wiper $\rightarrow$ Arduino A0
-\end{itemize}
-}}
-\caption{Motor control system wiring diagram}
-\label{fig:wiring}
-\end{figure}
+\caption{Motor Control System Wiring Connections}
+\label{tab:wiring}
+\begin{tabular}{lll}
+\toprule
+\textbf{Category} & \textbf{Source} & \textbf{Destination} \\
+\midrule
+\multirow{4}{*}{Power} & 12V Supply & Motor Driver VCC \\
+& Motor Driver GND & Common Ground / Arduino GND \\
+& Arduino 5V & Potentiometer Terminal 1 \\
+& Arduino GND & Potentiometer Terminal 2 \\
+\midrule
+\multirow{3}{*}{Motor Driver} & Driver IN1 & Arduino D5 (PWM) \\
+& Driver IN2 & Arduino D6 (PWM) \\
+& Driver ENA & Arduino D9 (PWM) or 5V jumper \\
+\midrule
+\multirow{4}{*}{Encoder} & Encoder VCC & Arduino 5V \\
+& Encoder GND & Arduino GND \\
+& Encoder A & Arduino D2 (interrupt capable) \\
+& Encoder B & Arduino D3 (interrupt capable) \\
+\midrule
+Potentiometer & Wiper & Arduino A0 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Software Implementation}
 
 \subsubsection{Part 1: Encoder Reading (Common to Both Experiments)}
 
-\begin{lstlisting}[language=C++, caption={Quadrature Encoder Reading with Interrupts}, label={lst:encoder}]
-// Encoder pins
-const int encoderA = 2;
-const int encoderB = 3;
-
-// Encoder state
-volatile long encoderCount = 0;
-volatile int lastEncoded = 0;
-
-void setup() {
-  Serial.begin(115200);
-
-  pinMode(encoderA, INPUT_PULLUP);
-  pinMode(encoderB, INPUT_PULLUP);
-
-  // Attach interrupts for both channels
-  attachInterrupt(digitalPinToInterrupt(encoderA),
-                  updateEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(encoderB),
-                  updateEncoder, CHANGE);
-}
-
-void updateEncoder() {
-  int MSB = digitalRead(encoderA);
-  int LSB = digitalRead(encoderB);
-
-  int encoded = (MSB << 1) | LSB;
-  int sum = (lastEncoded << 2) | encoded;
-
-  // Quadrature state machine
-  if (sum == 0b1101 || sum == 0b0100 ||
-      sum == 0b0010 || sum == 0b1011) {
-    encoderCount++;
-  }
-  if (sum == 0b1110 || sum == 0b0111 ||
-      sum == 0b0001 || sum == 0b1000) {
-    encoderCount--;
-  }
-
-  lastEncoded = encoded;
-}
-
-float getPositionDegrees() {
-  // Adjust PPR for your encoder (e.g., 400 for 100 PPR quad)
-  const float COUNTS_PER_REV = 400.0;
-  return (encoderCount / COUNTS_PER_REV) * 360.0;
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Quadrature Encoder Reading with Interrupts}
+\label{alg:encoder}
+\begin{algorithmic}[1]
+\State \textbf{Initialize:}
+\State \hspace{1em} $\textit{encoderCount} \gets 0$
+\State \hspace{1em} $\textit{lastEncoded} \gets 0$
+\State \hspace{1em} Configure encoder pins A and B as inputs with pull-up resistors
+\State \hspace{1em} Attach interrupt handlers to both encoder channels
+\State
+\Procedure{UpdateEncoder}{} \Comment{Called on any encoder pin change}
+    \State $\textit{MSB} \gets$ read encoder channel A
+    \State $\textit{LSB} \gets$ read encoder channel B
+    \State $\textit{encoded} \gets (\textit{MSB} \times 2) + \textit{LSB}$
+    \State $\textit{sum} \gets (\textit{lastEncoded} \times 4) + \textit{encoded}$
+    \If{$\textit{sum}$ indicates forward rotation}
+        \State $\textit{encoderCount} \gets \textit{encoderCount} + 1$
+    \ElsIf{$\textit{sum}$ indicates reverse rotation}
+        \State $\textit{encoderCount} \gets \textit{encoderCount} - 1$
+    \EndIf
+    \State $\textit{lastEncoded} \gets \textit{encoded}$
+\EndProcedure
+\State
+\Function{GetPositionDegrees}{}
+    \State $\textit{COUNTS\_PER\_REV} \gets 400$ \Comment{Adjust for encoder PPR}
+    \State \Return $(\textit{encoderCount} / \textit{COUNTS\_PER\_REV}) \times 360$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Part 2: Open-Loop Control Experiment}
 
-\begin{lstlisting}[language=C++, caption={Open-Loop Position Control (Timed Pulses)}, label={lst:openloop}]
-// Motor pins
-const int motorPWM1 = 5;
-const int motorPWM2 = 6;
-
-// Calibration: PWM value and time for 90-degree rotation
-// STUDENTS MUST CALIBRATE THESE VALUES
-const int CAL_PWM = 150;        // Motor speed (0-255)
-const int CAL_TIME_90DEG = 500; // ms for 90 degrees
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(motorPWM1, OUTPUT);
-  pinMode(motorPWM2, OUTPUT);
-
-  // Initialize encoder (from previous code)
-  // ...
-
-  Serial.println("Open-Loop Control Experiment");
-  Serial.println("Enter target angle in degrees:");
-}
-
-void setMotorPWM(int pwm) {
-  if (pwm > 0) {
-    analogWrite(motorPWM1, pwm);
-    analogWrite(motorPWM2, 0);
-  } else if (pwm < 0) {
-    analogWrite(motorPWM1, 0);
-    analogWrite(motorPWM2, -pwm);
-  } else {
-    analogWrite(motorPWM1, 0);
-    analogWrite(motorPWM2, 0);
-  }
-}
-
-void moveOpenLoop(float targetDegrees) {
-  // Calculate required time based on calibration
-  float timeRequired = abs(targetDegrees) *
-                       (CAL_TIME_90DEG / 90.0);
-  int direction = (targetDegrees > 0) ? 1 : -1;
-
-  Serial.print("Moving open-loop to ");
-  Serial.print(targetDegrees);
-  Serial.println(" degrees");
-
-  float startPos = getPositionDegrees();
-
-  // Apply motor power for calculated time
-  setMotorPWM(direction * CAL_PWM);
-  delay((int)timeRequired);
-  setMotorPWM(0);
-
-  // Report actual position (but don't use for control)
-  delay(500);  // Let motor settle
-  float endPos = getPositionDegrees();
-  float error = targetDegrees - (endPos - startPos);
-
-  Serial.print("Target: "); Serial.print(targetDegrees);
-  Serial.print(" Actual: "); Serial.print(endPos - startPos);
-  Serial.print(" Error: "); Serial.println(error);
-}
-
-void loop() {
-  if (Serial.available()) {
-    float target = Serial.parseFloat();
-    if (target != 0) {
-      encoderCount = 0;  // Reset position
-      moveOpenLoop(target);
-    }
-  }
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Open-Loop Position Control (Timed Pulses)}
+\label{alg:openloop}
+\begin{algorithmic}[1]
+\State \textbf{Constants} (students must calibrate):
+\State \hspace{1em} $\textit{CAL\_PWM} \gets 150$ \Comment{Motor speed setting}
+\State \hspace{1em} $\textit{CAL\_TIME\_90DEG} \gets 500$ \Comment{Milliseconds for 90 degrees}
+\State
+\State \textbf{Initialize:}
+\State \hspace{1em} Configure motor pins as outputs
+\State \hspace{1em} Initialize encoder (see Algorithm~\ref{alg:encoder})
+\State
+\Procedure{SetMotorPWM}{$\textit{pwm}$}
+    \If{$\textit{pwm} > 0$}
+        \State Set forward direction with magnitude $\textit{pwm}$
+    \ElsIf{$\textit{pwm} < 0$}
+        \State Set reverse direction with magnitude $|\textit{pwm}|$
+    \Else
+        \State Stop motor
+    \EndIf
+\EndProcedure
+\State
+\Procedure{MoveOpenLoop}{$\textit{targetDegrees}$}
+    \State $\textit{timeRequired} \gets |\textit{targetDegrees}| \times (\textit{CAL\_TIME\_90DEG} / 90)$
+    \State $\textit{direction} \gets \text{sign}(\textit{targetDegrees})$
+    \State $\textit{startPos} \gets \text{GetPositionDegrees}()$
+    \State \Call{SetMotorPWM}{$\textit{direction} \times \textit{CAL\_PWM}$}
+    \State Wait for $\textit{timeRequired}$ milliseconds
+    \State \Call{SetMotorPWM}{$0$}
+    \State Wait 500 ms for motor to settle
+    \State $\textit{endPos} \gets \text{GetPositionDegrees}()$
+    \State $\textit{error} \gets \textit{targetDegrees} - (\textit{endPos} - \textit{startPos})$
+    \State Report target, actual position, and error
+\EndProcedure
+\State
+\State \textbf{Main Loop:}
+\While{true}
+    \If{user input available}
+        \State $\textit{target} \gets$ read target angle from user
+        \State Reset encoder count to zero
+        \State \Call{MoveOpenLoop}{$\textit{target}$}
+    \EndIf
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Part 3: Closed-Loop Control Experiment}
 
-\begin{lstlisting}[language=C++, caption={Closed-Loop Proportional Position Control}, label={lst:closedloop}]
-// Control parameters
-float Kp = 2.0;  // Proportional gain - STUDENTS TUNE THIS
-const float DEADBAND = 1.0;  // Degrees - stop when error < this
-const int MAX_PWM = 200;
-const int MIN_PWM = 30;  // Minimum to overcome friction
-
-// Setpoint (degrees)
-float setpoint = 0;
-
-void setup() {
-  Serial.begin(115200);
-  // ... (encoder and motor pin setup)
-
-  Serial.println("Closed-Loop Control Experiment");
-  Serial.println("Commands: Snnn=setpoint, Knnn=gain");
-}
-
-void loop() {
-  // Read serial commands
-  if (Serial.available()) {
-    char cmd = Serial.read();
-    if (cmd == 'S' || cmd == 's') {
-      setpoint = Serial.parseFloat();
-      Serial.print("New setpoint: ");
-      Serial.println(setpoint);
-    } else if (cmd == 'K' || cmd == 'k') {
-      Kp = Serial.parseFloat();
-      Serial.print("New Kp: ");
-      Serial.println(Kp);
-    }
-  }
-
-  // Closed-loop control calculation
-  float position = getPositionDegrees();
-  float error = setpoint - position;
-
-  int pwmOutput = 0;
-
-  if (abs(error) > DEADBAND) {
-    // Proportional control
-    pwmOutput = (int)(Kp * error);
-
-    // Constrain output
-    pwmOutput = constrain(pwmOutput, -MAX_PWM, MAX_PWM);
-
-    // Apply minimum PWM to overcome friction
-    if (abs(pwmOutput) < MIN_PWM && abs(error) > DEADBAND) {
-      pwmOutput = (error > 0) ? MIN_PWM : -MIN_PWM;
-    }
-  }
-
-  setMotorPWM(pwmOutput);
-
-  // Report status every 100ms
-  static unsigned long lastReport = 0;
-  if (millis() - lastReport > 100) {
-    Serial.print("SP:"); Serial.print(setpoint);
-    Serial.print(" Pos:"); Serial.print(position);
-    Serial.print(" Err:"); Serial.print(error);
-    Serial.print(" PWM:"); Serial.println(pwmOutput);
-    lastReport = millis();
-  }
-
-  delay(10);  // 100 Hz control loop
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Closed-Loop Proportional Position Control}
+\label{alg:closedloop}
+\begin{algorithmic}[1]
+\State \textbf{Parameters} (students tune these):
+\State \hspace{1em} $K_p \gets 2.0$ \Comment{Proportional gain}
+\State \hspace{1em} $\textit{DEADBAND} \gets 1.0$ \Comment{Degrees; stop when error below this}
+\State \hspace{1em} $\textit{MAX\_PWM} \gets 200$
+\State \hspace{1em} $\textit{MIN\_PWM} \gets 30$ \Comment{Minimum to overcome friction}
+\State
+\State \textbf{State Variables:}
+\State \hspace{1em} $\textit{setpoint} \gets 0$
+\State
+\State \textbf{Initialize:}
+\State \hspace{1em} Configure encoder and motor pins
+\State
+\State \textbf{Main Control Loop} (runs at 100 Hz):
+\While{true}
+    \If{user command received}
+        \If{command is `S'}
+            \State $\textit{setpoint} \gets$ new setpoint value
+        \ElsIf{command is `K'}
+            \State $K_p \gets$ new gain value
+        \EndIf
+    \EndIf
+    \State
+    \State $\textit{position} \gets \text{GetPositionDegrees}()$
+    \State $\textit{error} \gets \textit{setpoint} - \textit{position}$
+    \State $\textit{pwmOutput} \gets 0$
+    \State
+    \If{$|\textit{error}| > \textit{DEADBAND}$}
+        \State $\textit{pwmOutput} \gets K_p \times \textit{error}$ \Comment{Proportional control}
+        \State $\textit{pwmOutput} \gets \text{clamp}(\textit{pwmOutput}, -\textit{MAX\_PWM}, \textit{MAX\_PWM})$
+        \If{$|\textit{pwmOutput}| < \textit{MIN\_PWM}$}
+            \State $\textit{pwmOutput} \gets \text{sign}(\textit{error}) \times \textit{MIN\_PWM}$
+        \EndIf
+    \EndIf
+    \State
+    \State \Call{SetMotorPWM}{$\textit{pwmOutput}$}
+    \State Report setpoint, position, error, and PWM (every 100 ms)
+    \State Wait 10 ms
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Experimental Procedure}
 
 \subsubsection{Experiment A: Open-Loop Calibration and Testing}
 
-\begin{enumerate}
-    \item Upload the open-loop code to the Arduino
-    \item \textbf{Calibration}: Command 90-degree movements, adjusting \texttt{CAL\_TIME\_90DEG} until the motor consistently moves 90 degrees
-    \item Record the calibrated value
-    \item \textbf{Repeatability Test}: Command ten 90-degree movements; record actual positions; calculate mean and standard deviation of error
-    \item \textbf{Disturbance Test}: While the motor is at rest, manually rotate the shaft; command a 90-degree movement; observe that the system has no knowledge of the disturbance
-    \item \textbf{Load Test}: Attach a small mass to the shaft; repeat the 90-degree movements; observe increased error due to changed dynamics
-\end{enumerate}
+Begin by uploading the open-loop code to the Arduino. For calibration, command 90-degree movements and adjust the \texttt{CAL\_TIME\_90DEG} parameter until the motor consistently moves 90 degrees, then record this calibrated value. Next, conduct a repeatability test by commanding ten 90-degree movements, recording the actual positions achieved, and calculating the mean and standard deviation of the error. For the disturbance test, while the motor is at rest, manually rotate the shaft, then command a 90-degree movement and observe that the system has no knowledge of this disturbance. Finally, perform a load test by attaching a small mass to the shaft and repeating the 90-degree movements; observe the increased error due to the changed dynamics.
 
 \subsubsection{Experiment B: Closed-Loop Control}
 
-\begin{enumerate}
-    \item Upload the closed-loop code to the Arduino
-    \item Start with $K_p = 1.0$; command position changes and observe response
-    \item \textbf{Gain Tuning}: Increase $K_p$ gradually; observe:
-    \begin{itemize}
-        \item Low $K_p$: sluggish response, large steady-state error (if no integrator)
-        \item Medium $K_p$: crisp response, small error
-        \item High $K_p$: oscillation or overshoot
-    \end{itemize}
-    \item \textbf{Disturbance Rejection}: With the motor holding a position, manually push the shaft; observe automatic return to setpoint
-    \item \textbf{Repeatability Test}: Command ten 90-degree movements; compare error statistics to open-loop
-    \item \textbf{Load Test}: Attach the same mass as Experiment A; observe that closed-loop compensates automatically
-\end{enumerate}
+Upload the closed-loop code to the Arduino and start with $K_p = 1.0$, commanding position changes and observing the response. For gain tuning, increase $K_p$ gradually and observe the system behavior: at low $K_p$ values, the response will be sluggish with large steady-state error; at medium $K_p$ values, the response becomes crisp with small error; at high $K_p$ values, oscillation or overshoot will appear. Test disturbance rejection by holding the motor at a position, manually pushing the shaft, and observing the automatic return to setpoint. Conduct a repeatability test by commanding ten 90-degree movements and comparing the error statistics to those from the open-loop experiment. Finally, perform a load test by attaching the same mass used in Experiment A and observing that the closed-loop system compensates automatically.
 
 \subsection{Data Collection and Analysis}
 
@@ -701,40 +618,37 @@ Students should complete the following table:
 \centering
 \caption{Experimental Results Comparison}
 \label{tab:results}
-\begin{tabular}{|l|c|c|}
-\hline
+\begin{tabular}{lcc}
+\toprule
 \textbf{Metric} & \textbf{Open-Loop} & \textbf{Closed-Loop} \\
-\hline
+\midrule
 Mean error (90° target) & & \\
 Std. dev. of error & & \\
 Maximum error observed & & \\
 Time to reach 2° of target & & \\
 Disturbance recovery & None & \\
 Effect of added load & & \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
 \subsubsection{Discussion Questions}
-\begin{enumerate}
-    \item Why does open-loop control fail when load is added, while closed-loop adapts automatically?
-    \item What limits how high $K_p$ can be set? What physical phenomena cause oscillation at high gain?
-    \item How would you modify the controller to eliminate steady-state error entirely?
-    \item What is the role of the deadband? What happens if it is set too small? Too large?
-\end{enumerate}
+Students should consider and discuss the following questions. First, why does open-loop control fail when load is added, while closed-loop adapts automatically? Second, what limits how high $K_p$ can be set, and what physical phenomena cause oscillation at high gain? Third, how would you modify the controller to eliminate steady-state error entirely? Fourth, what is the role of the deadband, and what happens if it is set too small or too large?
 
 %=============================================================================
 \section{Worked Examples}
 \label{sec:examples}
 %=============================================================================
 
+\begin{examplebox}[Steady-State Error Comparison]
+A DC motor position system has plant transfer function $G(s) = \dfrac{10}{s(s+2)}$. Compare the steady-state error to a unit ramp input for (a) open-loop control with $K = 1$, and (b) closed-loop control with proportional controller $K = 5$ and unity feedback.
+
+\textbf{Solution:}
+\end{examplebox}
+
 \begin{example}[Steady-State Error Comparison]
 \label{ex:sse}
-A DC motor position system has plant transfer function $G(s) = \dfrac{10}{s(s+2)}$. Compare the steady-state error to a unit ramp input for:
-\begin{enumerate}[(a)]
-    \item Open-loop control with $K = 1$
-    \item Closed-loop control with proportional controller $K = 5$ and unity feedback
-\end{enumerate}
+A DC motor position system has plant transfer function $G(s) = \dfrac{10}{s(s+2)}$. Compare the steady-state error to a unit ramp input for (a) open-loop control with $K = 1$, and (b) closed-loop control with proportional controller $K = 5$ and unity feedback.
 
 \textbf{Solution:}
 
@@ -784,6 +698,10 @@ $\boxed{e_{ss,\text{closed-loop}} = 0.04 \text{ (or 4\% of ramp slope)}}$
 
 \textbf{Conclusion:} Feedback reduces the error from unbounded to a finite, small value.
 \end{example}
+
+\begin{examplebox}[Sensitivity Improvement Through Feedback]
+This example demonstrates the power of feedback for reducing sensitivity to plant variations. A temperature control system has nominal plant gain $G_0 = 5$ °C/V, but due to environmental variations, the actual gain can vary by $\pm 20\%$. We will design a proportional feedback controller to reduce the output sensitivity to plant variations by a factor of 10, showing how feedback can make a system robust to uncertainty.
+\end{examplebox}
 
 \begin{example}[Sensitivity Improvement]
 \label{ex:sensitivity}
@@ -839,13 +757,7 @@ $\boxed{K = 1.8 \text{ V/°C}}$
 
 \begin{example}[Disturbance Rejection Analysis]
 \label{ex:disturbance}
-Consider the motor control system with block diagram shown in Figure~\ref{fig:closedloop_block}. The plant is $G(s) = \dfrac{1}{s+1}$, the controller is $K(s) = K_p$ (proportional), and feedback is unity ($H = 1$). A constant disturbance $D(s) = D_0/s$ acts at the plant input.
-
-\begin{enumerate}[(a)]
-    \item Find the steady-state output error due to the disturbance for the open-loop system.
-    \item Find the steady-state output error due to the disturbance for the closed-loop system with $K_p = 10$.
-    \item What value of $K_p$ reduces the disturbance effect by a factor of 100?
-\end{enumerate}
+Consider the motor control system with block diagram shown in Figure~\ref{fig:closedloop_block}. The plant is $G(s) = \dfrac{1}{s+1}$, the controller is $K(s) = K_p$ (proportional), and feedback is unity ($H = 1$). A constant disturbance $D(s) = D_0/s$ acts at the plant input. Determine (a) the steady-state output error due to the disturbance for the open-loop system, (b) the steady-state output error due to the disturbance for the closed-loop system with $K_p = 10$, and (c) what value of $K_p$ reduces the disturbance effect by a factor of 100.
 
 \textbf{Solution:}
 
@@ -900,14 +812,7 @@ $\boxed{K_p = 99}$
 
 \begin{example}[Complete Closed-Loop Design]
 \label{ex:design}
-Design a feedback control system for a thermal system with the following specifications:
-\begin{itemize}
-    \item Plant: $G(s) = \dfrac{2}{5s + 1}$ (°C per watt of heater power)
-    \item Steady-state error to a step change in setpoint: $\leq 2\%$
-    \item The sensor has transfer function $H(s) = 1$ (ideal thermocouple)
-\end{itemize}
-
-Determine the required proportional controller gain $K_p$.
+Design a feedback control system for a thermal system with the following specifications: the plant transfer function is $G(s) = \dfrac{2}{5s + 1}$ (°C per watt of heater power), the steady-state error to a step change in setpoint must be $\leq 2\%$, and the sensor has transfer function $H(s) = 1$ (ideal thermocouple). Determine the required proportional controller gain $K_p$.
 
 \textbf{Solution:}
 
@@ -965,186 +870,126 @@ The following detailed descriptions enable creation of publication-quality figur
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.9\textwidth}{
-\textbf{TikZ Implementation: Watt Governor Schematic}
+\begin{tikzpicture}[>=latex', scale=0.9]
+    % Spindle
+    \draw[thick] (0,0) -- (0,5);
+    \draw[thick] (0,0) -- (0,-0.5);
+    \fill (0,5) circle (2pt);
 
-\textbf{Main Components to Draw:}
-\begin{enumerate}
-    \item \textbf{Vertical spindle}: Central axis, approximately 10cm tall, driven from below
-    \item \textbf{Flyball arms}: Two arms (at 45° from vertical at rest) hinged at top of spindle
-    \item \textbf{Flyballs}: Heavy spheres (1cm diameter) at end of each arm
-    \item \textbf{Linkage arms}: From each flyball arm to a sliding collar on the spindle
-    \item \textbf{Collar}: Ring that slides up/down on spindle as balls move out/in
-    \item \textbf{Throttle linkage}: Horizontal rod from collar to throttle valve
-    \item \textbf{Throttle valve}: Butterfly or gate valve symbol
-    \item \textbf{Steam flow arrows}: Showing steam path through valve
-    \item \textbf{Drive connection}: Bevel gears or belt from engine to spindle base
-\end{enumerate}
+    % Low speed configuration (left side, dashed)
+    \draw[dashed, gray] (0,5) -- (-1.2,3.5);
+    \fill[gray] (-1.2,3.5) circle (4pt);
+    \draw[dashed, gray] (-1.2,3.5) -- (-0.3,2.5);
 
-\textbf{Annotations:}
-\begin{itemize}
-    \item ``$\omega$'' with circular arrow at spindle (rotation)
-    \item ``Centrifugal force $F_c = m\omega^2 r$'' pointing outward from balls
-    \item ``Gravity $mg$'' pointing down from balls
-    \item ``To engine'' label on throttle output
-    \item ``From boiler'' label on steam input
-\end{itemize}
+    % High speed configuration (solid)
+    \draw[thick] (0,5) -- (-2,2.5);
+    \fill (-2,2.5) circle (6pt);
+    \node[left] at (-2.2,2.5) {Flyball};
+    \draw[thick] (-2,2.5) -- (-0.3,1.5);
 
-\textbf{Show two states} (can be side-by-side or overlaid with dashed lines):
-\begin{itemize}
-    \item Low speed: balls at 30° from vertical, collar down, throttle open (green)
-    \item High speed: balls at 60° from vertical, collar up, throttle closed (red)
-\end{itemize}
-}}
-\caption{Watt centrifugal governor schematic (TikZ specification)}
+    % Mirror for right side
+    \draw[thick] (0,5) -- (2,2.5);
+    \fill (2,2.5) circle (6pt);
+    \draw[thick] (2,2.5) -- (0.3,1.5);
+
+    % Collar
+    \draw[thick, fill=gray!30] (-0.3,1.3) rectangle (0.3,1.7);
+    \node[right] at (0.5,1.5) {Collar};
+
+    % Throttle linkage
+    \draw[thick] (0.3,1.5) -- (2.5,1.5);
+
+    % Throttle valve
+    \draw[thick] (2.5,0.5) -- (2.5,2.5);
+    \draw[thick, fill=gray!50] (2.3,1.3) rectangle (2.7,1.7);
+    \draw[thick] (2.5,2.7) -- (2.5,3.2);
+    \draw[thick] (2.5,0.3) -- (2.5,-0.2);
+    \node[right] at (2.8,1.5) {Valve};
+
+    % Steam flow arrows
+    \draw[->, thick] (2.5,-0.5) -- (2.5,0.3);
+    \node[below] at (2.5,-0.5) {\small From boiler};
+    \draw[->, thick] (2.5,3.2) -- (2.5,4);
+    \node[above] at (2.5,4) {\small To engine};
+
+    % Drive connection
+    \draw[thick] (-0.3,-0.5) -- (0.3,-0.5) -- (0.3,-0.3) -- (-0.3,-0.3) -- cycle;
+    \node[below] at (0,-0.7) {\small Drive from engine};
+
+    % Rotation arrow
+    \draw[->, thick] (0.5,4.5) arc (0:270:0.3);
+    \node[right] at (0.6,4.3) {$\omega$};
+
+    % Force annotations
+    \draw[->, thick, blue] (-2,2.5) -- (-2.8,2.5);
+    \node[above, blue] at (-2.6,2.6) {\small $F_c$};
+    \draw[->, thick, red] (-2,2.5) -- (-2,1.8);
+    \node[left, red] at (-2.1,2.1) {\small $mg$};
+
+    % Legend
+    \node[align=left] at (-1.5,-1.2) {\small Dashed: low speed\\Solid: high speed};
+\end{tikzpicture}
+\caption{Watt centrifugal governor schematic. As rotational speed $\omega$ increases, centrifugal force $F_c$ swings the flyballs outward, raising the collar and closing the throttle valve to reduce steam flow.}
 \label{fig:watt_governor}
-\end{figure}
-
-\subsection{Figure: Open-Loop Block Diagram}
-
-\begin{figure}[htbp]
-\centering
-\fbox{\parbox{0.9\textwidth}{
-\textbf{TikZ Code Specification: Open-Loop Block Diagram}
-
-\begin{verbatim}
-\begin{tikzpicture}[auto, node distance=2.5cm, >=latex']
-    % Blocks
-    \node [input, name=rinput] (rinput) {};
-    \node [block, right of=rinput] (controller) {$K$};
-    \node [sum, right of=controller, node distance=2cm] (sum1) {};
-    \node [block, right of=sum1, node distance=2cm] (plant) {$G(s)$};
-    \node [output, right of=plant] (output) {};
-
-    % Disturbance input
-    \node [input, above of=sum1, node distance=1.5cm] (disturbance) {};
-
-    % Connections
-    \draw [->] (rinput) -- node {$R(s)$} (controller);
-    \draw [->] (controller) -- node {$U(s)$} (sum1);
-    \draw [->] (sum1) -- (plant);
-    \draw [->] (plant) -- node {$Y(s)$} (output);
-    \draw [->] (disturbance) -- node {$D(s)$} (sum1);
-
-    % Sum labels
-    \node at (sum1.south east) {$+$};
-    \node at (sum1.north) {$+$};
-\end{tikzpicture}
-\end{verbatim}
-
-Required TikZ styles:
-\begin{itemize}
-    \item \texttt{block}: rectangle, draw, minimum height=2em, minimum width=3em
-    \item \texttt{sum}: circle, draw, inner sep=0pt, minimum size=6mm
-    \item \texttt{input}: coordinate
-    \item \texttt{output}: coordinate
-\end{itemize}
-}}
-\caption{Open-loop system TikZ code}
-\label{fig:openloop_tikz}
-\end{figure}
-
-\subsection{Figure: Closed-Loop Block Diagram}
-
-\begin{figure}[htbp]
-\centering
-\fbox{\parbox{0.9\textwidth}{
-\textbf{TikZ Code Specification: Closed-Loop Block Diagram}
-
-\begin{verbatim}
-\begin{tikzpicture}[auto, node distance=2cm, >=latex']
-    % Blocks
-    \node [input] (rinput) {};
-    \node [sum, right of=rinput] (sum1) {};
-    \node [block, right of=sum1] (controller) {$K(s)$};
-    \node [sum, right of=controller] (sum2) {};
-    \node [block, right of=sum2] (plant) {$G(s)$};
-    \node [output, right of=plant, node distance=2.5cm] (output) {};
-
-    % Feedback path
-    \node [block, below of=plant, node distance=1.5cm] (sensor) {$H(s)$};
-
-    % Disturbance
-    \node [input, above of=sum2, node distance=1.5cm] (dist) {};
-
-    % Forward path connections
-    \draw [->] (rinput) -- node[pos=0.2] {$R(s)$} (sum1);
-    \draw [->] (sum1) -- node {$E(s)$} (controller);
-    \draw [->] (controller) -- node {$U(s)$} (sum2);
-    \draw [->] (sum2) -- (plant);
-    \draw [->] (plant) -- node [name=y, pos=0.7] {$Y(s)$} (output);
-    \draw [->] (dist) -- node {$D(s)$} (sum2);
-
-    % Feedback path
-    \draw [->] (y) |- (sensor);
-    \draw [->] (sensor) -| node[pos=0.9] {$-$} (sum1);
-
-    % Sum labels
-    \node at (sum1.north east) {$+$};
-    \node at (sum2.south east) {$+$};
-    \node at (sum2.north) {$+$};
-\end{tikzpicture}
-\end{verbatim}
-}}
-\caption{Closed-loop system TikZ code}
-\label{fig:closedloop_tikz}
 \end{figure}
 
 \subsection{Figure: Laboratory Setup}
 
 \begin{figure}[htbp]
 \centering
-\fbox{\parbox{0.9\textwidth}{
-\textbf{Laboratory Setup Diagram Specification}
+\begin{tikzpicture}[>=latex', scale=0.85,
+    component/.style={rectangle, draw, minimum width=2cm, minimum height=1.2cm, align=center}]
 
-\textbf{Main elements (isometric or top-down view):}
+    % Arduino
+    \node[component, fill=blue!20] (arduino) at (0,0) {Arduino\\Uno};
+    \node[below=0.1cm of arduino, font=\scriptsize] {D2,D3,D5,D6,A0};
 
-\textbf{1. Arduino Board} (center-left)
-\begin{itemize}
-    \item Rectangular PCB shape with USB port
-    \item Label digital pins D2, D3, D5, D6
-    \item Label analog pin A0
-    \item Label 5V, GND, Vin
-\end{itemize}
+    % Motor Driver
+    \node[component, fill=green!20] (driver) at (4,0) {Motor\\Driver};
+    \node[below=0.1cm of driver, font=\scriptsize] {L298N};
 
-\textbf{2. Motor Driver Module} (center)
-\begin{itemize}
-    \item L298N or TB6612 board shape
-    \item Label motor output terminals (OUT1, OUT2)
-    \item Label input pins (IN1, IN2)
-    \item Label power input (12V, GND)
-\end{itemize}
+    % Motor with Encoder
+    \node[component, fill=gray!30, minimum width=2.5cm] (motor) at (8,0) {DC Motor\\+ Encoder};
 
-\textbf{3. DC Motor with Encoder} (right)
-\begin{itemize}
-    \item Cylindrical motor body
-    \item Encoder disc on rear (show slotted pattern)
-    \item Shaft extending from front
-    \item Position indicator (arrow or dial) on shaft
-    \item Label: ``Encoder: A, B, VCC, GND''
-\end{itemize}
+    % Potentiometer
+    \node[component, fill=yellow!30, minimum width=1.5cm, minimum height=0.8cm] (pot) at (0,-2.5) {Pot};
 
-\textbf{4. Potentiometer} (bottom)
-\begin{itemize}
-    \item Circular knob symbol
-    \item Three terminals labeled
-\end{itemize}
+    % Power Supply
+    \node[component, fill=red!20, minimum width=1.5cm, minimum height=0.8cm] (power) at (4,2) {12V\\Supply};
 
-\textbf{5. Power Supply} (top-left)
-\begin{itemize}
-    \item 12V adapter symbol
-\end{itemize}
+    % Position indicator on motor
+    \draw[thick] (9.5,0) -- (10,0);
+    \draw[thick, ->] (10,0) -- (10.5,0.3);
+    \node[right, font=\scriptsize] at (10.5,0.3) {Position};
 
-\textbf{Wiring (use colored lines):}
-\begin{itemize}
-    \item Red: Power (5V, 12V)
-    \item Black: Ground
-    \item Blue: Encoder signals
-    \item Green: Motor control signals
-    \item Yellow: Analog input
-\end{itemize}
-}}
-\caption{Laboratory wiring diagram specification}
+    % Wiring connections
+    % Arduino to Driver (control signals - green)
+    \draw[->, green!60!black, thick] (arduino.east) -- node[above, font=\scriptsize] {D5,D6} (driver.west);
+
+    % Driver to Motor (power - thick black)
+    \draw[->, thick] (driver.east) -- node[above, font=\scriptsize] {OUT} (motor.west);
+
+    % Encoder to Arduino (feedback - blue)
+    \draw[->, blue, thick] (motor.south) -- (8,-1.5) -- (1,-1.5) -- node[left, font=\scriptsize] {D2,D3} (arduino.south east);
+
+    % Power supply connections (red)
+    \draw[->, red, thick] (power.south) -- node[right, font=\scriptsize] {12V} (driver.north);
+
+    % Potentiometer to Arduino (yellow)
+    \draw[->, yellow!70!black, thick] (pot.north) -- node[left, font=\scriptsize] {A0} (arduino.south);
+
+    % Ground connections (black dashed)
+    \draw[dashed] (arduino.south west) -- (-1,-1) -- (driver.south west);
+
+    % Legend
+    \node[align=left, font=\scriptsize] at (10,-2) {
+        \textcolor{green!60!black}{---} Control\\
+        \textcolor{blue}{---} Encoder\\
+        \textcolor{red}{---} Power\\
+        \textcolor{yellow!70!black}{---} Analog
+    };
+\end{tikzpicture}
+\caption{Laboratory setup showing the Arduino microcontroller, motor driver, DC motor with encoder, potentiometer for setpoint input, and power supply. Arrows indicate signal flow direction.}
 \label{fig:lab_setup}
 \end{figure}
 
@@ -1153,49 +998,71 @@ Required TikZ styles:
 \label{sec:summary}
 %=============================================================================
 
-This chapter established the fundamental concepts of control systems:
+This chapter established the fundamental concepts of control systems. From a historical perspective, feedback control emerged from practical necessity---the need to regulate systems against unpredictable disturbances. From Ktesibios's water clock to Watt's steam governor, each invention solved problems that open-loop control could not address.
 
-\begin{enumerate}
-    \item \textbf{Historical Context}: Feedback control emerged from practical necessity---the need to regulate systems against unpredictable disturbances. From Ktesibios's water clock to Watt's steam governor, each invention solved problems that open-loop control could not address.
+The distinction between open-loop and closed-loop systems is fundamental. Open-loop systems apply predetermined inputs without measuring outputs; they fail when disturbances occur or models are inaccurate. Closed-loop systems measure output error and adjust input to compensate, providing inherent robustness.
 
-    \item \textbf{Open-Loop vs.\ Closed-Loop}: Open-loop systems apply predetermined inputs without measuring outputs; they fail when disturbances occur or models are inaccurate. Closed-loop systems measure output error and adjust input to compensate, providing inherent robustness.
+The mathematical framework developed in this chapter shows that the closed-loop transfer function $T(s) = \dfrac{GK}{1+GKH}$ differs fundamentally from the open-loop transfer function $GK$ through the $(1+L)$ denominator, which reduces sensitivity to plant variations and disturbances. Feedback reduces sensitivity to plant variations by the factor $S = 1/(1+L)$, and system type determines steady-state error characteristics for polynomial inputs.
 
-    \item \textbf{Mathematical Framework}: The closed-loop transfer function $T(s) = \dfrac{GK}{1+GKH}$ differs fundamentally from open-loop $GK$ through the $(1+L)$ denominator, which reduces sensitivity to plant variations and disturbances.
+The laboratory exercises demonstrate these principles using accessible hardware, showing quantitatively how closed-loop control improves accuracy and disturbance rejection compared to open-loop approaches.
 
-    \item \textbf{Sensitivity and Error}: Feedback reduces sensitivity to plant variations by the factor $S = 1/(1+L)$. System type determines steady-state error characteristics for polynomial inputs.
-
-    \item \textbf{Practical Implementation}: The laboratory exercises demonstrate these principles using accessible hardware, showing quantitatively how closed-loop control improves accuracy and disturbance rejection.
-\end{enumerate}
-
-\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Key Takeaway]
+\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Key Takeaway,sharp corners]
 Feedback control enables systems to regulate themselves against disturbances and uncertainties that cannot be eliminated at their source. The fundamental principle---measure the error, apply correction---is universal across all control applications, from ancient water clocks to modern spacecraft.
 \end{tcolorbox}
 
+\newpage
 %=============================================================================
-\section{Problems}
-\label{sec:problems}
+\section{Exercises}
+\label{sec:exercises}
 %=============================================================================
 
-\begin{enumerate}
-    \item \textbf{Historical Analysis}: Explain why Ktesibios's float valve constitutes a feedback controller. Identify the reference input, controlled variable, manipulated variable, and feedback element.
+\begin{exercise}
+\textbf{(Historical Analysis)} Explain why Ktesibios's float valve constitutes a feedback controller. Identify the reference input, controlled variable, manipulated variable, and feedback element.
+\end{exercise}
 
-    \item \textbf{Open vs.\ Closed Loop}: A coffee maker heats water for a fixed time (open-loop). Propose a closed-loop alternative and identify what sensor and actuator would be required.
+\begin{exercise}
+\textbf{(Open vs.\ Closed Loop)} A coffee maker heats water for a fixed time (open-loop). Propose a closed-loop alternative and identify what sensor and actuator would be required.
+\end{exercise}
 
-    \item \textbf{Steady-State Error}: For a system with $G(s) = \dfrac{5}{s+2}$, $K = 4$, and unity feedback, calculate the steady-state error to (a) a unit step input, (b) a unit ramp input.
+\begin{exercise}
+\textbf{(Steady-State Error)} For a system with $G(s) = \dfrac{5}{s+2}$, $K = 4$, and unity feedback, calculate the steady-state error to (a) a unit step input, and (b) a unit ramp input.
+\end{exercise}
 
-    \item \textbf{Sensitivity Analysis}: A control system has loop gain $L_0 = 20$ at DC. If the plant gain increases by 10\%, what is the percentage change in closed-loop gain?
+\begin{exercise}
+\textbf{(Sensitivity Analysis)} A control system has loop gain $L_0 = 20$ at DC. If the plant gain increases by 10\%, what is the percentage change in closed-loop gain?
+\end{exercise}
 
-    \item \textbf{Controller Design}: Design a proportional controller for $G(s) = \dfrac{3}{s+5}$ with unity feedback such that the steady-state error to a unit step is less than 5\%.
+\begin{exercise}
+\textbf{(Controller Design)} Design a proportional controller for $G(s) = \dfrac{3}{s+5}$ with unity feedback such that the steady-state error to a unit step is less than 5\%.
+\end{exercise}
 
-    \item \textbf{Disturbance Rejection}: For the system in Problem 5, calculate the steady-state output due to a unit step disturbance at the plant input, both with and without feedback.
+\begin{exercise}
+\textbf{(Disturbance Rejection)} For the system in Exercise 5, calculate the steady-state output due to a unit step disturbance at the plant input, both with and without feedback.
+\end{exercise}
 
-    \item \textbf{Laboratory Extension}: Modify the closed-loop Arduino code to implement proportional-integral (PI) control. What improvement do you expect in steady-state error?
+\begin{exercise}
+\textbf{(Laboratory Extension)} Modify the closed-loop Arduino code to implement proportional-integral (PI) control. What improvement do you expect in steady-state error?
+\end{exercise}
 
-    \item \textbf{System Type}: Determine the system type and calculate all applicable error constants for:
-    \begin{equation*}
-    L(s) = \frac{100(s+2)}{s^2(s+5)(s+10)}
-    \end{equation*}
+\begin{exercise}
+\textbf{(System Type)} Determine the system type and calculate all applicable error constants for the loop transfer function
+\begin{equation*}
+L(s) = \frac{100(s+2)}{s^2(s+5)(s+10)}
+\end{equation*}
+\end{exercise}
+
+\begin{exercise}
+\textbf{(Biological Feedback)} Human body temperature is regulated at approximately 37°C through sweating, shivering, and vasodilation/vasoconstriction. Draw a block diagram of this thermoregulatory system, identifying the setpoint, sensor, controller, and actuators. What type of controller action (proportional, integral, derivative, or combination) does the body appear to use?
+\end{exercise}
+
+\begin{exercise}
+\textbf{(Closed-Loop Gain Calculation)} For the closed-loop system shown in Figure~\ref{fig:closedloop_block} with $G(s) = \dfrac{10}{s(s+5)}$, $K(s) = K_p$, and $H(s) = 1$:
+\begin{enumerate}[(a)]
+\item Derive the closed-loop transfer function $T(s) = Y(s)/R(s)$.
+\item Find the value of $K_p$ that results in a closed-loop DC gain of 0.9.
+\item Calculate the closed-loop poles for this value of $K_p$ and determine if the system is stable.
 \end{enumerate}
+\end{exercise}
 
 %=============================================================================
 % End of Chapter

@@ -806,22 +806,9 @@ This experiment demonstrates transient and steady-state concepts through a physi
 \subsection{Experimental Setup}
 %-----------------------------------------------------------------------------
 
-\textbf{Hardware components}:
-\begin{itemize}
-    \item DC motor with optical encoder (e.g., Pololu 37D gearmotor with 64 CPR encoder)
-    \item Arduino Uno or Mega microcontroller
-    \item L298N or similar H-bridge motor driver
-    \item 12V power supply for motor
-    \item USB connection for data logging
-\end{itemize}
+The hardware components include a DC motor with optical encoder (e.g., Pololu 37D gearmotor with 64 CPR encoder), an Arduino Uno or Mega microcontroller, an L298N or similar H-bridge motor driver, a 12V power supply for the motor, and a USB connection for data logging.
 
-\textbf{System configuration}:
-\begin{itemize}
-    \item Encoder provides position feedback (quadrature decoding)
-    \item Arduino implements digital PID control
-    \item PWM output drives motor through H-bridge
-    \item Serial communication for command input and data output
-\end{itemize}
+In terms of system configuration, the encoder provides position feedback via quadrature decoding, the Arduino implements digital PID control, PWM output drives the motor through the H-bridge, and serial communication handles command input and data output.
 
 \begin{figure}[H]
 \centering
@@ -860,59 +847,41 @@ This experiment demonstrates transient and steady-state concepts through a physi
 
 The Arduino implements a discrete-time PID controller:
 
-\begin{lstlisting}[language=C++, caption={Arduino PID Position Control}]
-// PID Position Controller for DC Motor
-// Sample time: 10 ms
-
-const float Ts = 0.010;  // Sample time in seconds
-
-// Controller gains (adjustable)
-float Kp = 2.0;    // Proportional gain
-float Ki = 0.5;    // Integral gain
-float Kd = 0.1;    // Derivative gain
-
-// State variables
-long position = 0;        // Current position (encoder counts)
-long setpoint = 0;        // Desired position
-float integral = 0;       // Integral accumulator
-long prevPosition = 0;    // Previous position
-
-void controlLoop() {
-    // Read encoder position
-    position = readEncoder();
-
-    // Calculate error
-    float error = (float)(setpoint - position);
-
-    // Proportional term
-    float P = Kp * error;
-
-    // Integral term (with anti-windup)
-    integral += error * Ts;
-    integral = constrain(integral, -1000, 1000);
-    float I = Ki * integral;
-
-    // Derivative term (on measurement to avoid kick)
-    float derivative = (position - prevPosition) / Ts;
-    float D = -Kd * derivative;
-
-    // Total output
-    float output = P + I + D;
-
-    // Apply to motor (PWM: -255 to +255)
-    setMotor((int)constrain(output, -255, 255));
-
-    // Store for next iteration
-    prevPosition = position;
-
-    // Log data to serial
-    Serial.print(millis());
-    Serial.print(",");
-    Serial.print(setpoint);
-    Serial.print(",");
-    Serial.println(position);
-}
-\end{lstlisting}
+\begin{algorithm}[H]
+\caption{Discrete-Time PID Position Controller}
+\begin{algorithmic}[1]
+\State \textbf{Parameters:} $T_s \gets 0.010$ (sample time in seconds)
+\State \textbf{Gains:} $K_p \gets 2.0$, $K_i \gets 0.5$, $K_d \gets 0.1$
+\State \textbf{Initialize:} $\text{integral} \gets 0$, $\text{prevPosition} \gets 0$
+\State
+\While{controller is running}
+    \State $\text{position} \gets \text{ReadEncoder}()$
+    \State $\text{error} \gets \text{setpoint} - \text{position}$
+    \State
+    \State \Comment{Proportional term}
+    \State $P \gets K_p \times \text{error}$
+    \State
+    \State \Comment{Integral term with anti-windup}
+    \State $\text{integral} \gets \text{integral} + \text{error} \times T_s$
+    \State $\text{integral} \gets \Call{Clamp}{\text{integral}, -1000, 1000}$
+    \State $I \gets K_i \times \text{integral}$
+    \State
+    \State \Comment{Derivative term on measurement (avoids derivative kick)}
+    \State $\text{derivative} \gets (\text{position} - \text{prevPosition}) / T_s$
+    \State $D \gets -K_d \times \text{derivative}$
+    \State
+    \State \Comment{Compute and apply control output}
+    \State $\text{output} \gets P + I + D$
+    \State $\text{SetMotorPWM}(\Call{Clamp}{\text{output}, -255, 255})$
+    \State
+    \State \Comment{Update state and log data}
+    \State $\text{prevPosition} \gets \text{position}$
+    \State $\Call{LogData}{\text{time}, \text{setpoint}, \text{position}}$
+    \State
+    \State \textbf{wait} $T_s$ seconds
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 %-----------------------------------------------------------------------------
 \subsection{Experimental Procedure}
@@ -920,56 +889,21 @@ void controlLoop() {
 
 \subsubsection{Experiment 1: Measuring Step Response}
 
-\begin{enumerate}
-    \item Set initial position: $\theta_0 = 0$ counts
-    \item Command step change: $\theta_{ref} = 1000$ counts (approximately 1 revolution)
-    \item Record position every 10 ms via serial port
-    \item Repeat for three different proportional gains: $K_p = 1.0, 2.0, 4.0$
-    \item Keep $K_i = 0$ and $K_d = 0$ initially
-\end{enumerate}
+Begin by setting the initial position to $\theta_0 = 0$ counts, then command a step change to $\theta_{ref} = 1000$ counts (approximately 1 revolution). Record the position every 10 ms via the serial port. Repeat this procedure for three different proportional gains: $K_p = 1.0$, $K_p = 2.0$, and $K_p = 4.0$. Keep $K_i = 0$ and $K_d = 0$ initially to isolate the effect of proportional gain.
 
 \subsubsection{Expected Results}
 
-\textbf{Low gain} ($K_p = 1.0$):
-\begin{itemize}
-    \item Slow rise time
-    \item Minimal or no overshoot
-    \item Large steady-state error (proportional control only)
-    \item Long settling time due to slow approach to final value
-\end{itemize}
+With \textbf{low gain} ($K_p = 1.0$), expect slow rise time with minimal or no overshoot. There will be large steady-state error since proportional control alone cannot eliminate it, and settling time will be long due to the slow approach to the final value.
 
-\textbf{Medium gain} ($K_p = 2.0$):
-\begin{itemize}
-    \item Moderate rise time
-    \item Some overshoot (perhaps 10--20\%)
-    \item Smaller steady-state error
-    \item Reasonable settling time
-\end{itemize}
+With \textbf{medium gain} ($K_p = 2.0$), expect moderate rise time with some overshoot (perhaps 10--20\%). The steady-state error will be smaller than with low gain, and settling time should be reasonable.
 
-\textbf{High gain} ($K_p = 4.0$):
-\begin{itemize}
-    \item Fast rise time
-    \item Significant overshoot (perhaps 30--50\%)
-    \item Small steady-state error
-    \item Long settling time due to oscillation
-    \item May approach instability
-\end{itemize}
+With \textbf{high gain} ($K_p = 4.0$), expect fast rise time but significant overshoot (perhaps 30--50\%). The steady-state error will be small, but settling time may be long due to oscillation. The system may approach instability.
 
 \subsubsection{Experiment 2: Eliminating Steady-State Error}
 
-\begin{enumerate}
-    \item Return to medium proportional gain: $K_p = 2.0$
-    \item Add integral action: $K_i = 0.2$, then $K_i = 0.5$
-    \item Observe effect on steady-state error and transient response
-\end{enumerate}
+Return to medium proportional gain ($K_p = 2.0$), then add integral action by setting $K_i = 0.2$ and later increasing to $K_i = 0.5$. Observe the effect on steady-state error and transient response.
 
-\textbf{Expected observations}:
-\begin{itemize}
-    \item Steady-state error reduced to zero with integral action
-    \item Overshoot may increase initially
-    \item Settling time may increase
-    \item Too much integral gain causes slow oscillation
-\end{itemize}
+The expected observations are that steady-state error will be reduced to zero with integral action, but overshoot may increase initially. Settling time may also increase, and too much integral gain will cause slow oscillation.
 
 %-----------------------------------------------------------------------------
 \subsection{Data Analysis}
@@ -1200,11 +1134,7 @@ For a ramp $r(t) = 5t$, so $R(s) = 5/s^2$. The steady-state error scales with th
 \vspace{1em}
 
 \begin{examplebox}[Example 7.4: Design to Meet Transient Specifications]
-Design a second-order system (specify $\zeta$ and $\omega_n$) to meet the following specifications:
-\begin{itemize}
-    \item Percent overshoot: PO $\leq 10\%$
-    \item Settling time: $t_s \leq 2$ s (2\% criterion)
-\end{itemize}
+Design a second-order system (specify $\zeta$ and $\omega_n$) to meet the following specifications: percent overshoot PO $\leq 10\%$ and settling time $t_s \leq 2$ s (2\% criterion).
 
 \textbf{Solution}:
 
@@ -1310,13 +1240,7 @@ This gives significant overshoot (PO $\approx 31\%$). If transient performance i
 \vspace{1em}
 
 \begin{examplebox}[Example 7.6: Complete System Design]
-Design a controller for the plant $G_p(s) = \dfrac{10}{s(s+5)}$ to achieve:
-\begin{itemize}
-    \item Zero steady-state error for step inputs
-    \item Steady-state error $\leq 0.05$ units for a unit ramp input
-    \item Percent overshoot $\leq 20\%$
-    \item Settling time $\leq 1$ s
-\end{itemize}
+Design a controller for the plant $G_p(s) = \dfrac{10}{s(s+5)}$ to achieve zero steady-state error for step inputs, steady-state error $\leq 0.05$ units for a unit ramp input, percent overshoot $\leq 20\%$, and settling time $\leq 1$ s.
 
 \textbf{Solution}:
 
@@ -1387,14 +1311,7 @@ With $K = 100$, the open-loop function is:
 
 This third-order system must be analyzed numerically or via root locus. The lead compensator adds phase lead near crossover, improving damping.
 
-\textbf{Design verification} (via root locus or simulation):
-\begin{itemize}
-    \item Dominant poles at approximately $s = -4 \pm j4$
-    \item Effective $\zeta \approx 0.7$, effective $\omega_n \approx 5.7$ rad/s
-    \item PO $\approx 5\%$ (meets spec)
-    \item $t_s \approx 1.0$ s (meets spec)
-    \item $e_{ss,ramp} = 1/20 = 0.05$ (meets spec)
-\end{itemize}
+\textbf{Design verification} (via root locus or simulation): The dominant poles are located at approximately $s = -4 \pm j4$, giving an effective $\zeta \approx 0.7$ and effective $\omega_n \approx 5.7$ rad/s. This yields PO $\approx 5\%$ (meets spec), $t_s \approx 1.0$ s (meets spec), and $e_{ss,ramp} = 1/20 = 0.05$ (meets spec).
 \end{examplebox}
 
 %=============================================================================
@@ -1492,104 +1409,81 @@ This chapter has developed the framework for analyzing and specifying control sy
 
 \subsection*{Key Concepts}
 
-\textbf{Transient Response Specifications}:
-\begin{itemize}
-    \item \textbf{Rise time} ($t_r$): Measures response speed; primarily determined by $\omega_n$
-    \item \textbf{Peak time} ($t_p$): Time to first overshoot; $t_p = \pi/\omega_d$
-    \item \textbf{Percent overshoot} (PO): Depends only on $\zeta$; lower $\zeta$ means more overshoot
-    \item \textbf{Settling time} ($t_s$): Time to reach steady state; $t_s \approx 4/(\zeta\omega_n)$
-\end{itemize}
+\textbf{Transient Response Specifications}: \textbf{Rise time} ($t_r$) measures response speed and is primarily determined by $\omega_n$. \textbf{Peak time} ($t_p$) is the time to first overshoot, given by $t_p = \pi/\omega_d$. \textbf{Percent overshoot} (PO) depends only on $\zeta$, with lower $\zeta$ producing more overshoot. \textbf{Settling time} ($t_s$) is the time to reach steady state, approximately $t_s \approx 4/(\zeta\omega_n)$.
 
-\textbf{Steady-State Error Analysis}:
-\begin{itemize}
-    \item \textbf{System type}: Number of integrators in open-loop transfer function
-    \item \textbf{Error constants} ($K_p$, $K_v$, $K_a$): Determine error magnitude for polynomial inputs
-    \item Type 0: Finite step error, infinite ramp error
-    \item Type 1: Zero step error, finite ramp error
-    \item Type 2: Zero step and ramp error, finite parabolic error
-\end{itemize}
+\textbf{Steady-State Error Analysis}: The \textbf{system type} is the number of integrators in the open-loop transfer function. The \textbf{error constants} ($K_p$, $K_v$, $K_a$) determine error magnitude for polynomial inputs. Type 0 systems have finite step error but infinite ramp error. Type 1 systems have zero step error but finite ramp error. Type 2 systems have zero step and ramp error but finite parabolic error.
 
-\textbf{Fundamental Tradeoffs}:
-\begin{itemize}
-    \item Higher gain reduces steady-state error but often increases overshoot
-    \item Faster response (higher $\omega_n$) requires higher gain
-    \item Adding integrators eliminates steady-state error but reduces stability margins
-    \item The s-plane provides a geometric framework for balancing multiple specifications
-\end{itemize}
+\textbf{Fundamental Tradeoffs}: Higher gain reduces steady-state error but often increases overshoot. Faster response (higher $\omega_n$) requires higher gain. Adding integrators eliminates steady-state error but reduces stability margins. The s-plane provides a geometric framework for balancing multiple specifications.
 
 \subsection*{Design Guidelines}
 
-\begin{enumerate}
-    \item Begin by determining required $\zeta$ from overshoot specification
-    \item Calculate required $\sigma = \zeta\omega_n$ from settling time specification
-    \item Determine minimum $\omega_n$ from the ratio $\sigma/\zeta$
-    \item Check steady-state error requirements; add integrators or increase gain as needed
-    \item Verify that stability margins remain adequate
-    \item Use compensation (lead, lag, or PID) to satisfy conflicting requirements
-\end{enumerate}
+The recommended design procedure begins by determining the required $\zeta$ from the overshoot specification, then calculating the required $\sigma = \zeta\omega_n$ from the settling time specification. From these, determine the minimum $\omega_n$ from the ratio $\sigma/\zeta$. Next, check steady-state error requirements and add integrators or increase gain as needed. Always verify that stability margins remain adequate. Finally, use compensation (lead, lag, or PID) to satisfy conflicting requirements.
 
+\newpage
 %=============================================================================
-\section*{Problems}
+\section{Exercises}
 %=============================================================================
 
+\begin{exercise}
+A second-order system has poles at $s = -2 \pm j3$. Calculate:
 \begin{enumerate}
-    \item A second-order system has poles at $s = -2 \pm j3$. Calculate:
-    \begin{enumerate}
-        \item Natural frequency $\omega_n$ and damping ratio $\zeta$
-        \item Rise time, peak time, percent overshoot, and settling time
-        \item The closed-loop transfer function (assuming unity DC gain)
-    \end{enumerate}
-
-    \item For the system $G(s) = \dfrac{20(s+3)}{s^2(s+5)(s+10)}$:
-    \begin{enumerate}
-        \item Determine the system type
-        \item Calculate all error constants
-        \item Find the steady-state error for inputs $r(t) = 5$, $r(t) = 2t$, and $r(t) = t^2$
-    \end{enumerate}
-
-    \item Design a second-order system to achieve:
-    \begin{itemize}
-        \item Settling time $\leq 0.5$ s
-        \item Percent overshoot $\leq 5\%$
-    \end{itemize}
-    Specify $\zeta$, $\omega_n$, and pole locations.
-
-    \item A unity feedback system has $G(s) = \dfrac{K}{s+10}$.
-    \begin{enumerate}
-        \item What is the system type?
-        \item Find $K$ for 5\% steady-state error to a step input
-        \item With this $K$, what is the closed-loop time constant?
-    \end{enumerate}
-
-    \item For the motor control experiment, if the measured step response shows:
-    \begin{itemize}
-        \item Rise time: 0.15 s
-        \item Overshoot: 25\%
-        \item Settling time: 0.8 s
-    \end{itemize}
-    Estimate the effective $\zeta$ and $\omega_n$ of the closed-loop system.
-
-    \item A Type 1 system must track a ramp input with velocity 10 units/s with steady-state error less than 0.1 units. What minimum velocity error constant $K_v$ is required?
-
-    \item Sketch the allowable region in the s-plane for dominant poles that satisfy:
-    \begin{itemize}
-        \item Settling time $\leq 2$ s
-        \item Overshoot $\leq 15\%$
-        \item Rise time $\leq 0.5$ s
-    \end{itemize}
-
-    \item Explain why adding an integrator to improve steady-state error may degrade transient performance. What compensation technique can restore good transient response?
-
-    \item A hard disk servo must position the head within 0.1 $\mu$m of the target track within 4 ms. If the maximum acceptable overshoot is 2\%, estimate the required $\zeta$ and $\omega_n$.
-
-    \item Compare the step responses of three systems, all with $\omega_n = 5$ rad/s:
-    \begin{enumerate}
-        \item $\zeta = 0.3$
-        \item $\zeta = 0.7$
-        \item $\zeta = 1.5$
-    \end{enumerate}
-    Calculate and tabulate all transient specifications. Which provides the best compromise between speed and smoothness?
+    \item Natural frequency $\omega_n$ and damping ratio $\zeta$
+    \item Rise time, peak time, percent overshoot, and settling time
+    \item The closed-loop transfer function (assuming unity DC gain)
 \end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+For the system $G(s) = \dfrac{20(s+3)}{s^2(s+5)(s+10)}$:
+\begin{enumerate}
+    \item Determine the system type
+    \item Calculate all error constants
+    \item Find the steady-state error for inputs $r(t) = 5$, $r(t) = 2t$, and $r(t) = t^2$
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Design a second-order system to achieve settling time $\leq 0.5$ s and percent overshoot $\leq 5\%$. Specify $\zeta$, $\omega_n$, and pole locations.
+\end{exercise}
+
+\begin{exercise}
+A unity feedback system has $G(s) = \dfrac{K}{s+10}$.
+\begin{enumerate}
+    \item What is the system type?
+    \item Find $K$ for 5\% steady-state error to a step input
+    \item With this $K$, what is the closed-loop time constant?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+For the motor control experiment, if the measured step response shows rise time of 0.15 s, overshoot of 25\%, and settling time of 0.8 s, estimate the effective $\zeta$ and $\omega_n$ of the closed-loop system.
+\end{exercise}
+
+\begin{exercise}
+A Type 1 system must track a ramp input with velocity 10 units/s with steady-state error less than 0.1 units. What minimum velocity error constant $K_v$ is required?
+\end{exercise}
+
+\begin{exercise}
+Sketch the allowable region in the s-plane for dominant poles that satisfy settling time $\leq 2$ s, overshoot $\leq 15\%$, and rise time $\leq 0.5$ s.
+\end{exercise}
+
+\begin{exercise}
+Explain why adding an integrator to improve steady-state error may degrade transient performance. What compensation technique can restore good transient response?
+\end{exercise}
+
+\begin{exercise}
+A hard disk servo must position the head within 0.1 $\mu$m of the target track within 4 ms. If the maximum acceptable overshoot is 2\%, estimate the required $\zeta$ and $\omega_n$.
+\end{exercise}
+
+\begin{exercise}
+Compare the step responses of three systems, all with $\omega_n = 5$ rad/s:
+\begin{enumerate}
+    \item $\zeta = 0.3$
+    \item $\zeta = 0.7$
+    \item $\zeta = 1.5$
+\end{enumerate}
+Calculate and tabulate all transient specifications. Which provides the best compromise between speed and smoothness?
+\end{exercise}
 
 %=============================================================================
 \section*{Further Reading}
