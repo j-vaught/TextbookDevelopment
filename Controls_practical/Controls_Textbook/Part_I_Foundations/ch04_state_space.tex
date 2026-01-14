@@ -10,13 +10,7 @@ This chapter introduces state-space representation, the modern foundation of con
 
 \vspace{1em}
 \noindent\textbf{Learning Objectives:}
-\begin{itemize}[noitemsep]
-    \item Understand the historical development and motivation for state-space methods
-    \item Define state variables and formulate state-space models
-    \item Convert between transfer function and state-space representations
-    \item Analyze system dynamics using eigenvalues and the state transition matrix
-    \item Apply state-space modeling to practical multi-body systems
-\end{itemize}
+Upon completing this chapter, students will understand the historical development and motivation for state-space methods, and will be able to define state variables and formulate state-space models from physical systems. Students will learn to convert between transfer function and state-space representations, analyze system dynamics using eigenvalues and the state transition matrix, and apply state-space modeling to practical multi-body systems.
 
 %==============================================================================
 \section{Historical Development and Motivation}
@@ -26,15 +20,7 @@ This chapter introduces state-space representation, the modern foundation of con
 
 By the late 1950s, control engineering had reached a critical impasse. The classical methods developed by Bode, Nyquist, and others---while elegant and powerful for single-input, single-output (SISO) systems---proved inadequate for the increasingly complex engineering challenges of the post-war era. Transfer function methods, the cornerstone of classical control, suffered from fundamental limitations:
 
-\begin{enumerate}
-    \item \textbf{MIMO Complexity:} For systems with multiple inputs and outputs, transfer functions become unwieldy matrices of rational polynomials, losing the intuitive interpretation that made them valuable.
-
-    \item \textbf{Initial Conditions:} Transfer functions assume zero initial conditions, making them ill-suited for trajectory planning or systems that must operate from arbitrary starting points.
-
-    \item \textbf{Internal Behavior:} Transfer functions describe only input-output relationships, potentially hiding unstable internal dynamics---a phenomenon later formalized as ``observability'' and ``controllability.''
-
-    \item \textbf{Time-Varying Systems:} Classical methods assume linear time-invariant (LTI) systems; extending them to time-varying systems required fundamental reformulation.
-\end{enumerate}
+The first major limitation concerned MIMO complexity: for systems with multiple inputs and outputs, transfer functions become unwieldy matrices of rational polynomials, losing the intuitive interpretation that made them valuable. The second limitation involved initial conditions---transfer functions assume zero initial conditions, making them ill-suited for trajectory planning or systems that must operate from arbitrary starting points. Third, transfer functions describe only input-output relationships, potentially hiding unstable internal dynamics---a phenomenon later formalized as ``observability'' and ``controllability.'' Finally, classical methods assume linear time-invariant (LTI) systems; extending them to time-varying systems required fundamental reformulation.
 
 \subsection{Rudolf Kalman and the State-Space Revolution}
 
@@ -57,15 +43,7 @@ The timing of Kalman's theoretical developments proved fortuitous. The Soviet Un
 
 Spacecraft guidance presented precisely the challenges that classical control could not address:
 
-\begin{itemize}
-    \item \textbf{Multiple Coupled Variables:} A spacecraft's position and orientation in three-dimensional space require tracking at least twelve state variables (position, velocity, attitude, and angular rates).
-
-    \item \textbf{Sensor Fusion:} Navigation required combining measurements from multiple imperfect sensors---gyroscopes, accelerometers, star trackers, and radar---each with different noise characteristics and update rates.
-
-    \item \textbf{Fuel Optimality:} With strictly limited fuel, controllers had to minimize thrust usage while achieving precise trajectory corrections.
-
-    \item \textbf{Real-Time Computation:} All calculations had to execute on primitive onboard computers with kilobytes of memory and kilohertz clock speeds.
-\end{itemize}
+Spacecraft presented the challenge of multiple coupled variables, as a spacecraft's position and orientation in three-dimensional space require tracking at least twelve state variables encompassing position, velocity, attitude, and angular rates. Navigation demanded sensor fusion, combining measurements from multiple imperfect sensors---gyroscopes, accelerometers, star trackers, and radar---each with different noise characteristics and update rates. Fuel optimality was critical because with strictly limited fuel, controllers had to minimize thrust usage while achieving precise trajectory corrections. Furthermore, all calculations had to execute in real-time on primitive onboard computers with only kilobytes of memory and kilohertz clock speeds.
 
 Stanley Schmidt at NASA Ames Research Center recognized the potential of Kalman's work and implemented the first practical Kalman filter for the Apollo navigation computer. The filter elegantly solved the sensor fusion problem, optimally combining noisy measurements to estimate the spacecraft's true state. This application demonstrated that state-space methods were not merely theoretical curiosities but practical tools for solving real engineering problems.
 
@@ -105,11 +83,7 @@ Spacecraft applications have grown increasingly sophisticated. Mars rovers navig
 
 Industrial and research robots exemplify MIMO control challenges. A six-axis robot arm has twelve state variables (six joint angles and six joint velocities) with highly coupled, nonlinear dynamics. State-space methods enable:
 
-\begin{itemize}
-    \item \textbf{Computed Torque Control:} Linearization of nonlinear dynamics about the current state, enabling linear state feedback.
-    \item \textbf{State Estimation:} Kalman filters combine joint encoder measurements with dynamic models to estimate unmeasured states like joint velocities.
-    \item \textbf{Trajectory Optimization:} Pontryagin's maximum principle determines time-optimal or energy-optimal joint trajectories.
-\end{itemize}
+State-space methods enable computed torque control through linearization of nonlinear dynamics about the current state, enabling linear state feedback. Kalman filters provide state estimation by combining joint encoder measurements with dynamic models to estimate unmeasured states like joint velocities. For trajectory optimization, Pontryagin's maximum principle determines time-optimal or energy-optimal joint trajectories.
 
 \subsection{Economic and Financial Modeling}
 
@@ -143,12 +117,7 @@ The state variables are collected into a \textbf{state vector}:
 The integer $n$ is the \textbf{order} of the system, and the $n$-dimensional space containing all possible state vectors is the \textbf{state space}.
 
 \begin{example}[Simple Pendulum]
-A simple pendulum's motion is governed by $\ddot{\theta} + (g/L)\sin\theta = 0$. To predict future motion, we need:
-\begin{itemize}
-    \item $x_1 = \theta$ (angular position)
-    \item $x_2 = \dot{\theta}$ (angular velocity)
-\end{itemize}
-Knowing only $\theta$ is insufficient---we cannot distinguish a pendulum at rest from one passing through the same angle with high velocity.
+A simple pendulum's motion is governed by $\ddot{\theta} + (g/L)\sin\theta = 0$. To predict future motion, we need both the angular position $x_1 = \theta$ and the angular velocity $x_2 = \dot{\theta}$. Knowing only $\theta$ is insufficient---we cannot distinguish a pendulum at rest from one passing through the same angle with high velocity.
 \end{example}
 
 \subsection{Standard State-Space Form}
@@ -165,16 +134,26 @@ For linear time-invariant (LTI) systems, the state-space representation takes a 
 \label{eq:state_space_standard}
 \end{equation}
 
-where:
-\begin{itemize}
-    \item $\state(t) \in \Real^n$ is the state vector
-    \item $\inputvec(t) \in \Real^m$ is the input vector
-    \item $\outputvec(t) \in \Real^p$ is the output vector
-    \item $\mat{A} \in \Real^{n \times n}$ is the \textbf{system matrix} (or state matrix)
-    \item $\mat{B} \in \Real^{n \times m}$ is the \textbf{input matrix}
-    \item $\mat{C} \in \Real^{p \times n}$ is the \textbf{output matrix}
-    \item $\mat{D} \in \Real^{p \times m}$ is the \textbf{feedthrough matrix} (often zero)
-\end{itemize}
+The variables and matrices in this representation are defined in Table~\ref{tab:state_space_notation}.
+
+\begin{table}[htbp]
+\centering
+\caption{State-space notation and dimensions}
+\label{tab:state_space_notation}
+\begin{tabular}{cll}
+\hline
+\textbf{Symbol} & \textbf{Dimension} & \textbf{Description} \\
+\hline
+$\state(t)$ & $\Real^n$ & State vector \\
+$\inputvec(t)$ & $\Real^m$ & Input vector \\
+$\outputvec(t)$ & $\Real^p$ & Output vector \\
+$\mat{A}$ & $\Real^{n \times n}$ & System matrix (or state matrix) \\
+$\mat{B}$ & $\Real^{n \times m}$ & Input matrix \\
+$\mat{C}$ & $\Real^{p \times n}$ & Output matrix \\
+$\mat{D}$ & $\Real^{p \times m}$ & Feedthrough matrix (often zero) \\
+\hline
+\end{tabular}
+\end{table}
 
 The state equation is a system of $n$ coupled first-order ordinary differential equations. The output equation is algebraic, specifying which combinations of states and inputs are measured.
 
@@ -226,12 +205,7 @@ The state equation is a system of $n$ coupled first-order ordinary differential 
 Any $n$th-order linear ODE can be converted to $n$ first-order equations in state-space form. The procedure is systematic:
 
 \textbf{General Procedure:}
-\begin{enumerate}
-    \item Identify the highest derivative of the output in the differential equation.
-    \item Choose state variables as the output and its successive derivatives.
-    \item Write each derivative as a function of states and inputs.
-    \item Assemble into matrix form.
-\end{enumerate}
+The conversion process follows a systematic approach. First, identify the highest derivative of the output in the differential equation. Next, choose state variables as the output and its successive derivatives. Then write each derivative as a function of states and inputs. Finally, assemble the resulting equations into matrix form.
 
 \begin{example}[Second-Order System]
 Consider the general second-order ODE:
@@ -423,13 +397,7 @@ Using the quadratic formula:
     \lambda_{1,2} = \frac{-0.5 \pm \sqrt{0.25 - 8}}{2} = -0.25 \pm j1.39
 \end{equation}
 
-The eigenvalues are complex conjugates with negative real parts ($-0.25$), indicating:
-\begin{itemize}
-    \item \textbf{Stable system} (negative real part)
-    \item \textbf{Oscillatory response} (nonzero imaginary part)
-    \item \textbf{Damped oscillation frequency:} $\omega_d = 1.39$ rad/s
-    \item \textbf{Time constant:} $\tau = 1/0.25 = 4$ s
-\end{itemize}
+The eigenvalues are complex conjugates with negative real parts ($-0.25$), indicating a stable system with oscillatory response. The negative real part ensures stability, while the nonzero imaginary part produces oscillations. The damped oscillation frequency is $\omega_d = 1.39$ rad/s, and the time constant is $\tau = 1/0.25 = 4$ s.
 \end{example}
 
 \subsection{State Transition Matrix}
@@ -447,21 +415,12 @@ where $e^{\mat{A}t}$ is the \textbf{state transition matrix} (or matrix exponent
 \end{equation}
 
 \textbf{Key Properties:}
-\begin{enumerate}
-    \item $e^{\mat{A} \cdot 0} = \mat{I}$
-    \item $\frac{\diff}{\diff t}e^{\mat{A}t} = \mat{A}e^{\mat{A}t} = e^{\mat{A}t}\mat{A}$
-    \item $e^{\mat{A}(t_1+t_2)} = e^{\mat{A}t_1}e^{\mat{A}t_2}$
-    \item $(e^{\mat{A}t})^{-1} = e^{-\mat{A}t}$
-\end{enumerate}
+The state transition matrix satisfies several important properties. At $t=0$, we have $e^{\mat{A} \cdot 0} = \mat{I}$, confirming the initial condition. The derivative satisfies $\frac{\diff}{\diff t}e^{\mat{A}t} = \mat{A}e^{\mat{A}t} = e^{\mat{A}t}\mat{A}$, showing that $\mat{A}$ and $e^{\mat{A}t}$ commute. The semigroup property states that $e^{\mat{A}(t_1+t_2)} = e^{\mat{A}t_1}e^{\mat{A}t_2}$, and the inverse is simply $(e^{\mat{A}t})^{-1} = e^{-\mat{A}t}$.
 
 The state transition matrix propagates the state forward in time: $\state(t) = e^{\mat{A}(t-t_0)}\state(t_0)$.
 
 \textbf{Computation Methods:}
-\begin{enumerate}
-    \item \textbf{Laplace Transform:} $e^{\mat{A}t} = \mathcal{L}^{-1}\{(s\mat{I}-\mat{A})^{-1}\}$
-    \item \textbf{Eigenvalue Decomposition:} If $\mat{A} = \mat{V}\mat{\Lambda}\mat{V}^{-1}$, then $e^{\mat{A}t} = \mat{V}e^{\mat{\Lambda}t}\mat{V}^{-1}$
-    \item \textbf{Cayley-Hamilton:} For $n \times n$ matrix, $e^{\mat{A}t}$ is a polynomial of degree $n-1$ in $\mat{A}$
-\end{enumerate}
+Several methods exist for computing the matrix exponential. The Laplace transform approach gives $e^{\mat{A}t} = \mathcal{L}^{-1}\{(s\mat{I}-\mat{A})^{-1}\}$. Eigenvalue decomposition provides an alternative: if $\mat{A} = \mat{V}\mat{\Lambda}\mat{V}^{-1}$, then $e^{\mat{A}t} = \mat{V}e^{\mat{\Lambda}t}\mat{V}^{-1}$. The Cayley-Hamilton theorem guarantees that for an $n \times n$ matrix, $e^{\mat{A}t}$ can be expressed as a polynomial of degree $n-1$ in $\mat{A}$.
 
 \subsection{Complete Solution with Forcing}
 
@@ -494,14 +453,7 @@ Integrating from 0 to $t$:
 
 \subsection{Objective}
 
-This experiment demonstrates state-space modeling using a coupled two-mass system. Unlike the single mass-spring-damper, this system has four state variables and exhibits richer dynamics including two distinct natural frequencies. Students will:
-
-\begin{enumerate}
-    \item Build a physical two-mass system
-    \item Derive and validate a state-space model
-    \item Observe the complexity this system would have in transfer function form
-    \item Compare model predictions with measured responses
-\end{enumerate}
+This experiment demonstrates state-space modeling using a coupled two-mass system. Unlike the single mass-spring-damper, this system has four state variables and exhibits richer dynamics including two distinct natural frequencies. Students will build a physical two-mass system and derive and validate a state-space model. Through this process, they will observe the complexity this system would have in transfer function form and compare model predictions with measured responses.
 
 \subsection{Apparatus}
 
@@ -572,23 +524,10 @@ This experiment demonstrates state-space modeling using a coupled two-mass syste
 \end{figure}
 
 \textbf{Required Components:}
-\begin{itemize}
-    \item Two carts (3D printed or commercial dynamics carts, $m_1 \approx m_2 \approx 0.5$ kg)
-    \item Linear track (drawer slides or commercial air track, length $\geq$ 1 m)
-    \item Two springs ($k_1, k_2 \approx 10$--50 N/m)
-    \item Rotary encoders or ultrasonic distance sensors for position measurement
-    \item Solenoid or motor for applying controlled force $F(t)$
-    \item Data acquisition system (Arduino, myRIO, or similar)
-    \item Computer with MATLAB/Python for analysis
-\end{itemize}
+The apparatus requires two carts (3D printed or commercial dynamics carts with $m_1 \approx m_2 \approx 0.5$ kg) mounted on a linear track (drawer slides or commercial air track with length $\geq$ 1 m). Two springs with constants $k_1, k_2 \approx 10$--50 N/m provide the coupling forces. Position measurement is accomplished using rotary encoders or ultrasonic distance sensors, while a solenoid or motor applies the controlled force $F(t)$. A data acquisition system (Arduino, myRIO, or similar) interfaces with a computer running MATLAB or Python for analysis.
 
-\textbf{3D Printing Notes:} Cart designs should include:
-\begin{itemize}
-    \item Low-friction wheel mounts compatible with track
-    \item Spring attachment points
-    \item Encoder wheel mount or reflector for distance sensor
-    \item Estimated print time: 2--3 hours per cart at 0.2 mm layer height
-\end{itemize}
+\textbf{3D Printing Notes:}
+Cart designs should incorporate low-friction wheel mounts compatible with the track, spring attachment points, and an encoder wheel mount or reflector for the distance sensor. The estimated print time is 2--3 hours per cart at 0.2 mm layer height.
 
 \subsection{System Modeling}
 
@@ -652,36 +591,13 @@ This fourth-order transfer function, with its complicated coefficient expression
 
 \subsection{Experimental Procedure}
 
-\begin{enumerate}
-    \item \textbf{Parameter Identification:}
-    \begin{itemize}
-        \item Weigh carts to determine $m_1$, $m_2$
-        \item Measure spring constants by hanging known masses
-        \item Estimate damping from free oscillation decay
-    \end{itemize}
+The experiment proceeds through four phases. In the \textbf{parameter identification} phase, weigh the carts to determine $m_1$ and $m_2$, measure spring constants by hanging known masses, and estimate damping coefficients from free oscillation decay rates.
 
-    \item \textbf{Model Validation:}
-    \begin{itemize}
-        \item Displace cart 2 and release (initial condition response)
-        \item Record $x_1(t)$ and $x_2(t)$
-        \item Simulate state-space model with same initial conditions
-        \item Compare simulated and measured trajectories
-    \end{itemize}
+For \textbf{model validation}, displace cart 2 and release it to observe the initial condition response. Record $x_1(t)$ and $x_2(t)$ throughout the motion, then simulate the state-space model with the same initial conditions. Compare the simulated and measured trajectories to assess model accuracy.
 
-    \item \textbf{Forced Response:}
-    \begin{itemize}
-        \item Apply step force to cart 2
-        \item Apply sinusoidal force at various frequencies
-        \item Identify resonant frequencies (should match eigenvalue imaginary parts)
-    \end{itemize}
+The \textbf{forced response} phase involves applying a step force to cart 2 and observing the transient behavior. Subsequently, apply sinusoidal forcing at various frequencies to identify resonant frequencies, which should match the imaginary parts of the eigenvalues.
 
-    \item \textbf{Phase Portrait Analysis:}
-    \begin{itemize}
-        \item Plot $x_1$ vs $\dot{x}_1$ (cart 1 phase plane)
-        \item Plot $x_2$ vs $\dot{x}_2$ (cart 2 phase plane)
-        \item Observe spiral trajectories indicating damped oscillation
-    \end{itemize}
-\end{enumerate}
+Finally, conduct \textbf{phase portrait analysis} by plotting $x_1$ versus $\dot{x}_1$ for cart 1 and $x_2$ versus $\dot{x}_2$ for cart 2. Observe the spiral trajectories characteristic of damped oscillatory systems converging to the equilibrium point.
 
 \begin{figure}[htbp]
 \centering

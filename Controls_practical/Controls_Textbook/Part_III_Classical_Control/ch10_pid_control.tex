@@ -72,29 +72,13 @@ The gap between engineering practice and theoretical understanding was bridged b
 
 In his landmark 1922 paper, ``Directional Stability of Automatically Steered Bodies,'' published in the \textit{Journal of the American Society of Naval Engineers}, Minorsky provided the first complete theoretical analysis of what we now call PID control \cite{minorsky1922}. His key insight came from observing how experienced helmsmen steered ships.
 
-Minorsky noted that skilled helmsmen did not simply apply a rudder correction proportional to the current heading error. Instead, they:
-
-\begin{enumerate}[label=(\arabic*)]
-    \item Applied a correction proportional to the current error (P action)
-    \item Applied additional correction when the error persisted over time (I action)
-    \item Anticipated where the ship was heading based on how fast the error was changing (D action)
-\end{enumerate}
-
-This observation led Minorsky to propose the three-term controller:
+Minorsky noted that skilled helmsmen did not simply apply a rudder correction proportional to the current heading error. Instead, they applied a correction proportional to the current error (P action), applied additional correction when the error persisted over time (I action), and anticipated where the ship was heading based on how fast the error was changing (D action). This observation led Minorsky to propose the three-term controller:
 \begin{equation}
 \delta(t) = \Kp e(t) + \Ki \int_0^t e(\tau) \, d\tau + \Kd \frac{de(t)}{dt}
 \label{eq:minorsky_pid}
 \end{equation}
 
-Minorsky's analysis was groundbreaking not just for proposing this controller structure, but for providing a mathematical framework to understand why each term was necessary:
-
-\begin{itemize}
-    \item \textbf{Proportional term}: Provides the primary corrective action. Larger errors produce larger corrections. However, for a stable equilibrium with non-zero external disturbance, the system must maintain some error to generate the necessary restoring force.
-
-    \item \textbf{Integral term}: Accumulates error over time. Even a small persistent error will eventually produce a large integral, driving the system to eliminate the steady-state offset. Minorsky recognized this as the key to achieving zero steady-state error.
-
-    \item \textbf{Derivative term}: Responds to the rate of change of error. When the ship is rapidly approaching the desired heading, the derivative term applies a ``braking'' action, reducing overshoot and oscillation.
-\end{itemize}
+Minorsky's analysis was groundbreaking not just for proposing this controller structure, but for providing a mathematical framework to understand why each term was necessary. The \textbf{proportional term} provides the primary corrective action, where larger errors produce larger corrections; however, for a stable equilibrium with non-zero external disturbance, the system must maintain some error to generate the necessary restoring force. The \textbf{integral term} accumulates error over time, so that even a small persistent error will eventually produce a large integral, driving the system to eliminate the steady-state offset---Minorsky recognized this as the key to achieving zero steady-state error. The \textbf{derivative term} responds to the rate of change of error: when the ship is rapidly approaching the desired heading, the derivative term applies a ``braking'' action, reducing overshoot and oscillation.
 
 Minorsky tested his three-term controller on the USS New Mexico in 1922, demonstrating dramatically improved steering performance compared to proportional-only systems. The ship could maintain its heading within $\pm 1/6$ of a degree---an unprecedented level of precision for the time.
 
@@ -172,17 +156,7 @@ The pneumatic implementation of integral action was particularly ingenious. A be
 
 \subsection{Why PID Dominates: The 90\% Solution}
 
-Today, surveys consistently show that PID controllers constitute approximately 90--95\% of all control loops in industrial settings. This remarkable dominance is not because PID is optimal---more sophisticated control strategies exist---but because PID offers an unmatched combination of:
-
-\begin{enumerate}[label=(\arabic*)]
-    \item \textbf{Simplicity}: Three parameters capture the essential dynamics of most control problems
-    \item \textbf{Robustness}: PID controllers tolerate significant model uncertainty
-    \item \textbf{Tunability}: Operators can adjust behavior without deep theoretical knowledge
-    \item \textbf{Universality}: The same algorithm works for temperature, pressure, flow, level, speed, and countless other variables
-    \item \textbf{Maturity}: Nearly a century of engineering experience has produced reliable tuning methods
-\end{enumerate}
-
-As we develop the mathematical theory in subsequent sections, keep in mind that PID's endurance comes not from mathematical elegance alone, but from its practical effectiveness across an enormous range of applications.
+Today, surveys consistently show that PID controllers constitute approximately 90--95\% of all control loops in industrial settings. This remarkable dominance is not because PID is optimal---more sophisticated control strategies exist---but because PID offers an unmatched combination of desirable properties. First, PID provides \textbf{simplicity}, as three parameters capture the essential dynamics of most control problems. Second, PID controllers exhibit \textbf{robustness}, tolerating significant model uncertainty without becoming unstable. Third, \textbf{tunability} allows operators to adjust behavior without deep theoretical knowledge. Fourth, \textbf{universality} means the same algorithm works for temperature, pressure, flow, level, speed, and countless other variables. Finally, the \textbf{maturity} of the technology, with nearly a century of engineering experience, has produced reliable tuning methods. As we develop the mathematical theory in subsequent sections, keep in mind that PID's endurance comes not from mathematical elegance alone, but from its practical effectiveness across an enormous range of applications.
 
 
 %=============================================================================
@@ -193,13 +167,7 @@ While the mathematical foundation of PID control was established in the 1920s, t
 
 \subsection{HVAC Systems and Smart Thermostats}
 
-The thermostat in your home or office implements PID control to maintain comfortable temperatures. Modern smart thermostats like the Nest or Ecobee use sophisticated digital PID algorithms with additional features such as:
-
-\begin{itemize}
-    \item \textbf{Adaptive tuning}: The controller learns the thermal characteristics of your building
-    \item \textbf{Predictive heating/cooling}: Anticipates when to start conditioning based on learned patterns
-    \item \textbf{Anti-windup}: Prevents integral term from accumulating when heating/cooling is saturated
-\end{itemize}
+The thermostat in your home or office implements PID control to maintain comfortable temperatures. Modern smart thermostats like the Nest or Ecobee use sophisticated digital PID algorithms with additional features. These include \textbf{adaptive tuning}, where the controller learns the thermal characteristics of your building, as well as \textbf{predictive heating/cooling}, which anticipates when to start conditioning based on learned patterns. Additionally, \textbf{anti-windup} mechanisms prevent the integral term from accumulating when heating or cooling is saturated.
 
 A typical home HVAC system might use a PI controller (derivative action is often omitted due to noise sensitivity):
 \begin{equation}
@@ -209,15 +177,7 @@ where $u(t)$ is the heating/cooling command, $e(t) = T_{\text{setpoint}} - T_{\t
 
 \subsection{Drone Flight Controllers}
 
-Multirotor drones (quadcopters, hexacopters, etc.) rely heavily on PID control for stabilization. A typical drone runs multiple cascaded PID loops:
-
-\begin{itemize}
-    \item \textbf{Rate controllers}: PID loops controlling angular velocity around roll, pitch, and yaw axes (inner loop, running at 1--8 kHz)
-    \item \textbf{Attitude controllers}: PID loops controlling orientation angles (outer loop, running at 250--1000 Hz)
-    \item \textbf{Position controllers}: PID loops for GPS hold and waypoint navigation (running at 10--50 Hz)
-\end{itemize}
-
-The cascaded structure allows each loop to be tuned independently, and the fast inner loops provide stability while the slower outer loops provide trajectory tracking.
+Multirotor drones (quadcopters, hexacopters, etc.) rely heavily on PID control for stabilization. A typical drone runs multiple cascaded PID loops at different frequencies. The innermost \textbf{rate controllers} are PID loops controlling angular velocity around the roll, pitch, and yaw axes, running at 1--8 kHz. The \textbf{attitude controllers} form the outer loop, controlling orientation angles at 250--1000 Hz. Finally, \textbf{position controllers} provide PID loops for GPS hold and waypoint navigation, running at 10--50 Hz. The cascaded structure allows each loop to be tuned independently, and the fast inner loops provide stability while the slower outer loops provide trajectory tracking.
 
 \subsection{3D Printer Temperature Control}
 
@@ -234,14 +194,7 @@ The relatively high derivative gain helps counteract the thermal lag inherent in
 
 \subsection{Automotive Engine Management}
 
-Modern vehicles contain dozens of PID control loops managing everything from idle speed to air-fuel ratio to electronic throttle position. The electronic fuel injection system, for example, uses PID control to maintain the stoichiometric air-fuel ratio required for optimal catalytic converter performance:
-
-\begin{itemize}
-    \item Oxygen sensors measure exhaust composition
-    \item PID controller adjusts fuel injector pulse width
-    \item Integral action ensures zero steady-state error in average air-fuel ratio
-    \item Derivative action (often filtered) provides fast transient response
-\end{itemize}
+Modern vehicles contain dozens of PID control loops managing everything from idle speed to air-fuel ratio to electronic throttle position. The electronic fuel injection system, for example, uses PID control to maintain the stoichiometric air-fuel ratio required for optimal catalytic converter performance. In this system, oxygen sensors measure exhaust composition, and a PID controller adjusts the fuel injector pulse width accordingly. The integral action ensures zero steady-state error in the average air-fuel ratio, while derivative action (often filtered) provides fast transient response.
 
 These automotive PID loops must function reliably across extreme temperature ranges, varying altitudes, and component aging---a testament to the robustness of the PID algorithm.
 
@@ -301,13 +254,7 @@ C(s) = \frac{\Kd s^2 + \Kp s + \Ki}{s} = \Kp \cdot \frac{\Ti \Td s^2 + \Ti s + 1
 \label{eq:pid_tf_combined}
 \end{equation}
 
-This reveals that the PID controller has:
-\begin{itemize}
-    \item One pole at $s = 0$ (from the integral action)
-    \item Two zeros (from the numerator polynomial)
-\end{itemize}
-
-The zeros are located at:
+This reveals that the PID controller has one pole at $s = 0$ (from the integral action) and two zeros (from the numerator polynomial). The zeros are located at:
 \begin{equation}
 s = \frac{-\Kp \pm \sqrt{\Kp^2 - 4\Kd\Ki}}{2\Kd}
 \end{equation}
@@ -458,11 +405,7 @@ u_D(t) = \Kd \frac{de(t)}{dt}
 
 \textbf{Physical interpretation:} If the error is decreasing rapidly (the system is approaching the setpoint quickly), the derivative term applies a ``braking'' force, reducing overshoot. Conversely, if a disturbance is causing the error to grow, the derivative term provides an early corrective response before the proportional term can react significantly.
 
-\textbf{Frequency domain perspective:} The derivative $\Kd s$ has magnitude $|\Kd s| = \Kd \omega$ increasing with frequency. This provides:
-\begin{itemize}
-    \item \textbf{Phase lead}: The phase contribution $+90°$ at all frequencies can improve phase margin
-    \item \textbf{Increased bandwidth}: High-frequency response is amplified
-\end{itemize}
+\textbf{Frequency domain perspective:} The derivative $\Kd s$ has magnitude $|\Kd s| = \Kd \omega$ increasing with frequency. This provides \textbf{phase lead}, where the phase contribution of $+90°$ at all frequencies can improve phase margin, as well as \textbf{increased bandwidth} due to amplified high-frequency response.
 
 \textbf{Noise amplification:} The derivative term is rarely used in its pure form because it amplifies high-frequency measurement noise. A practical solution is the \textbf{filtered derivative}:
 \begin{equation}
