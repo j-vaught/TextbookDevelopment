@@ -782,39 +782,38 @@ Infrared (Sharp GP2Y0A21) & 10cm--80cm & $\sim$2mm \\
 
 Data acquisition requires an Arduino Uno or similar microcontroller operating at a minimum sampling rate of 50~Hz, though 100+~Hz is preferable for capturing fast dynamics. Data can be logged to a serial monitor for real-time viewing or to an SD card for later analysis.
 
-\textbf{Arduino Code Framework:}
-\begin{verbatim}
-// Second-order system measurement
-const int trigPin = 9;
-const int echoPin = 10;
-unsigned long startTime;
+\textbf{Data Acquisition Algorithm:}
 
-void setup() {
-  Serial.begin(115200);
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-  startTime = millis();
-}
-
-void loop() {
-  float distance = measureDistance();
-  unsigned long elapsed = millis() - startTime;
-  Serial.print(elapsed);
-  Serial.print(",");
-  Serial.println(distance);
-  delay(10);  // 100 Hz sampling
-}
-
-float measureDistance() {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  long duration = pulseIn(echoPin, HIGH);
-  return duration * 0.034 / 2;  // cm
-}
-\end{verbatim}
+\begin{algorithm}[H]
+\caption{Second-Order System Distance Measurement}
+\begin{algorithmic}[1]
+\State \textbf{Configuration:}
+\State \quad Set trigger pin $\leftarrow$ output pin 9
+\State \quad Set echo pin $\leftarrow$ input pin 10
+\State \quad Set serial baud rate $\leftarrow$ 115200
+\State
+\State \textbf{Initialization:}
+\State Record start time $t_0 \leftarrow$ current time in milliseconds
+\State
+\State \textbf{Main Loop:}
+\While{data acquisition active}
+    \State $d \leftarrow$ \Call{MeasureDistance}{ }
+    \State $t_{elapsed} \leftarrow$ current time $-$ $t_0$
+    \State Output $(t_{elapsed}, d)$ to serial port
+    \State Wait 10~ms \Comment{100~Hz sampling rate}
+\EndWhile
+\State
+\Function{MeasureDistance}{ }
+    \State Set trigger pin LOW
+    \State Wait 2~$\mu$s
+    \State Set trigger pin HIGH
+    \State Wait 10~$\mu$s
+    \State Set trigger pin LOW
+    \State $t_{pulse} \leftarrow$ measure echo pulse duration
+    \State \Return $t_{pulse} \times 0.034 / 2$ \Comment{distance in cm}
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
 
 %-----------------------------------------------------------------------------
 \subsection{Experimental Procedure}
@@ -916,8 +915,7 @@ Consider the following questions when analyzing your experimental results. Why d
 This section presents detailed solutions to representative problems involving first and second order systems. Each example emphasizes a specific concept or technique.
 
 %-----------------------------------------------------------------------------
-\begin{example}[Time Constant from RC Circuit Values]
-\label{ex:rc_circuit}
+\begin{examplebox}[Time Constant from RC Circuit Values]
 An RC low-pass filter has $R = 10\,\text{k}\Omega$ and $C = 47\,\mu\text{F}$. Find:
 \begin{enumerate}[label=(\alph*)]
     \item The time constant $\tau$
@@ -925,7 +923,6 @@ An RC low-pass filter has $R = 10\,\text{k}\Omega$ and $C = 47\,\mu\text{F}$. Fi
     \item The settling time (2\% criterion)
     \item The output voltage 0.5 seconds after applying a 5V step input
 \end{enumerate}
-\end{example}
 
 \textbf{Solution:}
 
@@ -963,18 +960,15 @@ v_{out}(0.5) = 5\left(1 - e^{-1.064}\right) = 5(1 - 0.345) = 5(0.655) = \boxed{3
 \end{equation}
 
 This represents 65.5\% of the final value, consistent with being just past one time constant.
-
-\hfill$\square$
+\end{examplebox}
 
 %-----------------------------------------------------------------------------
-\begin{example}[Finding $\zeta$ and $\omega_n$ from Transfer Function]
-\label{ex:tf_params}
+\begin{examplebox}[Finding $\zeta$ and $\omega_n$ from Transfer Function]
 Given the transfer function:
 \begin{equation}
 G(s) = \frac{50}{s^2 + 6s + 25}
 \end{equation}
 Determine $\omega_n$, $\zeta$, the pole locations, and characterize the expected step response.
-\end{example}
 
 \textbf{Solution:}
 
@@ -1022,8 +1016,7 @@ Settling time:
 \begin{equation}
 t_s = \frac{4}{\zeta\omega_n} = \frac{4}{0.6 \times 5} = \frac{4}{3} \approx 1.33\,\text{s}
 \end{equation}
-
-\hfill$\square$
+\end{examplebox}
 
 %-----------------------------------------------------------------------------
 \begin{example}[Calculating Overshoot and Settling Time]
@@ -1318,12 +1311,7 @@ The response will exhibit oscillation (due to the underdamped second-order mode 
 
 \textbf{Step Response:} $y(t) = K(1 - e^{-t/\tau})$
 
-\textbf{Key Times:}
-\begin{itemize}
-    \item At $t = \tau$: output reaches 63.2\% of final value
-    \item Rise time (10\%--90\%): $t_r = 2.2\tau$
-    \item Settling time (2\%): $t_s = 4\tau$
-\end{itemize}
+\textbf{Key Times:} At $t = \tau$, the output reaches 63.2\% of the final value. The rise time (10\%--90\%) is $t_r = 2.2\tau$, and the settling time (2\%) is $t_s = 4\tau$.
 \end{keyconceptbox}
 
 \begin{keyconceptbox}[Second-Order Systems Summary]
@@ -1333,13 +1321,7 @@ The response will exhibit oscillation (due to the underdamped second-order mode 
 
 \textbf{Physical Parameters:} $\omega_n = \sqrt{k/m}$, \quad $\zeta = c/(2\sqrt{km})$
 
-\textbf{Underdamped Response} ($\zeta < 1$):
-\begin{itemize}
-    \item Damped frequency: $\omega_d = \omega_n\sqrt{1-\zeta^2}$
-    \item Percent overshoot: $PO = e^{-\pi\zeta/\sqrt{1-\zeta^2}} \times 100\%$
-    \item Peak time: $t_p = \pi/\omega_d$
-    \item Settling time: $t_s = 4/(\zeta\omega_n)$
-\end{itemize}
+\textbf{Underdamped Response} ($\zeta < 1$): The damped frequency is $\omega_d = \omega_n\sqrt{1-\zeta^2}$, the percent overshoot is $PO = e^{-\pi\zeta/\sqrt{1-\zeta^2}} \times 100\%$, the peak time is $t_p = \pi/\omega_d$, and the settling time is $t_s = 4/(\zeta\omega_n)$.
 
 \textbf{Critically Damped} ($\zeta = 1$): $y(t) = K[1 - e^{-\omega_n t}(1 + \omega_n t)]$
 
@@ -1347,36 +1329,55 @@ The response will exhibit oscillation (due to the underdamped second-order mode 
 \end{keyconceptbox}
 
 %=============================================================================
-\section{Problems}
+\newpage
+\section{Exercises}
 %=============================================================================
 
-\begin{enumerate}
-    \item An RC circuit has $R = 47\,\text{k}\Omega$ and $C = 10\,\mu\text{F}$. Calculate the time constant, the frequency at which the output is attenuated by 3~dB, and the time required for the output to reach 99\% of its final value after a step input.
+\begin{exercise}
+An RC circuit has $R = 47\,\text{k}\Omega$ and $C = 10\,\mu\text{F}$. Calculate the time constant, the frequency at which the output is attenuated by 3~dB, and the time required for the output to reach 99\% of its final value after a step input.
+\end{exercise}
 
-    \item A mass-spring-damper system has $m = 2\,\text{kg}$, $k = 50\,\text{N/m}$, and $c = 8\,\text{N}\cdot\text{s/m}$. Determine $\omega_n$, $\zeta$, and classify the system as underdamped, critically damped, or overdamped.
+\begin{exercise}
+A mass-spring-damper system has $m = 2\,\text{kg}$, $k = 50\,\text{N/m}$, and $c = 8\,\text{N}\cdot\text{s/m}$. Determine $\omega_n$, $\zeta$, and classify the system as underdamped, critically damped, or overdamped.
+\end{exercise}
 
-    \item For the transfer function $G(s) = 25/(s^2 + 3s + 25)$:
-    \begin{enumerate}[label=(\alph*)]
-        \item Find $\zeta$ and $\omega_n$
-        \item Calculate the percent overshoot
-        \item Determine the peak time and settling time
-        \item Sketch the expected step response
-    \end{enumerate}
-
-    \item Design a second-order system (specify $\zeta$ and $\omega_n$) that meets the following specifications: settling time $\leq 0.5\,\text{s}$ and percent overshoot $\leq 5\%$.
-
-    \item A step response measurement shows the following: initial value 0, final value 4.0, first peak 5.6 at $t = 0.1\,\text{s}$. Assuming a second-order system, estimate the transfer function.
-
-    \item For the system $G(s) = 10/[(s+1)(s+10)]$, determine whether first-order or second-order behavior dominates the step response. Justify your answer and estimate the settling time.
-
-    \item An automobile suspension is modeled as a second-order system with $\omega_n = 8\,\text{rad/s}$. What damping ratio provides 20\% overshoot? If the sprung mass is 400~kg, calculate the required spring constant and damping coefficient.
-
-    \item Prove that for an underdamped second-order system, the logarithmic decrement $\delta = \ln(x_n/x_{n+1})$ is related to the damping ratio by $\zeta = \delta/\sqrt{4\pi^2 + \delta^2}$.
-
-    \item A seismograph has $\omega_n = 1\,\text{rad/s}$ and $\zeta = 0.7$. An earthquake produces ground acceleration $a(t) = A\sin(\omega t)$. For what range of earthquake frequencies $\omega$ will the seismograph output amplitude be within 10\% of the true ground displacement amplitude?
-
-    \item Consider the third-order system $G(s) = 50/[(s+1)(s^2+4s+25)]$. Identify all poles, determine which are dominant, and estimate the settling time and percent overshoot of the step response.
+\begin{exercise}
+For the transfer function $G(s) = 25/(s^2 + 3s + 25)$:
+\begin{enumerate}[label=(\alph*)]
+    \item Find $\zeta$ and $\omega_n$
+    \item Calculate the percent overshoot
+    \item Determine the peak time and settling time
+    \item Sketch the expected step response
 \end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Design a second-order system (specify $\zeta$ and $\omega_n$) that meets the following specifications: settling time $\leq 0.5\,\text{s}$ and percent overshoot $\leq 5\%$.
+\end{exercise}
+
+\begin{exercise}
+A step response measurement shows the following: initial value 0, final value 4.0, first peak 5.6 at $t = 0.1\,\text{s}$. Assuming a second-order system, estimate the transfer function.
+\end{exercise}
+
+\begin{exercise}
+For the system $G(s) = 10/[(s+1)(s+10)]$, determine whether first-order or second-order behavior dominates the step response. Justify your answer and estimate the settling time.
+\end{exercise}
+
+\begin{exercise}
+An automobile suspension is modeled as a second-order system with $\omega_n = 8\,\text{rad/s}$. What damping ratio provides 20\% overshoot? If the sprung mass is 400~kg, calculate the required spring constant and damping coefficient.
+\end{exercise}
+
+\begin{exercise}
+Prove that for an underdamped second-order system, the logarithmic decrement $\delta = \ln(x_n/x_{n+1})$ is related to the damping ratio by $\zeta = \delta/\sqrt{4\pi^2 + \delta^2}$.
+\end{exercise}
+
+\begin{exercise}
+A seismograph has $\omega_n = 1\,\text{rad/s}$ and $\zeta = 0.7$. An earthquake produces ground acceleration $a(t) = A\sin(\omega t)$. For what range of earthquake frequencies $\omega$ will the seismograph output amplitude be within 10\% of the true ground displacement amplitude?
+\end{exercise}
+
+\begin{exercise}
+Consider the third-order system $G(s) = 50/[(s+1)(s^2+4s+25)]$. Identify all poles, determine which are dominant, and estimate the settling time and percent overshoot of the step response.
+\end{exercise}
 
 %=============================================================================
 \section{Further Reading}

@@ -9,14 +9,7 @@
 \vspace{1em}
 
 \noindent\textbf{Chapter Objectives:}
-\begin{itemize}[leftmargin=2cm]
-    \item Understand the historical development and motivation for adaptive control
-    \item Master the mathematical foundations of Model Reference Adaptive Control (MRAC)
-    \item Derive adaptation laws using both gradient descent (MIT Rule) and Lyapunov methods
-    \item Implement self-tuning regulators and gain scheduling techniques
-    \item Apply adaptive control to practical motor control problems
-    \item Analyze stability and convergence properties of adaptive systems
-\end{itemize}
+This chapter provides a comprehensive treatment of adaptive control systems. You will understand the historical development and motivation for adaptive control, gaining insight into why fixed controllers fail in environments with changing dynamics. The chapter covers the mathematical foundations of Model Reference Adaptive Control (MRAC) in depth, including the derivation of adaptation laws using both gradient descent (the MIT Rule) and Lyapunov stability methods. You will learn to implement self-tuning regulators and gain scheduling techniques for practical applications, apply adaptive control to motor control problems, and analyze the stability and convergence properties of adaptive systems.
 
 %=============================================================================
 \section{Historical Motivation: The Need for Adaptation}
@@ -59,7 +52,7 @@ G(s) = \frac{K_\alpha(q, M)}{s^2 + 2\zeta(q,M)\omega_n(q,M)s + \omega_n^2(q,M)}
 \end{equation}
 where all parameters depend on dynamic pressure $q$ and Mach number $M$. The gain $K_\alpha$ might vary by a factor of 10, while the natural frequency $\omega_n$ could change by a factor of 3.
 
-\begin{historicalbox}
+\begin{historicalbox}[sharp corners]
 \textbf{The X-15 Hypersonic Aircraft (1959-1968):} Perhaps no vehicle better illustrates the adaptive control challenge than the North American X-15. This rocket-powered research aircraft flew from the dense atmosphere at Edwards Air Force Base to the edge of space at 354,200 feet. During a typical flight, the dynamic pressure varied from 2,000 psf at low altitude to essentially zero in the upper atmosphere. The X-15 used an early form of gain scheduling, with the pilot manually adjusting stability augmentation system gains based on displayed flight conditions. Three X-15 aircraft made 199 flights, with pilots reporting significant workload managing the changing dynamics. This experience directly motivated the development of automated adaptive control systems.
 \end{historicalbox}
 
@@ -69,7 +62,7 @@ The first systematic approach to adaptive control emerged from the MIT Instrumen
 
 The fundamental insight was elegant: if we define a tracking error between the actual plant output and a desired reference model output, we can adjust controller parameters to minimize this error using gradient descent.
 
-\begin{keyconceptbox}[title=The MIT Rule Philosophy]
+\begin{keyconceptbox}[title=The MIT Rule Philosophy, sharp corners]
 \textit{``If the system isn't behaving like the reference model, adjust the controller parameters in the direction that reduces the error.''}
 
 This is formalized as:
@@ -90,11 +83,7 @@ While the MIT Rule provided an intuitive and often effective approach, it lacked
 
 This theoretical gap was addressed in the 1960s through the application of Lyapunov stability theory to adaptive control. The key figures in this development included Parks (1966), who applied Lyapunov methods to adaptive control, and Narendra and his colleagues, who developed systematic design procedures.
 
-The Lyapunov approach reversed the design philosophy:
-\begin{enumerate}
-    \item \textbf{MIT Rule:} Start with an intuitive adaptation law, hope for stability
-    \item \textbf{Lyapunov approach:} Start with a stability requirement, derive the adaptation law
-\end{enumerate}
+The Lyapunov approach reversed the design philosophy. The MIT Rule begins with an intuitive adaptation law and hopes for stability, whereas the Lyapunov approach starts with a stability requirement and derives the adaptation law from it.
 
 By choosing an appropriate Lyapunov function that includes both the tracking error and parameter estimation error, one could \textit{derive} an adaptation law that guarantees $\dot{V} \leq 0$, ensuring stability. This was not merely an incremental improvement---it transformed adaptive control from an engineering heuristic to a mathematically rigorous discipline.
 
@@ -135,22 +124,11 @@ By the early 1980s, adaptive control theory had achieved considerable mathematic
 
 In 1985, Rohrs, Valavani, Athans, and Stein published a landmark paper in \textit{IEEE Transactions on Automatic Control} titled ``Robustness of Continuous-Time Adaptive Control Algorithms in the Presence of Unmodeled Dynamics.'' Their findings were troubling.
 
-\begin{warningbox}[title=Rohrs' Counterexample]
-Rohrs et al. demonstrated that adaptive controllers which were \textit{provably stable} under ideal assumptions could become \textit{unstable} when:
-\begin{itemize}
-    \item Unmodeled high-frequency dynamics were present
-    \item Output disturbances were added
-    \item Both conditions occurred together
-\end{itemize}
-The instability could be dramatic, with bounded disturbances causing unbounded signals.
+\begin{warningbox}[title=Rohrs' Counterexample, sharp corners]
+Rohrs et al. demonstrated that adaptive controllers which were \textit{provably stable} under ideal assumptions could become \textit{unstable} when unmodeled high-frequency dynamics were present, when output disturbances were added, or when both conditions occurred together. The instability could be dramatic, with bounded disturbances causing unbounded signals.
 \end{warningbox}
 
-The core issue was that all stability proofs relied on idealized assumptions:
-\begin{enumerate}
-    \item \textbf{Perfect model knowledge:} The plant was assumed to be exactly in the model class
-    \item \textbf{No unmodeled dynamics:} High-frequency parasitic dynamics were ignored
-    \item \textbf{No disturbances:} Proofs assumed noise-free measurements
-\end{enumerate}
+The core issue was that all stability proofs relied on idealized assumptions. First, perfect model knowledge was assumed---the plant was taken to be exactly in the model class. Second, no unmodeled dynamics were considered, meaning high-frequency parasitic dynamics were ignored. Third, no disturbances were present, as the proofs assumed noise-free measurements.
 
 Real systems violate all three assumptions. A DC motor has armature inductance (often neglected in simple models), sensors add noise, and mechanical systems have resonances at high frequencies.
 
@@ -158,18 +136,11 @@ The problem was particularly insidious because adaptive systems could appear to 
 
 \subsection{Resolution and Modern Perspective}
 
-The robustness crisis did not kill adaptive control---instead, it transformed the field. Researchers developed modifications that restored robustness:
-
-\begin{itemize}
-    \item \textbf{$\sigma$-modification:} Adding a leakage term $-\sigma\theta$ to prevent parameter drift
-    \item \textbf{$\varepsilon_1$-modification:} Dead-zone modifications to stop adaptation when error is small
-    \item \textbf{Projection:} Constraining parameters to remain in a known bounded region
-    \item \textbf{Normalization:} Scaling signals to prevent unbounded growth
-\end{itemize}
+The robustness crisis did not kill adaptive control---instead, it transformed the field. Researchers developed modifications that restored robustness. The $\sigma$-modification adds a leakage term $-\sigma\theta$ to prevent parameter drift. The $\varepsilon_1$-modification introduces dead-zone modifications to stop adaptation when the error is small. Projection constrains parameters to remain in a known bounded region. Normalization scales signals to prevent unbounded growth.
 
 These robustness modifications came at a cost: one could no longer prove asymptotic convergence of tracking error to zero. Instead, the error would converge to a small residual set. But this trade-off---perfect theoretical performance for practical robustness---is one that every practicing engineer should embrace.
 
-\begin{historicalbox}
+\begin{historicalbox}[sharp corners]
 \textbf{Legacy of the Robustness Crisis:} The Rohrs counterexamples served as a watershed moment for control theory broadly, not just adaptive control. They demonstrated the danger of mistaking mathematical elegance for engineering validity. Today, robustness analysis is considered essential for any advanced control design, and the gap between theoretical assumptions and practical reality is explicitly addressed rather than ignored.
 \end{historicalbox}
 
@@ -182,57 +153,27 @@ While the theoretical foundations of adaptive control were established decades a
 
 \subsection{Aerospace and Flight Control}
 
-Adaptive control remains central to aerospace applications, where the original motivation persists:
-\begin{itemize}
-    \item \textbf{Commercial aircraft:} Fuel consumption changes aircraft mass by 30\% or more during long flights
-    \item \textbf{Military aircraft:} Weapons release, battle damage, and configuration changes alter dynamics
-    \item \textbf{Spacecraft:} Fuel depletion and appendage deployment change mass properties
-    \item \textbf{UAVs:} Payload variations and icing conditions require adaptation
-\end{itemize}
+Adaptive control remains central to aerospace applications, where the original motivation persists. In commercial aircraft, fuel consumption changes the aircraft mass by 30\% or more during long flights. Military aircraft experience dynamics alterations due to weapons release, battle damage, and configuration changes. Spacecraft undergo mass property changes from fuel depletion and appendage deployment. Unmanned aerial vehicles (UAVs) require adaptation to handle payload variations and icing conditions.
 
 NASA's Intelligent Flight Control System (IFCS) demonstrated neural network-based adaptive control on the F-15 ACTIVE research aircraft, showing the ability to maintain control even with significant control surface failures.
 
 \subsection{Robotics and Manufacturing}
 
-Modern robots face continuously changing conditions that classical fixed controllers handle poorly:
-\begin{itemize}
-    \item \textbf{Payload variation:} Robot arm carrying different loads requires different gains
-    \item \textbf{Wear and degradation:} Joint friction and gear backlash change over time
-    \item \textbf{Human-robot interaction:} Contact with humans requires adaptive compliance
-    \item \textbf{Learning from demonstration:} Adapting to new tasks shown by operators
-\end{itemize}
+Modern robots face continuously changing conditions that classical fixed controllers handle poorly. Payload variation requires different gains when a robot arm carries different loads. Wear and degradation cause joint friction and gear backlash to change over time. Human-robot interaction demands adaptive compliance when robots make contact with humans. Learning from demonstration requires adapting to new tasks shown by operators.
 
 \subsection{Process Industry}
 
-Chemical and manufacturing processes exhibit slow parameter variations that motivate adaptive approaches:
-\begin{itemize}
-    \item \textbf{Catalyst deactivation:} Reaction rates decrease over weeks or months
-    \item \textbf{Fouling:} Heat exchanger coefficients degrade as deposits accumulate
-    \item \textbf{Raw material variation:} Feed composition changes affect process dynamics
-    \item \textbf{Seasonal changes:} Cooling water temperature affects heat transfer
-\end{itemize}
+Chemical and manufacturing processes exhibit slow parameter variations that motivate adaptive approaches. Catalyst deactivation causes reaction rates to decrease over weeks or months. Fouling degrades heat exchanger coefficients as deposits accumulate. Raw material variation affects process dynamics as feed composition changes. Seasonal changes alter heat transfer as cooling water temperature varies.
 
 Self-tuning PID controllers are widely deployed in process industries, automatically adjusting gains to maintain performance as conditions drift.
 
 \subsection{Biomedical Applications}
 
-Adaptive control has found growing application in medical devices:
-\begin{itemize}
-    \item \textbf{Artificial pancreas:} Insulin delivery must adapt to varying patient sensitivity
-    \item \textbf{Anesthesia control:} Drug sensitivity varies between patients and during surgery
-    \item \textbf{Prosthetics:} EMG-controlled prosthetic limbs adapt to user patterns
-    \item \textbf{Rehabilitation robots:} Therapy robots adapt assistance to patient progress
-\end{itemize}
+Adaptive control has found growing application in medical devices. Artificial pancreas systems must adapt insulin delivery to varying patient sensitivity. Anesthesia control systems accommodate drug sensitivity that varies between patients and during surgery. EMG-controlled prosthetic limbs adapt to user patterns over time. Rehabilitation robots adjust therapy assistance based on patient progress.
 
 \subsection{Automotive Systems}
 
-Modern vehicles contain numerous adaptive control systems:
-\begin{itemize}
-    \item \textbf{Engine control:} Fuel injection adapts to altitude, temperature, fuel quality
-    \item \textbf{Transmission control:} Shift patterns adapt to driver behavior
-    \item \textbf{Active suspension:} Damping adapts to road conditions and load
-    \item \textbf{Autonomous vehicles:} Control adapts to road surface and conditions
-\end{itemize}
+Modern vehicles contain numerous adaptive control systems. Engine control units adapt fuel injection to altitude, temperature, and fuel quality. Transmission control systems adjust shift patterns based on driver behavior. Active suspension systems adapt damping to road conditions and vehicle load. Autonomous vehicles adapt their control strategies to road surface conditions and environmental factors.
 
 %=============================================================================
 \section{Mathematical Foundations of Adaptive Control}
@@ -268,13 +209,8 @@ In MRAC, we specify desired closed-loop behavior through a reference model:
 \end{equation}
 where $A_m$ is Hurwitz (stable), and the model represents ideal behavior we want the plant to achieve.
 
-\begin{keyconceptbox}[title=Reference Model Selection]
-The reference model should satisfy:
-\begin{enumerate}
-    \item \textbf{Stability:} $A_m$ must have all eigenvalues in left half-plane
-    \item \textbf{Achievability:} The plant must be capable of matching the model
-    \item \textbf{Desired behavior:} Response should match specifications (rise time, overshoot, etc.)
-\end{enumerate}
+\begin{keyconceptbox}[title=Reference Model Selection, sharp corners]
+The reference model should satisfy three essential criteria. First, it must be stable, with $A_m$ having all eigenvalues in the left half-plane. Second, the model must be achievable, meaning the plant must be capable of matching the model behavior. Third, the model should exhibit the desired behavior, with its response matching specifications such as rise time and overshoot.
 \end{keyconceptbox}
 
 For a first-order plant $\dot{y} = -a y + b u$ where we want first-order reference behavior $\dot{y}_m = -a_m y_m + b_m r$, the controller takes the form:
@@ -429,12 +365,7 @@ The MIT Rule requires knowledge of $\text{sgn}(b)$, the sign of the control gain
 
 \subsection{Lyapunov-Based Adaptive Control}
 
-The Lyapunov approach provides stability guarantees that the MIT Rule lacks. The methodology is:
-\begin{enumerate}
-    \item Define the error dynamics
-    \item Choose a Lyapunov function including both state error and parameter error
-    \item Derive the adaptation law that makes $\dot{V} \leq 0$
-\end{enumerate}
+The Lyapunov approach provides stability guarantees that the MIT Rule lacks. The methodology proceeds as follows: first, define the error dynamics relating the tracking error to parameter estimation errors; second, choose a Lyapunov function that includes both state error and parameter error terms; and third, derive the adaptation law that ensures $\dot{V} \leq 0$.
 
 \subsubsection{Error Dynamics}
 
@@ -482,12 +413,7 @@ This cancels the indefinite term, yielding:
 
 \begin{theorem}[Stability of Lyapunov-Based MRAC]
 \label{thm:mrac_stability}
-Consider the adaptive system with the adaptation law (\ref{eq:lyapunov_adaptation}). Then:
-\begin{enumerate}
-    \item All signals in the closed-loop system are bounded
-    \item The tracking error $e(t) \to 0$ as $t \to \infty$
-    \item The parameter estimates $\hat{\theta}(t)$ remain bounded
-\end{enumerate}
+Consider the adaptive system with the adaptation law (\ref{eq:lyapunov_adaptation}). Then all signals in the closed-loop system are bounded, the tracking error $e(t) \to 0$ as $t \to \infty$, and the parameter estimates $\hat{\theta}(t)$ remain bounded.
 \end{theorem}
 
 \begin{proof}
@@ -628,15 +554,16 @@ Gain scheduling is the simplest and most widely used form of adaptive control. I
 
 \subsubsection{Design Procedure}
 
-\begin{enumerate}
-    \item \textbf{Identify scheduling variable(s):} Measurable variable(s) that correlate with parameter changes (e.g., altitude, speed, temperature)
-
-    \item \textbf{Define operating points:} Select representative conditions across the operating envelope
-
-    \item \textbf{Design local controllers:} At each operating point, linearize and design an optimal controller
-
-    \item \textbf{Implement interpolation:} Smoothly transition between controllers based on scheduling variable
-\end{enumerate}
+\begin{algorithm}
+\caption{Gain Scheduling Design Procedure}
+\begin{algorithmic}[1]
+\State \textbf{Identify scheduling variables:} Select measurable variables that correlate with parameter changes (e.g., altitude, speed, temperature)
+\State \textbf{Define operating points:} Select representative conditions spanning the operating envelope
+\State \textbf{Design local controllers:} At each operating point, linearize the plant and design an optimal controller
+\State \textbf{Implement interpolation:} Create smooth transitions between controllers based on the scheduling variable
+\State \Return Gain-scheduled controller with interpolation lookup table
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Linear Interpolation}
 
@@ -679,12 +606,7 @@ For multiple scheduling variables, multi-dimensional interpolation (e.g., biline
 
 \subsubsection{Stability Considerations}
 
-Gain scheduling provides no formal stability guarantees during transitions. Sufficient conditions for stability include:
-\begin{itemize}
-    \item Operating points close enough that interpolated controllers stabilize intermediate plants
-    \item Scheduling variable changes slowly compared to closed-loop dynamics
-    \item Use of LPV (Linear Parameter-Varying) design methods that explicitly account for parameter rates
-\end{itemize}
+Gain scheduling provides no formal stability guarantees during transitions. Sufficient conditions for stability include operating points close enough that interpolated controllers stabilize intermediate plants, scheduling variables that change slowly compared to closed-loop dynamics, and the use of LPV (Linear Parameter-Varying) design methods that explicitly account for parameter rates.
 
 \subsection{Robustness Modifications}
 
@@ -724,7 +646,7 @@ where the projection operator prevents $\hat{\theta}$ from leaving $\Omega$.
 \label{sec:adaptive_experiment}
 %=============================================================================
 
-\begin{experimentbox}[title=Adaptive DC Motor Speed Control with Variable Load]
+\begin{experimentbox}[title=Adaptive DC Motor Speed Control with Variable Load, sharp corners]
 \textbf{Objective:} Demonstrate that an adaptive controller maintains performance under varying load conditions where a fixed controller fails.
 
 \textbf{Time Required:} 3-4 hours
@@ -736,15 +658,23 @@ where the projection operator prevents $\hat{\theta}$ from leaving $\Omega$.
 
 \subsubsection{Hardware Requirements}
 
-\begin{itemize}
-    \item Arduino Uno or Mega microcontroller
-    \item DC motor with encoder (e.g., Pololu 37D gearmotor with encoder)
-    \item Motor driver (L298N H-bridge or similar)
-    \item Power supply (12V, 2A recommended)
-    \item Rotary disc with mounting points for weights
-    \item Set of calibrated weights (10g, 20g, 50g, 100g)
-    \item Oscilloscope or data logging capability
-\end{itemize}
+\begin{table}[H]
+\centering
+\caption{Hardware Components for Adaptive Motor Control Experiment}
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Specification} \\
+\midrule
+Microcontroller & Arduino Uno or Mega \\
+Motor & DC motor with encoder (e.g., Pololu 37D gearmotor) \\
+Motor driver & L298N H-bridge or similar \\
+Power supply & 12V, 2A recommended \\
+Load mechanism & Rotary disc with mounting points for weights \\
+Calibrated weights & 10g, 20g, 50g, 100g set \\
+Data acquisition & Oscilloscope or data logging capability \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsubsection{System Schematic}
 
@@ -796,14 +726,7 @@ The DC motor with variable load is modeled as:
 J\dot{\omega} + b\omega = K_t i
 \label{eq:motor_dynamics}
 \end{equation}
-where:
-\begin{itemize}
-    \item $\omega$: angular velocity (rad/s)
-    \item $J$: total moment of inertia (motor + load)
-    \item $b$: viscous friction coefficient
-    \item $K_t$: motor torque constant
-    \item $i$: armature current
-\end{itemize}
+where $\omega$ denotes the angular velocity in rad/s, $J$ is the total moment of inertia including motor and load, $b$ represents the viscous friction coefficient, $K_t$ is the motor torque constant, and $i$ is the armature current.
 
 When mass is added to the disc at radius $r$, the inertia changes:
 \begin{equation}
@@ -838,154 +761,73 @@ The adaptive controller uses the same PI structure but adjusts gains online:
 
 \subsection{Arduino Implementation}
 
-\begin{lstlisting}[style=arduinoStyle, caption={Adaptive motor control Arduino code}]
-// Adaptive Motor Speed Control
-// Demonstrates MIT Rule adaptation with variable load
+\begin{algorithm}
+\caption{Adaptive Motor Speed Control with MIT Rule}
+\begin{algorithmic}[1]
+\State \textbf{Initialize:} $K_p \gets 2.0$, $K_i \gets 0.5$, $\gamma_p \gets 0.001$, $\gamma_i \gets 0.0005$
+\State \textbf{Initialize:} $\tau_m \gets 0.2$, $\omega_m \gets 0$, $\omega_{ref} \gets 100$ rad/s
+\State \textbf{Initialize:} integral $\gets 0$, $\Delta t \gets 0.01$ s
+\State Configure PWM output, direction output, and encoder inputs
+\State Attach interrupt handler for encoder counting
+\While{system is running}
+    \If{sample period $\Delta t$ has elapsed}
+        \State $\omega \gets$ compute angular velocity from encoder count
+        \State $\omega_m \gets \omega_m + \Delta t \cdot (-\omega_m/\tau_m + \omega_{ref}/\tau_m)$ \Comment{Reference model}
+        \State $e \gets \omega_{ref} - \omega$ \Comment{Control error}
+        \State $e_{track} \gets \omega - \omega_m$ \Comment{Tracking error for adaptation}
+        \State integral $\gets$ integral $+ e \cdot \Delta t$
+        \State integral $\gets \text{constrain}(\text{integral}, -50, 50)$ \Comment{Anti-windup}
+        \State $u \gets K_p \cdot e + K_i \cdot \text{integral}$ \Comment{PI control law}
+        \State $K_p \gets K_p + \gamma_p \cdot e_{track} \cdot e \cdot \Delta t$ \Comment{MIT Rule for $K_p$}
+        \State $K_i \gets K_i + \gamma_i \cdot e_{track} \cdot \text{integral} \cdot \Delta t$ \Comment{MIT Rule for $K_i$}
+        \State $K_p \gets \text{constrain}(K_p, 0.5, 10.0)$ \Comment{Bound gains}
+        \State $K_i \gets \text{constrain}(K_i, 0.1, 5.0)$
+        \State Apply PWM signal $|u|$ with direction $\text{sign}(u)$ to motor
+        \State Log data: time, $\omega_{ref}$, $\omega_m$, $\omega$, $K_p$, $K_i$, $e_{track}$
+    \EndIf
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
-// Pin definitions
-const int PWM_PIN = 9;
-const int DIR_PIN = 8;
-const int ENCODER_A = 2;
-const int ENCODER_B = 3;
-
-// Controller parameters
-float Kp = 2.0;           // Initial proportional gain
-float Ki = 0.5;           // Initial integral gain
-float gamma_p = 0.001;    // Adaptation rate for Kp
-float gamma_i = 0.0005;   // Adaptation rate for Ki
-
-// Reference model (first-order, tau = 0.2s)
-float tau_m = 0.2;
-float omega_m = 0.0;
-
-// State variables
-volatile long encoderCount = 0;
-float omega = 0.0;        // Measured speed
-float omega_ref = 100.0;  // Reference speed (rad/s)
-float integral = 0.0;
-float error = 0.0;
-float tracking_error = 0.0;
-
-// Timing
-unsigned long lastTime = 0;
-const float dt = 0.01;    // 10ms sample time
-
-void setup() {
-    pinMode(PWM_PIN, OUTPUT);
-    pinMode(DIR_PIN, OUTPUT);
-    pinMode(ENCODER_A, INPUT_PULLUP);
-    pinMode(ENCODER_B, INPUT_PULLUP);
-
-    attachInterrupt(digitalPinToInterrupt(ENCODER_A),
-                    encoderISR, RISING);
-
-    Serial.begin(115200);
-    Serial.println("Time,Omega_ref,Omega_m,Omega,Kp,Ki,Error");
-}
-
-void loop() {
-    unsigned long currentTime = millis();
-
-    if (currentTime - lastTime >= (unsigned long)(dt * 1000)) {
-        // Calculate speed from encoder
-        noInterrupts();
-        long count = encoderCount;
-        encoderCount = 0;
-        interrupts();
-
-        omega = (count * 2.0 * PI) / (1440.0 * dt);  // 1440 CPR
-
-        // Update reference model
-        omega_m += dt * (-omega_m / tau_m + omega_ref / tau_m);
-
-        // Calculate errors
-        error = omega_ref - omega;           // For PI controller
-        tracking_error = omega - omega_m;    // For adaptation
-
-        // Integral term with anti-windup
-        integral += error * dt;
-        integral = constrain(integral, -50, 50);
-
-        // Adaptive PI control
-        float u = Kp * error + Ki * integral;
-
-        // MIT Rule adaptation
-        Kp += gamma_p * tracking_error * error * dt;
-        Ki += gamma_i * tracking_error * integral * dt;
-
-        // Constrain gains to reasonable values
-        Kp = constrain(Kp, 0.5, 10.0);
-        Ki = constrain(Ki, 0.1, 5.0);
-
-        // Apply control
-        int pwm = constrain(abs(u), 0, 255);
-        digitalWrite(DIR_PIN, u >= 0 ? HIGH : LOW);
-        analogWrite(PWM_PIN, pwm);
-
-        // Log data
-        Serial.print(currentTime);
-        Serial.print(",");
-        Serial.print(omega_ref);
-        Serial.print(",");
-        Serial.print(omega_m);
-        Serial.print(",");
-        Serial.print(omega);
-        Serial.print(",");
-        Serial.print(Kp);
-        Serial.print(",");
-        Serial.print(Ki);
-        Serial.print(",");
-        Serial.println(tracking_error);
-
-        lastTime = currentTime;
-    }
-}
-
-void encoderISR() {
-    if (digitalRead(ENCODER_B) == LOW) {
-        encoderCount++;
-    } else {
-        encoderCount--;
-    }
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Encoder Interrupt Service Routine}
+\begin{algorithmic}[1]
+\If{encoder channel B is LOW}
+    \State encoderCount $\gets$ encoderCount $+ 1$
+\Else
+    \State encoderCount $\gets$ encoderCount $- 1$
+\EndIf
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Experimental Procedure}
 
-\begin{enumerate}
-    \item \textbf{Baseline Characterization:}
-    \begin{enumerate}
-        \item Run motor with no load, record step response
-        \item Identify time constant $\tau_0$ and gain $K_0$
-        \item Tune fixed PI controller for good performance
-    \end{enumerate}
-
-    \item \textbf{Fixed Controller Under Load Variation:}
-    \begin{enumerate}
-        \item Set reference speed to 100 rad/s
-        \item Wait for steady state
-        \item Add 50g weight at 5cm radius
-        \item Record response degradation
-        \item Add 100g total weight
-        \item Document further degradation
-    \end{enumerate}
-
-    \item \textbf{Adaptive Controller Under Load Variation:}
-    \begin{enumerate}
-        \item Reset to no load condition
-        \item Enable adaptive control
-        \item Repeat load variation sequence
-        \item Record adaptation of gains
-        \item Observe maintained performance
-    \end{enumerate}
-
-    \item \textbf{Comparative Analysis:}
-    \begin{enumerate}
-        \item Plot fixed vs. adaptive responses
-        \item Calculate performance metrics (rise time, overshoot, settling time)
-        \item Show gain adaptation history
-    \end{enumerate}
-\end{enumerate}
+\begin{algorithm}
+\caption{Experimental Procedure for Adaptive Motor Control}
+\begin{algorithmic}[1]
+\State \textbf{Phase 1: Baseline Characterization}
+\State Run motor with no load and record step response
+\State Identify time constant $\tau_0$ and gain $K_0$ from response data
+\State Tune fixed PI controller gains for good nominal performance
+\State
+\State \textbf{Phase 2: Fixed Controller Under Load Variation}
+\State Set reference speed to 100 rad/s and wait for steady state
+\State Add 50g weight at 5cm radius and record response degradation
+\State Add 100g total weight and document further performance degradation
+\State
+\State \textbf{Phase 3: Adaptive Controller Under Load Variation}
+\State Reset system to no load condition
+\State Enable adaptive control with MIT Rule adaptation
+\State Repeat the load variation sequence from Phase 2
+\State Record the adaptation of gains $K_p$ and $K_i$ over time
+\State Observe and document maintained performance despite load changes
+\State
+\State \textbf{Phase 4: Comparative Analysis}
+\State Plot fixed vs. adaptive controller responses on same axes
+\State Calculate performance metrics: rise time, overshoot, settling time
+\State Generate gain adaptation history plots showing $K_p(t)$ and $K_i(t)$
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Expected Results}
 
@@ -1079,20 +921,14 @@ void encoderISR() {
 
 \subsection{Discussion Questions}
 
-\begin{enumerate}
-    \item Why does the proportional gain $K_p$ need to increase when inertia increases?
-    \item What would happen if the adaptation gains $\gamma_p$ and $\gamma_i$ were too large?
-    \item How would you modify the experiment to demonstrate the need for robustness modifications?
-    \item Compare the experimental results with the theoretical predictions from Section \ref{sec:adaptive_math}.
-\end{enumerate}
+Several important questions arise from this experiment. First, consider why the proportional gain $K_p$ needs to increase when inertia increases---what is the physical intuition behind this relationship? Second, analyze what would happen if the adaptation gains $\gamma_p$ and $\gamma_i$ were set too large, considering both transient behavior and potential instability. Third, propose modifications to the experiment that would demonstrate the need for robustness modifications such as $\sigma$-modification or dead zones. Finally, compare the experimental results with the theoretical predictions from Section \ref{sec:adaptive_math}, noting any discrepancies and their likely causes.
 
 %=============================================================================
 \section{Example Problems}
 \label{sec:adaptive_examples}
 %=============================================================================
 
-\begin{example}[MIT Rule for First-Order System]
-\label{ex:mit_first_order}
+\begin{examplebox}[MIT Rule for First-Order System]
 Consider a first-order plant:
 \begin{equation}
 G_p(s) = \frac{b}{s + a}
@@ -1161,10 +997,9 @@ With $\gamma_1 = \gamma_2 = 2$ and initial conditions $\hat{\theta}_1(0) = 1$, $
 \end{axis}
 \end{tikzpicture}
 \end{center}
-\end{example}
+\end{examplebox}
 
-\begin{example}[Lyapunov Adaptation Law Derivation]
-\label{ex:lyapunov_derivation}
+\begin{examplebox}[Lyapunov Adaptation Law Derivation]
 For the same first-order system as Example \ref{ex:mit_first_order}, derive a Lyapunov-based adaptation law and prove stability.
 
 \textbf{Solution:}
@@ -1213,15 +1048,10 @@ With this choice:
 \dot{V} = -a_m e^2 = -4e^2 \leq 0
 \end{equation}
 
-Since $V > 0$ and $\dot{V} \leq 0$:
-\begin{itemize}
-    \item $V$ is bounded, so $e$, $\tilde{\theta}_1$, $\tilde{\theta}_2$ are bounded
-    \item $e \in \mathcal{L}_2$ since $\int_0^\infty 4e^2 dt \leq V(0) < \infty$
-    \item By Barbalat's lemma (since $\dot{e}$ is also bounded), $e(t) \to 0$ as $t \to \infty$
-\end{itemize}
+Since $V > 0$ and $\dot{V} \leq 0$, we can establish the following results. The function $V$ is bounded, which implies that $e$, $\tilde{\theta}_1$, and $\tilde{\theta}_2$ are all bounded. Furthermore, $e \in \mathcal{L}_2$ since $\int_0^\infty 4e^2 dt \leq V(0) < \infty$. By Barbalat's lemma (since $\dot{e}$ is also bounded), we conclude that $e(t) \to 0$ as $t \to \infty$.
 
 \textbf{Note:} $\tilde{\theta} \to 0$ is not guaranteed without persistence of excitation.
-\end{example}
+\end{examplebox}
 
 \begin{example}[Gain Scheduling with Interpolation]
 \label{ex:gain_scheduling}
@@ -1342,19 +1172,11 @@ K_p = \frac{\tau}{K \cdot \tau_{cl}} = \frac{10}{1.0 \times 5} = 2.0, \qquad K_i
 
 \underline{Case 1:} $K = 1.2$, $\tau = 8$s (fast, high gain)
 
-Open-loop gain increases to $K_p K = 2.4$, making the system more aggressive:
-\begin{itemize}
-    \item Overshoot increases significantly
-    \item Risk of oscillation
-\end{itemize}
+Open-loop gain increases to $K_p K = 2.4$, making the system more aggressive. This results in significantly increased overshoot and elevated risk of oscillation.
 
 \underline{Case 2:} $K = 0.8$, $\tau = 12$s (slow, low gain)
 
-Open-loop gain decreases to $K_p K = 1.6$, making the system sluggish:
-\begin{itemize}
-    \item Rise time increases by $\sim$40\%
-    \item Settling time increases significantly
-\end{itemize}
+Open-loop gain decreases to $K_p K = 1.6$, making the system sluggish. The rise time increases by approximately 40\%, and the settling time increases significantly.
 
 \textbf{Step 3: Adaptive controller benefits}
 
@@ -1457,21 +1279,7 @@ Parameters converge within approximately 50 samples, after which the STR achieve
 
 \subsection{Key Concepts}
 
-\begin{itemize}
-    \item \textbf{Adaptive control} adjusts controller parameters online to handle unknown or time-varying plant dynamics
-
-    \item \textbf{Model Reference Adaptive Control (MRAC)} makes the plant output track a reference model output
-
-    \item The \textbf{MIT Rule} uses gradient descent to minimize tracking error: $\dot{\theta} = -\gamma e \frac{\partial e}{\partial \theta}$
-
-    \item \textbf{Lyapunov-based adaptation} provides stability guarantees by deriving adaptation laws from Lyapunov functions
-
-    \item \textbf{Self-Tuning Regulators} explicitly identify plant parameters and redesign the controller
-
-    \item \textbf{Gain scheduling} interpolates between pre-designed controllers based on operating conditions
-
-    \item \textbf{Robustness modifications} ($\sigma$-modification, dead zones, projection) prevent instability from unmodeled dynamics
-\end{itemize}
+Adaptive control adjusts controller parameters online to handle unknown or time-varying plant dynamics, distinguishing it from fixed-gain controllers that cannot respond to changing conditions. Model Reference Adaptive Control (MRAC) makes the plant output track a reference model output that represents desired closed-loop behavior. The MIT Rule uses gradient descent to minimize tracking error through the adaptation law $\dot{\theta} = -\gamma e \frac{\partial e}{\partial \theta}$, providing an intuitive approach to parameter adjustment. Lyapunov-based adaptation provides formal stability guarantees by deriving adaptation laws directly from Lyapunov functions, ensuring that tracking errors converge to zero. Self-Tuning Regulators take a different approach by explicitly identifying plant parameters using recursive estimation and then redesigning the controller based on these estimates. Gain scheduling offers a simpler alternative that interpolates between pre-designed controllers based on measured operating conditions. Finally, robustness modifications including $\sigma$-modification, dead zones, and projection prevent instability that can arise from unmodeled dynamics and disturbances.
 
 \subsection{Essential Equations}
 
@@ -1494,47 +1302,40 @@ Gain interpolation & $K(\rho) = \frac{\rho_2 - \rho}{\rho_2 - \rho_1}K_1 + \frac
 
 \subsection{Design Guidelines}
 
-\begin{enumerate}
-    \item \textbf{Choose adaptation gains carefully:} Too high causes oscillation; too low causes slow tracking
+When designing adaptive controllers, several practical guidelines should be followed. Adaptation gains must be chosen carefully: values that are too high cause oscillation, while values that are too low result in slow tracking performance. Robustness modifications should always be included in practical implementations to guard against unmodeled dynamics and disturbances. Persistence of excitation must be ensured if parameter convergence to true values is required, not merely tracking error convergence. Signal normalization prevents large signal-induced instability that can occur when input magnitudes vary significantly. Parameter projection constrains estimates to known feasible regions, preventing drift to physically unreasonable values. When operating points are well-defined, starting with gain scheduling is recommended, reserving full adaptation for situations where the operating envelope is not well characterized. Finally, extensive testing at off-nominal conditions before deployment is essential to verify robust performance.
 
-    \item \textbf{Always include robustness modifications} in practical implementations
-
-    \item \textbf{Ensure persistence of excitation} if parameter convergence is required
-
-    \item \textbf{Normalize signals} to prevent large signal-induced instability
-
-    \item \textbf{Project parameters} to known feasible regions
-
-    \item \textbf{Start with gain scheduling} if operating points are well-defined; use full adaptation only when necessary
-
-    \item \textbf{Test extensively} at off-nominal conditions before deployment
-\end{enumerate}
-
+\newpage
 %=============================================================================
 \section{Problems}
 \label{sec:adaptive_problems}
 %=============================================================================
 
-\textbf{Problem 23.1:} A first-order plant $G(s) = \frac{2}{s+3}$ is controlled using MRAC with reference model $G_m(s) = \frac{5}{s+5}$.
-\begin{enumerate}[(a)]
-    \item Find the ideal controller parameters $\theta_1^*$ and $\theta_2^*$
-    \item Derive the MIT Rule adaptation laws
-    \item Simulate the system with $\gamma_1 = \gamma_2 = 1$ and initial conditions $\hat{\theta}_1(0) = 0$, $\hat{\theta}_2(0) = 0$
-\end{enumerate}
+\begin{exercise}
+A first-order plant $G(s) = \frac{2}{s+3}$ is controlled using MRAC with reference model $G_m(s) = \frac{5}{s+5}$. (a) Find the ideal controller parameters $\theta_1^*$ and $\theta_2^*$. (b) Derive the MIT Rule adaptation laws. (c) Simulate the system with $\gamma_1 = \gamma_2 = 1$ and initial conditions $\hat{\theta}_1(0) = 0$, $\hat{\theta}_2(0) = 0$.
+\end{exercise}
 
-\textbf{Problem 23.2:} For the system in Problem 23.1, derive the Lyapunov-based adaptation law and prove that $e(t) \to 0$.
+\begin{exercise}
+For the system in Exercise 1, derive the Lyapunov-based adaptation law and prove that $e(t) \to 0$.
+\end{exercise}
 
-\textbf{Problem 23.3:} Consider an aircraft with pitch dynamics:
+\begin{exercise}
+Consider an aircraft with pitch dynamics:
 \begin{equation}
 G(s) = \frac{K(\alpha)}{s(s^2 + 2\zeta\omega_n s + \omega_n^2)}
 \end{equation}
 where $K$ varies from 5 to 15 and $\omega_n$ varies from 2 to 4 rad/s depending on flight condition. Design a gain scheduling controller with at least 4 operating points.
+\end{exercise}
 
-\textbf{Problem 23.4:} Prove that the $\sigma$-modification guarantees ultimate boundedness of all signals even when the plant has bounded unmodeled dynamics.
+\begin{exercise}
+Prove that the $\sigma$-modification guarantees ultimate boundedness of all signals even when the plant has bounded unmodeled dynamics.
+\end{exercise}
 
-\textbf{Problem 23.5:} Design a self-tuning PID controller for a second-order system using RLS identification. Implement the design in MATLAB/Simulink and compare with a fixed PID controller under parameter variations.
+\begin{exercise}
+Design a self-tuning PID controller for a second-order system using RLS identification. Implement the design in MATLAB/Simulink and compare with a fixed PID controller under parameter variations.
+\end{exercise}
 
-\textbf{Problem 23.6:} The following figure shows the response of an adaptive system:
+\begin{exercise}
+The following figure shows the response of an adaptive system:
 
 \begin{center}
 \begin{tikzpicture}
@@ -1554,37 +1355,52 @@ where $K$ varies from 5 to 15 and $\omega_n$ varies from 2 to 4 rad/s depending 
 \end{tikzpicture}
 \end{center}
 
-\begin{enumerate}[(a)]
-    \item What happened at $t = 4$s that caused the oscillation?
-    \item What robustness modification would prevent this behavior?
-    \item Sketch the expected response with your proposed modification
-\end{enumerate}
+(a) What happened at $t = 4$s that caused the oscillation? (b) What robustness modification would prevent this behavior? (c) Sketch the expected response with your proposed modification.
+\end{exercise}
+
+\begin{exercise}
+A second-order plant has transfer function $G(s) = \frac{b_0}{s^2 + a_1 s + a_0}$ where $a_0$, $a_1$, and $b_0$ are unknown. The desired closed-loop response is specified by the reference model $G_m(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}$ with $\zeta = 0.7$ and $\omega_n = 5$ rad/s. (a) What is the minimum number of adjustable parameters needed in the controller? (b) Propose a controller structure and derive the matching conditions.
+\end{exercise}
+
+\begin{exercise}
+Implement a recursive least squares (RLS) parameter estimator for a first-order discrete-time system $y[k] = -a y[k-1] + b u[k-1]$. (a) Derive the RLS update equations. (b) Explain the role of the forgetting factor $\lambda$. (c) Simulate the estimator with $a = 0.8$, $b = 0.5$, and analyze convergence for different values of $\lambda$.
+\end{exercise}
+
+\begin{exercise}
+Compare the MIT Rule and Lyapunov-based adaptation for a simple first-order system. (a) Show that both methods give the same adaptation law structure. (b) Explain why the Lyapunov method provides stability guarantees while the MIT Rule does not. (c) Under what conditions might the MIT Rule fail while the Lyapunov design succeeds?
+\end{exercise}
+
+\begin{exercise}
+A robot manipulator has joint dynamics that vary with configuration. The effective inertia at joint 1 varies from $J_{min} = 0.5$ kg$\cdot$m$^2$ to $J_{max} = 2.0$ kg$\cdot$m$^2$ depending on the arm position. (a) Design a gain-scheduled PD controller with at least 3 operating points. (b) Specify the scheduling variable and interpolation method. (c) Discuss potential stability issues during rapid configuration changes.
+\end{exercise}
 
 %=============================================================================
 \section{Further Reading}
 \label{sec:adaptive_reading}
 %=============================================================================
 
-\begin{itemize}
-    \item \textbf{Foundational texts:}
-    \begin{itemize}
-        \item \AA str\"om, K.J. and Wittenmark, B., \textit{Adaptive Control}, 2nd ed., Addison-Wesley, 1995
-        \item Narendra, K.S. and Annaswamy, A.M., \textit{Stable Adaptive Systems}, Prentice Hall, 1989
-        \item Ioannou, P.A. and Sun, J., \textit{Robust Adaptive Control}, Prentice Hall, 1996
-    \end{itemize}
-
-    \item \textbf{Historical papers:}
-    \begin{itemize}
-        \item Whitaker, H.P., Yamron, J., and Kezer, A., ``Design of Model Reference Adaptive Control Systems for Aircraft,'' MIT Instrumentation Laboratory Report R-164, 1958
-        \item Rohrs, C.E., Valavani, L., Athans, M., and Stein, G., ``Robustness of Continuous-Time Adaptive Control Algorithms in the Presence of Unmodeled Dynamics,'' IEEE Trans. Automatic Control, 1985
-    \end{itemize}
-
-    \item \textbf{Modern developments:}
-    \begin{itemize}
-        \item Lavretsky, E. and Wise, K.A., \textit{Robust and Adaptive Control with Aerospace Applications}, Springer, 2013
-        \item Hovakimyan, N. and Cao, C., \textit{L$_1$ Adaptive Control Theory}, SIAM, 2010
-    \end{itemize}
-\end{itemize}
+\begin{table}[H]
+\centering
+\caption{Recommended Reading in Adaptive Control}
+\begin{tabular}{p{3cm}p{9cm}}
+\toprule
+\textbf{Category} & \textbf{Reference} \\
+\midrule
+\multirow{3}{*}{Foundational Texts}
+& \AA str\"om, K.J. and Wittenmark, B., \textit{Adaptive Control}, 2nd ed., Addison-Wesley, 1995 \\
+& Narendra, K.S. and Annaswamy, A.M., \textit{Stable Adaptive Systems}, Prentice Hall, 1989 \\
+& Ioannou, P.A. and Sun, J., \textit{Robust Adaptive Control}, Prentice Hall, 1996 \\
+\midrule
+\multirow{2}{*}{Historical Papers}
+& Whitaker, H.P., Yamron, J., and Kezer, A., ``Design of Model Reference Adaptive Control Systems for Aircraft,'' MIT Instrumentation Laboratory Report R-164, 1958 \\
+& Rohrs, C.E., Valavani, L., Athans, M., and Stein, G., ``Robustness of Continuous-Time Adaptive Control Algorithms in the Presence of Unmodeled Dynamics,'' IEEE Trans. Automatic Control, 1985 \\
+\midrule
+\multirow{2}{*}{Modern Developments}
+& Lavretsky, E. and Wise, K.A., \textit{Robust and Adaptive Control with Aerospace Applications}, Springer, 2013 \\
+& Hovakimyan, N. and Cao, C., \textit{L$_1$ Adaptive Control Theory}, SIAM, 2010 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \vfill
 

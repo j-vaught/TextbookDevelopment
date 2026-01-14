@@ -5,9 +5,6 @@
 \chapter{Sampling and Discretization}
 \label{ch:sampling_discretization}
 
-\begin{abstract}
-This chapter addresses the fundamental transition from continuous-time to discrete-time control systems. We trace the historical development from Nyquist's telegraph transmission work through Shannon's sampling theorem, derive the mathematical foundations of sampling and reconstruction, analyze aliasing phenomena, examine hold circuits, and present practical methods for discretizing continuous controllers. Laboratory experiments demonstrate aliasing visually and compare continuous versus discrete controller implementations.
-\end{abstract}
 
 %=============================================================================
 \section{Historical Motivation: From Telegraph Lines to Digital Control}
@@ -18,6 +15,10 @@ The mathematics of sampling did not emerge from abstract curiosity but from an i
 
 \subsection{Harry Nyquist and Telegraph Transmission Theory (1928)}
 \label{subsec:nyquist}
+
+\begin{historicalbox}[Harry Nyquist and the Birth of Sampling Theory]
+Harry Nyquist (1889--1976), a Swedish-American engineer at AT\&T Bell Telephone Laboratories, published a landmark paper in 1928 titled ``Certain Topics in Telegraph Transmission Theory.'' Born in Nilsby, Sweden, Nyquist emigrated to the United States in 1907 and earned his Ph.D. from Yale in 1917. His work on telegraph transmission theory addressed the fundamental limits of communication systems and established principles that would later underpin all digital signal processing. Nyquist's contributions extended beyond sampling theory to include the Nyquist stability criterion for feedback systems and foundational work on thermal noise in electronic circuits. His 1928 paper remains one of the most cited works in electrical engineering, establishing him as a founding father of information theory alongside Claude Shannon.
+\end{historicalbox}
 
 Harry Nyquist, a Swedish-American engineer at AT\&T Bell Telephone Laboratories, published a landmark paper in 1928 titled ``Certain Topics in Telegraph Transmission Theory.'' This work addressed a pressing industrial problem: the transcontinental telephone network required transmitting multiple telegraph signals simultaneously over a single wire pair, a technique called \textit{multiplexing}.
 
@@ -35,7 +36,7 @@ Nyquist's analysis revealed a fundamental limit. He demonstrated that a channel 
 
 Nyquist recognized that a bandlimited signal (one containing no frequencies above $W$ Hz) could be completely characterized by samples taken at rate $2W$ samples per second. More precisely, he showed that:
 
-\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,title=Nyquist's Sampling Principle (1928)]
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,sharp corners,title=Nyquist's Sampling Principle (1928)]
 A signal containing no frequencies higher than $W$ hertz is completely determined by its values at uniformly spaced instants separated by $\dfrac{1}{2W}$ seconds.
 \end{tcolorbox}
 
@@ -54,7 +55,7 @@ Claude Shannon, also at Bell Labs, formalized and extended Nyquist's work in his
 
 Shannon stated the sampling theorem in its now-standard form:
 
-\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,title=Nyquist-Shannon Sampling Theorem]
+\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,sharp corners,title=Nyquist-Shannon Sampling Theorem]
 If a function $x(t)$ contains no frequencies higher than $f_{\max}$ hertz, then it is completely determined by its values at a series of points spaced $\dfrac{1}{2f_{\max}}$ seconds apart. The original signal can be exactly reconstructed from these samples using the interpolation formula:
 \begin{equation}
 x(t) = \sum_{n=-\infty}^{\infty} x(nT) \, \mathrm{sinc}\left(\frac{t - nT}{T}\right)
@@ -63,13 +64,7 @@ x(t) = \sum_{n=-\infty}^{\infty} x(nT) \, \mathrm{sinc}\left(\frac{t - nT}{T}\ri
 where $T = \dfrac{1}{2f_{\max}}$ is the sampling period and $\mathrm{sinc}(u) = \dfrac{\sin(\pi u)}{\pi u}$.
 \end{tcolorbox}
 
-Shannon's contribution was not merely restating Nyquist but providing:
-\begin{enumerate}
-    \item A rigorous mathematical proof based on Fourier analysis
-    \item An explicit reconstruction formula (the sinc interpolation)
-    \item Connection to information theory and channel capacity
-    \item Analysis of what happens when the conditions are violated (aliasing)
-\end{enumerate}
+Shannon's contribution was not merely restating Nyquist but providing a rigorous mathematical proof based on Fourier analysis, an explicit reconstruction formula through sinc interpolation, a deep connection to information theory and channel capacity, and a careful analysis of what happens when the conditions are violated, namely aliasing.
 
 \subsubsection{The Information Theory Context}
 
@@ -82,14 +77,7 @@ The telephone industry's central challenge was economic: voice communication req
 
 \subsubsection{Why Sampling?}
 
-The advantage of sampling became apparent with the development of pulse-code modulation (PCM) at Bell Labs in the 1930s and 1940s. If each sample could be quantized to a finite number of levels (e.g., 256 levels using 8 bits), then voice could be transmitted as a sequence of numbers. These numbers offered:
-
-\begin{itemize}
-    \item \textbf{Regeneration}: Unlike analog signals that accumulate noise through repeaters, digital signals can be perfectly regenerated at each relay station
-    \item \textbf{Multiplexing}: Multiple conversations can share a channel through time-division multiplexing
-    \item \textbf{Storage}: Signals can be stored in digital memory
-    \item \textbf{Processing}: Digital signal processing, filtering, and encryption become possible
-\end{itemize}
+The advantage of sampling became apparent with the development of pulse-code modulation (PCM) at Bell Labs in the 1930s and 1940s. If each sample could be quantized to a finite number of levels (e.g., 256 levels using 8 bits), then voice could be transmitted as a sequence of numbers. These numbers offered several key advantages. First, \textbf{regeneration} becomes possible: unlike analog signals that accumulate noise through repeaters, digital signals can be perfectly regenerated at each relay station. Second, \textbf{multiplexing} allows multiple conversations to share a channel through time-division multiplexing. Third, \textbf{storage} in digital memory becomes straightforward. Fourth, \textbf{processing} through digital signal processing, filtering, and encryption becomes possible.
 
 \subsubsection{The Cost of Undersampling}
 
@@ -102,26 +90,11 @@ The emergence of digital computers in the 1950s and 1960s created an entirely ne
 
 \subsubsection{Why Computers Cannot Handle Continuous Signals}
 
-Digital computers are fundamentally discrete devices. They operate on finite sequences of numbers, perform calculations at discrete instants, and communicate through digital interfaces. When a computer must control a physical process---maintaining temperature in a chemical reactor, guiding a spacecraft, or positioning a machine tool---it confronts an inherent mismatch:
-
-\begin{itemize}
-    \item The physical world evolves continuously in time
-    \item The computer operates at discrete instants
-    \item Sensors produce continuous voltages that must be digitized
-    \item Actuators require analog commands that must be synthesized from discrete values
-\end{itemize}
-
-This mismatch necessitated a complete theory of \textit{sampled-data control systems}.
+Digital computers are fundamentally discrete devices. They operate on finite sequences of numbers, perform calculations at discrete instants, and communicate through digital interfaces. When a computer must control a physical process---maintaining temperature in a chemical reactor, guiding a spacecraft, or positioning a machine tool---it confronts an inherent mismatch. The physical world evolves continuously in time while the computer operates at discrete instants. Furthermore, sensors produce continuous voltages that must be digitized, and actuators require analog commands that must be synthesized from discrete values. This mismatch necessitated a complete theory of \textit{sampled-data control systems}.
 
 \subsubsection{Radar Systems: Early Digital Control}
 
-The first large-scale applications of digital control emerged in military radar and fire-control systems during World War II and the Cold War. The SAGE (Semi-Automatic Ground Environment) air defense system of the 1950s used digital computers to track aircraft based on radar returns sampled at discrete intervals. These systems required:
-
-\begin{enumerate}
-    \item Sampling radar signals at rates sufficient to track aircraft without aliasing their motion
-    \item Implementing tracking filters (predecessors to the Kalman filter) in discrete time
-    \item Generating smooth guidance commands from discrete computations
-\end{enumerate}
+The first large-scale applications of digital control emerged in military radar and fire-control systems during World War II and the Cold War. The SAGE (Semi-Automatic Ground Environment) air defense system of the 1950s used digital computers to track aircraft based on radar returns sampled at discrete intervals. These systems required sampling radar signals at rates sufficient to track aircraft without aliasing their motion, implementing tracking filters (predecessors to the Kalman filter) in discrete time, and generating smooth guidance commands from discrete computations.
 
 \subsubsection{Aerospace Applications}
 
@@ -136,13 +109,8 @@ Chemical plants, refineries, and power stations adopted digital control in the 1
 
 All these applications raised the same fundamental question:
 
-\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=The Digital Control Question]
-Given a continuous-time system that must be controlled by a digital computer:
-\begin{enumerate}
-    \item How fast must we sample to preserve control performance?
-    \item How do we convert continuous controller designs to discrete implementations?
-    \item What artifacts arise from sampling, and how do we mitigate them?
-\end{enumerate}
+\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,sharp corners,title=The Digital Control Question]
+Given a continuous-time system that must be controlled by a digital computer, three fundamental questions arise: How fast must we sample to preserve control performance? How do we convert continuous controller designs to discrete implementations? And what artifacts arise from sampling, and how do we mitigate them?
 \end{tcolorbox}
 
 The remainder of this chapter answers these questions with mathematical precision and practical guidance.
@@ -157,42 +125,33 @@ The principles established by Nyquist and Shannon now pervade every digital syst
 \subsection{Digital Audio}
 \label{subsec:digital_audio}
 
-The compact disc (CD), introduced in 1982, samples audio at 44.1 kHz with 16-bit resolution. This rate was chosen because:
-
-\begin{itemize}
-    \item Human hearing extends to approximately 20 kHz
-    \item The Nyquist theorem requires sampling above 40 kHz
-    \item A small margin (44.1 kHz) provides headroom for practical anti-aliasing filters
-    \item The specific value 44.1 kHz aligned with existing video equipment standards
-\end{itemize}
-
-Modern high-resolution audio systems sample at 96 kHz, 192 kHz, or even higher---not because humans can hear frequencies above 20 kHz, but because higher sample rates ease anti-aliasing filter requirements and provide margin for signal processing.
+The compact disc (CD), introduced in 1982, samples audio at 44.1 kHz with 16-bit resolution. This rate was chosen because human hearing extends to approximately 20 kHz and the Nyquist theorem requires sampling above 40 kHz. A small margin at 44.1 kHz provides headroom for practical anti-aliasing filters, and the specific value aligned with existing video equipment standards. Modern high-resolution audio systems sample at 96 kHz, 192 kHz, or even higher---not because humans can hear frequencies above 20 kHz, but because higher sample rates ease anti-aliasing filter requirements and provide margin for signal processing.
 
 \subsection{Digital Control in Microcontrollers}
 \label{subsec:microcontroller_control}
 
-Modern embedded systems implement control algorithms on microcontrollers with integrated analog-to-digital converters (ADCs) and pulse-width modulation (PWM) outputs. Typical applications include:
+Modern embedded systems implement control algorithms on microcontrollers with integrated analog-to-digital converters (ADCs) and pulse-width modulation (PWM) outputs. Table~\ref{tab:microcontroller_applications} summarizes typical applications and their sample rate requirements. The sample rate selection involves tradeoffs between control bandwidth, computational load, sensor noise, and power consumption.
 
-\begin{itemize}
-    \item \textbf{Motor control}: Sample rates of 10--100 kHz for brushless DC motor commutation
-    \item \textbf{Power electronics}: Switching converters operate at 50--500 kHz with control loops at 10--100 kHz
-    \item \textbf{Automotive systems}: Engine control units sample sensors at 1--10 kHz
-    \item \textbf{Consumer electronics}: Temperature control, battery management at 1--100 Hz
-\end{itemize}
-
-The sample rate selection involves tradeoffs between control bandwidth, computational load, sensor noise, and power consumption.
+\begin{table}[htbp]
+\centering
+\caption{Typical Microcontroller Control Applications and Sample Rates}
+\label{tab:microcontroller_applications}
+\begin{tabular}{ll}
+\toprule
+\textbf{Application} & \textbf{Sample Rate} \\
+\midrule
+Motor control (brushless DC commutation) & 10--100 kHz \\
+Power electronics (switching converters) & 10--100 kHz \\
+Automotive systems (engine control) & 1--10 kHz \\
+Consumer electronics (temperature, battery) & 1--100 Hz \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Anti-Aliasing in Signal Processing}
 \label{subsec:antialiasing}
 
-Every properly designed data acquisition system includes an anti-aliasing filter before the analog-to-digital converter. This lowpass filter attenuates frequencies above half the sampling rate, preventing aliasing. Design considerations include:
-
-\begin{itemize}
-    \item Filter order (steeper cutoff requires higher-order filters)
-    \item Phase distortion (important for time-domain applications)
-    \item Cost and complexity tradeoffs
-    \item Oversampling strategies that relax filter requirements
-\end{itemize}
+Every properly designed data acquisition system includes an anti-aliasing filter before the analog-to-digital converter. This lowpass filter attenuates frequencies above half the sampling rate, preventing aliasing. Design considerations include filter order, since steeper cutoff requires higher-order filters, and phase distortion, which is important for time-domain applications. Engineers must also balance cost and complexity tradeoffs, and may employ oversampling strategies that relax filter requirements.
 
 \subsection{Real-Time Embedded Systems}
 \label{subsec:realtime}
@@ -248,7 +207,7 @@ X^*(f) = X(f) * \left( \frac{1}{T} \sum_{k=-\infty}^{\infty} \delta(f - k f_s) \
 \label{eq:sampled_spectrum}
 \end{equation}
 
-\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,title=Spectral Effect of Sampling]
+\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,sharp corners,title=Spectral Effect of Sampling]
 Sampling creates infinitely many copies of the original spectrum $X(f)$, shifted to center frequencies $0, \pm f_s, \pm 2f_s, \ldots$, each scaled by $1/T$.
 \end{tcolorbox}
 
@@ -371,7 +330,7 @@ f_{\text{alias}} = |f_{\text{signal}} - k \cdot f_s| \quad \text{for integer } k
 \label{eq:alias_frequency}
 \end{equation}
 
-\begin{tcolorbox}[colback=red!5!white,colframe=red!75!black,title=Aliasing Formula]
+\begin{tcolorbox}[colback=red!5!white,colframe=red!75!black,sharp corners,title=Aliasing Formula]
 A signal at frequency $f$ sampled at rate $f_s$ produces the same samples as a signal at the \textbf{alias frequency}:
 \begin{equation}
 f_{\text{alias}} = \left| f - \left\lfloor \frac{f}{f_s} + 0.5 \right\rfloor \cdot f_s \right|
@@ -382,7 +341,7 @@ where $\lfloor \cdot \rfloor$ denotes rounding to the nearest integer.
 
 \subsubsection{Aliasing Examples}
 
-\begin{example}[Simple Aliasing]
+\begin{examplebox}[Simple Aliasing Calculation]
 A 1200 Hz sinusoid is sampled at 1000 Hz. What frequency appears in the sampled data?
 
 \textbf{Solution}: The signal frequency exceeds the Nyquist frequency (500 Hz). The alias frequency is:
@@ -391,9 +350,9 @@ f_{\text{alias}} = |1200 - 1 \times 1000| = 200 \text{ Hz}
 \end{equation*}
 
 The sampled data appears to contain a 200 Hz signal, not 1200 Hz.
-\end{example}
+\end{examplebox}
 
-\begin{example}[Wagon Wheel Effect]
+\begin{examplebox}[Wagon Wheel Effect in Cinema]
 In film (24 frames per second), a wagon wheel with 12 spokes rotating at 25 revolutions per second appears to rotate slowly backward.
 
 \textbf{Solution}: Each spoke passes a given position at rate $25 \times 12 = 300$ Hz. Sampled at 24 Hz, the alias frequency is:
@@ -402,7 +361,7 @@ f_{\text{alias}} = |300 - 12 \times 24| = |300 - 288| = 12 \text{ Hz}
 \end{equation*}
 
 Since this aliases to 12 Hz but the sampling rate is 24 Hz, and $12 < 24/2 = 12$, the wheel appears to move at $12/12 = 1$ revolution per second---but in the opposite direction due to the phase reversal in folding.
-\end{example}
+\end{examplebox}
 
 \subsubsection{Frequency Domain Visualization of Aliasing}
 
@@ -472,7 +431,7 @@ H_0(s) = \int_0^T e^{-st} \, dt = \frac{1 - e^{-sT}}{s}
 \label{eq:zoh_transfer}
 \end{equation}
 
-\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,title=Zero-Order Hold Transfer Function]
+\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,sharp corners,title=Zero-Order Hold Transfer Function]
 \begin{equation}
 H_0(s) = \frac{1 - e^{-sT}}{s}
 \label{eq:zoh_tf_boxed}
@@ -491,11 +450,7 @@ H_0(j\omega) = e^{-j\omega T/2} \cdot T \cdot \frac{\sin(\omega T/2)}{\omega T/2
 \label{eq:zoh_frequency_response}
 \end{equation}
 
-The ZOH has:
-\begin{itemize}
-    \item \textbf{Magnitude}: Rolls off as a sinc function, with zeros at $\omega = 2\pi k/T$ ($k = 1, 2, \ldots$)
-    \item \textbf{Phase}: A linear phase lag of $\omega T/2$, equivalent to a time delay of $T/2$
-\end{itemize}
+The ZOH has a \textbf{magnitude} response that rolls off as a sinc function, with zeros at $\omega = 2\pi k/T$ for $k = 1, 2, \ldots$, and a \textbf{phase} response consisting of a linear phase lag of $\omega T/2$, equivalent to a time delay of $T/2$.
 
 \subsubsection{Impact on Control Systems}
 
@@ -566,12 +521,7 @@ In the Laplace/z-transform domains, $s \cdot X(s)$ corresponds to differentiatio
 \label{eq:forward_euler_substitution}
 \end{equation}
 
-\textbf{Properties}:
-\begin{itemize}
-    \item Simple to implement
-    \item Can map stable continuous poles to unstable discrete poles
-    \item Accuracy: $O(T)$
-\end{itemize}
+The forward Euler method is simple to implement but can map stable continuous poles to unstable discrete poles. Its accuracy is $O(T)$.
 
 \subsubsection{Backward Euler (Backward Difference)}
 
@@ -587,12 +537,7 @@ This gives the substitution:
 \label{eq:backward_euler_substitution}
 \end{equation}
 
-\textbf{Properties}:
-\begin{itemize}
-    \item Never maps stable continuous poles to unstable discrete poles (A-stable)
-    \item May introduce excessive damping
-    \item Accuracy: $O(T)$
-\end{itemize}
+The backward Euler method never maps stable continuous poles to unstable discrete poles, making it A-stable. However, it may introduce excessive damping. Its accuracy is $O(T)$.
 
 \subsubsection{Tustin (Bilinear) Transform}
 
@@ -608,15 +553,9 @@ This leads to the substitution:
 \label{eq:tustin_substitution}
 \end{equation}
 
-\textbf{Properties}:
-\begin{itemize}
-    \item Maps the left half of the $s$-plane exactly to the interior of the unit circle in the $z$-plane
-    \item Preserves stability: stable continuous systems yield stable discrete systems
-    \item Introduces frequency warping: continuous frequency $\omega$ maps to discrete frequency $\omega_d = (2/T)\tan(\omega T/2)$
-    \item Accuracy: $O(T^2)$
-\end{itemize}
+The Tustin method maps the left half of the $s$-plane exactly to the interior of the unit circle in the $z$-plane, thereby preserving stability so that stable continuous systems yield stable discrete systems. It introduces frequency warping where continuous frequency $\omega$ maps to discrete frequency $\omega_d = (2/T)\tan(\omega T/2)$. Its accuracy is $O(T^2)$, making it more accurate than the Euler methods.
 
-\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,title=Tustin Frequency Warping]
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,sharp corners,title=Tustin Frequency Warping]
 The Tustin transform maps continuous frequency $\omega$ to discrete frequency $\omega_d$ according to:
 \begin{equation}
 \omega_d = \frac{2}{T} \tan\left(\frac{\omega T}{2}\right)
@@ -656,18 +595,15 @@ Table~\ref{tab:discretization_comparison} summarizes the properties of each meth
 \centering
 \caption{Comparison of Discretization Methods}
 \label{tab:discretization_comparison}
-\begin{tabular}{|l|c|c|c|c|}
-\hline
+\begin{tabular}{lcccc}
+\toprule
 \textbf{Method} & \textbf{Substitution} & \textbf{Stability} & \textbf{Accuracy} & \textbf{Frequency} \\
-\hline
+\midrule
 Forward Euler & $\dfrac{z-1}{T}$ & May destabilize & $O(T)$ & Good at low $f$ \\[1.5ex]
-\hline
 Backward Euler & $\dfrac{z-1}{Tz}$ & Always stable & $O(T)$ & Over-damped \\[1.5ex]
-\hline
 Tustin & $\dfrac{2}{T}\dfrac{z-1}{z+1}$ & Preserves & $O(T^2)$ & Warped \\[1.5ex]
-\hline
 ZOH (plant) & Exact & Exact & Exact & Exact \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -676,15 +612,9 @@ ZOH (plant) & Exact & Exact & Exact & Exact \\
 
 \subsubsection{Rule of Thumb}
 
-For control systems, the sampling rate should be significantly higher than the Nyquist minimum to account for:
-\begin{itemize}
-    \item ZOH phase lag
-    \item Computational delay
-    \item Practical anti-aliasing filter limitations
-    \item Margin for modeling errors
-\end{itemize}
+For control systems, the sampling rate should be significantly higher than the Nyquist minimum to account for ZOH phase lag, computational delay, practical anti-aliasing filter limitations, and margin for modeling errors.
 
-\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Sample Rate Guidelines]
+\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,sharp corners,title=Sample Rate Guidelines]
 For a control system with closed-loop bandwidth $\omega_{\text{BW}}$:
 \begin{equation}
 \omega_s \geq 10\omega_{\text{BW}} \quad \text{(minimum practical)}
@@ -694,31 +624,12 @@ For a control system with closed-loop bandwidth $\omega_{\text{BW}}$:
 \omega_s \approx 20\omega_{\text{BW}} \quad \text{(typical design)}
 \label{eq:sample_rate_typical}
 \end{equation}
-Higher rates (30--50$\times$ bandwidth) may be needed for:
-\begin{itemize}
-    \item Systems with lightly damped resonances
-    \item High-precision positioning
-    \item Fast disturbance rejection
-\end{itemize}
+Higher rates (30--50$\times$ bandwidth) may be needed for systems with lightly damped resonances, high-precision positioning applications, or fast disturbance rejection requirements.
 \end{tcolorbox}
 
 \subsubsection{Tradeoffs in Sample Rate Selection}
 
-\textbf{Benefits of higher sample rate}:
-\begin{itemize}
-    \item Better approximation of continuous control
-    \item Reduced phase lag from ZOH
-    \item Easier anti-aliasing filter design
-    \item Better high-frequency disturbance rejection
-\end{itemize}
-
-\textbf{Costs of higher sample rate}:
-\begin{itemize}
-    \item Increased computational load
-    \item More demanding real-time requirements
-    \item Higher power consumption
-    \item Increased data storage and communication bandwidth
-\end{itemize}
+Higher sample rates provide better approximation of continuous control, reduced phase lag from the ZOH, easier anti-aliasing filter design, and improved high-frequency disturbance rejection. However, these benefits come at the cost of increased computational load, more demanding real-time requirements, higher power consumption, and increased data storage and communication bandwidth. Engineers must balance these tradeoffs based on their specific application requirements.
 
 %=============================================================================
 \section{Practical Laboratory: Demonstrating Aliasing and Discretization Effects}
@@ -729,13 +640,7 @@ This laboratory provides hands-on experience with aliasing and discretization us
 
 \subsection{Learning Objectives}
 
-Upon completion, students will be able to:
-\begin{enumerate}
-    \item Visually observe aliasing when a signal is undersampled
-    \item Measure the alias frequency and verify the folding formula
-    \item Discretize a continuous controller and compare performance
-    \item Understand the effect of sample rate on control quality
-\end{enumerate}
+Upon completion, students will be able to visually observe aliasing when a signal is undersampled, measure the alias frequency and verify the folding formula, discretize a continuous controller and compare performance, and understand the effect of sample rate on control quality.
 
 \subsection{Required Components}
 
@@ -743,10 +648,10 @@ Upon completion, students will be able to:
 \centering
 \caption{Bill of Materials for Sampling Laboratory}
 \label{tab:sampling_bom}
-\begin{tabular}{|l|l|l|}
-\hline
+\begin{tabular}{lll}
+\toprule
 \textbf{Component} & \textbf{Specification} & \textbf{Qty} \\
-\hline
+\midrule
 Arduino Uno/Nano & ATmega328P & 1 \\
 Function Generator & 0--100 kHz, sine output (or Arduino PWM + filter) & 1 \\
 LEDs & Standard 5mm, assorted colors & 10 \\
@@ -756,7 +661,7 @@ Lowpass Filter & RC filter components (10k$\Omega$, 0.1$\mu$F) & 1 set \\
 Potentiometer & 10k$\Omega$ & 2 \\
 DC Motor with Encoder & Same as Chapter 1 lab & 1 \\
 Motor Driver & L298N or equivalent & 1 \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -766,85 +671,53 @@ Motor Driver & L298N or equivalent & 1 \\
 
 This experiment demonstrates aliasing using a strobe-light approach. A row of LEDs represents the ``sampled'' output, while the true signal frequency is known.
 
-\begin{enumerate}
-    \item Wire 8 LEDs in a row, each controlled by a digital output pin
-    \item Configure the Arduino to update the LED display at a fixed ``sample rate'' (e.g., 10 Hz)
-    \item Generate a test signal using:
-    \begin{itemize}
-        \item A potentiometer rotated at controlled speed, or
-        \item A function generator producing a low-frequency sine wave
-    \end{itemize}
-\end{enumerate}
+To set up the experiment, first wire 8 LEDs in a row, each controlled by a digital output pin. Then configure the Arduino to update the LED display at a fixed ``sample rate'' (e.g., 10 Hz). Finally, generate a test signal using either a potentiometer rotated at controlled speed or a function generator producing a low-frequency sine wave.
 
 \subsubsection{Software: Aliasing Demonstration}
 
-\begin{lstlisting}[language=C++, caption={Aliasing Demonstration with LED Array}, label={lst:aliasing_demo}]
-// Aliasing Demonstration
-// Samples an analog input at adjustable rate and displays on LEDs
-
-const int NUM_LEDS = 8;
-const int LED_PINS[] = {2, 3, 4, 5, 6, 7, 8, 9};
-const int ANALOG_PIN = A0;
-
-// Sample rate control (adjustable via Serial)
-unsigned long samplePeriodMs = 100;  // 10 Hz default
-unsigned long lastSampleTime = 0;
-
-void setup() {
-    Serial.begin(115200);
-    for (int i = 0; i < NUM_LEDS; i++) {
-        pinMode(LED_PINS[i], OUTPUT);
-    }
-    Serial.println("Aliasing Demo - Enter sample period in ms:");
-}
-
-void displayOnLEDs(int value) {
-    // Map 0-1023 to 0-7 (which LED to light)
-    int ledIndex = map(value, 0, 1023, 0, NUM_LEDS - 1);
-
-    // Turn off all LEDs, then light the selected one
-    for (int i = 0; i < NUM_LEDS; i++) {
-        digitalWrite(LED_PINS[i], (i == ledIndex) ? HIGH : LOW);
-    }
-}
-
-void loop() {
-    // Check for new sample period from Serial
-    if (Serial.available()) {
-        int newPeriod = Serial.parseInt();
-        if (newPeriod > 0) {
-            samplePeriodMs = newPeriod;
-            Serial.print("Sample period set to ");
-            Serial.print(samplePeriodMs);
-            Serial.println(" ms");
-        }
-    }
-
-    // Sample at the specified rate
-    unsigned long now = millis();
-    if (now - lastSampleTime >= samplePeriodMs) {
-        lastSampleTime = now;
-
-        int reading = analogRead(ANALOG_PIN);
-        displayOnLEDs(reading);
-
-        // Also output to Serial for plotting
-        Serial.println(reading);
-    }
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Aliasing Demonstration with LED Array}
+\label{alg:aliasing_demo}
+\begin{algorithmic}[1]
+\State \textbf{Constants:} $N_{\text{LEDs}} \gets 8$, LED pins $\gets \{2, 3, 4, 5, 6, 7, 8, 9\}$, analog input pin
+\State \textbf{Variables:} $T_{\text{sample}} \gets 100$ ms, $t_{\text{last}} \gets 0$
+\State
+\Procedure{Initialize}{}
+    \State Configure serial communication
+    \For{$i = 0$ \To $N_{\text{LEDs}} - 1$}
+        \State Set LED pin $i$ as output
+    \EndFor
+\EndProcedure
+\State
+\Procedure{DisplayOnLEDs}{$\text{value}$}
+    \State $\text{ledIndex} \gets \text{Map}(\text{value}, [0, 1023], [0, N_{\text{LEDs}} - 1])$
+    \For{$i = 0$ \To $N_{\text{LEDs}} - 1$}
+        \If{$i = \text{ledIndex}$}
+            \State Turn LED $i$ ON
+        \Else
+            \State Turn LED $i$ OFF
+        \EndIf
+    \EndFor
+\EndProcedure
+\State
+\Procedure{MainLoop}{}
+    \If{new sample period received from serial}
+        \State $T_{\text{sample}} \gets$ new period value
+    \EndIf
+    \State $t_{\text{now}} \gets$ current time in milliseconds
+    \If{$t_{\text{now}} - t_{\text{last}} \geq T_{\text{sample}}$}
+        \State $t_{\text{last}} \gets t_{\text{now}}$
+        \State $\text{reading} \gets$ read analog input
+        \State \Call{DisplayOnLEDs}{reading}
+        \State Output reading to serial for plotting
+    \EndIf
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Procedure}
 
-\begin{enumerate}
-    \item \textbf{No aliasing}: Set the sample rate to 100 Hz (10 ms period). Slowly rotate the potentiometer (about 1 Hz). Observe that the LED display smoothly follows the rotation.
-
-    \item \textbf{Introduce aliasing}: Reduce the sample rate to 2 Hz (500 ms period). Rotate the potentiometer at approximately 3 Hz. Observe that the LED display appears to move backward or erratically---this is aliasing.
-
-    \item \textbf{Quantify aliasing}: With sample rate at 10 Hz, rotate the potentiometer at exactly 12 Hz (use a metronome or timer). The display should appear to move at 2 Hz ($|12 - 10| = 2$).
-
-    \item \textbf{Nyquist limit}: Increase sample rate until the display correctly tracks the 12 Hz rotation. This should occur above 24 Hz.
-\end{enumerate}
+Begin by observing behavior without aliasing: set the sample rate to 100 Hz (10 ms period) and slowly rotate the potentiometer at about 1 Hz. The LED display should smoothly follow the rotation. Next, introduce aliasing by reducing the sample rate to 2 Hz (500 ms period) and rotating the potentiometer at approximately 3 Hz. Observe that the LED display appears to move backward or erratically---this is aliasing in action. To quantify aliasing, set the sample rate at 10 Hz and rotate the potentiometer at exactly 12 Hz (use a metronome or timer); the display should appear to move at 2 Hz since $|12 - 10| = 2$. Finally, explore the Nyquist limit by increasing the sample rate until the display correctly tracks the 12 Hz rotation, which should occur above 24 Hz.
 
 \subsubsection{Data Collection}
 
@@ -854,22 +727,17 @@ Complete Table~\ref{tab:aliasing_experiment}.
 \centering
 \caption{Aliasing Experiment Results}
 \label{tab:aliasing_experiment}
-\begin{tabular}{|c|c|c|c|}
-\hline
+\begin{tabular}{cccc}
+\toprule
 \textbf{Signal Freq. (Hz)} & \textbf{Sample Rate (Hz)} & \textbf{Predicted Alias (Hz)} & \textbf{Observed (Hz)} \\
-\hline
+\midrule
 3 & 10 & 3 (no alias) & \\
-\hline
 8 & 10 & 2 & \\
-\hline
 12 & 10 & 2 & \\
-\hline
 15 & 10 & 5 & \\
-\hline
 18 & 10 & 2 & \\
-\hline
 12 & 30 & 12 (no alias) & \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -881,160 +749,70 @@ Using the motor control hardware from Chapter 1, implement a discrete PID contro
 
 \subsubsection{Software: Variable Sample Rate Controller}
 
-\begin{lstlisting}[language=C++, caption={Variable Sample Rate Motor Control}, label={lst:variable_sample_rate}]
-// Variable Sample Rate Motor Control
-// Compare control quality at different sample rates
-
-const int ENCODER_A = 2;
-const int ENCODER_B = 3;
-const int MOTOR_PWM1 = 5;
-const int MOTOR_PWM2 = 6;
-
-volatile long encoderCount = 0;
-float setpoint = 0;
-
-// PID gains (tune for 100 Hz operation first)
-float Kp = 2.0;
-float Ki = 0.5;
-float Kd = 0.1;
-
-// Sample period (adjustable)
-unsigned long samplePeriodUs = 10000;  // 100 Hz default
-
-// Control state
-float integral = 0;
-float prevError = 0;
-unsigned long lastControlTime = 0;
-
-// Performance metrics
-unsigned long settlingStartTime = 0;
-bool settled = false;
-float maxOvershoot = 0;
-
-void setup() {
-    Serial.begin(115200);
-
-    pinMode(ENCODER_A, INPUT_PULLUP);
-    pinMode(ENCODER_B, INPUT_PULLUP);
-    pinMode(MOTOR_PWM1, OUTPUT);
-    pinMode(MOTOR_PWM2, OUTPUT);
-
-    attachInterrupt(digitalPinToInterrupt(ENCODER_A),
-                    updateEncoder, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_B),
-                    updateEncoder, CHANGE);
-
-    Serial.println("Variable Sample Rate Control");
-    Serial.println("Commands: Snnn=setpoint, Tnnn=period(us)");
-}
-
-void updateEncoder() {
-    // Same quadrature decoding as Chapter 1
-    static int lastEncoded = 0;
-    int MSB = digitalRead(ENCODER_A);
-    int LSB = digitalRead(ENCODER_B);
-    int encoded = (MSB << 1) | LSB;
-    int sum = (lastEncoded << 2) | encoded;
-
-    if (sum == 0b1101 || sum == 0b0100 ||
-        sum == 0b0010 || sum == 0b1011) encoderCount++;
-    if (sum == 0b1110 || sum == 0b0111 ||
-        sum == 0b0001 || sum == 0b1000) encoderCount--;
-
-    lastEncoded = encoded;
-}
-
-float getPositionDegrees() {
-    const float COUNTS_PER_REV = 400.0;
-    return (encoderCount / COUNTS_PER_REV) * 360.0;
-}
-
-void setMotorPWM(int pwm) {
-    pwm = constrain(pwm, -255, 255);
-    if (pwm > 0) {
-        analogWrite(MOTOR_PWM1, pwm);
-        analogWrite(MOTOR_PWM2, 0);
-    } else {
-        analogWrite(MOTOR_PWM1, 0);
-        analogWrite(MOTOR_PWM2, -pwm);
-    }
-}
-
-void loop() {
-    // Parse commands
-    if (Serial.available()) {
-        char cmd = Serial.read();
-        if (cmd == 'S' || cmd == 's') {
-            setpoint = Serial.parseFloat();
-            integral = 0;  // Reset integrator
-            prevError = 0;
-            settlingStartTime = micros();
-            settled = false;
-            maxOvershoot = 0;
-            Serial.print("Setpoint: "); Serial.println(setpoint);
-        } else if (cmd == 'T' || cmd == 't') {
-            samplePeriodUs = Serial.parseInt();
-            Serial.print("Sample period: ");
-            Serial.print(samplePeriodUs);
-            Serial.println(" us");
-        }
-    }
-
-    // Control at specified sample rate
-    unsigned long now = micros();
-    if (now - lastControlTime >= samplePeriodUs) {
-        float dt = (now - lastControlTime) / 1e6;
-        lastControlTime = now;
-
-        float position = getPositionDegrees();
-        float error = setpoint - position;
-
-        // PID calculation with proper discrete integration
-        integral += error * dt;
-        float derivative = (error - prevError) / dt;
-        prevError = error;
-
-        float output = Kp * error + Ki * integral + Kd * derivative;
-        setMotorPWM((int)output);
-
-        // Track performance metrics
-        float overshoot = (setpoint > 0) ?
-                          (position - setpoint) : (setpoint - position);
-        if (overshoot > maxOvershoot) maxOvershoot = overshoot;
-
-        if (!settled && abs(error) < 2.0) {
-            settled = true;
-            unsigned long settlingTime = now - settlingStartTime;
-            Serial.print("Settled in ");
-            Serial.print(settlingTime / 1000.0);
-            Serial.print(" ms, Overshoot: ");
-            Serial.println(maxOvershoot);
-        }
-
-        // Output for plotting
-        Serial.print(setpoint); Serial.print(",");
-        Serial.print(position); Serial.print(",");
-        Serial.println(error);
-    }
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Variable Sample Rate Motor Control}
+\label{alg:variable_sample_rate}
+\begin{algorithmic}[1]
+\State \textbf{Constants:} $K_p \gets 2.0$, $K_i \gets 0.5$, $K_d \gets 0.1$, counts per revolution $\gets 400$
+\State \textbf{Variables:} $T_{\text{sample}} \gets 10000\,\mu$s, $t_{\text{last}} \gets 0$, integral $\gets 0$, $e_{\text{prev}} \gets 0$
+\State \textbf{Variables:} setpoint $\gets 0$, encoderCount $\gets 0$, settled $\gets$ false, maxOvershoot $\gets 0$
+\State
+\Procedure{Initialize}{}
+    \State Configure encoder pins with interrupts for quadrature decoding
+    \State Configure motor PWM output pins
+\EndProcedure
+\State
+\Procedure{UpdateEncoder}{} \Comment{Called on encoder edge interrupt}
+    \State Decode quadrature signals to update encoderCount
+\EndProcedure
+\State
+\Function{GetPositionDegrees}{}
+    \State \Return $(\text{encoderCount} / 400) \times 360$
+\EndFunction
+\State
+\Procedure{SetMotorPWM}{$\text{pwm}$}
+    \State $\text{pwm} \gets \text{Constrain}(\text{pwm}, -255, 255)$
+    \If{$\text{pwm} > 0$}
+        \State Set forward direction with magnitude pwm
+    \Else
+        \State Set reverse direction with magnitude $|\text{pwm}|$
+    \EndIf
+\EndProcedure
+\State
+\Procedure{MainLoop}{}
+    \If{setpoint command received}
+        \State Update setpoint, reset integral and $e_{\text{prev}}$
+        \State Reset performance tracking variables
+    \ElsIf{sample period command received}
+        \State $T_{\text{sample}} \gets$ new period value
+    \EndIf
+    \State
+    \State $t_{\text{now}} \gets$ current time in microseconds
+    \If{$t_{\text{now}} - t_{\text{last}} \geq T_{\text{sample}}$}
+        \State $\Delta t \gets (t_{\text{now}} - t_{\text{last}}) / 10^6$ \Comment{Convert to seconds}
+        \State $t_{\text{last}} \gets t_{\text{now}}$
+        \State
+        \State $\theta \gets$ \Call{GetPositionDegrees}{}
+        \State $e \gets \text{setpoint} - \theta$
+        \State
+        \State \Comment{PID calculation with discrete integration}
+        \State integral $\gets$ integral $+ e \cdot \Delta t$
+        \State derivative $\gets (e - e_{\text{prev}}) / \Delta t$
+        \State $e_{\text{prev}} \gets e$
+        \State
+        \State $u \gets K_p \cdot e + K_i \cdot \text{integral} + K_d \cdot \text{derivative}$
+        \State \Call{SetMotorPWM}{$u$}
+        \State
+        \State Track overshoot and settling time metrics
+        \State Output data for plotting
+    \EndIf
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Procedure}
 
-\begin{enumerate}
-    \item \textbf{Baseline (100 Hz)}: Set sample period to 10000 $\mu$s (100 Hz). Command a 90-degree step. Record settling time, overshoot, and steady-state error.
-
-    \item \textbf{Reduce sample rate}: Test at 50 Hz, 20 Hz, 10 Hz, and 5 Hz. For each:
-    \begin{itemize}
-        \item Record settling time
-        \item Record maximum overshoot
-        \item Observe any oscillation or instability
-    \end{itemize}
-
-    \item \textbf{Increase sample rate}: Test at 200 Hz and 500 Hz. Note any improvement (or lack thereof due to other limiting factors).
-
-    \item \textbf{Find the limit}: Reduce sample rate until the system becomes unstable. Record this critical sample rate.
-\end{enumerate}
+Establish a baseline at 100 Hz by setting the sample period to 10000 $\mu$s, commanding a 90-degree step, and recording settling time, overshoot, and steady-state error. Then reduce the sample rate, testing at 50 Hz, 20 Hz, 10 Hz, and 5 Hz; for each rate, record settling time, maximum overshoot, and any oscillation or instability observed. Next, increase the sample rate to 200 Hz and 500 Hz to note any improvement (or lack thereof due to other limiting factors). Finally, find the stability limit by reducing sample rate until the system becomes unstable, and record this critical sample rate.
 
 \subsubsection{Data Collection}
 
@@ -1044,24 +822,18 @@ Complete Table~\ref{tab:sample_rate_experiment}.
 \centering
 \caption{Sample Rate Effect on Control Quality}
 \label{tab:sample_rate_experiment}
-\begin{tabular}{|c|c|c|c|c|}
-\hline
+\begin{tabular}{ccccc}
+\toprule
 \textbf{Sample Rate (Hz)} & \textbf{Settling Time (ms)} & \textbf{Overshoot (\%)} & \textbf{Oscillation?} & \textbf{Stable?} \\
-\hline
+\midrule
 500 & & & & \\
-\hline
 200 & & & & \\
-\hline
 100 & & & & \\
-\hline
 50 & & & & \\
-\hline
 20 & & & & \\
-\hline
 10 & & & & \\
-\hline
 5 & & & & \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -1102,60 +874,41 @@ C_{\text{Tustin}}(z) = K_p + \frac{K_i T}{2} \cdot \frac{z + 1}{z - 1}
 
 \subsubsection{Implementation}
 
-\begin{lstlisting}[language=C++, caption={Comparing Discretization Methods}, label={lst:discretization_compare}]
-// Discretization Method Comparison
-// Select method via Serial: F=Forward Euler, B=Backward, T=Tustin
-
-char discretizationMethod = 'T';  // Default: Tustin
-
-// Integral state variables
-float integralForward = 0;
-float integralBackward = 0;
-float integralTustin = 0;
-float prevErrorTustin = 0;
-
-float computePI(float error, float dt) {
-    float proportional = Kp * error;
-    float integralTerm = 0;
-
-    switch (discretizationMethod) {
-        case 'F':  // Forward Euler
-            integralTerm = integralForward;
-            integralForward += Ki * dt * error;
-            break;
-
-        case 'B':  // Backward Euler
-            integralBackward += Ki * dt * error;
-            integralTerm = integralBackward;
-            break;
-
-        case 'T':  // Tustin (Trapezoidal)
-            integralTustin += Ki * dt * 0.5 * (error + prevErrorTustin);
-            integralTerm = integralTustin;
-            prevErrorTustin = error;
-            break;
-    }
-
-    return proportional + integralTerm;
-}
-
-void resetIntegrators() {
-    integralForward = 0;
-    integralBackward = 0;
-    integralTustin = 0;
-    prevErrorTustin = 0;
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Comparing Discretization Methods for PI Control}
+\label{alg:discretization_compare}
+\begin{algorithmic}[1]
+\State \textbf{Constants:} $K_p$, $K_i$ (controller gains)
+\State \textbf{Variables:} method $\in \{\text{Forward}, \text{Backward}, \text{Tustin}\}$
+\State \textbf{State:} $I_F \gets 0$, $I_B \gets 0$, $I_T \gets 0$, $e_{\text{prev}} \gets 0$
+\State
+\Function{ComputePI}{$e$, $\Delta t$}
+    \State $u_P \gets K_p \cdot e$ \Comment{Proportional term}
+    \State
+    \If{method $=$ Forward Euler}
+        \State $u_I \gets I_F$ \Comment{Use previous integral value}
+        \State $I_F \gets I_F + K_i \cdot \Delta t \cdot e$ \Comment{Update for next iteration}
+    \ElsIf{method $=$ Backward Euler}
+        \State $I_B \gets I_B + K_i \cdot \Delta t \cdot e$ \Comment{Update first}
+        \State $u_I \gets I_B$ \Comment{Use updated value}
+    \ElsIf{method $=$ Tustin}
+        \State $I_T \gets I_T + K_i \cdot \Delta t \cdot 0.5 \cdot (e + e_{\text{prev}})$ \Comment{Trapezoidal rule}
+        \State $u_I \gets I_T$
+        \State $e_{\text{prev}} \gets e$
+    \EndIf
+    \State
+    \State \Return $u_P + u_I$
+\EndFunction
+\State
+\Procedure{ResetIntegrators}{}
+    \State $I_F \gets 0$, $I_B \gets 0$, $I_T \gets 0$, $e_{\text{prev}} \gets 0$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Procedure}
 
-For each discretization method (Forward Euler, Backward Euler, Tustin):
-\begin{enumerate}
-    \item Reset integrators
-    \item Command a step change in setpoint
-    \item Record step response (position vs. time)
-    \item Compare settling time, overshoot, and steady-state error
-\end{enumerate}
+For each discretization method (Forward Euler, Backward Euler, Tustin), reset the integrators, command a step change in setpoint, record the step response (position vs. time), and compare settling time, overshoot, and steady-state error.
 
 At slow sample rates (e.g., 10 Hz), the differences between methods become more pronounced. At fast sample rates (e.g., 500 Hz), all methods should produce nearly identical results.
 
@@ -1177,12 +930,7 @@ By the Nyquist-Shannon theorem, the minimum sample rate is:
 f_{s,\min} = 2 f_{\max} = 2 \times 3400 = 6800 \text{ Hz}
 \end{equation*}
 
-In practice, we need margin for:
-\begin{itemize}
-    \item Anti-aliasing filter rolloff (practical filters cannot have infinite slope)
-    \item Guard band to prevent any frequency folding
-    \item Tolerance in component values
-\end{itemize}
+In practice, we need margin for anti-aliasing filter rolloff (since practical filters cannot have infinite slope), a guard band to prevent any frequency folding, and tolerance in component values.
 
 The telephone standard uses 8000 Hz, providing approximately 18\% margin. For higher quality, sample rates of 16 kHz (wideband telephony) or 44.1 kHz (CD audio) are used.
 
@@ -1212,12 +960,7 @@ k = 2: \quad & f_{\text{true}} = 2000 - 45 = 1955 \text{ Hz, or } f_{\text{true}
 & \vdots
 \end{align*}
 
-Checking if any are related to the shaft frequency:
-\begin{itemize}
-    \item $955/10.5 \approx 91$ (not an integer multiple)
-    \item $1045/10.5 \approx 99.5$ (not an integer multiple)
-    \item But $45/10.5 \approx 4.3$ (not exact either)
-\end{itemize}
+Checking if any are related to the shaft frequency: $955/10.5 \approx 91$ (not an integer multiple), $1045/10.5 \approx 99.5$ (not an integer multiple), and $45/10.5 \approx 4.3$ (not exact either).
 
 Let's check for blade-pass frequency. If the machine has 91 blades:
 \begin{equation*}
@@ -1273,16 +1016,16 @@ Pole at $z = 0.818$, corresponding to $s = \ln(0.818)/T = -10.05$ rad/s (very cl
 \textbf{Comparison}:
 
 \begin{center}
-\begin{tabular}{|l|c|c|}
-\hline
+\begin{tabular}{lcc}
+\toprule
 \textbf{Method} & \textbf{Discrete Pole} & \textbf{Equivalent Continuous Pole} \\
-\hline
+\midrule
 Forward Euler & 0.800 & -11.16 rad/s \\
 Backward Euler & 0.833 & -9.12 rad/s \\
 Tustin & 0.818 & -10.05 rad/s \\
-\hline
+\midrule
 Original & (exact: 0.819) & -10 rad/s \\
-\hline
+\bottomrule
 \end{tabular}
 \end{center}
 
@@ -1295,11 +1038,7 @@ A data acquisition system samples at 10 kHz. Signals of interest are below 1 kHz
 
 \textbf{Solution:}
 
-We need a lowpass filter with:
-\begin{itemize}
-    \item Passband: 0--1 kHz (signals of interest)
-    \item Stopband: 5 kHz (must be attenuated by 40 dB)
-\end{itemize}
+We need a lowpass filter with passband from 0--1 kHz (signals of interest) and stopband at 5 kHz (which must be attenuated by 40 dB).
 
 The transition band ratio is:
 \begin{equation*}
@@ -1605,58 +1344,63 @@ This is the velocity form of PI control, which avoids integrator windup issues.
 \label{sec:summary}
 %=============================================================================
 
-This chapter established the theoretical and practical foundations for working with sampled-data control systems:
+This chapter established the theoretical and practical foundations for working with sampled-data control systems.
 
-\begin{enumerate}
-    \item \textbf{Historical Context}: Sampling theory emerged from the telephone industry's need to efficiently transmit voice signals. Nyquist (1928) established the fundamental rate limit; Shannon (1949) formalized the reconstruction theorem.
+From a \textbf{historical context}, sampling theory emerged from the telephone industry's need to efficiently transmit voice signals. Nyquist (1928) established the fundamental rate limit, and Shannon (1949) formalized the reconstruction theorem. The \textbf{Nyquist-Shannon Theorem} states that a bandlimited signal with no frequency content above $f_{\max}$ can be perfectly reconstructed from samples taken at rate $f_s > 2f_{\max}$.
 
-    \item \textbf{Nyquist-Shannon Theorem}: A bandlimited signal with no frequency content above $f_{\max}$ can be perfectly reconstructed from samples taken at rate $f_s > 2f_{\max}$.
+\textbf{Aliasing} occurs when sampling below the Nyquist rate, causing high frequencies to fold into the baseband and creating spurious signals that cannot be distinguished from legitimate low-frequency content. Anti-aliasing filters prevent this phenomenon. The \textbf{Zero-Order Hold} maintains each sample constant until the next, creating a staircase approximation with transfer function $H_0(s) = (1 - e^{-sT})/s$ and introducing phase lag of approximately $\omega T/2$.
 
-    \item \textbf{Aliasing}: Sampling below the Nyquist rate causes high frequencies to fold into the baseband, creating spurious signals that cannot be distinguished from legitimate low-frequency content. Anti-aliasing filters prevent this.
+Several \textbf{discretization methods} are available: Forward Euler is simple but can destabilize; Backward Euler is always stable but over-damped; Tustin offers the best accuracy and preserves stability but warps frequencies; and ZOH discretization is exact for the plant-hold combination. For \textbf{sample rate selection} in control systems, $f_s \geq 10$--$20 \times$ bandwidth provides adequate phase margin and discretization accuracy.
 
-    \item \textbf{Zero-Order Hold}: The ZOH maintains each sample constant until the next, creating a staircase approximation. It has transfer function $H_0(s) = (1 - e^{-sT})/s$ and introduces phase lag of approximately $\omega T/2$.
-
-    \item \textbf{Discretization Methods}:
-    \begin{itemize}
-        \item Forward Euler: Simple but can destabilize
-        \item Backward Euler: Always stable but over-damped
-        \item Tustin: Best accuracy, preserves stability, but warps frequencies
-        \item ZOH: Exact for plant with hold
-    \end{itemize}
-
-    \item \textbf{Sample Rate Selection}: For control systems, $f_s \geq 10$--$20 \times$ bandwidth provides adequate phase margin and discretization accuracy.
-\end{enumerate}
-
-\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Key Takeaway]
+\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,sharp corners,title=Key Takeaway]
 Sampling is not merely a practical convenience for digital implementation---it fundamentally transforms the system. Understanding aliasing, hold effects, and discretization accuracy is essential for designing digital controllers that achieve continuous-system performance. The Nyquist frequency represents an absolute information limit: frequencies above it cannot be captured, only corrupted.
 \end{tcolorbox}
 
+\newpage
 %=============================================================================
-\section{Problems}
-\label{sec:problems}
+\section{Exercises}
+\label{sec:exercises}
 %=============================================================================
 
-\begin{enumerate}
-    \item \textbf{Nyquist Rate Calculation}: A control system must measure vibrations from 0.1 Hz to 250 Hz. What is the minimum sample rate? What would you recommend in practice?
+\begin{exercise}
+\textbf{Nyquist Rate Calculation}: A control system must measure vibrations from 0.1 Hz to 250 Hz. What is the minimum sample rate? What would you recommend in practice?
+\end{exercise}
 
-    \item \textbf{Aliasing Identification}: A rotating shaft at 3600 RPM has 20 gear teeth. When sampled at 500 Hz, what frequency appears in the data? Is this aliased?
+\begin{exercise}
+\textbf{Aliasing Identification}: A rotating shaft at 3600 RPM has 20 gear teeth. When sampled at 500 Hz, what frequency appears in the data? Is this aliased?
+\end{exercise}
 
-    \item \textbf{ZOH Analysis}: Calculate the magnitude and phase of the ZOH transfer function at $\omega = \omega_s/4$, $\omega_s/2$, and $\omega_s$. Sketch the Bode plot.
+\begin{exercise}
+\textbf{ZOH Analysis}: Calculate the magnitude and phase of the ZOH transfer function at $\omega = \omega_s/4$, $\omega_s/2$, and $\omega_s$. Sketch the Bode plot.
+\end{exercise}
 
-    \item \textbf{Discretization Comparison}: Discretize the controller $C(s) = \dfrac{s + 2}{s + 10}$ using Forward Euler, Backward Euler, and Tustin methods with $T = 0.05$ s. Compare pole locations.
+\begin{exercise}
+\textbf{Discretization Comparison}: Discretize the controller $C(s) = \dfrac{s + 2}{s + 10}$ using Forward Euler, Backward Euler, and Tustin methods with $T = 0.05$ s. Compare pole locations.
+\end{exercise}
 
-    \item \textbf{Filter Design}: An ADC samples at 1 kHz. Design a second-order Butterworth anti-aliasing filter that attenuates the Nyquist frequency by at least 30 dB. Specify the cutoff frequency.
+\begin{exercise}
+\textbf{Filter Design}: An ADC samples at 1 kHz. Design a second-order Butterworth anti-aliasing filter that attenuates the Nyquist frequency by at least 30 dB. Specify the cutoff frequency.
+\end{exercise}
 
-    \item \textbf{Phase Margin Preservation}: A continuous system has phase margin 60 degrees at crossover frequency 50 rad/s. What sample rate is needed to lose no more than 10 degrees to ZOH phase lag?
+\begin{exercise}
+\textbf{Phase Margin Preservation}: A continuous system has phase margin 60 degrees at crossover frequency 50 rad/s. What sample rate is needed to lose no more than 10 degrees to ZOH phase lag?
+\end{exercise}
 
-    \item \textbf{Tustin Prewarping}: A notch filter must have its zero exactly at 60 Hz when discretized at 1 kHz. Calculate the prewarped analog frequency.
+\begin{exercise}
+\textbf{Tustin Prewarping}: A notch filter must have its zero exactly at 60 Hz when discretized at 1 kHz. Calculate the prewarped analog frequency.
+\end{exercise}
 
-    \item \textbf{Complete Design}: A motor has transfer function $G(s) = \dfrac{100}{s(s+10)}$. Design a continuous PI controller for 1 rad/s bandwidth, then discretize it using Tustin at 20 Hz. Write the difference equation.
+\begin{exercise}
+\textbf{Complete Design}: A motor has transfer function $G(s) = \dfrac{100}{s(s+10)}$. Design a continuous PI controller for 1 rad/s bandwidth, then discretize it using Tustin at 20 Hz. Write the difference equation.
+\end{exercise}
 
-    \item \textbf{Laboratory Analysis}: In Experiment 2, explain why the control system becomes unstable as sample rate decreases. What is the relationship between the critical sample rate and the closed-loop bandwidth?
+\begin{exercise}
+\textbf{Laboratory Analysis}: In Experiment 2, explain why the control system becomes unstable as sample rate decreases. What is the relationship between the critical sample rate and the closed-loop bandwidth?
+\end{exercise}
 
-    \item \textbf{Historical Reflection}: How did Nyquist's work on telegraph transmission lead to modern digital audio? Calculate the minimum bits per second required for telephone-quality voice (4 kHz bandwidth, 8-bit quantization).
-\end{enumerate}
+\begin{exercise}
+\textbf{Historical Reflection}: How did Nyquist's work on telegraph transmission lead to modern digital audio? Calculate the minimum bits per second required for telephone-quality voice (4 kHz bandwidth, 8-bit quantization).
+\end{exercise}
 
 %=============================================================================
 % End of Chapter

@@ -15,6 +15,7 @@ The story of linearization is, in many ways, the story of applied mathematics it
 
 \subsection{Newton and the Birth of Local Approximation (1687)}
 
+\begin{historicalbox}[Newton's Revolutionary Insight]
 Isaac Newton's \textit{Principia Mathematica}, published in 1687, laid the foundation for both calculus and the concept of local approximation. Newton recognized that complicated functions could be represented as infinite series---what we now call Taylor series or power series expansions. In his \textit{Method of Fluxions}, Newton developed techniques for expanding functions around a point:
 \begin{equation}
 f(x) = f(x_0) + f'(x_0)(x - x_0) + \frac{f''(x_0)}{2!}(x - x_0)^2 + \cdots
@@ -23,6 +24,7 @@ f(x) = f(x_0) + f'(x_0)(x - x_0) + \frac{f''(x_0)}{2!}(x - x_0)^2 + \cdots
 The revolutionary insight was that \textit{near} the expansion point $x_0$, the higher-order terms become negligibly small. If $(x - x_0)$ is small, then $(x - x_0)^2$ is smaller still, and $(x - x_0)^3$ even more so. This observation---that locally, any smooth function can be approximated by a straight line---is the mathematical foundation of linearization.
 
 Newton himself applied this principle in his analysis of planetary motion. While the gravitational interactions of multiple bodies create hopelessly complex nonlinear dynamics, Newton showed that for small perturbations from a known orbit, the motion could be approximated by linear equations. This ``perturbation theory'' became a cornerstone of celestial mechanics.
+\end{historicalbox}
 
 \subsection{Small Oscillation Theory in Physics}
 
@@ -552,29 +554,25 @@ Begin by mounting the pendulum and verifying that it swings freely with minimal 
 
 Use the Arduino to timestamp zero-crossings of the pendulum. The period is twice the time between successive crossings (half-period). Sample code outline:
 
-\begin{lstlisting}[language=C++, caption={Arduino Period Measurement}]
-// Pseudocode for period measurement
-volatile long lastCrossing = 0;
-volatile float period = 0;
-
-void setup() {
-  attachInterrupt(digitalPinToInterrupt(encoderPin),
-                  zeroCrossing, RISING);
-  Serial.begin(115200);
-}
-
-void zeroCrossing() {
-  long now = micros();
-  period = 2.0 * (now - lastCrossing) / 1e6; // seconds
-  lastCrossing = now;
-}
-
-void loop() {
-  // Print period when stable
-  Serial.println(period, 6);
-  delay(500);
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Pendulum Period Measurement}
+\begin{algorithmic}[1]
+\State \textbf{Initialize:} $t_{\text{last}} \gets 0$, $T \gets 0$
+\State Configure interrupt on encoder zero-crossing (rising edge)
+\State Initialize serial communication
+\State
+\While{system is running}
+    \State \textbf{On zero-crossing interrupt:}
+    \State \quad $t_{\text{now}} \gets$ current time in microseconds
+    \State \quad $T \gets 2 \times (t_{\text{now}} - t_{\text{last}}) / 10^6$ \Comment{Period in seconds}
+    \State \quad $t_{\text{last}} \gets t_{\text{now}}$
+    \State
+    \State \textbf{In main loop:}
+    \State \quad Output period $T$ to serial monitor
+    \State \quad Wait 500 ms before next output
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 \textbf{Part B: Waveform Comparison}
 
@@ -643,8 +641,7 @@ Consider the following questions for deeper understanding of the experiment. Fir
 
 This section presents detailed solutions to representative linearization problems.
 
-\subsection{Example 1: Pendulum with Torque Input}
-
+\begin{examplebox}[Pendulum with Torque Input]
 \textbf{Problem:} Linearize the pendulum equation with an applied torque input $\tau$ about the downward equilibrium.
 
 \textbf{Solution:}
@@ -690,11 +687,9 @@ Or in scalar form:
 \end{equation}
 
 This is an undamped second-order system with natural frequency $\omega_n = \sqrt{g/L}$.
+\end{examplebox}
 
-\hrulefill
-
-\subsection{Example 2: Tank Level System}
-
+\begin{examplebox}[Tank Level System]
 \textbf{Problem:} A tank with cross-sectional area $A$ has liquid flowing in at rate $q_{\text{in}}$ and draining through an orifice at the bottom. The outflow rate depends on the square root of the liquid height: $q_{\text{out}} = k\sqrt{h}$. Linearize the system about a steady-state operating point.
 
 \textbf{Solution:}
@@ -746,8 +741,7 @@ A = -\frac{0.005}{2 \cdot 1 \cdot 2} = -0.00125 \text{ s}^{-1}, \quad B = 1 \tex
 This is a first-order system with time constant $\tau = 2A\sqrt{h_0}/k = 800$ s.
 
 \textbf{Physical Interpretation:} The linearized model shows that the tank acts as a low-pass filter. The time constant depends on the operating point---at higher liquid levels, the drainage rate is faster, so the system responds more quickly to input changes.
-
-\hrulefill
+\end{examplebox}
 
 \subsection{Example 3: Finding Equilibrium Points}
 
@@ -869,54 +863,35 @@ where $\delta x_1 = x_1 - 2$ and $\delta x_2 = x_2 - 0$.
 
 The following MATLAB/Python pseudocode implements the comparison:
 
-\begin{lstlisting}[language=Python, caption={Nonlinear Pendulum Simulation}]
-import numpy as np
-from scipy.integrate import odeint
-import matplotlib.pyplot as plt
-
-# Parameters
-g, L = 9.81, 1.0
-omega_n = np.sqrt(g/L)
-theta0 = np.radians(30)  # 30 degrees
-
-# Time vector
-t = np.linspace(0, 5, 500)
-
-# Linear solution
-theta_lin = theta0 * np.cos(omega_n * t)
-
-# Nonlinear ODE
-def pendulum(y, t):
-    theta, omega = y
-    return [omega, -omega_n**2 * np.sin(theta)]
-
-# Solve nonlinear
-y0 = [theta0, 0]
-sol = odeint(pendulum, y0, t)
-theta_nonlin = sol[:, 0]
-
-# Plot comparison
-plt.plot(t, np.degrees(theta_lin), '--', label='Linear')
-plt.plot(t, np.degrees(theta_nonlin), '-', label='Nonlinear')
-plt.xlabel('Time (s)')
-plt.ylabel('Angle (degrees)')
-plt.legend()
-plt.grid(True)
-plt.show()
-
-# Compute period error
-# Linear period
-T_lin = 2*np.pi/omega_n  # 2.006 s
-
-# Nonlinear period (from simulation)
-# Find first two zero-crossings
-crossings = np.where(np.diff(np.sign(theta_nonlin)))[0]
-T_nonlin = 2 * (t[crossings[1]] - t[crossings[0]])
-
-print(f"Linear period: {T_lin:.4f} s")
-print(f"Nonlinear period: {T_nonlin:.4f} s")
-print(f"Error: {100*(T_nonlin-T_lin)/T_lin:.2f}%")
-\end{lstlisting}
+\begin{algorithm}
+\caption{Nonlinear Pendulum Simulation and Comparison}
+\begin{algorithmic}[1]
+\State \textbf{Input:} $g = 9.81$ m/s$^2$, $L = 1.0$ m, $\theta_0 = 30°$
+\State \textbf{Output:} Period comparison between linear and nonlinear models
+\State
+\State Compute natural frequency: $\omega_n \gets \sqrt{g/L}$
+\State Convert initial angle to radians: $\theta_0 \gets 30 \times \pi/180$
+\State Create time vector: $t \gets [0, 0.01, 0.02, \ldots, 5.0]$ seconds
+\State
+\State \textbf{Linear Solution:}
+\For{each time $t_i$}
+    \State $\theta_{\text{lin}}(t_i) \gets \theta_0 \cos(\omega_n t_i)$
+\EndFor
+\State
+\State \textbf{Nonlinear Solution (using numerical integration):}
+\State Define ODE: $\dot{\theta} = \omega$, $\dot{\omega} = -\omega_n^2 \sin(\theta)$
+\State Set initial conditions: $[\theta(0), \omega(0)] \gets [\theta_0, 0]$
+\State Integrate ODE numerically (e.g., Runge-Kutta) to obtain $\theta_{\text{nonlin}}(t)$
+\State
+\State \textbf{Period Calculation:}
+\State $T_{\text{lin}} \gets 2\pi / \omega_n$
+\State Find zero-crossings of $\theta_{\text{nonlin}}(t)$
+\State $T_{\text{nonlin}} \gets 2 \times (\text{second crossing time} - \text{first crossing time})$
+\State
+\State \textbf{Compute error:} $\epsilon \gets 100 \times (T_{\text{nonlin}} - T_{\text{lin}}) / T_{\text{lin}}$ \%
+\Return $T_{\text{lin}}$, $T_{\text{nonlin}}$, $\epsilon$
+\end{algorithmic}
+\end{algorithm}
 
 \textbf{Results:}
 
@@ -1002,93 +977,88 @@ The concept of the operating point is central to practical control system design
 
 \textbf{Implications:}
 
-\begin{enumerate}
-\item \textbf{Perturbation variables:} The linearized model describes deviations from the operating point, not absolute values. When implementing a controller, remember that:
+The operating point concept has several important implications. First, regarding perturbation variables, the linearized model describes deviations from the operating point rather than absolute values. When implementing a controller, remember that:
 \begin{align}
 \delta x &= x - x_0 \quad (\text{measured state minus setpoint}) \\
 \delta u &= u - u_0 \quad (\text{control input minus nominal})
 \end{align}
 
-\item \textbf{Bias terms:} In implementation, the actual control signal is:
+Second, bias terms must be properly handled in implementation. The actual control signal is:
 \begin{equation}
 u = u_0 + \delta u = u_0 + K(\delta x)
 \end{equation}
-The term $u_0$ provides the steady-state input needed to maintain the operating point; $\delta u$ is the corrective action from the controller.
+The term $u_0$ provides the steady-state input needed to maintain the operating point, while $\delta u$ is the corrective action from the controller.
 
-\item \textbf{Gain scheduling:} If the system operates over a range of conditions (e.g., aircraft at different altitudes/speeds), multiple linearizations are performed and controller gains are ``scheduled'' based on the current operating condition.
+Third, gain scheduling becomes necessary when the system operates over a range of conditions, such as aircraft at different altitudes and speeds. In such cases, multiple linearizations are performed and controller gains are ``scheduled'' based on the current operating condition.
 
-\item \textbf{Operating envelope:} The set of operating points for which a single linearized controller provides acceptable performance defines the operating envelope. Beyond this envelope, the controller may exhibit degraded performance or instability.
-\end{enumerate}
+Finally, the operating envelope is defined as the set of operating points for which a single linearized controller provides acceptable performance. Beyond this envelope, the controller may exhibit degraded performance or instability.
 
 %% ============================================================================
 \section{Summary}
 
-Linearization transforms nonlinear systems into linear approximations that are amenable to analysis and control design. The key concepts are:
+Linearization transforms nonlinear systems into linear approximations that are amenable to analysis and control design. The Taylor series provides the mathematical foundation, demonstrating that any smooth function can be approximated by a polynomial, and locally, by a linear function. Equilibrium points serve as the natural operating points for linearization, characterized by the condition $f(x_0, u_0) = 0$. The Jacobian matrices $A$ and $B$ capture the local sensitivity of the dynamics to state and input perturbations, respectively. The validity of the linear approximation depends on the magnitude of perturbations and the curvature of the nonlinearity; for most control applications, perturbations within 10--20\% of the operating point yield acceptable accuracy. Finally, eigenvalue analysis of the linearized system determines local stability properties.
 
-\begin{enumerate}
-\item \textbf{Taylor series} provides the mathematical foundation: any smooth function can be approximated by a polynomial, and locally, by a linear function.
-
-\item \textbf{Equilibrium points} are the natural operating points for linearization, where $f(x_0, u_0) = 0$.
-
-\item \textbf{Jacobian matrices} $A$ and $B$ capture the local sensitivity of the dynamics to state and input perturbations.
-
-\item \textbf{Validity} of the linear approximation depends on the magnitude of perturbations and the curvature of the nonlinearity. For most control applications, perturbations within 10--20\% of the operating point yield acceptable accuracy.
-
-\item \textbf{Eigenvalue analysis} of the linearized system determines local stability properties.
-\end{enumerate}
-
-The linearization approach has proven remarkably successful across engineering disciplines because:
-\begin{itemize}
-\item Well-designed control systems keep perturbations small
-\item Linear tools (transfer functions, Bode plots, state feedback) are powerful and well-understood
-\item Gain scheduling extends linear methods to cover wide operating ranges
-\end{itemize}
-
-Linearization is not a limitation but an enabler---it allows us to apply elegant, systematic design methods to the complex nonlinear systems that populate the real world.
+The linearization approach has proven remarkably successful across engineering disciplines for three key reasons: well-designed control systems keep perturbations small, linear tools such as transfer functions, Bode plots, and state feedback are powerful and well-understood, and gain scheduling extends linear methods to cover wide operating ranges. Linearization is not a limitation but an enabler---it allows us to apply elegant, systematic design methods to the complex nonlinear systems that populate the real world.
 
 %% ============================================================================
-\section{Problems}
+\newpage
+\section{Exercises}
 
-\begin{enumerate}
-\item Linearize the system $\dot{x} = -x^3 + u$ about the equilibrium with $u_0 = 0$. Find the transfer function and determine stability.
+\begin{exercise}
+Linearize the system $\dot{x} = -x^3 + u$ about the equilibrium with $u_0 = 0$. Find the transfer function and determine stability.
+\end{exercise}
 
-\item A satellite attitude control system has dynamics:
+\begin{exercise}
+A satellite attitude control system has dynamics:
 \begin{equation}
 I\ddot{\theta} = \tau - k_d\dot{\theta}
 \end{equation}
 where $\theta$ is angle, $I$ is moment of inertia, $\tau$ is control torque, and $k_d$ is damping. This is already linear. Explain why linearization is not needed and write the state-space model.
+\end{exercise}
 
-\item For the tank system of Example 2, how does the time constant change if the operating level is doubled from 4 m to 8 m?
+\begin{exercise}
+For the tank system of Example 2, how does the time constant change if the operating level is doubled from 4 m to 8 m?
+\end{exercise}
 
-\item Linearize the Lotka-Volterra predator-prey equations:
+\begin{exercise}
+Linearize the Lotka-Volterra predator-prey equations:
 \begin{align}
 \dot{x} &= \alpha x - \beta xy \\
 \dot{y} &= \delta xy - \gamma y
 \end{align}
 about the non-trivial equilibrium $(x_0, y_0) = (\gamma/\delta, \alpha/\beta)$.
+\end{exercise}
 
-\item An inverted pendulum on a cart has the approximate linearized dynamics (for small angles):
+\begin{exercise}
+An inverted pendulum on a cart has the approximate linearized dynamics (for small angles):
 \begin{equation}
 (M+m)\ddot{p} + mL\ddot{\theta} = F, \quad mL\ddot{p} + mL^2\ddot{\theta} = mgL\theta
 \end{equation}
 where $p$ is cart position, $\theta$ is pendulum angle from vertical, and $F$ is applied force. Derive the transfer function $\Theta(s)/F(s)$ and verify that it is unstable.
+\end{exercise}
 
-\item For the pendulum experiment: if the bearing friction contributes a damping torque $-b\dot{\theta}$, how does this affect (a) the equilibrium analysis, (b) the linearized model, and (c) the validity of the linear approximation?
+\begin{exercise}
+For the pendulum experiment: if the bearing friction contributes a damping torque $-b\dot{\theta}$, how does this affect (a) the equilibrium analysis, (b) the linearized model, and (c) the validity of the linear approximation?
+\end{exercise}
 
-\item (Computer Exercise) Implement the pendulum simulation of Example 5. Extend it to initial angles of $15°, 45°, 60°, 75°, 90°$. Create a plot showing the period error (compared to linear prediction) as a function of initial amplitude. At what amplitude does the error exceed 5\%?
-\end{enumerate}
+\begin{exercise}
+(Computer Exercise) Implement the pendulum simulation of Example 5. Extend it to initial angles of $15°, 45°, 60°, 75°, 90°$. Create a plot showing the period error (compared to linear prediction) as a function of initial amplitude. At what amplitude does the error exceed 5\%?
+\end{exercise}
+
+\begin{exercise}
+A nonlinear spring has restoring force $F = -kx - \alpha x^3$ where $\alpha > 0$ (hardening spring). For a mass $m$ attached to this spring, linearize the equation of motion about $x_0 = 0$ and find the natural frequency of small oscillations.
+\end{exercise}
+
+\begin{exercise}
+The van der Pol oscillator $\ddot{x} + \mu(x^2 - 1)\dot{x} + x = 0$ has an equilibrium at the origin. Linearize about this equilibrium and determine whether it is stable for $\mu > 0$. What type of behavior do you expect from the nonlinear system?
+\end{exercise}
+
+\begin{exercise}
+A chemical reactor has temperature dynamics governed by $\dot{T} = -\frac{UA}{mC_p}(T - T_c) + \frac{(-\Delta H)k_0 e^{-E_a/RT}C_A}{mC_p}$ where the exponential Arrhenius term is highly nonlinear. Linearize this equation about an operating temperature $T_0$, defining the linearized gain for small temperature perturbations.
+\end{exercise}
 
 %% ============================================================================
 \section{Further Reading}
 
-\begin{itemize}
-\item Khalil, H.K., \textit{Nonlinear Systems}, 3rd ed. Prentice Hall, 2002. Chapter 4 provides rigorous treatment of linearization and stability.
+For rigorous treatment of linearization and stability, consult Khalil's \textit{Nonlinear Systems} (3rd ed., Prentice Hall, 2002), particularly Chapter 4. Slotine and Li's \textit{Applied Nonlinear Control} (Prentice Hall, 1991) provides excellent coverage of when linearization fails and what to do about it. Strogatz's \textit{Nonlinear Dynamics and Chaos} (2nd ed., Westview Press, 2015) offers an accessible introduction to nonlinear systems with beautiful examples. For historical context on the development of these ideas, Diacu and Holmes's \textit{Celestial Encounters: The Origins of Chaos and Stability} (Princeton University Press, 1996) is highly recommended.
 
-\item Slotine, J.J.E. and Li, W., \textit{Applied Nonlinear Control}. Prentice Hall, 1991. Excellent coverage of when linearization fails and what to do about it.
-
-\item Strogatz, S.H., \textit{Nonlinear Dynamics and Chaos}, 2nd ed. Westview Press, 2015. Accessible introduction to nonlinear systems with beautiful examples.
-
-\item For historical context: Diacu, F. and Holmes, P., \textit{Celestial Encounters: The Origins of Chaos and Stability}. Princeton University Press, 1996.
-\end{itemize}
-
-\end{chapter}

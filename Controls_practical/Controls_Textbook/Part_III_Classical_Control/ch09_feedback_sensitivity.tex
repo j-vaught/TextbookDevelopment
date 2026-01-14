@@ -79,9 +79,11 @@ With 50 amplifiers each contributing 2\% THD, the total approached 14\%---render
 
 \subsection{Harold Black's Revolutionary Insight}
 
+\begin{historicalbox}[Harold S. Black and the Negative Feedback Amplifier]
 Harold Stephen Black (1898--1983) joined Bell Telephone Laboratories in 1921 and was assigned to the repeater amplifier problem. For six years, he pursued conventional approaches: improving vacuum tube linearity, using push-pull configurations to cancel even harmonics, and developing sophisticated matching networks. Progress was incremental and insufficient.
 
-The breakthrough came on the morning of August 2, 1927, during Black's commute on the Lackawanna Ferry crossing the Hudson River from New Jersey to Manhattan. In a flash of insight, Black conceived of an entirely different approach: rather than trying to build a perfect amplifier, he would use feedback to force an imperfect amplifier to behave as if it were nearly ideal.
+The breakthrough came on the morning of August 2, 1927, during Black's commute on the Lackawanna Ferry crossing the Hudson River from New Jersey to Manhattan. In a flash of insight, Black conceived of an entirely different approach: rather than trying to build a perfect amplifier, he would use feedback to force an imperfect amplifier to behave as if it were nearly ideal. Black's patent application, filed in 1928, spent nine years in the Patent Office before U.S. Patent 2,102,671 was finally granted on December 21, 1937. The patent examiner's skepticism was understandable---why would an engineer deliberately ``throw away'' the hard-won gain that vacuum tube designers had struggled for years to achieve?
+\end{historicalbox}
 
 Black's key insight was captured in a sketch he made on a page of the \textit{New York Times} that morning---a diagram that would become one of the most important figures in engineering history:
 
@@ -539,14 +541,7 @@ From equation \eqref{eq:complete_output}, the complete output is:
 Y = T \cdot R + G \cdot S \cdot D - T \cdot N
 \end{equation}
 
-This reveals the fundamental tradeoffs:
-\begin{enumerate}
-\item Making $T$ large (for tracking) amplifies noise $N$
-\item Making $S$ small (for disturbance rejection) requires high loop gain, which also makes $T$ large
-\item At high frequencies, we want $T$ small to reject noise, but this means $S \to 1$ and disturbance rejection is lost
-\end{enumerate}
-
-The art of control design is managing these tradeoffs across the frequency spectrum.
+This reveals the fundamental tradeoffs inherent in feedback design. First, making $T$ large for good tracking simultaneously amplifies the measurement noise $N$. Second, making $S$ small for effective disturbance rejection requires high loop gain, which in turn makes $T$ large. Third, at high frequencies where we want $T$ small to reject noise, the constraint forces $S \to 1$, meaning disturbance rejection is inevitably lost at these frequencies. The art of control design lies in managing these tradeoffs across the frequency spectrum.
 
 %=============================================================================
 \section{Practical Experiment: Motor Speed Control with Disturbance Rejection}
@@ -563,12 +558,12 @@ The experiment requires a DC motor with optical encoder, such as the Pololu 37D 
 \centering
 \begin{tikzpicture}[scale=0.9]
     % Arduino
-    \draw[fill=blue!20, rounded corners] (0,0) rectangle (3,2);
+    \draw[fill=blue!20] (0,0) rectangle (3,2);
     \node at (1.5,1) {Arduino};
     \node[font=\small] at (1.5,0.3) {Uno};
 
     % Motor driver
-    \draw[fill=red!20, rounded corners] (5,0) rectangle (8,2);
+    \draw[fill=red!20] (5,0) rectangle (8,2);
     \node at (6.5,1.2) {L298N};
     \node[font=\small] at (6.5,0.5) {Driver};
 
@@ -582,7 +577,7 @@ The experiment requires a DC motor with optical encoder, such as the Pololu 37D 
     \node[font=\tiny, right] at (12.6,1) {Encoder};
 
     % Brake
-    \draw[fill=orange!30, rounded corners] (12,2.2) rectangle (14,3.2);
+    \draw[fill=orange!30] (12,2.2) rectangle (14,3.2);
     \node[font=\small] at (13,2.7) {Friction};
     \node[font=\small] at (13,2.4) {Brake};
     \draw[->] (13,2.2) -- (12.3,1.5);
@@ -598,7 +593,7 @@ The experiment requires a DC motor with optical encoder, such as the Pololu 37D 
     \node[below, font=\tiny, green!50!black] at (7,-1) {Encoder feedback};
 
     % Power supply
-    \draw[fill=gray!20, rounded corners] (5,-2) rectangle (8,-1);
+    \draw[fill=gray!20] (5,-2) rectangle (8,-1);
     \node[font=\small] at (6.5,-1.5) {12V Supply};
     \draw[thick] (6.5,-1) -- (6.5,0);
 
@@ -623,109 +618,58 @@ The brake provides a load torque disturbance that we can apply suddenly while th
 
 \subsection{Software Implementation}
 
-The following Arduino code implements both open-loop and closed-loop control modes, allowing direct comparison.
+The following algorithm implements both open-loop and closed-loop control modes, allowing direct comparison. This pseudocode can be adapted to any microcontroller platform.
 
-\begin{lstlisting}[style=arduino, caption={Motor speed control with disturbance rejection measurement}]
-// Motor Speed Control with Disturbance Rejection
-// Chapter 9 Laboratory Experiment
-
-// Pin definitions
-const int PWM_PIN = 9;      // Motor PWM output
-const int DIR_PIN = 8;      // Motor direction
-const int ENC_A = 2;        // Encoder channel A (interrupt)
-const int ENC_B = 3;        // Encoder channel B
-
-// Encoder variables
-volatile long encoderCount = 0;
-const int CPR = 64;         // Counts per revolution
-const int GEAR_RATIO = 50;  // Gearbox ratio
-
-// Control parameters
-float Kp = 2.0;             // Proportional gain
-float Ki = 5.0;             // Integral gain
-float setpoint = 60.0;      // Desired speed in RPM
-float integral = 0;
-
-// Timing
-unsigned long lastTime = 0;
-const int SAMPLE_TIME = 50; // ms
-
-// Mode selection
-bool closedLoop = true;     // Toggle via serial command
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(PWM_PIN, OUTPUT);
-  pinMode(DIR_PIN, OUTPUT);
-  pinMode(ENC_A, INPUT_PULLUP);
-  pinMode(ENC_B, INPUT_PULLUP);
-
-  attachInterrupt(digitalPinToInterrupt(ENC_A),
-                  encoderISR, RISING);
-
-  digitalWrite(DIR_PIN, HIGH);
-  Serial.println("Motor Control Ready");
-  Serial.println("Commands: 'o'=open-loop, 'c'=closed-loop");
-}
-
-void encoderISR() {
-  if (digitalRead(ENC_B)) encoderCount++;
-  else encoderCount--;
-}
-
-void loop() {
-  // Check for serial commands
-  if (Serial.available()) {
-    char cmd = Serial.read();
-    if (cmd == 'o') {
-      closedLoop = false;
-      integral = 0;
-      Serial.println("Open-loop mode");
-    } else if (cmd == 'c') {
-      closedLoop = true;
-      Serial.println("Closed-loop mode");
-    }
-  }
-
-  unsigned long now = millis();
-  if (now - lastTime >= SAMPLE_TIME) {
-    // Calculate speed in RPM
-    noInterrupts();
-    long count = encoderCount;
-    encoderCount = 0;
-    interrupts();
-
-    float dt = (now - lastTime) / 1000.0;
-    float rpm = (count * 60.0) / (CPR * GEAR_RATIO * dt);
-    lastTime = now;
-
-    int pwmOut;
-
-    if (closedLoop) {
-      // PI Controller
-      float error = setpoint - rpm;
-      integral += error * dt;
-      integral = constrain(integral, -50, 50);
-
-      float output = Kp * error + Ki * integral;
-      pwmOut = constrain(128 + output, 0, 255);
-    } else {
-      // Open-loop: fixed PWM
-      pwmOut = 128; // Nominally produces ~60 RPM
-    }
-
-    analogWrite(PWM_PIN, pwmOut);
-
-    // Output for Serial Plotter
-    Serial.print("Setpoint:");
-    Serial.print(setpoint);
-    Serial.print(",Speed:");
-    Serial.print(rpm);
-    Serial.print(",PWM:");
-    Serial.println(pwmOut);
-  }
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Motor Speed Control with Disturbance Rejection}
+\begin{algorithmic}[1]
+\State \textbf{Constants:} $CPR \gets 64$, $GEAR\_RATIO \gets 50$, $SAMPLE\_TIME \gets 50$ ms
+\State \textbf{Parameters:} $K_p \gets 2.0$, $K_i \gets 5.0$, $setpoint \gets 60.0$ RPM
+\State \textbf{Variables:} $encoderCount \gets 0$, $integral \gets 0$, $closedLoop \gets \texttt{true}$
+\State
+\State \textbf{Initialize:}
+\State \hspace{1em} Configure PWM output pin and direction pin
+\State \hspace{1em} Configure encoder input pins with interrupts
+\State \hspace{1em} Set motor direction forward
+\State
+\State \textbf{Encoder Interrupt Handler:}
+\If{encoder channel B is high}
+    \State $encoderCount \gets encoderCount + 1$
+\Else
+    \State $encoderCount \gets encoderCount - 1$
+\EndIf
+\State
+\While{system is running}
+    \State Check for mode switch commands from serial input
+    \If{command received is `o'}
+        \State $closedLoop \gets \texttt{false}$; $integral \gets 0$
+    \ElsIf{command received is `c'}
+        \State $closedLoop \gets \texttt{true}$
+    \EndIf
+    \State
+    \If{$SAMPLE\_TIME$ has elapsed since last sample}
+        \State Disable interrupts temporarily
+        \State $count \gets encoderCount$; $encoderCount \gets 0$
+        \State Enable interrupts
+        \State $dt \gets$ elapsed time in seconds
+        \State $rpm \gets (count \times 60) / (CPR \times GEAR\_RATIO \times dt)$
+        \State
+        \If{$closedLoop$}
+            \State $error \gets setpoint - rpm$
+            \State $integral \gets integral + error \times dt$
+            \State $integral \gets \Call{clamp}{integral, -50, 50}$
+            \State $output \gets K_p \times error + K_i \times integral$
+            \State $pwmOut \gets \Call{clamp}{128 + output, 0, 255}$
+        \Else
+            \State $pwmOut \gets 128$ \Comment{Fixed open-loop value}
+        \EndIf
+        \State
+        \State Write $pwmOut$ to PWM output
+        \State Output setpoint, speed, and PWM values for plotting
+    \EndIf
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Experimental Procedure}
 
@@ -848,8 +792,7 @@ The disturbance rejection ratio increases approximately linearly with loop gain,
 \label{sec:worked_examples}
 %=============================================================================
 
-\begin{example}[Sensitivity Calculation: Open-Loop vs. Closed-Loop]
-\label{ex:sensitivity_comparison}
+\begin{examplebox}[Sensitivity Calculation: Open-Loop vs. Closed-Loop]
 An amplifier has nominal gain $A = 1000$ with $\pm 20\%$ variation. Calculate the output variation for:
 \begin{enumerate}[(a)]
 \item Open-loop operation
@@ -881,7 +824,7 @@ Therefore:
 \end{equation}
 
 \textbf{Conclusion:} Feedback reduces the output variation from $\pm 20\%$ to $\pm 0.2\%$, a 100:1 improvement corresponding to the loop gain of 99.
-\end{example}
+\end{examplebox}
 
 \begin{example}[Closed-Loop Gain with Parameter Variations]
 \label{ex:gain_variation}
@@ -954,8 +897,7 @@ K_c \geq \frac{24}{2} = 12
 \textbf{Design choice:} $K_c = 15$ provides margin. This yields a loop gain of $L(0) = 30$, a sensitivity of $S = 1/31 = 0.032$, and a closed-loop variation of $0.032 \times 25\% = 0.8\%$, which satisfies the specification of being less than $1\%$.
 \end{example}
 
-\begin{example}[Disturbance Rejection Analysis]
-\label{ex:disturbance_rejection}
+\begin{examplebox}[Disturbance Rejection Analysis]
 Consider a velocity control system with:
 \begin{equation}
 G(s) = \frac{10}{s + 2}, \quad C(s) = 5, \quad H(s) = 1
@@ -1003,7 +945,7 @@ Disturbance rejection ratio:
 \end{equation}
 
 This equals $1 + L(0) = 1 + 50/2 = 26$, confirming the theory.
-\end{example}
+\end{examplebox}
 
 \begin{example}[Operational Amplifier: Why Feedback Makes Gain Predictable]
 \label{ex:opamp}
@@ -1236,10 +1178,10 @@ This is an algebraic identity that holds for all $s$, including $s = j\omega$. T
     \node[font=\small] at (6.35,0.25) {$+$};
 
     % Transfer function box
-    \draw[dashed, thick, rounded corners] (-2,-4) rectangle (13,3.2);
+    \draw[dashed, thick] (-2,-4) rectangle (13,3.2);
 
     % Key equations box
-    \node[draw, fill=yellow!20, rounded corners, text width=5.5cm, align=left, font=\small] at (10.5,-3.5) {
+    \node[draw, fill=yellow!20, text width=5.5cm, align=left, font=\small] at (10.5,-3.5) {
         \textbf{Key Transfer Functions:}\\[3pt]
         $T = \dfrac{Y}{R} = \dfrac{GC}{1+GCH}$\\[6pt]
         $\dfrac{Y}{D} = \dfrac{G}{1+GCH} = G \cdot S$\\[6pt]
@@ -1274,57 +1216,84 @@ This chapter has explored the fundamental role of feedback in reducing sensitivi
 
 The principles developed in this chapter---sensitivity reduction, disturbance rejection, and the $S + T = 1$ tradeoff---form the foundation for modern robust control design methods covered in subsequent chapters.
 
+\newpage
 %=============================================================================
-\section{Problems}
-\label{sec:problems}
+\section{Exercises}
+\label{sec:exercises}
 %=============================================================================
 
-\begin{enumerate}
-\item A unity feedback system has $G(s) = K/(s+5)$ and $C(s) = 10$.
+\begin{exercise}
+A unity feedback system has $G(s) = K/(s+5)$ and $C(s) = 10$.
 \begin{enumerate}[(a)]
     \item Find the sensitivity $S^K_T$ at DC.
     \item If $K$ changes from 100 to 120, what is the percentage change in $T(0)$?
 \end{enumerate}
+\end{exercise}
 
-\item For the system in Problem 1, a step disturbance of magnitude 2 enters at the plant input. Find:
+\begin{exercise}
+For the system in Exercise 1, a step disturbance of magnitude 2 enters at the plant input. Find:
 \begin{enumerate}[(a)]
     \item The steady-state output deviation
     \item The disturbance rejection ratio compared to open-loop
 \end{enumerate}
+\end{exercise}
 
-\item An operational amplifier with $A_{OL} = 50{,}000$ is used in an inverting configuration with $R_1 = \SI{1}{k\Omega}$ and $R_f = \SI{100}{k\Omega}$.
+\begin{exercise}
+An operational amplifier with $A_{OL} = 50{,}000$ is used in an inverting configuration with $R_1 = \SI{1}{k\Omega}$ and $R_f = \SI{100}{k\Omega}$.
 \begin{enumerate}[(a)]
     \item Calculate the ideal and actual closed-loop gain.
     \item Find the sensitivity of the closed-loop gain to $A_{OL}$.
     \item If $A_{OL}$ decreases by 50\% due to loading, what is the percentage change in closed-loop gain?
 \end{enumerate}
+\end{exercise}
 
-\item Derive the transfer function from measurement noise $N(s)$ to output $Y(s)$ for the standard feedback configuration. Explain why high bandwidth (high $|T(j\omega)|$ at high frequencies) is undesirable from a noise perspective.
+\begin{exercise}
+Derive the transfer function from measurement noise $N(s)$ to output $Y(s)$ for the standard feedback configuration. Explain why high bandwidth (high $|T(j\omega)|$ at high frequencies) is undesirable from a noise perspective.
+\end{exercise}
 
-\item A cruise control system has plant $G(s) = 1/(10s+1)$ representing vehicle dynamics. Design a PI controller $C(s) = K_p + K_i/s$ such that:
+\begin{exercise}
+A cruise control system has plant $G(s) = 1/(10s+1)$ representing vehicle dynamics. Design a PI controller $C(s) = K_p + K_i/s$ such that:
 \begin{enumerate}[(a)]
     \item The DC loop gain exceeds 100 (for disturbance rejection)
     \item The crossover frequency is approximately 1 rad/s
 \end{enumerate}
+\end{exercise}
 
-\item Prove that for a general feedback system, the sensitivity of $T$ with respect to the feedback element $H$ is:
+\begin{exercise}
+Prove that for a general feedback system, the sensitivity of $T$ with respect to the feedback element $H$ is:
 \begin{equation}
 S^H_T = -\frac{L}{1+L} = -T
 \end{equation}
 Interpret this result: why is the sensitivity to $H$ approximately $-1$ when loop gain is high?
+\end{exercise}
 
-\item A temperature control system has plant $G(s) = 2/((s+0.1)(s+1))$. The plant gain can vary by $\pm 30\%$ due to heat exchanger fouling. Design a proportional controller to limit the closed-loop gain variation to $\pm 3\%$.
+\begin{exercise}
+A temperature control system has plant $G(s) = 2/((s+0.1)(s+1))$. The plant gain can vary by $\pm 30\%$ due to heat exchanger fouling. Design a proportional controller to limit the closed-loop gain variation to $\pm 3\%$.
+\end{exercise}
 
-\item Using the Bode magnitude plot, sketch $|S(j\omega)|$ and $|T(j\omega)|$ for:
+\begin{exercise}
+Using the Bode magnitude plot, sketch $|S(j\omega)|$ and $|T(j\omega)|$ for:
 \begin{equation}
 L(s) = \frac{100}{s(s/10 + 1)}
 \end{equation}
 Identify the crossover frequency and verify that $|S(j\omega_c)| \approx |T(j\omega_c)|$.
+\end{exercise}
 
-\item In the motor control experiment (Section~\ref{sec:practical_experiment}), derive a theoretical expression for the disturbance rejection ratio as a function of proportional gain $K_p$, assuming the motor transfer function is $G(s) = K_m/(s + a)$.
+\begin{exercise}
+In the motor control experiment (Section~\ref{sec:practical_experiment}), derive a theoretical expression for the disturbance rejection ratio as a function of proportional gain $K_p$, assuming the motor transfer function is $G(s) = K_m/(s + a)$.
+\end{exercise}
 
-\item \textbf{Design project:} Implement the motor speed control experiment using an Arduino and any available DC motor with encoder. Measure the disturbance rejection ratio for at least 4 different controller gains. Plot DRR versus loop gain and compare with theoretical predictions.
-\end{enumerate}
+\begin{exercise}
+\textbf{Design project:} Implement the motor speed control experiment using an Arduino and any available DC motor with encoder. Measure the disturbance rejection ratio for at least 4 different controller gains. Plot DRR versus loop gain and compare with theoretical predictions.
+\end{exercise}
+
+\begin{exercise}
+Consider a feedback system where the plant transfer function is $G(s) = \dfrac{5}{(s+1)(s+5)}$ and a proportional controller $C(s) = K_p$ is used with unity feedback. Calculate the steady-state error to a unit step input for $K_p = 1, 10, 100$ and explain the trend.
+\end{exercise}
+
+\begin{exercise}
+For the standard feedback configuration, show that when the loop gain $|L(j\omega)| \gg 1$, the sensitivity function magnitude $|S(j\omega)| \approx 1/|L(j\omega)|$. Use this to explain why high loop gain at low frequencies is desirable for disturbance rejection.
+\end{exercise}
 
 %=============================================================================
 % References
