@@ -94,13 +94,7 @@ These engineers faced the problem of \textit{interconnection}: how to predict th
 
 The transfer function embodies a fundamental engineering principle: \textit{abstraction}. By representing a system as a transfer function, we treat it as a ``black box'' characterized solely by its input-output relationship. The internal details---whether the system is electrical, mechanical, thermal, or hybrid---become irrelevant for interconnection analysis.
 
-This abstraction enables:
-\begin{itemize}
-    \item \textbf{Modular design:} Systems can be designed independently and combined predictably.
-    \item \textbf{Analysis simplification:} Differential equations become algebraic equations.
-    \item \textbf{Frequency-domain insight:} Setting $s = \j\omega$ reveals the steady-state frequency response.
-    \item \textbf{Stability analysis:} Pole locations determine stability without solving the time-domain equations.
-\end{itemize}
+This abstraction enables several powerful capabilities. First, it facilitates modular design, allowing systems to be designed independently and combined predictably. Second, it provides analysis simplification by transforming differential equations into algebraic equations. Third, setting $s = \j\omega$ yields frequency-domain insight, revealing the steady-state frequency response directly. Finally, pole locations determine stability without requiring explicit solution of the time-domain equations, greatly simplifying stability analysis.
 
 The journey from Heaviside's pragmatic operators to the modern transfer function illustrates how engineering necessity drives mathematical development. Today, transfer functions form the foundation of control system analysis, and the block diagram has become the universal language for describing interconnected dynamic systems.
 
@@ -123,37 +117,19 @@ Professional audio software displays these transfer functions as frequency respo
 
 \subsection{Communication Systems}
 
-Every communication channel---wireless, fiber optic, or copper---can be characterized by a transfer function that describes how it affects transmitted signals. The channel transfer function $H(f)$ captures:
-\begin{itemize}
-    \item Frequency-dependent attenuation (magnitude response)
-    \item Signal delay and dispersion (phase response)
-    \item Bandwidth limitations
-\end{itemize}
+Every communication channel---wireless, fiber optic, or copper---can be characterized by a transfer function that describes how it affects transmitted signals. The channel transfer function $H(f)$ captures three essential characteristics: frequency-dependent attenuation through its magnitude response, signal delay and dispersion through its phase response, and the inherent bandwidth limitations of the physical medium.
 
 Modern communication systems use \textit{equalization}---the design of inverse transfer functions---to compensate for channel distortion. The principles of cascade systems (Section~\ref{sec:block_algebra}) apply directly: if the channel has transfer function $H_c(s)$ and the equalizer has $H_e(s)$, the cascade $H_e(s)H_c(s)$ should approximate unity for distortion-free transmission.
 
 \subsection{Mechanical Vibration Analysis}
 
-The mass-spring-damper system we derive in Section~\ref{sec:msd_derivation} represents the fundamental model for mechanical vibration. Transfer functions enable engineers to:
-\begin{itemize}
-    \item Predict resonance frequencies and amplitudes
-    \item Design vibration isolators for sensitive equipment
-    \item Analyze vehicle suspension systems
-    \item Study structural dynamics in buildings and bridges
-\end{itemize}
+The mass-spring-damper system we derive in Section~\ref{sec:msd_derivation} represents the fundamental model for mechanical vibration. Transfer functions enable engineers to predict resonance frequencies and amplitudes, design vibration isolators for sensitive equipment, analyze vehicle suspension systems, and study structural dynamics in buildings and bridges.
 
 The same mathematical framework applies whether analyzing a microscopic MEMS accelerometer or the vibration modes of a skyscraper.
 
 \subsection{Control System Design Software}
 
-Modern engineering relies heavily on computational tools that implement transfer function methods. MATLAB's Control System Toolbox and Simulink provide:
-\begin{itemize}
-    \item Transfer function representation and manipulation
-    \item Automated block diagram reduction
-    \item Pole-zero analysis and plotting
-    \item Frequency response computation (Bode plots, Nyquist diagrams)
-    \item Time response simulation
-\end{itemize}
+Modern engineering relies heavily on computational tools that implement transfer function methods. MATLAB's Control System Toolbox and Simulink provide transfer function representation and manipulation, automated block diagram reduction, pole-zero analysis and plotting, frequency response computation including Bode plots and Nyquist diagrams, as well as time response simulation.
 
 Python's control systems library (\texttt{python-control}) offers similar capabilities in an open-source environment. These tools automate the calculations developed in this chapter, but understanding the underlying theory remains essential for effective use.
 
@@ -434,12 +410,19 @@ The \textit{zeros} $z_1, z_2, \ldots, z_m$ are the roots of the numerator polyno
 
 The poles of a system determine its natural response---the behavior when excited by an impulse or released from initial conditions. Each pole $p_i$ contributes a term $\e^{p_i t}$ to the time response.
 
-\begin{itemize}
-    \item \textbf{Real negative pole} ($p = -a$, $a > 0$): Contributes $\e^{-at}$, a decaying exponential. The system is stable.
-    \item \textbf{Real positive pole} ($p = a$, $a > 0$): Contributes $\e^{at}$, a growing exponential. The system is unstable.
-    \item \textbf{Complex conjugate poles} ($p = -\sigma \pm \j\omega_d$): Contribute $\e^{-\sigma t}[\cos(\omega_d t) + \sin(\omega_d t)]$, a damped oscillation when $\sigma > 0$.
-    \item \textbf{Poles on imaginary axis} ($p = \pm\j\omega$): Contribute sustained oscillations $\cos(\omega t)$. The system is marginally stable.
-\end{itemize}
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Pole Type} & \textbf{Time Response Contribution} & \textbf{Stability} \\
+\midrule
+Real negative ($p = -a$, $a > 0$) & $\e^{-at}$ (decaying exponential) & Stable \\
+Real positive ($p = a$, $a > 0$) & $\e^{at}$ (growing exponential) & Unstable \\
+Complex conjugate ($p = -\sigma \pm \j\omega_d$) & $\e^{-\sigma t}[\cos(\omega_d t) + \sin(\omega_d t)]$ & Stable if $\sigma > 0$ \\
+Imaginary axis ($p = \pm\j\omega$) & $\cos(\omega t)$ (sustained oscillation) & Marginally stable \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{theorem}[Stability from Poles]
 A linear time-invariant system is \textbf{BIBO stable} (bounded input yields bounded output) if and only if all poles have strictly negative real parts, i.e., all poles lie in the open left half of the complex plane.
@@ -447,11 +430,7 @@ A linear time-invariant system is \textbf{BIBO stable} (bounded input yields bou
 
 \subsubsection{Physical Meaning of Zeros}
 
-Zeros affect how the system responds to inputs at different frequencies:
-\begin{itemize}
-    \item At a frequency corresponding to a zero, the system output is blocked or attenuated.
-    \item Zeros in the right half-plane cause \textit{non-minimum phase} behavior, including initial response in the opposite direction of the final response.
-\end{itemize}
+Zeros affect how the system responds to inputs at different frequencies. At a frequency corresponding to a zero, the system output is blocked or attenuated. Furthermore, zeros in the right half-plane cause \textit{non-minimum phase} behavior, which manifests as an initial response in the opposite direction of the final response.
 
 \subsubsection{Pole-Zero Plot}
 
@@ -686,14 +665,7 @@ G(s) = \frac{\sum_k P_k \Delta_k}{\Delta}
 \label{eq:mason}
 \end{equation}
 
-where:
-\begin{itemize}
-    \item $P_k$ = gain of the $k$-th forward path
-    \item $\Delta$ = determinant = $1 - \sum L_i + \sum L_iL_j - \sum L_iL_jL_k + \cdots$
-    \item $L_i$ = gain of the $i$-th individual loop
-    \item $L_iL_j$ = product of gains of non-touching loops $i$ and $j$
-    \item $\Delta_k$ = cofactor of $P_k$ (determinant with loops touching $P_k$ removed)
-\end{itemize}
+where $P_k$ denotes the gain of the $k$-th forward path, $L_i$ denotes the gain of the $i$-th individual loop, and $L_iL_j$ represents the product of gains of non-touching loops $i$ and $j$. The graph determinant is computed as $\Delta = 1 - \sum L_i + \sum L_iL_j - \sum L_iL_jL_k + \cdots$, alternating the signs of successively higher-order products of non-touching loops. The cofactor $\Delta_k$ is the determinant evaluated with all loops touching the $k$-th forward path removed.
 
 \begin{example}[Mason's Formula Application]
 Consider the block diagram in Figure~\ref{fig:mason_example}.
@@ -740,11 +712,7 @@ Consider the block diagram in Figure~\ref{fig:mason_example}.
 
 \textbf{Forward path:} $P_1 = G_1G_2G_3$
 
-\textbf{Loops:}
-\begin{itemize}
-    \item $L_1 = -G_2G_3H_1$ (inner loop)
-    \item $L_2 = -G_1G_2G_3H_2$ (outer loop)
-\end{itemize}
+\textbf{Loops:} The inner loop has gain $L_1 = -G_2G_3H_1$, while the outer loop has gain $L_2 = -G_1G_2G_3H_2$.
 
 These loops touch (share node), so there are no non-touching loop products.
 
@@ -838,13 +806,21 @@ At $\omega = \omega_c$: $|H| = 1/\sqrt{2} \approx 0.707$ ($-3$ dB) and $\angle H
 \subsection{Hardware Implementation}
 
 \subsubsection{Required Components}
-\begin{itemize}
-    \item Resistor: $R = 10\text{ k}\Omega$
-    \item Capacitor: $C = 100\text{ nF}$ (0.1 $\mu$F)
-    \item Breadboard and jumper wires
-    \item Arduino Uno (or similar microcontroller)
-    \item OR: Function generator and oscilloscope
-\end{itemize}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Component} & \textbf{Specification} \\
+\midrule
+Resistor & $R = 10\text{ k}\Omega$ \\
+Capacitor & $C = 100\text{ nF}$ (0.1 $\mu$F) \\
+Prototyping & Breadboard and jumper wires \\
+Microcontroller & Arduino Uno (or similar) \\
+Alternative equipment & Function generator and oscilloscope \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 With these values, the theoretical cutoff frequency is:
 \begin{equation}
