@@ -5,9 +5,6 @@
 \chapter{Robustness and Uncertainty}
 \label{ch:robustness}
 
-\begin{abstract}
-This chapter develops the theory and practice of robust control---designing controllers that perform reliably despite inevitable discrepancies between mathematical models and physical reality. Beginning with Bode's foundational insights on sensitivity and progressing through the modern $H_\infty$ framework, we establish rigorous methods for quantifying and accommodating uncertainty. The practical laboratory demonstrates these principles through motor control with varying payloads, showing how robust design principles yield controllers that succeed where aggressive ``optimal'' designs fail.
-\end{abstract}
 
 %=============================================================================
 \section{Historical Motivation: Why Models Are Never Enough}
@@ -23,14 +20,7 @@ Hendrik Wade Bode, working at Bell Telephone Laboratories in the 1930s and 1940s
 
 \subsubsection{The Telephone Amplifier Problem}
 
-A transcontinental telephone call in 1940 passed through dozens of repeater amplifiers, each boosting the signal to compensate for cable losses. The system faced fundamental uncertainties:
-
-\begin{itemize}
-    \item \textbf{Component drift}: Vacuum tube gains varied by 20--30\% over their lifetime
-    \item \textbf{Temperature dependence}: Cables buried underground experienced seasonal temperature swings of 50°C or more, changing their attenuation characteristics
-    \item \textbf{Manufacturing tolerances}: No two amplifiers were identical
-    \item \textbf{Load variations}: The number of simultaneous calls affected impedance matching
-\end{itemize}
+A transcontinental telephone call in 1940 passed through dozens of repeater amplifiers, each boosting the signal to compensate for cable losses. The system faced fundamental uncertainties from multiple sources. Component drift caused vacuum tube gains to vary by 20--30\% over their lifetime. Temperature dependence posed another challenge, as cables buried underground experienced seasonal temperature swings of 50°C or more, changing their attenuation characteristics. Manufacturing tolerances meant that no two amplifiers were identical, while load variations caused the number of simultaneous calls to affect impedance matching.
 
 An open-loop amplifier design was unthinkable---the cumulative gain variations would make the system unusable within months. Bode's insight was that feedback could be used not merely to improve nominal performance, but to \textit{desensitize} the system to parameter variations.
 
@@ -67,6 +57,10 @@ where $\omega_c$ is the gain crossover frequency where $|L(j\omega_c)| = 1$.
 \end{definition}
 
 Bode's design philosophy was to ensure adequate margins---typically $G_m > 6$ dB and $\phi_m > 45°$---so that the system would remain stable despite the inevitable uncertainties in the telephone network.
+
+\begin{historicalbox}[Bode's Secret Wartime Work]
+While developing his feedback amplifier theory at Bell Labs, Hendrik Bode was simultaneously engaged in classified wartime research. During World War II, he applied his feedback principles to fire-control systems for anti-aircraft guns---a problem where robustness to uncertainty was literally a matter of life and death. The targets were moving, the gun platform was pitching on a ship's deck, and the ammunition varied from round to round. Bode's insistence on adequate stability margins came directly from this experience: a system that worked perfectly on the test bench but failed in combat was worse than useless. This practical wartime experience profoundly shaped the conservative design philosophy that characterizes robust control to this day.
+\end{historicalbox}
 
 \subsection{The Multivariable Challenge: Doyle and Stein (1981)}
 \label{subsec:doyle_stein}
@@ -143,20 +137,14 @@ The landing algorithm was designed for nominal conditions---smooth descent, clea
 
 Two crashes of Boeing 737 MAX aircraft in 2018 and 2019, killing 346 people, were caused by the Maneuvering Characteristics Augmentation System (MCAS) repeatedly commanding nose-down trim based on a single angle-of-attack sensor. When that sensor failed or gave erroneous readings, MCAS drove the aircraft into unrecoverable dives.
 
-The MCAS design violated fundamental robust design principles:
-\begin{itemize}
-    \item Single point of failure: one sensor controlled a critical system
-    \item No uncertainty modeling: erroneous sensors were not considered in the design
-    \item Inadequate authority limits: MCAS could command unlimited nose-down trim
-    \item Pilot override inadequate: the system repeatedly reactivated after pilot correction
-\end{itemize}
+The MCAS design violated fundamental robust design principles in several critical ways. First, it created a single point of failure where one sensor controlled a critical system. Second, no uncertainty modeling was performed, meaning erroneous sensors were not considered in the design. Third, inadequate authority limits allowed MCAS to command unlimited nose-down trim. Finally, pilot override was inadequate because the system repeatedly reactivated after pilot correction.
 
 \subsection{The Fundamental Principle}
 \label{subsec:fundamental}
 
 These failures illuminate a principle that robust control theory formalizes mathematically:
 
-\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,title=The Robustness Principle]
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,title=The Robustness Principle,sharp corners]
 \textbf{All models are wrong.} A control system designed only for nominal conditions will fail when (not if) reality deviates from assumptions. Robust design explicitly accounts for uncertainty, ensuring acceptable performance across a range of operating conditions.
 \end{tcolorbox}
 
@@ -171,53 +159,25 @@ Robust control principles find application wherever uncertainty is unavoidable a
 
 \subsection{Aerospace Systems}
 
-Modern aircraft operate across vast flight envelopes where aerodynamic characteristics change dramatically:
-
-\begin{itemize}
-    \item \textbf{Mach number effects}: Transonic flight (Mach 0.8--1.2) exhibits complex shock-boundary layer interactions that defy precise modeling
-    \item \textbf{Altitude variations}: Air density varies by orders of magnitude from sea level to cruise altitude, changing control effectiveness
-    \item \textbf{Fuel consumption}: Aircraft mass can decrease by 40\% during long flights as fuel is consumed
-    \item \textbf{Configuration changes}: Flaps, slats, landing gear, and store releases change the aircraft's dynamics
-    \item \textbf{Icing and damage}: Ice accumulation or battle damage can dramatically alter aerodynamics
-\end{itemize}
+Modern aircraft operate across vast flight envelopes where aerodynamic characteristics change dramatically. Mach number effects present significant challenges, as transonic flight (Mach 0.8--1.2) exhibits complex shock-boundary layer interactions that defy precise modeling. Altitude variations cause air density to vary by orders of magnitude from sea level to cruise altitude, changing control effectiveness substantially. Fuel consumption during long flights can decrease aircraft mass by 40\%, while configuration changes from flaps, slats, landing gear, and store releases alter the aircraft's dynamics. Additionally, icing and damage from ice accumulation or battle damage can dramatically alter aerodynamics in unpredictable ways.
 
 Flight control systems must provide stable, predictable handling qualities across this entire operating space. Robust control techniques---particularly $H_\infty$ and $\mu$-synthesis---are now standard tools in flight control design.
 
 \subsection{Robotics and Automation}
 
-Industrial robots face continuous uncertainty:
-
-\begin{itemize}
-    \item \textbf{Payload variations}: A robot arm might handle payloads from empty gripper to maximum capacity, changing effective inertia by factors of 10 or more
-    \item \textbf{Wear and degradation}: Gearbox backlash, bearing wear, and cable stretching accumulate over millions of cycles
-    \item \textbf{Friction variations}: Static and dynamic friction depend on temperature, lubrication, and contamination
-    \item \textbf{Flexible dynamics}: High-speed robots excite structural resonances that depend on configuration
-\end{itemize}
+Industrial robots face continuous uncertainty from multiple sources. Payload variations are particularly significant, as a robot arm might handle payloads from empty gripper to maximum capacity, changing effective inertia by factors of 10 or more. Wear and degradation accumulate over millions of cycles through gearbox backlash, bearing wear, and cable stretching. Friction variations depend on temperature, lubrication, and contamination, affecting both static and dynamic friction characteristics. Furthermore, high-speed robots excite structural resonances that depend on configuration, introducing flexible dynamics into the system.
 
 Robust controllers enable robots to maintain precision despite these variations, reducing the need for frequent recalibration.
 
 \subsection{Power Systems and Renewable Energy}
 
-Modern power grids face unprecedented uncertainty from renewable generation:
-
-\begin{itemize}
-    \item \textbf{Solar variability}: Cloud passages can change solar farm output by 50\% in minutes
-    \item \textbf{Wind intermittency}: Wind power fluctuates on time scales from seconds (gusts) to seasons
-    \item \textbf{Demand uncertainty}: Electric vehicle charging and smart appliances create unpredictable load patterns
-    \item \textbf{Grid topology changes}: Lines are switched for maintenance, faults, and optimization
-\end{itemize}
+Modern power grids face unprecedented uncertainty from renewable generation. Solar variability poses a significant challenge, as cloud passages can change solar farm output by 50\% in minutes. Wind intermittency causes wind power to fluctuate on time scales from seconds (gusts) to seasons. Demand uncertainty arises because electric vehicle charging and smart appliances create unpredictable load patterns. Grid topology changes further complicate matters, as lines are switched for maintenance, faults, and optimization.
 
 Grid frequency and voltage control must maintain stability despite these uncertainties, requiring robust control strategies at all levels from individual generators to system-wide coordination.
 
 \subsection{Medical Devices}
 
-Medical control systems face patient-to-patient variability and the ultimate consequences of failure:
-
-\begin{itemize}
-    \item \textbf{Drug delivery}: Patient metabolism varies by factors of 3--10; a dose appropriate for one patient may be dangerous for another
-    \item \textbf{Artificial organs}: Blood pump controllers must accommodate varying vascular resistance, patient activity, and device degradation
-    \item \textbf{Radiation therapy}: Tumor size and location change during treatment; beam control must adapt
-\end{itemize}
+Medical control systems face patient-to-patient variability and the ultimate consequences of failure. Drug delivery systems must account for patient metabolism that varies by factors of 3--10, where a dose appropriate for one patient may be dangerous for another. Artificial organs present unique challenges because blood pump controllers must accommodate varying vascular resistance, patient activity, and device degradation over time. Radiation therapy systems must adapt as tumor size and location change during treatment, requiring beam control to continuously adjust.
 
 Robust design is not optional in medical devices---it is the difference between healing and harm.
 
@@ -447,11 +407,7 @@ S(s) + T(s) = 1
 
 \subsubsection{Frequency-Domain Shaping Requirements}
 
-Good control requires:
-\begin{itemize}
-    \item \textbf{Low-frequency $|S|$ small}: For tracking and disturbance rejection, we want $|S(j\omega)| \ll 1$ at low frequencies. This requires $|L(j\omega)| \gg 1$.
-    \item \textbf{High-frequency $|T|$ small}: For noise rejection and robustness to unmodeled dynamics, we want $|T(j\omega)| \ll 1$ at high frequencies. This requires $|L(j\omega)| \ll 1$.
-\end{itemize}
+Good control requires careful frequency-domain shaping of these functions. At low frequencies, the sensitivity magnitude $|S|$ should be small for effective tracking and disturbance rejection, which means we want $|S(j\omega)| \ll 1$ and thus require $|L(j\omega)| \gg 1$. At high frequencies, the complementary sensitivity magnitude $|T|$ should be small for noise rejection and robustness to unmodeled dynamics, which means we want $|T(j\omega)| \ll 1$ and thus require $|L(j\omega)| \ll 1$.
 
 The identity $S + T = 1$ shows that we cannot have both small simultaneously. At any frequency, either $|S|$ is small or $|T|$ is small, but not both.
 
@@ -514,12 +470,7 @@ If $M_S$ is the peak sensitivity, then:
 
 For example, $M_S = 2$ (6 dB) guarantees $G_m \geq 2$ (6 dB) and $\phi_m \geq 29°$.
 
-Recommended design specifications for robust systems:
-\begin{itemize}
-    \item $M_S \leq 2$ (6 dB) for good robustness
-    \item $M_S \leq 1.5$ (3.5 dB) for critical applications
-    \item $M_T \leq 1.25$ (2 dB) for robustness to multiplicative uncertainty
-\end{itemize}
+Recommended design specifications for robust systems depend on the application criticality. For good robustness in typical applications, $M_S \leq 2$ (6 dB) is recommended. For critical applications where reliability is paramount, $M_S \leq 1.5$ (3.5 dB) provides additional safety margin. For robustness to multiplicative uncertainty, $M_T \leq 1.25$ (2 dB) ensures adequate high-frequency roll-off.
 
 \subsection{The $H_\infty$ Control Problem}
 \label{subsec:hinf_problem}
@@ -535,11 +486,7 @@ The mixed sensitivity problem seeks a controller $K(s)$ that minimizes:
 \end{equation}
 where $W_S(s)$ and $W_T(s)$ are weighting functions.
 
-This formulation simultaneously shapes both sensitivity functions:
-\begin{itemize}
-    \item $W_S$ is large at low frequencies, forcing $|S|$ small there (good tracking)
-    \item $W_T$ is large at high frequencies, forcing $|T|$ small there (robustness)
-\end{itemize}
+This formulation simultaneously shapes both sensitivity functions. The weight $W_S$ is designed to be large at low frequencies, forcing $|S|$ to be small in that range and ensuring good tracking performance. Conversely, $W_T$ is large at high frequencies, forcing $|T|$ small there and providing robustness to unmodeled dynamics.
 
 \subsubsection{Standard Problem Formulation}
 
@@ -657,20 +604,11 @@ While $H_\infty$ and $\mu$ provide rigorous frameworks, practical robustness ass
 
 \subsubsection{Gain and Phase Margin Assessment}
 
-For SISO systems, classical margins remain valuable:
-\begin{itemize}
-    \item Gain margin $G_m \geq 6$ dB (factor of 2)
-    \item Phase margin $\phi_m \geq 45°$
-    \item Delay margin $\tau_m = \phi_m/\omega_c$ (at least one sampling period for digital systems)
-\end{itemize}
+For SISO systems, classical margins remain valuable. A gain margin $G_m \geq 6$ dB (factor of 2) provides adequate tolerance to gain variations. A phase margin $\phi_m \geq 45°$ ensures sufficient tolerance to phase lag from unmodeled dynamics or time delays. The delay margin $\tau_m = \phi_m/\omega_c$ should be at least one sampling period for digital systems to maintain stability under discretization effects.
 
 \subsubsection{Sensitivity Peak Limits}
 
-Specify bounds on $M_S$ and $M_T$:
-\begin{itemize}
-    \item $M_S \leq 2$ (6 dB)
-    \item $M_T \leq 1.25$ (2 dB)
-\end{itemize}
+Specify bounds on $M_S$ and $M_T$ to ensure adequate robustness. Typically, $M_S \leq 2$ (6 dB) provides good disturbance rejection with acceptable stability margins, while $M_T \leq 1.25$ (2 dB) ensures robustness to multiplicative uncertainty at high frequencies.
 
 \subsubsection{Monte Carlo Analysis}
 
@@ -713,10 +651,10 @@ Upon completion of this laboratory, students will be able to:
 \centering
 \caption{Bill of Materials for Robust Control Laboratory}
 \label{tab:robust_bom}
-\begin{tabular}{|l|l|l|}
-\hline
+\begin{tabular}{lll}
+\toprule
 \textbf{Component} & \textbf{Specification} & \textbf{Qty} \\
-\hline
+\midrule
 Arduino Uno/Nano & ATmega328P & 1 \\
 DC Motor with Encoder & 12V, 400+ PPR & 1 \\
 Motor Driver & L298N or TB6612 & 1 \\
@@ -724,7 +662,7 @@ Power Supply & 12V, 3A & 1 \\
 Payload Masses & 10g, 25g, 50g, 100g & 4 \\
 Mounting Hardware & 3D-printed wheel/arm & 1 \\
 Breadboard \& Wires & Standard & 1 set \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -741,88 +679,33 @@ Apply a step voltage to the motor and measure the velocity response. For a first
 G(s) = \frac{K}{Js + B} = \frac{K/B}{(J/B)s + 1} = \frac{K_{\text{DC}}}{\tau s + 1}
 \end{equation}
 
-Measure:
-\begin{itemize}
-    \item Steady-state velocity $\omega_{ss} = K_{\text{DC}} \cdot V_{in}$
-    \item Time constant $\tau$ = time to reach 63\% of steady-state
-\end{itemize}
+From the step response, measure the steady-state velocity $\omega_{ss} = K_{\text{DC}} \cdot V_{in}$ to determine the DC gain, and measure the time constant $\tau$ as the time to reach 63\% of steady-state.
 
-\begin{lstlisting}[language=C++, caption={System Identification Code}, label={lst:sysid}]
-// System identification: step response
-const int MOTOR_PWM = 5;
-const int ENCODER_A = 2;
-const int ENCODER_B = 3;
-
-volatile long encoderCount = 0;
-unsigned long startTime;
-float lastVelocity = 0;
-float velocities[500];  // Store velocity samples
-unsigned long times[500];
-int sampleIndex = 0;
-
-void setup() {
-    Serial.begin(115200);
-    pinMode(MOTOR_PWM, OUTPUT);
-    pinMode(ENCODER_A, INPUT_PULLUP);
-    pinMode(ENCODER_B, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_A),
-                    encoderISR, RISING);
-
-    Serial.println("System Identification");
-    Serial.println("Applying step input in 2 seconds...");
-    delay(2000);
-
-    // Apply step
-    startTime = millis();
-    analogWrite(MOTOR_PWM, 150);  // 59% duty cycle
-}
-
-void loop() {
-    static unsigned long lastSample = 0;
-    unsigned long now = millis();
-
-    // Sample at 100 Hz for 5 seconds
-    if (now - lastSample >= 10 && sampleIndex < 500) {
-        float velocity = getVelocity();  // deg/s
-        velocities[sampleIndex] = velocity;
-        times[sampleIndex] = now - startTime;
-        sampleIndex++;
-        lastSample = now;
-    }
-
-    // After 5 seconds, stop and print data
-    if (now - startTime > 5000 && sampleIndex >= 500) {
-        analogWrite(MOTOR_PWM, 0);
-        Serial.println("Time(ms), Velocity(deg/s)");
-        for (int i = 0; i < 500; i++) {
-            Serial.print(times[i]);
-            Serial.print(", ");
-            Serial.println(velocities[i]);
-        }
-        while(1);  // Stop
-    }
-}
-
-void encoderISR() {
-    if (digitalRead(ENCODER_B)) encoderCount++;
-    else encoderCount--;
-}
-
-float getVelocity() {
-    static long lastCount = 0;
-    static unsigned long lastTime = 0;
-    unsigned long now = micros();
-    long count = encoderCount;
-
-    float dt = (now - lastTime) / 1.0e6;  // seconds
-    float dTheta = (count - lastCount) * (360.0 / 400.0);  // degrees
-
-    lastCount = count;
-    lastTime = now;
-
-    return dTheta / dt;  // deg/s
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{System Identification via Step Response}
+\label{alg:sysid}
+\begin{algorithmic}[1]
+\State \textbf{Initialize:} Configure motor PWM output and encoder inputs
+\State \textbf{Initialize:} Set up encoder interrupt for position counting
+\State \textbf{Initialize:} Create arrays for velocity samples and timestamps
+\State Wait 2 seconds for system to stabilize
+\State Record start time $t_{\text{start}}$
+\State Apply step input to motor (constant PWM duty cycle)
+\While{sample count $<$ 500 AND elapsed time $<$ 5 seconds}
+    \If{10 ms elapsed since last sample}
+        \State Read current encoder count
+        \State Compute velocity: $\omega = \Delta\theta / \Delta t$
+        \State Store velocity and timestamp in arrays
+        \State Increment sample index
+    \EndIf
+\EndWhile
+\State Set motor PWM to zero (stop motor)
+\State Output all time-velocity data pairs for analysis
+\State \textbf{Post-processing:} Fit first-order model $G(s) = K_{\text{DC}}/(\tau s + 1)$
+\State Extract $K_{\text{DC}}$ from steady-state velocity and $\tau$ from 63\% rise time
+\State \Return Model parameters $K_{\text{DC}}$, $\tau$
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Data Collection Procedure}
 
@@ -846,84 +729,43 @@ Design a PI controller for the nominal (no payload) plant with aggressive bandwi
 K_{\text{agg}}(s) = K_p \left(1 + \frac{1}{T_i s}\right)
 \end{equation}
 
-Design criteria:
-\begin{itemize}
-    \item Bandwidth $\omega_c = 2/\tau^{(0)}$ (twice the nominal pole frequency)
-    \item Phase margin $\phi_m \approx 30°$ (intentionally low for demonstration)
-\end{itemize}
+The design criteria for this aggressive controller are a bandwidth $\omega_c = 2/\tau^{(0)}$ (twice the nominal pole frequency) and a phase margin $\phi_m \approx 30°$ (intentionally low for demonstration purposes to show how marginal stability leads to problems under perturbation).
 
 \subsubsection{Robust Controller (Conservative)}
 
-Design a PI controller with conservative margins:
-\begin{itemize}
-    \item Bandwidth $\omega_c = 0.5/\tau^{(100g)}$ (based on slowest plant)
-    \item Phase margin $\phi_m \geq 60°$
-\end{itemize}
+Design a PI controller with conservative margins, using a bandwidth $\omega_c = 0.5/\tau^{(100g)}$ (based on the slowest plant with maximum payload) and ensuring a phase margin $\phi_m \geq 60°$ to provide adequate robustness across all payload conditions.
 
-\begin{lstlisting}[language=C++, caption={PI Controller Implementation}, label={lst:pi_control}]
-// PI Position/Velocity Controller
-class PIController {
-private:
-    float Kp, Ki;
-    float integral;
-    float integralLimit;
-
-public:
-    PIController(float kp, float ki, float limit) :
-        Kp(kp), Ki(ki), integralLimit(limit), integral(0) {}
-
-    float compute(float error, float dt) {
-        integral += error * dt;
-        // Anti-windup
-        integral = constrain(integral,
-                           -integralLimit, integralLimit);
-        return Kp * error + Ki * integral;
-    }
-
-    void reset() { integral = 0; }
-
-    void setGains(float kp, float ki) {
-        Kp = kp;
-        Ki = ki;
-    }
-};
-
-// Aggressive controller (designed for no payload)
-PIController aggressiveCtrl(5.0, 20.0, 100.0);
-
-// Robust controller (designed for worst-case payload)
-PIController robustCtrl(1.5, 3.0, 100.0);
-
-// Current controller pointer
-PIController* activeCtrl = &robustCtrl;
-
-void loop() {
-    static unsigned long lastTime = micros();
-    unsigned long now = micros();
-    float dt = (now - lastTime) / 1.0e6;
-    lastTime = now;
-
-    // Read setpoint and position
-    float setpoint = readSetpoint();  // From pot or serial
-    float position = getPosition();   // From encoder
-
-    // Compute control
-    float error = setpoint - position;
-    float output = activeCtrl->compute(error, dt);
-
-    // Apply to motor
-    setMotorPWM((int)constrain(output, -255, 255));
-
-    // Logging
-    static unsigned long lastLog = 0;
-    if (now - lastLog > 50000) {  // 20 Hz logging
-        Serial.print(setpoint); Serial.print(",");
-        Serial.print(position); Serial.print(",");
-        Serial.println(error);
-        lastLog = now;
-    }
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{PI Controller with Anti-Windup}
+\label{alg:pi_control}
+\begin{algorithmic}[1]
+\State \textbf{Parameters:} $K_p$ (proportional gain), $K_i$ (integral gain), $I_{\max}$ (integral limit)
+\State \textbf{Initialize:} $I \gets 0$ (integral accumulator)
+\State
+\Procedure{ComputeControl}{$e$, $\Delta t$}
+    \State $I \gets I + e \cdot \Delta t$ \Comment{Integrate error}
+    \State $I \gets \text{clamp}(I, -I_{\max}, I_{\max})$ \Comment{Anti-windup saturation}
+    \State $u \gets K_p \cdot e + K_i \cdot I$ \Comment{PI control law}
+    \State \Return $u$
+\EndProcedure
+\State
+\State \textbf{Controller Configurations:}
+\State \quad Aggressive: $K_p = 5.0$, $K_i = 20.0$, $I_{\max} = 100$
+\State \quad Robust: $K_p = 1.5$, $K_i = 3.0$, $I_{\max} = 100$
+\State
+\State \textbf{Main Control Loop:}
+\While{system running}
+    \State Compute time step $\Delta t$ since last iteration
+    \State Read setpoint $r$ from input device
+    \State Read position $y$ from encoder
+    \State Compute error: $e \gets r - y$
+    \State Compute control: $u \gets \text{ComputeControl}(e, \Delta t)$
+    \State Apply saturated output: $u_{\text{sat}} \gets \text{clamp}(u, -u_{\max}, u_{\max})$
+    \State Send $u_{\text{sat}}$ to motor driver
+    \State Log data at 20 Hz for analysis
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Experimental Procedure}
 
@@ -963,22 +805,22 @@ void loop() {
 \centering
 \caption{Experimental Results Template}
 \label{tab:robust_results}
-\begin{tabular}{|l|c|c|c|c|}
-\hline
+\begin{tabular}{lcccc}
+\toprule
 \textbf{Metric} & \textbf{0g} & \textbf{25g} & \textbf{50g} & \textbf{100g} \\
-\hline
-\multicolumn{5}{|c|}{\textbf{Aggressive Controller}} \\
-\hline
+\midrule
+\multicolumn{5}{c}{\textbf{Aggressive Controller}} \\
+\midrule
 Settling time (s) & & & & \\
 Overshoot (\%) & & & & \\
 Stable? (Y/N) & Y & & & \\
-\hline
-\multicolumn{5}{|c|}{\textbf{Robust Controller}} \\
-\hline
+\midrule
+\multicolumn{5}{c}{\textbf{Robust Controller}} \\
+\midrule
 Settling time (s) & & & & \\
 Overshoot (\%) & & & & \\
 Stable? (Y/N) & Y & Y & Y & Y \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -997,8 +839,7 @@ Stable? (Y/N) & Y & Y & Y & Y \\
 \label{sec:examples}
 %=============================================================================
 
-\begin{example}[Calculating Stability Margins from Bode Plot]
-\label{ex:margins}
+\begin{examplebox}[Calculating Stability Margins from Bode Plot]
 A control system has loop transfer function:
 \begin{equation*}
 L(s) = \frac{100}{s(s+2)(s+10)}
@@ -1044,19 +885,12 @@ G_m = \frac{1}{|L(j4.47)|} = \frac{4.47 \cdot \sqrt{4.47^2+4} \cdot \sqrt{4.47^2
 
 In decibels: $G_m = 20\log_{10}(2.4) = 7.6$ dB.
 
-\textbf{Assessment:}
-\begin{itemize}
-    \item Gain margin of 7.6 dB is adequate
-    \item Phase margin of 4° is \textit{unacceptable}
-    \item System will likely oscillate with any parameter variation
-    \item Recommendation: Add phase lead compensation
-\end{itemize}
+\textbf{Assessment:} The gain margin of 7.6 dB is adequate for most applications. However, the phase margin of 4° is \textit{unacceptable} and indicates the system is dangerously close to instability. The system will likely oscillate with any parameter variation. The recommendation is to add phase lead compensation to increase the phase margin to at least 45°.
 
 $\boxed{G_m = 7.6 \text{ dB}, \quad \phi_m = 4°}$
-\end{example}
+\end{examplebox}
 
-\begin{example}[Robust Stability via Small Gain Theorem]
-\label{ex:small_gain}
+\begin{examplebox}[Robust Stability via Small Gain Theorem]
 A plant has multiplicative uncertainty:
 \begin{equation*}
 G_{\text{true}}(s) = G_{\text{nom}}(s)(1 + W_m(s)\Delta(s))
@@ -1083,13 +917,7 @@ Find the peak:
 |W_m(j\omega) T(j\omega)| = \frac{5\omega}{\sqrt{\omega^2+100} \cdot \sqrt{\omega^2+121}}
 \end{equation*}
 
-Taking the derivative and setting to zero, or evaluating at several frequencies:
-\begin{itemize}
-    \item At $\omega = 0$: $|W_m T| = 0$
-    \item At $\omega = 10$: $|W_m T| = \frac{50}{\sqrt{200} \cdot \sqrt{221}} = \frac{50}{14.1 \cdot 14.9} = 0.24$
-    \item At $\omega = 100$: $|W_m T| = \frac{500}{\sqrt{10100} \cdot \sqrt{10221}} = \frac{500}{100.5 \cdot 101.1} = 0.049$
-    \item At $\omega \to \infty$: $|W_m T| \to 0$
-\end{itemize}
+Taking the derivative and setting to zero, or evaluating at several frequencies, we find: at $\omega = 0$, $|W_m T| = 0$; at $\omega = 10$, $|W_m T| = \frac{50}{\sqrt{200} \cdot \sqrt{221}} = \frac{50}{14.1 \cdot 14.9} = 0.24$; at $\omega = 100$, $|W_m T| = \frac{500}{\sqrt{10100} \cdot \sqrt{10221}} = \frac{500}{100.5 \cdot 101.1} = 0.049$; and as $\omega \to \infty$, $|W_m T| \to 0$.
 
 The maximum occurs near $\omega \approx 10$ rad/s. More precisely, taking the derivative:
 \begin{equation*}
@@ -1101,15 +929,11 @@ Solving yields $\omega^* \approx 10.5$ rad/s, and $\|W_m T\|_\infty \approx 0.24
 Since $\|W_m T\|_\infty = 0.24 < 1$, the system is robustly stable.
 
 $\boxed{\|W_m T\|_\infty \approx 0.24 < 1 \implies \text{Robustly Stable}}$
-\end{example}
+\end{examplebox}
 
 \begin{example}[Controller Design for Specified Margins]
 \label{ex:design_margins}
-Design a lead compensator for the plant $G(s) = \dfrac{10}{s(s+5)}$ to achieve:
-\begin{itemize}
-    \item Phase margin $\geq 50°$
-    \item Gain crossover frequency $\omega_c = 5$ rad/s
-\end{itemize}
+Design a lead compensator for the plant $G(s) = \dfrac{10}{s(s+5)}$ to achieve a phase margin $\geq 50°$ with gain crossover frequency $\omega_c = 5$ rad/s.
 
 \textbf{Solution:}
 
@@ -1218,11 +1042,7 @@ For high frequencies ($s$ large):
 \frac{G_{\text{true}} - G_{\text{nom}}}{G_{\text{nom}}} \approx \frac{J_0 - J}{J}
 \end{equation*}
 
-Maximum deviation:
-\begin{itemize}
-    \item For $J = 0.008$: $(0.01 - 0.008)/0.008 = +25\%$
-    \item For $J = 0.015$: $(0.01 - 0.015)/0.015 = -33\%$
-\end{itemize}
+Maximum deviation occurs at the extremes of the uncertainty range: for $J = 0.008$, the relative error is $(0.01 - 0.008)/0.008 = +25\%$, while for $J = 0.015$, the relative error is $(0.01 - 0.015)/0.015 = -33\%$.
 
 The multiplicative uncertainty bound is:
 \begin{equation*}
@@ -1241,14 +1061,7 @@ $\boxed{W_m(s) = \frac{0.33s}{s + 0.067B}}$
 
 \begin{example}[Robust Stability Analysis for Perturbed System]
 \label{ex:robust_analysis}
-A feedback system has:
-\begin{itemize}
-    \item Nominal plant: $G_{\text{nom}}(s) = \dfrac{1}{s+1}$
-    \item Additive uncertainty: $|\Delta_a(j\omega)| \leq \dfrac{0.5\omega}{\omega + 5}$
-    \item Controller: $K(s) = 2$
-\end{itemize}
-
-Determine if the system is robustly stable.
+A feedback system has nominal plant $G_{\text{nom}}(s) = \dfrac{1}{s+1}$, additive uncertainty bounded by $|\Delta_a(j\omega)| \leq \dfrac{0.5\omega}{\omega + 5}$, and controller $K(s) = 2$. Determine if the system is robustly stable.
 
 \textbf{Solution:}
 
@@ -1507,36 +1320,55 @@ This chapter developed the theory and practice of robust control---designing con
     \item \textbf{$H_\infty$ Control}: The $H_\infty$ framework transforms robust design into optimization: minimize the worst-case performance over all plants in the uncertainty set. This provides a systematic approach to robust controller synthesis.
 \end{enumerate}
 
-\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Key Takeaway]
+\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Key Takeaway,sharp corners]
 All models are wrong. A controller designed only for nominal conditions will eventually fail. Robust design explicitly accounts for uncertainty, trading peak performance for reliability across a range of operating conditions. In safety-critical systems, this trade-off is not optional---it is the difference between success and catastrophe.
 \end{tcolorbox}
 
+\newpage
 %=============================================================================
-\section{Problems}
+\section{Exercises}
 \label{sec:problems}
 %=============================================================================
 
-\begin{enumerate}
-    \item \textbf{Margins from Bode Plot}: For a system with loop transfer function $L(s) = \dfrac{50}{s(s+1)(s+10)}$, calculate the gain margin and phase margin. Assess whether the system meets typical robustness specifications.
+\begin{exercise}
+For a system with loop transfer function $L(s) = \dfrac{50}{s(s+1)(s+10)}$, calculate the gain margin and phase margin. Assess whether the system meets typical robustness specifications.
+\end{exercise}
 
-    \item \textbf{Sensitivity Peak}: A control system has sensitivity function $S(s) = \dfrac{s^2 + 2s + 1}{s^2 + 3s + 10}$. Calculate $M_S = \|S\|_\infty$ and determine the guaranteed minimum gain and phase margins.
+\begin{exercise}
+A control system has sensitivity function $S(s) = \dfrac{s^2 + 2s + 1}{s^2 + 3s + 10}$. Calculate $M_S = \|S\|_\infty$ and determine the guaranteed minimum gain and phase margins.
+\end{exercise}
 
-    \item \textbf{Multiplicative Uncertainty}: A plant has multiplicative uncertainty weight $W_m(s) = \dfrac{s+1}{s+20}$. If the complementary sensitivity at $\omega = 10$ rad/s has magnitude $|T(j10)| = 0.5$, is the robust stability condition satisfied at this frequency?
+\begin{exercise}
+A plant has multiplicative uncertainty weight $W_m(s) = \dfrac{s+1}{s+20}$. If the complementary sensitivity at $\omega = 10$ rad/s has magnitude $|T(j10)| = 0.5$, is the robust stability condition satisfied at this frequency?
+\end{exercise}
 
-    \item \textbf{Small Gain Application}: A feedback system has $G(s) = \dfrac{2}{(s+1)^2}$ and $K(s) = 3$. An additive uncertainty $\Delta_a$ satisfies $|\Delta_a(j\omega)| \leq 0.1\omega^2$ for all $\omega$. Determine if the system is robustly stable.
+\begin{exercise}
+A feedback system has $G(s) = \dfrac{2}{(s+1)^2}$ and $K(s) = 3$. An additive uncertainty $\Delta_a$ satisfies $|\Delta_a(j\omega)| \leq 0.1\omega^2$ for all $\omega$. Determine if the system is robustly stable.
+\end{exercise}
 
-    \item \textbf{Lead Compensator Design}: Design a lead compensator for $G(s) = \dfrac{5}{s(s+2)}$ to achieve phase margin $\geq 60°$ with gain crossover frequency $\omega_c = 4$ rad/s.
+\begin{exercise}
+Design a lead compensator for $G(s) = \dfrac{5}{s(s+2)}$ to achieve phase margin $\geq 60°$ with gain crossover frequency $\omega_c = 4$ rad/s.
+\end{exercise}
 
-    \item \textbf{Parametric to Multiplicative}: A spring-mass system has uncertain stiffness $k \in [80, 120]$ N/m with nominal $k_0 = 100$ N/m and mass $m = 1$ kg. Express the plant uncertainty in multiplicative form and determine the weight $W_m(s)$.
+\begin{exercise}
+A spring-mass system has uncertain stiffness $k \in [80, 120]$ N/m with nominal $k_0 = 100$ N/m and mass $m = 1$ kg. Express the plant uncertainty in multiplicative form and determine the weight $W_m(s)$.
+\end{exercise}
 
-    \item \textbf{$H_\infty$ Interpretation}: Explain the physical meaning of minimizing $\|W_S S\|_\infty$ where $W_S(s) = \dfrac{s/M + \omega_B}{s + \omega_B A}$ with $M = 2$, $\omega_B = 10$ rad/s, and $A = 0.01$.
+\begin{exercise}
+Explain the physical meaning of minimizing $\|W_S S\|_\infty$ where $W_S(s) = \dfrac{s/M + \omega_B}{s + \omega_B A}$ with $M = 2$, $\omega_B = 10$ rad/s, and $A = 0.01$.
+\end{exercise}
 
-    \item \textbf{Laboratory Analysis}: In the robust motor control experiment, a student finds that the aggressive controller becomes unstable when payload mass increases from 0g to 50g. If the nominal time constant is $\tau_0 = 0.1$ s and increases to $\tau = 0.15$ s with the 50g payload, calculate how much the phase margin at the original crossover frequency has decreased.
+\begin{exercise}
+In the robust motor control experiment, a student finds that the aggressive controller becomes unstable when payload mass increases from 0g to 50g. If the nominal time constant is $\tau_0 = 0.1$ s and increases to $\tau = 0.15$ s with the 50g payload, calculate how much the phase margin at the original crossover frequency has decreased.
+\end{exercise}
 
-    \item \textbf{Monte Carlo}: Describe a procedure to assess robust performance using Monte Carlo simulation for a system with three uncertain parameters, each uniformly distributed over a $\pm 20\%$ range.
+\begin{exercise}
+Describe a procedure to assess robust performance using Monte Carlo simulation for a system with three uncertain parameters, each uniformly distributed over a $\pm 20\%$ range.
+\end{exercise}
 
-    \item \textbf{Design Trade-off}: A system requires $|S(j\omega)| < 0.1$ for $\omega < 1$ rad/s and $|T(j\omega)| < 0.1$ for $\omega > 100$ rad/s. Sketch a typical sensitivity/complementary sensitivity pair that meets these requirements and identify the crossover frequency range.
-\end{enumerate}
+\begin{exercise}
+A system requires $|S(j\omega)| < 0.1$ for $\omega < 1$ rad/s and $|T(j\omega)| < 0.1$ for $\omega > 100$ rad/s. Sketch a typical sensitivity/complementary sensitivity pair that meets these requirements and identify the crossover frequency range.
+\end{exercise}
 
 %=============================================================================
 % End of Chapter

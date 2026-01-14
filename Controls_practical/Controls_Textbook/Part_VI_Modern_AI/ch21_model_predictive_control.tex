@@ -10,13 +10,7 @@ Model Predictive Control (MPC) represents one of the most significant advances i
 
 \vspace{1em}
 \noindent\textbf{Learning Objectives:}
-\begin{itemize}[noitemsep]
-    \item Understand the historical development and industrial motivation for MPC
-    \item Formulate MPC optimization problems for linear systems
-    \item Convert MPC problems to standard quadratic programming form
-    \item Implement receding horizon control with constraint handling
-    \item Compare MPC performance to classical PID control under constraints
-\end{itemize}
+Upon completing this chapter, students will understand the historical development and industrial motivation for MPC, gaining insight into how process control challenges in the petrochemical industry drove the development of predictive control methods. Students will learn to formulate MPC optimization problems for linear systems, expressing control objectives as quadratic cost functions subject to constraints. The chapter develops skills for converting MPC problems to standard quadratic programming form, enabling efficient numerical solution. Students will implement receding horizon control with explicit constraint handling, and will compare MPC performance to classical PID control under constraints to understand when predictive methods offer advantages.
 
 %==============================================================================
 \section{Historical Development and Motivation}
@@ -33,19 +27,13 @@ Classical anti-windup schemes provided partial remedies, but they were reactive 
 
 \subsection{Shell Oil and Dynamic Matrix Control (1970s)}
 
+\begin{historicalbox}[Charles Cutler and the Birth of Industrial MPC]
+Charles R. Cutler, a chemical engineer at Shell Oil Company's Houston research center, developed Dynamic Matrix Control (DMC) in the mid-1970s alongside his colleague Brian Ramaker. Cutler's key insight was that complex refinery processes could be controlled effectively using simple step-response models rather than detailed differential equations---a pragmatic engineering choice that made predictive control practical for industrial implementation. The first DMC installation on a fluid catalytic cracking unit in 1976 demonstrated dramatic improvements in yield and energy efficiency, generating millions of dollars in annual savings. Cutler later co-founded Dynamic Matrix Control Corporation to commercialize the technology, and his 1980 paper with Ramaker, ``Dynamic Matrix Control---A Computer Control Algorithm,'' became one of the most influential publications in process control history. Today, tens of thousands of MPC controllers based on Cutler's ideas operate in refineries and chemical plants worldwide.
+\end{historicalbox}
+
 The breakthrough came not from academic research but from industrial necessity. Engineers at Shell Oil Company's research center in Houston, Texas, confronted the challenge of controlling complex refinery units where dozens of manipulated variables affected dozens of controlled outputs, all subject to operational constraints.
 
-In the mid-1970s, Charles Cutler and Brian Ramaker at Shell developed \textbf{Dynamic Matrix Control (DMC)}, the first commercially successful MPC algorithm. Their key innovations were:
-
-\begin{enumerate}
-    \item \textbf{Step Response Models}: Rather than requiring detailed first-principles models, DMC used empirically measured step response coefficients. Engineers could identify these models by simply stepping each input and recording the output responses---no differential equations required.
-
-    \item \textbf{Prediction over a Horizon}: The algorithm predicted future outputs over a ``prediction horizon'' of $N$ time steps, computing how each candidate control move would affect future behavior.
-
-    \item \textbf{Move Suppression}: To prevent excessive control action (which wastes energy and stresses equipment), DMC penalized the magnitude of control changes, not just tracking errors.
-
-    \item \textbf{Constraint Handling}: Most critically, DMC formulated control as a constrained optimization problem, directly incorporating actuator limits and output bounds.
-\end{enumerate}
+In the mid-1970s, Charles Cutler and Brian Ramaker at Shell developed \textbf{Dynamic Matrix Control (DMC)}, the first commercially successful MPC algorithm. Their approach introduced several key innovations that made the technology practical. First, rather than requiring detailed first-principles models, DMC used empirically measured step response coefficients; engineers could identify these models by simply stepping each input and recording the output responses, eliminating the need for differential equations. Second, the algorithm predicted future outputs over a ``prediction horizon'' of $N$ time steps, computing how each candidate control move would affect future behavior. Third, DMC incorporated move suppression to prevent excessive control action, penalizing the magnitude of control changes rather than just tracking errors, thereby reducing energy waste and equipment stress. Most critically, DMC formulated control as a constrained optimization problem, directly incorporating actuator limits and output bounds into the control computation.
 
 The mathematical formulation was elegant in its simplicity. Let $a_i$ denote the step response coefficient at time step $i$---the amount by which the output changes $i$ steps after a unit step in the input. Then the predicted output at future time $k+j$ given control moves $\Delta u_k, \Delta u_{k+1}, \ldots$ is:
 \begin{equation}
@@ -71,16 +59,23 @@ where $\tau_{\text{ref}}$ was a tunable time constant specifying how aggressivel
 
 If MPC's principles were so powerful, why did they emerge only in the 1970s? The answer lies in computational requirements. MPC solves an optimization problem at every sampling instant---typically a quadratic program (QP) with tens to hundreds of decision variables and constraints.
 
-Consider the computational resources available in different eras:
-\begin{itemize}
-    \item \textbf{1960s}: Mainframe computers filled rooms, cost millions of dollars, and could perform perhaps $10^5$ floating-point operations per second. Solving even a modest QP would require minutes to hours.
+Consider the computational resources available in different eras, summarized in Table~\ref{tab:mpc_computing_history}.
 
-    \item \textbf{1970s}: Minicomputers like the DEC PDP-11 brought computing to industrial plants at costs under \$50,000. With $10^6$ FLOPS, a QP could be solved in seconds---fast enough for slow chemical processes with sampling times of minutes.
-
-    \item \textbf{1980s--1990s}: Workstations and embedded processors reached $10^7$--$10^9$ FLOPS, enabling MPC for faster systems (sampling times of seconds) and larger problems.
-
-    \item \textbf{2000s--present}: Modern microprocessors exceeding $10^{11}$ FLOPS enable MPC for automotive, aerospace, and robotics applications with millisecond sampling times.
-\end{itemize}
+\begin{table}[htbp]
+\centering
+\caption{Evolution of Computing Power and MPC Applications}
+\label{tab:mpc_computing_history}
+\begin{tabular}{lcll}
+\toprule
+\textbf{Era} & \textbf{FLOPS} & \textbf{Technology} & \textbf{MPC Capability} \\
+\midrule
+1960s & $10^5$ & Room-sized mainframes & QP solution: minutes to hours \\
+1970s & $10^6$ & Minicomputers (PDP-11) & QP in seconds; slow processes \\
+1980s--1990s & $10^7$--$10^9$ & Workstations, embedded & Seconds-scale sampling \\
+2000s--present & $>10^{11}$ & Modern microprocessors & Millisecond sampling \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 The history of MPC thus mirrors the history of computing power. Each generation of processors opened MPC to a broader class of applications.
 
@@ -88,32 +83,29 @@ The history of MPC thus mirrors the history of computing power. Each generation 
 
 While industry deployed increasingly sophisticated MPC systems, academic researchers worked to establish rigorous theoretical foundations. The early industrial algorithms, though empirically successful, lacked formal guarantees of stability and performance.
 
-Key theoretical developments included:
-
-\begin{enumerate}
-    \item \textbf{Stability through Terminal Constraints}: David Mayne, James Rawlings, and others showed that adding a ``terminal constraint''---requiring the predicted state to reach a target set by the end of the horizon---guaranteed closed-loop stability under mild conditions.
-
-    \item \textbf{Stability through Terminal Cost}: Alternatively, adding a ``terminal cost'' term to the objective function (typically an infinite-horizon LQR cost for the final state) provided stability without explicit terminal constraints.
-
-    \item \textbf{Robust MPC}: Extensions to handle model uncertainty, ensuring stability even when the true plant differs from the prediction model.
-
-    \item \textbf{Explicit MPC}: For systems with modest state and horizon dimensions, the optimal control law could be computed offline as a piecewise-affine function of the state, eliminating online optimization entirely.
-\end{enumerate}
+Several key theoretical developments emerged during this period. David Mayne, James Rawlings, and others established stability through terminal constraints, showing that requiring the predicted state to reach a target set by the end of the horizon guaranteed closed-loop stability under mild conditions. An alternative approach achieved stability through terminal cost, where adding a terminal cost term to the objective function---typically an infinite-horizon LQR cost for the final state---provided stability without explicit terminal constraints. Researchers also developed robust MPC extensions to handle model uncertainty, ensuring stability even when the true plant differs from the prediction model. For systems with modest state and horizon dimensions, explicit MPC allowed the optimal control law to be computed offline as a piecewise-affine function of the state, eliminating online optimization entirely.
 
 By the late 1990s, MPC had evolved from an industrial heuristic to a mathematically mature control methodology with well-understood stability, optimality, and robustness properties.
 
 \subsection{Becoming the Industry Standard}
 
-The adoption of MPC in process industries followed a characteristic technology diffusion curve:
-\begin{itemize}
-    \item \textbf{1978--1985}: Early adopters at major oil companies (Shell, Exxon, Texaco) deployed custom systems on high-value units.
+The adoption of MPC in process industries followed a characteristic technology diffusion curve, as summarized in Table~\ref{tab:mpc_adoption}.
 
-    \item \textbf{1985--1995}: Commercial MPC software (DMC-Plus, RMPCT, Connoisseur) made the technology accessible to smaller companies. Thousands of installations worldwide.
-
-    \item \textbf{1995--2010}: MPC became the default advanced control technology for refineries, petrochemical plants, and other process industries. Integration with plant-wide optimization systems.
-
-    \item \textbf{2010--present}: Extension beyond process industries to automotive (fuel economy optimization, emissions control), building systems (HVAC optimization), power electronics, and autonomous vehicles.
-\end{itemize}
+\begin{table}[htbp]
+\centering
+\caption{MPC Technology Adoption Timeline}
+\label{tab:mpc_adoption}
+\begin{tabular}{lp{10cm}}
+\toprule
+\textbf{Period} & \textbf{Development} \\
+\midrule
+1978--1985 & Early adopters at major oil companies (Shell, Exxon, Texaco) deployed custom systems on high-value units \\
+1985--1995 & Commercial MPC software (DMC-Plus, RMPCT, Connoisseur) made the technology accessible to smaller companies; thousands of installations worldwide \\
+1995--2010 & MPC became the default advanced control technology for refineries, petrochemical plants, and other process industries; integration with plant-wide optimization systems \\
+2010--present & Extension beyond process industries to automotive, building systems, power electronics, and autonomous vehicles \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 Today, MPC is taught in virtually every graduate control curriculum and is implemented in systems ranging from smartphone battery management to spacecraft attitude control. The technology born from refinery control rooms has become a fundamental tool of modern engineering.
 
@@ -126,55 +118,21 @@ Model Predictive Control has transcended its origins in petrochemical processing
 
 \subsection{Chemical Process Control}
 
-MPC remains dominant in its original domain. Modern refineries deploy dozens of MPC controllers, each coordinating multiple control loops while respecting hundreds of constraints simultaneously. Applications include:
-
-\begin{itemize}
-    \item \textbf{Crude distillation}: Optimizing product cuts while satisfying quality specifications
-    \item \textbf{Catalytic cracking}: Maximizing gasoline yield within temperature and catalyst constraints
-    \item \textbf{Polymerization reactors}: Controlling molecular weight distributions
-    \item \textbf{Batch processes}: Optimizing recipe trajectories for pharmaceutical and specialty chemical production
-\end{itemize}
-
-The economic incentives remain compelling: a typical refinery MPC installation yields \$1--5 million in annual benefits through improved yield, reduced energy consumption, and increased throughput.
+MPC remains dominant in its original domain. Modern refineries deploy dozens of MPC controllers, each coordinating multiple control loops while respecting hundreds of constraints simultaneously. In crude distillation, MPC optimizes product cuts while satisfying quality specifications. Catalytic cracking units use MPC to maximize gasoline yield within temperature and catalyst constraints. Polymerization reactors benefit from MPC's ability to control molecular weight distributions precisely. Batch processes in pharmaceutical and specialty chemical production employ MPC to optimize recipe trajectories throughout the production cycle. The economic incentives remain compelling: a typical refinery MPC installation yields \$1--5 million in annual benefits through improved yield, reduced energy consumption, and increased throughput.
 
 \subsection{Autonomous Vehicles}
 
 Modern autonomous vehicles rely extensively on MPC for motion planning and control. The problem is naturally formulated in MPC terms: given a desired trajectory (from higher-level planning), find control inputs (steering, throttle, brake) that track the trajectory while respecting physical constraints (maximum steering angle, acceleration limits) and safety requirements (obstacle avoidance, lane boundaries).
 
-Key features making MPC attractive for autonomous vehicles include:
-\begin{itemize}
-    \item \textbf{Explicit constraint handling}: Vehicle dynamics, actuator limits, and collision avoidance expressed as optimization constraints
-    \item \textbf{Preview capability}: The prediction horizon can ``see'' upcoming curves, intersections, and obstacles
-    \item \textbf{Graceful degradation}: When perfect tracking is impossible (e.g., obstacle too close), MPC finds the best feasible compromise
-\end{itemize}
-
-Major autonomous vehicle programs (Waymo, Tesla, Cruise) employ MPC-based controllers, though specific implementations remain proprietary.
+Several features make MPC particularly attractive for autonomous vehicles. Explicit constraint handling allows vehicle dynamics, actuator limits, and collision avoidance requirements to be expressed directly as optimization constraints. The prediction horizon provides preview capability, enabling the controller to ``see'' upcoming curves, intersections, and obstacles before they become immediate concerns. Perhaps most importantly, MPC offers graceful degradation: when perfect tracking is impossible due to an obstacle being too close, MPC finds the best feasible compromise rather than failing abruptly. Major autonomous vehicle programs at companies such as Waymo, Tesla, and Cruise employ MPC-based controllers, though specific implementations remain proprietary.
 
 \subsection{Building HVAC Optimization}
 
-Heating, ventilation, and air conditioning (HVAC) systems account for 40\% of commercial building energy consumption. MPC offers substantial savings by optimizing HVAC operation over prediction horizons of hours to days:
-
-\begin{itemize}
-    \item \textbf{Weather prediction integration}: Using forecast data to pre-cool buildings before heat waves or pre-heat before cold snaps
-    \item \textbf{Occupancy-aware control}: Reducing conditioning in unoccupied zones while maintaining comfort in occupied spaces
-    \item \textbf{Demand response}: Shifting energy consumption to off-peak hours or responding to grid signals
-    \item \textbf{Thermal storage}: Optimally charging and discharging ice storage or building thermal mass
-\end{itemize}
-
-Commercial building MPC implementations report 15--30\% energy savings compared to conventional rule-based control.
+Heating, ventilation, and air conditioning (HVAC) systems account for 40\% of commercial building energy consumption. MPC offers substantial savings by optimizing HVAC operation over prediction horizons of hours to days. Weather prediction integration allows the controller to use forecast data to pre-cool buildings before heat waves or pre-heat before cold snaps. Occupancy-aware control reduces conditioning in unoccupied zones while maintaining comfort in occupied spaces. MPC enables effective demand response by shifting energy consumption to off-peak hours or responding to grid signals. For buildings with thermal storage capabilities, MPC optimally manages the charging and discharging of ice storage or building thermal mass. Commercial building MPC implementations report 15--30\% energy savings compared to conventional rule-based control.
 
 \subsection{Quadrotor and UAV Control}
 
-Quadrotor drones present a challenging control problem: underactuated (4 inputs controlling 6 DOF), unstable, and operating in environments with obstacles. MPC has become the preferred approach for aggressive trajectory tracking:
-
-\begin{itemize}
-    \item \textbf{Trajectory optimization}: Computing dynamically feasible paths through cluttered environments
-    \item \textbf{Constraint satisfaction}: Respecting motor speed limits, battery current constraints, and no-fly zones
-    \item \textbf{Disturbance rejection}: Adapting to wind gusts and payload changes
-    \item \textbf{Multi-vehicle coordination}: Coordinating swarms while avoiding inter-vehicle collisions
-\end{itemize}
-
-Academic demonstrations have shown MPC-controlled quadrotors performing acrobatic maneuvers, flying through narrow gaps, and collaboratively transporting objects.
+Quadrotor drones present a challenging control problem: underactuated (4 inputs controlling 6 DOF), unstable, and operating in environments with obstacles. MPC has become the preferred approach for aggressive trajectory tracking due to its ability to handle these challenges systematically. Trajectory optimization computes dynamically feasible paths through cluttered environments. Constraint satisfaction ensures the controller respects motor speed limits, battery current constraints, and no-fly zones. MPC provides effective disturbance rejection, adapting to wind gusts and payload changes in real time. For multi-vehicle applications, MPC coordinates swarms while avoiding inter-vehicle collisions through appropriate constraint formulation. Academic demonstrations have shown MPC-controlled quadrotors performing acrobatic maneuvers, flying through narrow gaps, and collaboratively transporting objects.
 
 %==============================================================================
 \section{Mathematical Foundation}
@@ -241,13 +199,7 @@ MPC's core concept is beautifully simple: at each time step, solve a finite-hori
 \label{fig:receding_horizon}
 \end{figure}
 
-The receding horizon approach provides several crucial benefits:
-\begin{enumerate}
-    \item \textbf{Feedback}: By re-solving at each step, MPC incorporates new measurements and rejects disturbances.
-    \item \textbf{Finite computation}: Each optimization involves only $N$ time steps, not infinity.
-    \item \textbf{Implicit robustness}: Model errors are partially corrected by feedback.
-    \item \textbf{Adaptation}: Changing constraints or setpoints are automatically incorporated.
-\end{enumerate}
+The receding horizon approach provides several crucial benefits. First, by re-solving at each step, MPC incorporates new measurements and rejects disturbances, providing effective feedback control. Second, each optimization involves only $N$ time steps rather than infinity, ensuring finite computation time. Third, model errors are partially corrected by the feedback mechanism, providing implicit robustness to modeling inaccuracies. Finally, changing constraints or setpoints are automatically incorporated into the optimization at each step, enabling seamless adaptation to varying operating conditions.
 
 \subsection{System Model: Discrete-Time State-Space}
 
@@ -261,16 +213,7 @@ MPC requires a model predicting future states from current state and control inp
 }
 \label{eq:discrete_ss}
 \end{equation}
-where:
-\begin{itemize}
-    \item $\state_k \in \Real^n$ is the state vector at time step $k$
-    \item $\inputvec_k \in \Real^m$ is the control input vector
-    \item $\outputvec_k \in \Real^p$ is the output vector
-    \item $\mat{A} \in \Real^{n \times n}$ is the state transition matrix
-    \item $\mat{B} \in \Real^{n \times m}$ is the input matrix
-    \item $\mat{C} \in \Real^{p \times n}$ is the output matrix
-    \item $\mat{D} \in \Real^{p \times m}$ is the feedthrough matrix (often zero)
-\end{itemize}
+In this formulation, $\state_k \in \Real^n$ denotes the state vector at time step $k$, $\inputvec_k \in \Real^m$ represents the control input vector, and $\outputvec_k \in \Real^p$ is the output vector. The system matrices have the following dimensions: $\mat{A} \in \Real^{n \times n}$ is the state transition matrix governing the autonomous system dynamics, $\mat{B} \in \Real^{n \times m}$ is the input matrix describing how controls affect states, $\mat{C} \in \Real^{p \times n}$ is the output matrix relating states to measured outputs, and $\mat{D} \in \Real^{p \times m}$ is the feedthrough matrix (often zero in physical systems).
 
 Starting from state $\state_k$, we can predict future states recursively:
 \begin{align}
@@ -291,21 +234,9 @@ MPC minimizes a cost function that penalizes deviation from desired behavior and
 \label{eq:mpc_cost}
 \end{equation}
 
-where:
-\begin{itemize}
-    \item $\mat{Q} \in \Real^{n \times n}$ is the state weighting matrix ($\mat{Q} \succeq 0$, positive semi-definite)
-    \item $\mat{R} \in \Real^{m \times m}$ is the input weighting matrix ($\mat{R} \succ 0$, positive definite)
-    \item $\mat{P} \in \Real^{n \times n}$ is the terminal state weighting matrix ($\mat{P} \succeq 0$)
-    \item $N$ is the prediction horizon length
-\end{itemize}
+In this cost function, $\mat{Q} \in \Real^{n \times n}$ is the state weighting matrix (positive semi-definite, $\mat{Q} \succeq 0$), $\mat{R} \in \Real^{m \times m}$ is the input weighting matrix (positive definite, $\mat{R} \succ 0$), $\mat{P} \in \Real^{n \times n}$ is the terminal state weighting matrix ($\mat{P} \succeq 0$), and $N$ denotes the prediction horizon length.
 
-\textbf{Physical interpretation}:
-\begin{itemize}
-    \item The $\state^\top \mat{Q} \state$ terms penalize state deviation from zero (or from a reference trajectory)
-    \item The $\inputvec^\top \mat{R} \inputvec$ terms penalize control effort (actuator usage, energy consumption)
-    \item The terminal cost $\state_{k+N}^\top \mat{P} \state_{k+N}$ accounts for behavior beyond the horizon
-    \item Large $\mat{Q}$ entries demand tight tracking; large $\mat{R}$ entries demand gentle control action
-\end{itemize}
+\textbf{Physical interpretation}: The $\state^\top \mat{Q} \state$ terms penalize state deviation from zero (or from a reference trajectory), while the $\inputvec^\top \mat{R} \inputvec$ terms penalize control effort, accounting for actuator usage and energy consumption. The terminal cost $\state_{k+N}^\top \mat{P} \state_{k+N}$ accounts for behavior beyond the prediction horizon. The relative magnitude of the weighting matrices determines the controller's behavior: large $\mat{Q}$ entries demand tight tracking, while large $\mat{R}$ entries demand gentle control action.
 
 \subsection{Constraint Specification}
 
@@ -440,12 +371,7 @@ The MPC problem is now in standard QP form:
 \label{eq:standard_qp}
 \end{equation}
 
-where:
-\begin{itemize}
-    \item $\mat{H} = \boldsymbol{\mathcal{B}}^\top \bar{\mat{Q}} \boldsymbol{\mathcal{B}} + \bar{\mat{R}} \in \Real^{Nm \times Nm}$ is the Hessian matrix (positive definite)
-    \item $\vect{f} = \boldsymbol{\mathcal{B}}^\top \bar{\mat{Q}} \boldsymbol{\mathcal{A}} \state_k \in \Real^{Nm}$ is the linear cost vector
-    \item $\mat{G}$ and $\vect{w}$ encode all inequality constraints
-\end{itemize}
+In this formulation, $\mat{H} = \boldsymbol{\mathcal{B}}^\top \bar{\mat{Q}} \boldsymbol{\mathcal{B}} + \bar{\mat{R}} \in \Real^{Nm \times Nm}$ is the Hessian matrix (positive definite due to $\mat{R} \succ 0$), $\vect{f} = \boldsymbol{\mathcal{B}}^\top \bar{\mat{Q}} \boldsymbol{\mathcal{A}} \state_k \in \Real^{Nm}$ is the linear cost vector that depends on the current state, and $\mat{G}$ and $\vect{w}$ encode all inequality constraints in a compact matrix form.
 
 This QP can be solved by standard algorithms (active set, interior point, etc.) with computational complexity polynomial in the problem dimensions.
 
@@ -457,15 +383,15 @@ The complete MPC algorithm proceeds as follows:
 \caption{Model Predictive Control Algorithm}
 \label{alg:mpc}
 \begin{algorithmic}[1]
-\STATE \textbf{Initialization}: Choose $N$, $\mat{Q}$, $\mat{R}$, $\mat{P}$, constraints
-\STATE Form $\mat{H}$ (constant, computed once)
-\FOR{each sampling instant $k = 0, 1, 2, \ldots$}
-    \STATE Measure or estimate current state $\state_k$
-    \STATE Form $\vect{f}$ and $\vect{w}$ using current $\state_k$
-    \STATE Solve QP \eqref{eq:standard_qp} to obtain $\mathbf{U}^* = [\inputvec_k^{*\top}, \inputvec_{k+1}^{*\top}, \ldots]^\top$
-    \STATE Apply only the first element: $\inputvec_k = \inputvec_k^*$
-    \STATE Wait for next sampling instant
-\ENDFOR
+\State \textbf{Initialization}: Choose $N$, $\mat{Q}$, $\mat{R}$, $\mat{P}$, constraints
+\State Form $\mat{H}$ (constant, computed once)
+\For{each sampling instant $k = 0, 1, 2, \ldots$}
+    \State Measure or estimate current state $\state_k$
+    \State Form $\vect{f}$ and $\vect{w}$ using current $\state_k$
+    \State Solve QP \eqref{eq:standard_qp} to obtain $\mathbf{U}^* = [\inputvec_k^{*\top}, \inputvec_{k+1}^{*\top}, \ldots]^\top$
+    \State Apply only the first element: $\inputvec_k = \inputvec_k^*$
+    \State Wait for next sampling instant
+\EndFor
 \end{algorithmic}
 \end{algorithm}
 
@@ -473,12 +399,7 @@ The complete MPC algorithm proceeds as follows:
 
 A critical question is whether MPC guarantees closed-loop stability. Without additional structure, a finite-horizon optimization does not generally ensure stability---the controller might ``give up'' on long-term behavior beyond the horizon.
 
-\textbf{Theorem (MPC Stability):} The MPC closed-loop system is asymptotically stable if:
-\begin{enumerate}
-    \item The terminal cost $\mat{P}$ satisfies the Lyapunov equation $\mat{A}^\top \mat{P} \mat{A} - \mat{P} + \mat{Q} = \mat{0}$ (i.e., $\mat{P}$ is the infinite-horizon LQR cost matrix), OR
-    \item A terminal constraint $\state_{k+N} \in \mathcal{X}_f$ is imposed, where $\mathcal{X}_f$ is a control-invariant set containing the origin, AND
-    \item The optimization problem is feasible at each time step.
-\end{enumerate}
+\textbf{Theorem (MPC Stability):} The MPC closed-loop system is asymptotically stable under either of the following conditions, provided the optimization problem remains feasible at each time step. The first sufficient condition requires that the terminal cost $\mat{P}$ satisfies the Lyapunov equation $\mat{A}^\top \mat{P} \mat{A} - \mat{P} + \mat{Q} = \mat{0}$, meaning $\mat{P}$ equals the infinite-horizon LQR cost matrix. Alternatively, stability is guaranteed when a terminal constraint $\state_{k+N} \in \mathcal{X}_f$ is imposed, where $\mathcal{X}_f$ is a control-invariant set containing the origin.
 
 \textbf{Intuition}: The terminal cost (or constraint) ensures that the MPC controller ``cares about'' behavior beyond the horizon, preventing short-sighted decisions that compromise long-term stability.
 
@@ -488,22 +409,11 @@ In practice, choosing $\mat{P}$ as the solution to the discrete algebraic Riccat
 
 Model Predictive Control and Linear Quadratic Regulator (LQR) control are intimately related:
 
-\textbf{Theorem (MPC-LQR Equivalence):} For linear systems with:
-\begin{itemize}
-    \item No constraints
-    \item Infinite horizon ($N \to \infty$)
-    \item Terminal cost $\mat{P}$ equal to the LQR cost matrix
-\end{itemize}
-MPC produces the identical control law as LQR.
+\textbf{Theorem (MPC-LQR Equivalence):} For linear systems with no constraints, infinite horizon ($N \to \infty$), and terminal cost $\mat{P}$ equal to the LQR cost matrix, MPC produces the identical control law as LQR.
 
 \textbf{Proof sketch}: With no constraints and appropriate terminal cost, the MPC optimization becomes the standard LQR problem, whose solution is the well-known state feedback gain $\mat{K} = (\mat{R} + \mat{B}^\top \mat{P} \mat{B})^{-1} \mat{B}^\top \mat{P} \mat{A}$.
 
-This relationship is profound:
-\begin{itemize}
-    \item LQR is the ``idealized'' case of MPC---no constraints, perfect model, infinite foresight
-    \item MPC gracefully degrades from LQR as constraints become active
-    \item When constraints are inactive, MPC behaves like LQR; when active, MPC finds the best feasible approximation
-\end{itemize}
+This relationship is profound and illuminates the fundamental nature of both methods. LQR represents the ``idealized'' case of MPC, corresponding to no constraints, perfect model, and infinite foresight. MPC gracefully degrades from LQR as constraints become active: when constraints are inactive, MPC behaves identically to LQR; when constraints become active, MPC finds the best feasible approximation to the unconstrained optimum.
 
 \begin{figure}[htbp]
 \centering
@@ -664,10 +574,10 @@ where the time constants $T_i = \frac{A_i}{a_i}\sqrt{\frac{2h_i^0}{g}}$ and gain
 \centering
 \caption{Bill of Materials for Tank Control Experiment}
 \label{tab:tank_bom}
-\begin{tabular}{|l|l|l|}
-\hline
+\begin{tabular}{lll}
+\toprule
 \textbf{Component} & \textbf{Specification} & \textbf{Qty} \\
-\hline
+\midrule
 Arduino Mega 2560 & ATmega2560 microcontroller & 1 \\
 Water pump & 6-12V DC, 2-5 L/min & 1 \\
 Motor driver & L298N or similar & 1 \\
@@ -677,198 +587,88 @@ Tubing & 8mm ID silicone & 2m \\
 Orifice fittings & 3-5mm diameter & 2 \\
 Reservoir & Any container $>$2L & 1 \\
 Power supply & 12V, 3A & 1 \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{3D Printing Notes}:
-\begin{itemize}
-    \item Tank walls: 3mm thickness minimum for water resistance
-    \item Material: PETG recommended (water-resistant, food-safe)
-    \item Include mounting points for sensors and tubes
-    \item Consider o-ring grooves for leak-proof fittings
-    \item Print time: approximately 4-6 hours per tank at 0.2mm layer height
-\end{itemize}
+\textbf{3D Printing Notes}: Tank walls should be at least 3mm thick for adequate water resistance. PETG is the recommended material due to its water resistance and food-safe properties. The design should include mounting points for sensors and tubes, and o-ring grooves should be considered for leak-proof fittings. At 0.2mm layer height, expect approximately 4--6 hours of print time per tank.
 
 \subsection{Software Implementation}
 
 \subsubsection{PID Controller with Anti-Windup}
 
-\begin{lstlisting}[caption={PID Controller Implementation}, label={lst:pid_tank}]
-// PID Controller with basic anti-windup
-class PIDController {
-  float Kp, Ki, Kd;
-  float integral, prevError;
-  float outputMin, outputMax;
-
-public:
-  PIDController(float kp, float ki, float kd,
-                float outMin, float outMax) {
-    Kp = kp; Ki = ki; Kd = kd;
-    outputMin = outMin; outputMax = outMax;
-    integral = 0; prevError = 0;
-  }
-
-  float compute(float setpoint, float measurement, float dt) {
-    float error = setpoint - measurement;
-
-    // Proportional term
-    float P = Kp * error;
-
-    // Integral term with anti-windup
-    integral += Ki * error * dt;
-
-    // Derivative term
-    float derivative = (error - prevError) / dt;
-    float D = Kd * derivative;
-
-    // Compute output
-    float output = P + integral + D;
-
-    // Anti-windup: clamp integral if output saturates
-    if (output > outputMax) {
-      integral -= (output - outputMax);
-      output = outputMax;
-    } else if (output < outputMin) {
-      integral -= (output - outputMin);
-      output = outputMin;
-    }
-
-    prevError = error;
-    return output;
-  }
-
-  void reset() {
-    integral = 0;
-    prevError = 0;
-  }
-};
-\end{lstlisting}
+\begin{algorithm}[H]
+\caption{PID Controller with Anti-Windup}
+\label{alg:pid_tank}
+\begin{algorithmic}[1]
+\State \textbf{Parameters:} $K_p$, $K_i$, $K_d$, $u_{\min}$, $u_{\max}$
+\State \textbf{State variables:} $I \gets 0$ (integral accumulator), $e_{\text{prev}} \gets 0$
+\State
+\Function{Compute}{$r$, $y$, $\Delta t$} \Comment{$r$ = setpoint, $y$ = measurement}
+    \State $e \gets r - y$ \Comment{Compute error}
+    \State $P \gets K_p \cdot e$ \Comment{Proportional term}
+    \State $I \gets I + K_i \cdot e \cdot \Delta t$ \Comment{Integral term}
+    \State $D \gets K_d \cdot (e - e_{\text{prev}}) / \Delta t$ \Comment{Derivative term}
+    \State $u \gets P + I + D$ \Comment{Compute raw output}
+    \If{$u > u_{\max}$}
+        \State $I \gets I - (u - u_{\max})$ \Comment{Anti-windup: reduce integral}
+        \State $u \gets u_{\max}$
+    \ElsIf{$u < u_{\min}$}
+        \State $I \gets I - (u - u_{\min})$ \Comment{Anti-windup: increase integral}
+        \State $u \gets u_{\min}$
+    \EndIf
+    \State $e_{\text{prev}} \gets e$
+    \State \Return $u$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Simple MPC Implementation}
 
 For this educational experiment, we implement a simplified MPC that solves the unconstrained problem analytically, then projects the solution onto the constraint set.
 
-\begin{lstlisting}[caption={Simplified MPC Implementation}, label={lst:mpc_tank}]
-// Simplified MPC for two-tank system
-// Uses explicit solution for small horizon
-
-class SimpleMPC {
-  // Model parameters (discrete-time)
-  float A[2][2], B[2];  // State-space matrices
-  float Q[2], R;        // Cost weights
-  int N;                // Horizon length
-  float uMin, uMax;     // Input constraints
-
-  // Precomputed matrices for horizon N=3
-  float H, f_coeff[2];  // QP parameters
-
-public:
-  SimpleMPC(float a11, float a12, float a21, float a22,
-            float b1, float b2, float q1, float q2,
-            float r, float umin, float umax) {
-    A[0][0] = a11; A[0][1] = a12;
-    A[1][0] = a21; A[1][1] = a22;
-    B[0] = b1; B[1] = b2;
-    Q[0] = q1; Q[1] = q2;
-    R = r;
-    uMin = umin; uMax = umax;
-    N = 3;  // Fixed horizon for simplicity
-
-    // Precompute H matrix for N=3 horizon
-    // H = B'*Q_bar*B + R_bar (simplified scalar version)
-    computeQPMatrices();
-  }
-
-  void computeQPMatrices() {
-    // For educational purposes, using simplified computation
-    // Full implementation would build the matrices from Sec III
-    H = 3*R + (Q[0]*B[0]*B[0] + Q[1]*B[1]*B[1]) *
-        (1 + A[0][0]*A[0][0] + A[0][0]*A[0][0]*A[0][0]*A[0][0]);
-
-    f_coeff[0] = 2*(Q[0]*B[0]*A[0][0] + Q[1]*B[1]*A[1][0]);
-    f_coeff[1] = 2*(Q[0]*B[0]*A[0][1] + Q[1]*B[1]*A[1][1]);
-  }
-
-  float compute(float x1, float x2) {
-    // Compute linear cost term f = B'*Q_bar*A_bar*x
-    float f = f_coeff[0]*x1 + f_coeff[1]*x2;
-
-    // Unconstrained optimum: u* = -H^{-1} * f
-    float u_opt = -f / H;
-
-    // Project onto constraints [uMin, uMax]
-    if (u_opt < uMin) u_opt = uMin;
-    if (u_opt > uMax) u_opt = uMax;
-
-    return u_opt;
-  }
-};
-
-// Main control loop
-SimpleMPC mpc(/* parameters */);
-PIDController pid(2.0, 0.5, 0.1, 0, 255);
-
-void loop() {
-  // Read sensor values
-  float h1 = readLevel(SENSOR1_PIN);
-  float h2 = readLevel(SENSOR2_PIN);
-
-  // Compute control based on mode
-  float u;
-  if (useMPC) {
-    // MPC: uses state (deviation from setpoint)
-    float x1 = h1 - setpoint1;
-    float x2 = h2 - setpoint2;
-    u = mpc.compute(x1, x2);
-  } else {
-    // PID: single-loop on tank 2 level
-    u = pid.compute(setpoint2, h2, dt);
-  }
-
-  // Apply control
-  analogWrite(PUMP_PIN, (int)u);
-
-  // Log data for analysis
-  logData(h1, h2, u, setpoint2);
-
-  delay(SAMPLE_TIME_MS);
-}
-\end{lstlisting}
+\begin{algorithm}[H]
+\caption{Simplified MPC for Two-Tank System}
+\label{alg:mpc_tank}
+\begin{algorithmic}[1]
+\State \textbf{Offline Initialization:}
+\State \textbf{Input:} System matrices $\mat{A}$, $\mat{B}$; weights $\mat{Q}$, $R$; constraints $u_{\min}$, $u_{\max}$; horizon $N$
+\State Compute prediction matrices $\boldsymbol{\mathcal{A}}$, $\boldsymbol{\mathcal{B}}$ from $\mat{A}$, $\mat{B}$, $N$
+\State Compute Hessian $H \gets \boldsymbol{\mathcal{B}}^\top \bar{\mat{Q}} \boldsymbol{\mathcal{B}} + \bar{\mat{R}}$
+\State Compute linear coefficient matrix $\mat{F} \gets \boldsymbol{\mathcal{B}}^\top \bar{\mat{Q}} \boldsymbol{\mathcal{A}}$
+\State
+\State \textbf{Online Control Loop:}
+\While{system is running}
+    \State Read sensor measurements $h_1$, $h_2$
+    \State Compute state deviation: $\vect{x} \gets [h_1 - r_1, \, h_2 - r_2]^\top$
+    \State Compute linear cost term: $f \gets \mat{F} \cdot \vect{x}$
+    \State Compute unconstrained optimum: $u^* \gets -H^{-1} f$
+    \State Project onto constraints:
+    \If{$u^* < u_{\min}$}
+        \State $u^* \gets u_{\min}$
+    \ElsIf{$u^* > u_{\max}$}
+        \State $u^* \gets u_{\max}$
+    \EndIf
+    \State Apply control signal $u^*$ to pump
+    \State Log data: $h_1$, $h_2$, $u^*$, setpoints
+    \State Wait for next sampling instant
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Experimental Procedure}
 
 \subsubsection{Part 1: System Identification}
 
-\begin{enumerate}
-    \item Fill reservoir and establish steady-state at mid-level
-    \item Apply step changes in pump PWM (e.g., 100 to 150)
-    \item Record tank levels over time
-    \item Fit first-order-plus-delay models to responses
-    \item Extract time constants $T_1$, $T_2$ and gains
-\end{enumerate}
+Begin by filling the reservoir and establishing steady-state operation at mid-level in both tanks. Apply step changes in pump PWM, for example from 100 to 150, and record the resulting tank level responses over time. Using the recorded data, fit first-order-plus-delay models to the step responses. From these fitted models, extract the time constants $T_1$ and $T_2$ along with the system gains for use in the MPC prediction model.
 
 \subsubsection{Part 2: PID Control Experiment}
 
-\begin{enumerate}
-    \item Tune PID controller for acceptable step response at nominal operating point
-    \item Command a large positive setpoint change (level increase)
-    \item Observe: pump saturates at maximum, but recovers reasonably
-    \item Command a large negative setpoint change (level decrease)
-    \item Observe: pump saturates at zero (cannot go negative), integrator winds up
-    \item Record overshoot, settling time, and constraint violations
-\end{enumerate}
+Tune the PID controller to achieve acceptable step response performance at the nominal operating point. Command a large positive setpoint change to request a level increase, and observe that while the pump saturates at its maximum value, the system recovers reasonably. Next, command a large negative setpoint change to request a level decrease. Observe that the pump saturates at zero since it cannot provide negative flow, causing the integrator to wind up. Record the overshoot, settling time, and any constraint violations for later comparison with MPC.
 
 \subsubsection{Part 3: MPC Control Experiment}
 
-\begin{enumerate}
-    \item Configure MPC with same target response speed as PID
-    \item Repeat the large positive setpoint change
-    \item Observe: MPC may preemptively limit pump rate to avoid later saturation
-    \item Repeat the large negative setpoint change
-    \item Observe: MPC reduces pump to minimum (not negative), plans descent trajectory
-    \item Compare performance metrics to PID
-\end{enumerate}
+Configure the MPC controller with tuning parameters that target the same response speed as the PID controller. Repeat the large positive setpoint change and observe that MPC may preemptively limit the pump rate to avoid later saturation. When repeating the large negative setpoint change, observe that MPC reduces the pump command to its minimum value without attempting negative values, instead planning a feasible descent trajectory that respects the physical constraint. Compare the performance metrics from MPC to those recorded for PID control.
 
 \subsection{Expected Results}
 
@@ -952,16 +752,16 @@ void loop() {
 \centering
 \caption{Expected Performance Comparison}
 \label{tab:performance}
-\begin{tabular}{|l|c|c|}
-\hline
+\begin{tabular}{lcc}
+\toprule
 \textbf{Metric} & \textbf{PID} & \textbf{MPC} \\
-\hline
+\midrule
 Rise time (level increase) & Similar & Similar \\
 Settling time (level decrease) & Longer & Shorter \\
 Overshoot (level decrease) & 10-20\% & $<$5\% \\
 Constraint satisfaction & Violations & Always satisfied \\
 Control smoothness & Oscillatory & Smooth \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -979,8 +779,7 @@ Control smoothness & Oscillatory & Smooth \\
 \label{sec:examples}
 %==============================================================================
 
-\subsection{Example 1: Setting Up MPC Matrices for a Double Integrator}
-
+\begin{examplebox}[Setting Up MPC Matrices for a Double Integrator]
 \textbf{Problem}: A double integrator system (mass under force control) has dynamics:
 \begin{equation}
     \ddot{x} = u
@@ -1058,12 +857,11 @@ Computing $\mat{H}$ (showing structure):
 \end{equation}
 
 The off-diagonal coupling shows how future controls affect the current optimal decision.
+\end{examplebox}
 
-\hfill $\blacksquare$
+\begin{examplebox}[QP Formulation with Input Constraints]
 
-\subsection{Example 2: QP Formulation with Input Constraints}
-
-\textbf{Problem}: For the double integrator from Example 1, formulate the complete QP with constraints $-1 \leq u_k \leq 1$ for all $k$.
+\textbf{Problem}: For the double integrator from the previous example, formulate the complete QP with constraints $-1 \leq u_k \leq 1$ for all $k$.
 
 \textbf{Solution}:
 
@@ -1101,8 +899,7 @@ Combined inequality form:
 \end{aligned}
 }
 \end{equation}
-
-\hfill $\blacksquare$
+\end{examplebox}
 
 \subsection{Example 3: Comparing Unconstrained MPC to LQR}
 
@@ -1164,27 +961,21 @@ Using $\mat{Q} = \text{diag}(1, 0.1)$, $\mat{R} = 0.01$, and terminal cost $\mat
 
 \begin{table}[htbp]
 \centering
-\begin{tabular}{|c|c|c|}
-\hline
+\begin{tabular}{ccc}
+\toprule
 $N$ & $u_0^*$ & Cost $J$ \\
-\hline
+\midrule
 1 & -0.42 & 1.002 \\
 2 & -0.58 & 0.995 \\
 5 & -0.71 & 0.982 \\
 10 & -0.79 & 0.971 \\
 20 & -0.85 & 0.963 \\
 $\infty$ (LQR) & -0.91 & 0.958 \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Observations}:
-\begin{itemize}
-    \item Short horizons ($N=1,2$) give less aggressive control---the controller ``doesn't see'' far enough
-    \item As $N$ increases, control approaches the LQR solution
-    \item Cost decreases with horizon length (more optimization freedom)
-    \item Diminishing returns: $N=10$ captures most of the benefit
-\end{itemize}
+\textbf{Observations}: Short horizons such as $N=1$ or $N=2$ produce less aggressive control because the controller ``doesn't see'' far enough into the future. As $N$ increases, the control action approaches the LQR solution, and the cost decreases due to greater optimization freedom. However, there are diminishing returns: $N=10$ captures most of the benefit, suggesting that extremely long horizons may not justify the additional computational cost.
 
 \textbf{Practical guideline}: Choose $N$ such that open-loop predictions extend beyond the system's dominant time constant.
 
@@ -1295,108 +1086,111 @@ This procedure ensures the controller drives $\state \to \state_{\text{ref}}$ wi
 \label{sec:summary}
 %==============================================================================
 
-This chapter developed Model Predictive Control from industrial origins to mathematical rigor:
+This chapter developed Model Predictive Control from industrial origins to mathematical rigor.
 
-\begin{enumerate}
-    \item \textbf{Historical Context}: MPC emerged from 1970s petrochemical control challenges. Shell's DMC and Richalet's MPHC provided practical algorithms before complete theoretical understanding existed. The key insight was using process models for prediction and optimization for constraint handling.
+\textbf{Historical Context.} MPC emerged from 1970s petrochemical control challenges. Shell's DMC and Richalet's MPHC provided practical algorithms before complete theoretical understanding existed. The key insight was using process models for prediction and optimization for constraint handling.
 
-    \item \textbf{Modern Applications}: MPC now spans chemical processes, autonomous vehicles, building systems, and robotics---any domain requiring constraint-aware trajectory optimization.
+\textbf{Modern Applications.} MPC now spans chemical processes, autonomous vehicles, building systems, and robotics---any domain requiring constraint-aware trajectory optimization.
 
-    \item \textbf{Mathematical Foundation}: MPC solves finite-horizon optimal control problems at each sampling instant:
-    \begin{itemize}
-        \item Prediction model: $\state_{k+1} = \mat{A}\state_k + \mat{B}u_k$
-        \item Cost function: quadratic penalties on states and inputs
-        \item Constraints: input limits, state bounds, terminal conditions
-        \item Receding horizon: solve, apply first input, repeat
-    \end{itemize}
+\textbf{Mathematical Foundation.} MPC solves finite-horizon optimal control problems at each sampling instant. The approach combines a prediction model ($\state_{k+1} = \mat{A}\state_k + \mat{B}u_k$) with a cost function applying quadratic penalties on states and inputs. Constraints on inputs, states, and terminal conditions are handled explicitly. The receding horizon strategy solves the optimization, applies only the first input, and repeats at each sampling instant.
 
-    \item \textbf{QP Formulation}: Eliminating state predictions converts MPC to standard quadratic programming:
-    \begin{equation*}
-        \min_{\mathbf{U}} \frac{1}{2}\mathbf{U}^\top\mat{H}\mathbf{U} + \vect{f}^\top\mathbf{U} \quad \text{s.t.} \quad \mat{G}\mathbf{U} \leq \vect{w}
-    \end{equation*}
+\textbf{QP Formulation.} Eliminating state predictions converts MPC to standard quadratic programming:
+\begin{equation*}
+    \min_{\mathbf{U}} \frac{1}{2}\mathbf{U}^\top\mat{H}\mathbf{U} + \vect{f}^\top\mathbf{U} \quad \text{s.t.} \quad \mat{G}\mathbf{U} \leq \vect{w}
+\end{equation*}
 
-    \item \textbf{Stability}: Terminal cost or constraints ensure closed-loop stability. With appropriate terminal cost, unconstrained MPC equals LQR.
+\textbf{Stability.} Terminal cost or constraints ensure closed-loop stability. With appropriate terminal cost, unconstrained MPC equals LQR.
 
-    \item \textbf{Practical Implementation}: The tank-level experiment demonstrated MPC's graceful constraint handling compared to PID's windup problems.
-\end{enumerate}
+\textbf{Practical Implementation.} The tank-level experiment demonstrated MPC's graceful constraint handling compared to PID's windup problems.
 
-\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Key Takeaway]
+\begin{tcolorbox}[colback=yellow!10!white,colframe=orange!75!black,title=Key Takeaway,sharp corners]
 Model Predictive Control transforms control from reaction to anticipation. By predicting future behavior and optimizing over horizons while respecting constraints, MPC achieves performance impossible with classical feedback alone. The computational cost---solving an optimization at each step---is the price of this capability, now affordable for most applications thanks to modern processors.
 \end{tcolorbox}
 
+\newpage
 %==============================================================================
-\section{Problems}
-\label{sec:problems}
+\section{Exercises}
+\label{sec:exercises}
 %==============================================================================
 
-\subsection{Conceptual Problems}
+\subsection{Conceptual Exercises}
 
+\begin{exercise}
+Explain why MPC re-solves the optimization problem at every time step rather than executing the entire precomputed control sequence.
+\end{exercise}
+
+\begin{exercise}
+A colleague claims ``MPC is just optimal control, nothing new.'' Explain what distinguishes MPC from classical optimal control theory.
+\end{exercise}
+
+\begin{exercise}
+Why does MPC require positive definite $\mat{R}$ but only positive semi-definite $\mat{Q}$?
+\end{exercise}
+
+\begin{exercise}
+What happens to the MPC solution if the prediction model is perfect versus imperfect?
+\end{exercise}
+
+\subsection{Computational Exercises}
+
+\begin{exercise}
+For the system $\state_{k+1} = 0.9\state_k + 0.5u_k$ (scalar), with $Q=1$, $R=0.1$, $N=3$:
 \begin{enumerate}
-    \item Explain why MPC re-solves the optimization problem at every time step rather than executing the entire precomputed control sequence.
-
-    \item A colleague claims ``MPC is just optimal control, nothing new.'' Explain what distinguishes MPC from classical optimal control theory.
-
-    \item Why does MPC require positive definite $\mat{R}$ but only positive semi-definite $\mat{Q}$?
-
-    \item What happens to the MPC solution if the prediction model is perfect versus imperfect?
+    \item Compute the prediction matrices $\boldsymbol{\mathcal{A}}$ and $\boldsymbol{\mathcal{B}}$
+    \item Form the Hessian $\mat{H}$
+    \item Find the unconstrained optimal control sequence for $\state_0 = 1$
 \end{enumerate}
+\end{exercise}
 
-\subsection{Computational Problems}
+\begin{exercise}
+Using the system from the previous exercise, add input constraint $|u_k| \leq 0.5$. Show how the constraint affects the solution.
+\end{exercise}
 
-\begin{enumerate}[resume]
-    \item For the system $\state_{k+1} = 0.9\state_k + 0.5u_k$ (scalar), with $Q=1$, $R=0.1$, $N=3$:
-    \begin{enumerate}
-        \item Compute the prediction matrices $\boldsymbol{\mathcal{A}}$ and $\boldsymbol{\mathcal{B}}$
-        \item Form the Hessian $\mat{H}$
-        \item Find the unconstrained optimal control sequence for $\state_0 = 1$
-    \end{enumerate}
+\begin{exercise}
+For a double integrator with $T_s = 0.1$ s, design MPC parameters ($N$, $\mat{Q}$, $\mat{R}$) to achieve settling time approximately 1 second with input constraint $|u| \leq 10$.
+\end{exercise}
 
-    \item Repeat Problem 5 with input constraint $|u_k| \leq 0.5$. Show how the constraint affects the solution.
+\begin{exercise}
+Prove that the Hessian matrix $\mat{H} = \boldsymbol{\mathcal{B}}^\top\bar{\mat{Q}}\boldsymbol{\mathcal{B}} + \bar{\mat{R}}$ is positive definite when $\mat{R} \succ 0$.
+\end{exercise}
 
-    \item For a double integrator with $T_s = 0.1$ s, design MPC parameters ($N$, $\mat{Q}$, $\mat{R}$) to achieve settling time approximately 1 second with input constraint $|u| \leq 10$.
+\subsection{Analysis Exercises}
 
-    \item Prove that the Hessian matrix $\mat{H} = \boldsymbol{\mathcal{B}}^\top\bar{\mat{Q}}\boldsymbol{\mathcal{B}} + \bar{\mat{R}}$ is positive definite when $\mat{R} \succ 0$.
+\begin{exercise}
+Consider MPC with horizon $N=1$ (one step ahead). Show that this reduces to a simple state feedback law. What is the feedback gain?
+\end{exercise}
+
+\begin{exercise}
+For a marginally stable system ($\mat{A}$ has eigenvalues on the unit circle), explain why terminal constraints are particularly important for MPC stability.
+\end{exercise}
+
+\begin{exercise}
+Derive the relationship between MPC and LQR when no constraints are active. Under what conditions are they identical?
+\end{exercise}
+
+\subsection{Implementation Exercises}
+
+\begin{exercise}
+Implement MPC in MATLAB/Python for a DC motor position control system. Compare performance with PID for:
+\begin{enumerate}
+    \item Nominal step response
+    \item Step response with actuator saturation
+    \item Disturbance rejection
 \end{enumerate}
+\end{exercise}
 
-\subsection{Analysis Problems}
+\begin{exercise}
+Extend the tank-level MPC to include a constraint on maximum rate of change of pump speed (slew rate limiting).
+\end{exercise}
 
-\begin{enumerate}[resume]
-    \item Consider MPC with horizon $N=1$ (one step ahead). Show that this reduces to a simple state feedback law. What is the feedback gain?
-
-    \item For a marginally stable system ($\mat{A}$ has eigenvalues on the unit circle), explain why terminal constraints are particularly important for MPC stability.
-
-    \item Derive the relationship between MPC and LQR when no constraints are active. Under what conditions are they identical?
-\end{enumerate}
-
-\subsection{Implementation Problems}
-
-\begin{enumerate}[resume]
-    \item Implement MPC in MATLAB/Python for a DC motor position control system. Compare performance with PID for:
-    \begin{enumerate}
-        \item Nominal step response
-        \item Step response with actuator saturation
-        \item Disturbance rejection
-    \end{enumerate}
-
-    \item Extend the tank-level MPC to include a constraint on maximum rate of change of pump speed (slew rate limiting).
-
-    \item Implement an MPC controller for a simulated quadrotor hover task with thrust limits.
-\end{enumerate}
+\begin{exercise}
+Implement an MPC controller for a simulated quadrotor hover task with thrust limits.
+\end{exercise}
 
 %==============================================================================
 \section*{Further Reading}
 \addcontentsline{toc}{section}{Further Reading}
 %==============================================================================
 
-\begin{itemize}
-    \item J. M. Maciejowski, \textit{Predictive Control with Constraints}, Prentice Hall, 2002. [Excellent introduction with practical emphasis]
-
-    \item J. B. Rawlings and D. Q. Mayne, \textit{Model Predictive Control: Theory and Design}, Nob Hill Publishing, 2009. [Comprehensive theoretical treatment]
-
-    \item C. E. Garcia, D. M. Prett, and M. Morari, ``Model Predictive Control: Theory and Practice---A Survey,'' \textit{Automatica}, vol. 25, no. 3, pp. 335--348, 1989. [Classic survey paper]
-
-    \item S. J. Qin and T. A. Badgwell, ``A Survey of Industrial Model Predictive Control Technology,'' \textit{Control Engineering Practice}, vol. 11, no. 7, pp. 733--764, 2003. [Industrial applications overview]
-
-    \item F. Borrelli, A. Bemporad, and M. Morari, \textit{Predictive Control for Linear and Hybrid Systems}, Cambridge University Press, 2017. [Modern treatment with hybrid systems]
-\end{itemize}
+For an excellent introduction with practical emphasis, see J. M. Maciejowski's \textit{Predictive Control with Constraints} (Prentice Hall, 2002). A comprehensive theoretical treatment is provided by J. B. Rawlings and D. Q. Mayne in \textit{Model Predictive Control: Theory and Design} (Nob Hill Publishing, 2009). The classic survey paper by C. E. Garcia, D. M. Prett, and M. Morari, ``Model Predictive Control: Theory and Practice---A Survey,'' published in \textit{Automatica}, vol.~25, no.~3, pp.~335--348 (1989), remains an essential reference. For an overview of industrial applications, consult S. J. Qin and T. A. Badgwell's ``A Survey of Industrial Model Predictive Control Technology'' in \textit{Control Engineering Practice}, vol.~11, no.~7, pp.~733--764 (2003). A modern treatment including hybrid systems can be found in F. Borrelli, A. Bemporad, and M. Morari's \textit{Predictive Control for Linear and Hybrid Systems} (Cambridge University Press, 2017).
 

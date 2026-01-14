@@ -17,21 +17,17 @@ The development of modern control theory in the late 1950s and early 1960s broug
 
 Consider a DC motor driving a robotic arm. The state-space model requires knowledge of both position $\theta$ and angular velocity $\dot{\theta}$. While position can be measured directly with an encoder, measuring velocity precisely is far more challenging. Tachometers add cost, complexity, and mechanical coupling issues. Differentiating the position signal introduces noise that can destabilize the control system. The gap between the theoretical requirement for full-state feedback and the practical limitation of partial measurements seemed insurmountable.
 
+\begin{historicalbox}[Kalman's Dual Discovery and Luenberger's Observer (1960--1964)]
+In 1960, Rudolf Kalman published a landmark paper recognizing a beautiful duality in control mathematics: the question ``Can we drive the system anywhere?'' (controllability) is mathematically equivalent to ``Can we determine where the system has been?'' (observability). This duality meant that every theorem about controllability had a corresponding theorem about observability. Four years later, David G. Luenberger provided the practical implementation in his 1964 paper ``Observing the State of a Linear System,'' introducing the state observer that bears his name. Luenberger's key insight was elegant: if we know the system's model and have access to both input and output, we can build a ``copy'' of the system that converges to the true state by feeding back the difference between predicted and actual measurements.
+\end{historicalbox}
+
 \subsection{Kalman's Dual Discovery (1960)}
 
 In 1960, Rudolf Kalman published a landmark paper that addressed this challenge from a fundamental mathematical perspective. While developing the theory of controllability---the question of whether control inputs could steer a system to any desired state---Kalman recognized a beautiful duality in the mathematics. The question ``Can we drive the system anywhere?'' was mathematically equivalent to asking ``Can we determine where the system has been?''
 
-This second question is \textbf{observability}: given measurements of a system's outputs over some time interval, can we uniquely determine what the system's internal state was? Kalman showed that observability is the dual concept to controllability. If we define:
-\begin{itemize}
-    \item \textbf{Controllability:} Can the input $u(t)$ steer the state $x$ to any desired value?
-    \item \textbf{Observability:} Can the output history $y(\tau)$ for $\tau \in [0, t]$ reveal the initial state $x(0)$?
-\end{itemize}
+This second question is \textbf{observability}: given measurements of a system's outputs over some time interval, can we uniquely determine what the system's internal state was? Kalman showed that observability is the dual concept to controllability. \textbf{Controllability} asks whether the input $u(t)$ can steer the state $x$ to any desired value, while \textbf{observability} asks whether the output history $y(\tau)$ for $\tau \in [0, t]$ can reveal the initial state $x(0)$.
 
-Then these two properties are linked by a profound mathematical duality. For a system described by $(A, B, C, D)$:
-\begin{itemize}
-    \item The pair $(A, B)$ is controllable if and only if $(A^T, B^T)$ is observable
-    \item The pair $(A, C)$ is observable if and only if $(A^T, C^T)$ is controllable
-\end{itemize}
+These two properties are linked by a profound mathematical duality. For a system described by $(A, B, C, D)$, the pair $(A, B)$ is controllable if and only if $(A^T, B^T)$ is observable, and the pair $(A, C)$ is observable if and only if $(A^T, C^T)$ is controllable.
 
 This duality meant that every theorem about controllability had a corresponding theorem about observability, and every technique for controller design had a dual technique for observer design.
 
@@ -73,12 +69,7 @@ The fundamental insight from this historical development is both simple and prof
 \textit{If a system is observable, its complete internal state can be reconstructed from a history of output measurements, even if we can never measure those internal states directly.}
 \end{quote}
 
-This means that the requirement for state feedback does not actually require direct measurement of all states. Instead, we need only:
-\begin{enumerate}
-    \item A system that is observable (a property we can check mathematically)
-    \item An observer that uses available measurements to estimate unmeasured states
-    \item Sufficient time for the observer's estimates to converge to the true states
-\end{enumerate}
+This means that the requirement for state feedback does not actually require direct measurement of all states. Instead, we need only a system that is observable (a property we can check mathematically), an observer that uses available measurements to estimate unmeasured states, and sufficient time for the observer's estimates to converge to the true states.
 
 The development of observability theory and state observers transformed state-space control from an elegant but impractical theory into a practical engineering discipline that underlies much of modern control system design.
 
@@ -98,12 +89,7 @@ A GPS receiver implements a state estimator that tracks not only the receiver's 
 
 Electric motor drives routinely estimate velocity from position encoder measurements. While encoders provide precise position information, directly differentiating the encoder signal to obtain velocity produces a noisy, quantized signal that is unsuitable for high-performance velocity control.
 
-Instead, modern motor drives implement velocity observers that combine the encoder position with knowledge of the motor's electrical and mechanical dynamics. The observer produces a smooth velocity estimate that enables tight servo performance. This approach is particularly important in applications such as:
-\begin{itemize}
-    \item Industrial robots requiring precise velocity control for smooth motion
-    \item Disk drive head positioning requiring vibration-free settling
-    \item Electric vehicle traction motors requiring smooth torque delivery
-\end{itemize}
+Instead, modern motor drives implement velocity observers that combine the encoder position with knowledge of the motor's electrical and mechanical dynamics. The observer produces a smooth velocity estimate that enables tight servo performance. This approach is particularly important in industrial robots requiring precise velocity control for smooth motion, disk drive head positioning requiring vibration-free settling, and electric vehicle traction motors requiring smooth torque delivery.
 
 We will implement exactly such an observer in the practical experiment section of this chapter.
 
@@ -133,16 +119,26 @@ We consider a linear time-invariant (LTI) continuous-time system in state-space 
 y(t) &= Cx(t) + Du(t) \label{eq:output_equation}
 \end{align}
 
-where:
-\begin{itemize}
-    \item $x(t) \in \mathbb{R}^n$ is the state vector
-    \item $u(t) \in \mathbb{R}^m$ is the input vector
-    \item $y(t) \in \mathbb{R}^p$ is the output vector
-    \item $A \in \mathbb{R}^{n \times n}$ is the system matrix
-    \item $B \in \mathbb{R}^{n \times m}$ is the input matrix
-    \item $C \in \mathbb{R}^{p \times n}$ is the output matrix
-    \item $D \in \mathbb{R}^{p \times m}$ is the feedthrough matrix
-\end{itemize}
+The variables and matrices are defined in Table~\ref{tab:state_space_variables}.
+
+\begin{table}[ht]
+\centering
+\caption{State-Space System Variables and Matrices}
+\label{tab:state_space_variables}
+\begin{tabular}{@{}cl@{}}
+\toprule
+\textbf{Symbol} & \textbf{Description} \\
+\midrule
+$x(t) \in \mathbb{R}^n$ & State vector \\
+$u(t) \in \mathbb{R}^m$ & Input vector \\
+$y(t) \in \mathbb{R}^p$ & Output vector \\
+$A \in \mathbb{R}^{n \times n}$ & System matrix \\
+$B \in \mathbb{R}^{n \times m}$ & Input matrix \\
+$C \in \mathbb{R}^{p \times n}$ & Output matrix \\
+$D \in \mathbb{R}^{p \times m}$ & Feedthrough matrix \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 For the study of observability, we focus on the pair $(A, C)$. The input $u(t)$ is assumed known, and for simplicity in developing the theory, we often set $u(t) = 0$ and $D = 0$.
 
@@ -282,12 +278,7 @@ The observer is a dynamical system that runs alongside (or in software, simulati
 \label{eq:luenberger_observer}
 \end{equation}
 
-where:
-\begin{itemize}
-    \item $\hat{x}(t) \in \mathbb{R}^n$ is the estimated state
-    \item $L \in \mathbb{R}^{n \times p}$ is the observer gain matrix
-    \item $y - C\hat{x}$ is the \textbf{output estimation error} (or ``innovation'')
-\end{itemize}
+In this equation, $\hat{x}(t) \in \mathbb{R}^n$ is the estimated state, $L \in \mathbb{R}^{n \times p}$ is the observer gain matrix, and the term $y - C\hat{x}$ is the \textbf{output estimation error} (or ``innovation'').
 
 The observer can be rewritten as:
 \begin{equation}
@@ -340,13 +331,7 @@ Since a matrix and its transpose have identical eigenvalues, setting $L = K_d^T$
 
 \textbf{Practical Considerations for Observer Pole Placement:}
 
-\begin{enumerate}
-    \item \textbf{Faster than the controller:} Observer poles are typically placed 2--10 times faster than the controller poles, ensuring that the state estimates converge before they significantly affect control performance.
-
-    \item \textbf{Not too fast:} Extremely fast observer poles amplify measurement noise. There is a fundamental trade-off between convergence speed and noise sensitivity.
-
-    \item \textbf{Dominant poles:} If the plant has stable but slow modes, the observer must be faster than those modes to estimate the corresponding states before they contribute significantly to the response.
-\end{enumerate}
+Several practical considerations guide the selection of observer pole locations. First, observer poles should be placed faster than the controller poles, typically 2--10 times faster, ensuring that the state estimates converge before they significantly affect control performance. However, extremely fast observer poles amplify measurement noise, creating a fundamental trade-off between convergence speed and noise sensitivity. Finally, if the plant has stable but slow modes, the observer must be faster than those modes to estimate the corresponding states before they contribute significantly to the response.
 
 \subsection{Observer Design by Pole Placement}
 
@@ -360,33 +345,25 @@ L = \alpha_o(A) \mathcal{O}^{-1} \begin{bmatrix} 0 \\ 0 \\ \vdots \\ 0 \\ 1 \end
 
 where $\alpha_o(s) = (s - \lambda_1)(s - \lambda_2) \cdots (s - \lambda_n)$ is the desired observer characteristic polynomial and $\mathcal{O}$ is the observability matrix.
 
-\textbf{MATLAB Implementation:}
-\begin{lstlisting}[language=Matlab, caption={Observer pole placement in MATLAB}]
-% System matrices
-A = [0 1; -2 -3];
-C = [1 0];
-
-% Desired observer poles (faster than controller poles)
-observer_poles = [-10, -12];
-
-% Observer gain using place() or acker()
-L = place(A', C', observer_poles)';
-
-% Verify eigenvalues of A-LC
-eig(A - L*C)
-\end{lstlisting}
+\begin{algorithm}
+\caption{Observer Pole Placement}
+\begin{algorithmic}[1]
+\Require System matrices $A$, $C$; desired observer poles $\lambda_1, \lambda_2, \ldots, \lambda_n$
+\Ensure Observer gain matrix $L$
+\State Define system matrix $A$ and output matrix $C$
+\State Specify desired observer pole locations (faster than controller poles)
+\State Compute observer gain: $L \leftarrow \textsc{Place}(A^T, C^T, \text{poles})^T$
+\State Verify eigenvalues of $(A - LC)$ match desired poles
+\State \Return $L$
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{The Separation Principle}
 
 A crucial question arises when combining state-feedback control with state estimation: does using estimated states instead of true states affect stability or performance guarantees? The separation principle provides a reassuring answer.
 
 \begin{theorem}[Separation Principle]
-Consider a state-feedback controller $u = -Kx$ designed assuming access to the true state $x$. When implemented using the estimated state from an asymptotically stable observer, $u = -K\hat{x}$, the closed-loop system remains stable if and only if both:
-\begin{enumerate}
-    \item The state feedback $(A - BK)$ is stable
-    \item The observer $(A - LC)$ is stable
-\end{enumerate}
-Furthermore, the closed-loop eigenvalues are the union of the controller eigenvalues and the observer eigenvalues.
+Consider a state-feedback controller $u = -Kx$ designed assuming access to the true state $x$. When implemented using the estimated state from an asymptotically stable observer, $u = -K\hat{x}$, the closed-loop system remains stable if and only if both the state feedback $(A - BK)$ and the observer $(A - LC)$ are stable. Furthermore, the closed-loop eigenvalues are the union of the controller eigenvalues and the observer eigenvalues.
 \end{theorem}
 
 \begin{proof}
@@ -460,14 +437,7 @@ In this experiment, we implement a Luenberger observer to estimate the angular v
 
 \subsection{Required Equipment}
 
-\begin{itemize}
-    \item DC motor with quadrature encoder (e.g., Pololu 37D gearmotor with 64 CPR encoder)
-    \item Motor driver (L298N or similar H-bridge)
-    \item Arduino Mega or similar microcontroller
-    \item Power supply appropriate for motor
-    \item Oscilloscope or data logging capability
-    \item Computer with Arduino IDE and MATLAB/Python for analysis
-\end{itemize}
+The experiment requires the following equipment: a DC motor with quadrature encoder (such as a Pololu 37D gearmotor with 64 CPR encoder), a motor driver (L298N or similar H-bridge), an Arduino Mega or similar microcontroller, a power supply appropriate for the motor, an oscilloscope or data logging capability, and a computer with Arduino IDE and MATLAB/Python for analysis.
 
 \subsection{Motor Model}
 
@@ -532,157 +502,70 @@ l_2 + al_1 &= 3000 \implies l_2 = 3000 - 10 \times 100 = 2000
 
 So $L = \begin{bmatrix} 100 \\ 2000 \end{bmatrix}$.
 
-\subsection{Arduino Implementation}
+\subsection{Microcontroller Implementation}
 
-\begin{lstlisting}[language=C, caption={Velocity observer implementation on Arduino}]
-// Motor Velocity Observer
-// Estimates angular velocity from encoder position only
+The following algorithms describe the implementation of the velocity observer on a microcontroller. The implementation consists of three main components: initialization, encoder reading, and the observer update routine.
 
-// Encoder pins
-#define ENCODER_A 2
-#define ENCODER_B 3
-#define MOTOR_PWM 9
-#define MOTOR_DIR 8
+\begin{algorithm}
+\caption{Motor Velocity Observer -- Initialization}
+\begin{algorithmic}[1]
+\Require System parameters $a$, $b$; observer gains $L_1$, $L_2$; sample time $T_s$
+\State Initialize serial communication for data logging
+\State Configure encoder pins as inputs with pull-up resistors
+\State Configure motor PWM and direction pins as outputs
+\State Attach interrupt handlers to encoder channels A and B
+\State Configure timer for fixed sample rate (e.g., 1 kHz)
+\State Initialize state estimates: $\hat{\theta} \leftarrow 0$, $\hat{\omega} \leftarrow 0$
+\State Initialize comparison variables: $\theta_{prev} \leftarrow 0$, $\omega_{deriv} \leftarrow 0$
+\end{algorithmic}
+\end{algorithm}
 
-// System parameters (identified experimentally)
-const float a = 10.0;    // Damping coefficient (1/s)
-const float b = 50.0;    // Input coefficient (rad/s^2/V)
+\begin{algorithm}
+\caption{Quadrature Encoder Interrupt Service Routine}
+\begin{algorithmic}[1]
+\Require Current encoder channel states A, B
+\State Read current state: $s \leftarrow (A \ll 1) \lor B$
+\State Look up increment from state transition table using previous and current states
+\State Update encoder count: $\text{count} \leftarrow \text{count} + \text{increment}$
+\State Store current state for next interrupt
+\end{algorithmic}
+\end{algorithm}
 
-// Observer gains
-const float L1 = 100.0;
-const float L2 = 2000.0;
-
-// Sample time
-const float Ts = 0.001;  // 1 ms sample time
-
-// Encoder variables
-volatile long encoderCount = 0;
-const float countsPerRev = 64.0 * 19.0; // 64 CPR * 19:1 gear ratio
-const float countsPerRad = countsPerRev / (2.0 * PI);
-
-// State estimates
-float theta_hat = 0;
-float omega_hat = 0;
-
-// Previous values for numerical derivative (comparison)
-float theta_prev = 0;
-float omega_derivative = 0;
-
-// Control input (0-255 PWM corresponds to 0-12V)
-float voltage = 0;
-
-void setup() {
-    Serial.begin(115200);
-
-    pinMode(ENCODER_A, INPUT_PULLUP);
-    pinMode(ENCODER_B, INPUT_PULLUP);
-    pinMode(MOTOR_PWM, OUTPUT);
-    pinMode(MOTOR_DIR, OUTPUT);
-
-    attachInterrupt(digitalPinToInterrupt(ENCODER_A), encoderISR, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_B), encoderISR, CHANGE);
-
-    // Initialize timer for fixed sample rate
-    // Timer1 setup for 1kHz interrupt
-    noInterrupts();
-    TCCR1A = 0;
-    TCCR1B = 0;
-    TCNT1 = 0;
-    OCR1A = 15999;  // 16MHz / 1000Hz - 1
-    TCCR1B |= (1 << WGM12);  // CTC mode
-    TCCR1B |= (1 << CS10);   // No prescaler
-    TIMSK1 |= (1 << OCIE1A); // Enable compare interrupt
-    interrupts();
-}
-
-void loop() {
-    // Main loop can handle serial communication
-    // Control loop runs in timer interrupt
-
-    // Print data for analysis
-    static unsigned long lastPrint = 0;
-    if (millis() - lastPrint >= 10) {
-        lastPrint = millis();
-        Serial.print(theta_hat, 4);
-        Serial.print(",");
-        Serial.print(omega_hat, 4);
-        Serial.print(",");
-        Serial.print(omega_derivative, 4);
-        Serial.print(",");
-        Serial.println(voltage, 4);
-    }
-}
-
-void encoderISR() {
-    // Quadrature decoding
-    static uint8_t lastState = 0;
-    uint8_t state = (digitalRead(ENCODER_A) << 1) | digitalRead(ENCODER_B);
-
-    static const int8_t stateTable[4][4] = {
-        { 0, -1,  1,  0},
-        { 1,  0,  0, -1},
-        {-1,  0,  0,  1},
-        { 0,  1, -1,  0}
-    };
-
-    encoderCount += stateTable[lastState][state];
-    lastState = state;
-}
-
-ISR(TIMER1_COMPA_vect) {
-    // Fixed 1kHz sample rate
-
-    // Read position measurement
-    float theta_measured = encoderCount / countsPerRad;
-
-    // Numerical derivative for comparison (with low-pass filter)
-    float alpha = 0.2;  // Low-pass filter coefficient
-    float omega_raw = (theta_measured - theta_prev) / Ts;
-    omega_derivative = alpha * omega_raw + (1 - alpha) * omega_derivative;
-    theta_prev = theta_measured;
-
-    // === LUENBERGER OBSERVER ===
-    // Prediction step
-    float theta_hat_dot = omega_hat;
-    float omega_hat_dot = -a * omega_hat + b * voltage;
-
-    // Innovation (measurement error)
-    float innovation = theta_measured - theta_hat;
-
-    // Correction step
-    theta_hat_dot += L1 * innovation;
-    omega_hat_dot += L2 * innovation;
-
-    // Integration (Euler method)
-    theta_hat += theta_hat_dot * Ts;
-    omega_hat += omega_hat_dot * Ts;
-
-    // === CONTROL (example: step response) ===
-    static unsigned long stepTime = 0;
-    if (millis() - stepTime > 2000) {
-        stepTime = millis();
-        voltage = (voltage > 0) ? 0 : 6.0;  // Toggle between 0 and 6V
-    }
-
-    // Apply control to motor
-    digitalWrite(MOTOR_DIR, voltage >= 0 ? HIGH : LOW);
-    analogWrite(MOTOR_PWM, constrain(abs(voltage) * 255.0 / 12.0, 0, 255));
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Luenberger Observer Update (Timer ISR)}
+\begin{algorithmic}[1]
+\Require Encoder count, system parameters $a$, $b$, observer gains $L_1$, $L_2$, sample time $T_s$
+\State \textbf{// Read position measurement}
+\State $\theta_{meas} \leftarrow \text{count} / \text{countsPerRad}$
+\State
+\State \textbf{// Numerical derivative with low-pass filter (for comparison)}
+\State $\omega_{raw} \leftarrow (\theta_{meas} - \theta_{prev}) / T_s$
+\State $\omega_{deriv} \leftarrow \alpha \cdot \omega_{raw} + (1 - \alpha) \cdot \omega_{deriv}$ \Comment{$\alpha \approx 0.2$}
+\State $\theta_{prev} \leftarrow \theta_{meas}$
+\State
+\State \textbf{// Luenberger Observer}
+\State \textbf{Prediction step:}
+\State $\dot{\hat{\theta}} \leftarrow \hat{\omega}$
+\State $\dot{\hat{\omega}} \leftarrow -a \cdot \hat{\omega} + b \cdot V$
+\State
+\State \textbf{Correction step:}
+\State $\text{innovation} \leftarrow \theta_{meas} - \hat{\theta}$
+\State $\dot{\hat{\theta}} \leftarrow \dot{\hat{\theta}} + L_1 \cdot \text{innovation}$
+\State $\dot{\hat{\omega}} \leftarrow \dot{\hat{\omega}} + L_2 \cdot \text{innovation}$
+\State
+\State \textbf{Integration (Euler method):}
+\State $\hat{\theta} \leftarrow \hat{\theta} + \dot{\hat{\theta}} \cdot T_s$
+\State $\hat{\omega} \leftarrow \hat{\omega} + \dot{\hat{\omega}} \cdot T_s$
+\State
+\State \textbf{// Apply control signal to motor}
+\State Set motor direction based on sign of $V$
+\State Set motor PWM proportional to $|V|$
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Experimental Procedure}
 
-\begin{enumerate}
-    \item \textbf{System Identification:} Apply step inputs and measure the motor's response to identify parameters $a$ and $b$.
-
-    \item \textbf{Observer Implementation:} Upload the observer code and run step response experiments.
-
-    \item \textbf{Data Collection:} Log the estimated velocity $\hat{\omega}$, the numerical derivative $\omega_{deriv}$, and the applied voltage.
-
-    \item \textbf{Comparison:} Plot both velocity estimates. The observer estimate should be significantly smoother than the numerical derivative.
-
-    \item \textbf{Initial Condition Test:} Initialize the observer with a large error (e.g., $\hat{\theta}(0) = 0$, $\hat{\omega}(0) = 100$) and observe convergence to the true state.
-\end{enumerate}
+The experimental procedure consists of five phases. Begin with \textbf{system identification} by applying step inputs and measuring the motor's response to identify parameters $a$ and $b$. Next, proceed with \textbf{observer implementation} by uploading the observer code and running step response experiments. During \textbf{data collection}, log the estimated velocity $\hat{\omega}$, the numerical derivative $\omega_{deriv}$, and the applied voltage. For \textbf{comparison}, plot both velocity estimates; the observer estimate should be significantly smoother than the numerical derivative. Finally, conduct an \textbf{initial condition test} by initializing the observer with a large error (e.g., $\hat{\theta}(0) = 0$, $\hat{\omega}(0) = 100$) and observing convergence to the true state.
 
 \subsection{Expected Results}
 
@@ -721,12 +604,7 @@ ISR(TIMER1_COMPA_vect) {
 \label{fig:observer_comparison}
 \end{figure}
 
-Key observations:
-\begin{itemize}
-    \item The observer estimate converges to the true velocity within approximately $5/(50) = 0.1$ seconds (five time constants of the observer).
-    \item The numerical derivative is noisy, especially during rapid changes.
-    \item The observer provides smooth estimates suitable for feedback control.
-\end{itemize}
+Several key observations emerge from this comparison. The observer estimate converges to the true velocity within approximately $5/(50) = 0.1$ seconds (five time constants of the observer). The numerical derivative is noisy, especially during rapid changes. In contrast, the observer provides smooth estimates suitable for feedback control.
 
 %% ============================================================================
 \section{Block Diagrams}
@@ -736,7 +614,8 @@ Key observations:
 
 \begin{figure}[ht]
 \centering
-\begin{tikzpicture}[auto, node distance=2cm, >=latex']
+\begin{tikzpicture}[auto, node distance=2cm, >=latex',
+    block/.append style={sharp corners}]
     % Plant
     \node [block, minimum width=2.5cm, minimum height=1.5cm] (plant) {Plant\\$\dot{x} = Ax + Bu$\\$y = Cx$};
 
@@ -788,7 +667,8 @@ Key observations:
 
 \begin{figure}[ht]
 \centering
-\begin{tikzpicture}[auto, node distance=2cm, >=latex']
+\begin{tikzpicture}[auto, node distance=2cm, >=latex',
+    block/.append style={sharp corners}]
     % Reference
     \node [input] (ref) {};
     \node [above=0.2cm of ref] {$r$};
@@ -878,8 +758,7 @@ Key observations:
 \section{Worked Examples}
 %% ============================================================================
 
-\subsection{Example 1: Checking Observability}
-
+\begin{examplebox}[Checking Observability of a Third-Order System]
 \textbf{Problem:} Determine whether the following system is observable:
 \begin{equation}
 A = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -6 & -11 & -6 \end{bmatrix}, \quad
@@ -914,10 +793,11 @@ The observability matrix is the $3 \times 3$ identity matrix, so $\text{rank}(\m
 \textbf{Conclusion:} The system is \textbf{observable}.
 
 \textit{Remark:} This system is in \textbf{observer canonical form}. Systems in this form are always observable, just as systems in controller canonical form are always controllable.
+\end{examplebox}
 
 \hrulefill
 
-\subsection{Example 2: Luenberger Observer Design}
+\begin{examplebox}[Luenberger Observer Design for DC Motor]
 
 \textbf{Problem:} Design a Luenberger observer for the DC motor system with desired observer poles at $s = -40$ and $s = -50$.
 
@@ -963,6 +843,7 @@ Step 5: Match coefficients:
 \begin{equation}
 \boxed{L = \begin{bmatrix} 80 \\ 1200 \end{bmatrix}}
 \end{equation}
+\end{examplebox}
 
 \hrulefill
 
@@ -1037,11 +918,7 @@ Since they have the same rank (both full rank), the duality is verified: $(A, B)
 
 \subsection{Example 4: Observer-Based Controller Design}
 
-\textbf{Problem:} For the system in Example 2, design a complete observer-based controller with:
-\begin{itemize}
-    \item Controller poles at $s = -5 \pm 5j$
-    \item Observer poles at $s = -40$ and $s = -50$ (already computed in Example 2)
-\end{itemize}
+\textbf{Problem:} For the system in Example 2, design a complete observer-based controller with controller poles at $s = -5 \pm 5j$ and observer poles at $s = -40$ and $s = -50$ (already computed in Example 2).
 
 \textbf{Solution:}
 
@@ -1103,23 +980,13 @@ u &= -\begin{bmatrix} 1 & 0 \end{bmatrix} \hat{x} = -\hat{x}_1
 
 Step 4: Verify closed-loop poles (separation principle).
 
-The closed-loop eigenvalues are:
-\begin{itemize}
-    \item Controller poles: $-5 \pm 5j$ (eigenvalues of $A - BK$)
-    \item Observer poles: $-40, -50$ (eigenvalues of $A - LC$)
-\end{itemize}
-
-All four eigenvalues have negative real parts, confirming stability.
+The closed-loop eigenvalues consist of the controller poles at $-5 \pm 5j$ (eigenvalues of $A - BK$) and the observer poles at $-40$ and $-50$ (eigenvalues of $A - LC$). All four eigenvalues have negative real parts, confirming stability.
 
 \hrulefill
 
 \subsection{Example 5: Observer Convergence Rate Analysis}
 
-\textbf{Problem:} For the observer designed in Example 2 with $L = [80; 1200]^T$, determine:
-\begin{enumerate}
-    \item[(a)] The time for the estimation error to decay to 1\% of its initial value
-    \item[(b)] The effect of doubling the observer gains on convergence time
-\end{enumerate}
+\textbf{Problem:} For the observer designed in Example 2 with $L = [80; 1200]^T$, determine (a) the time for the estimation error to decay to 1\% of its initial value, and (b) the effect of doubling the observer gains on convergence time.
 
 \textbf{Solution:}
 
@@ -1274,94 +1141,113 @@ This chapter introduced the fundamental concept of observability and the practic
 
 \subsection{Key Concepts}
 
-\begin{enumerate}
-    \item \textbf{Observability} answers the question: can we determine the system's internal state from measurements of its output?
+\textbf{Observability} answers the fundamental question: can we determine the system's internal state from measurements of its output? The \textbf{observability matrix} $\mathcal{O} = [C; CA; \ldots; CA^{n-1}]^T$ provides a test for this property---a system is observable if and only if $\text{rank}(\mathcal{O}) = n$.
 
-    \item The \textbf{observability matrix} $\mathcal{O} = [C; CA; \ldots; CA^{n-1}]^T$ provides a test: a system is observable if and only if $\text{rank}(\mathcal{O}) = n$.
+A key theoretical insight is the \textbf{duality} between observability and controllability: $(A, C)$ is observable if and only if $(A^T, C^T)$ is controllable. This duality connects the two fundamental structural properties of linear systems.
 
-    \item \textbf{Duality:} Observability is the dual of controllability. $(A, C)$ observable $\Leftrightarrow$ $(A^T, C^T)$ controllable.
+The \textbf{Luenberger observer} estimates unmeasured states using the equation:
+\begin{equation}
+\dot{\hat{x}} = A\hat{x} + Bu + L(y - C\hat{x})
+\end{equation}
+The estimation error dynamics are governed by $(A - LC)$, and the observer gain $L$ can be designed to place the eigenvalues at any desired locations if the system is observable.
 
-    \item The \textbf{Luenberger observer} estimates unmeasured states using the equation:
-    \begin{equation}
-    \dot{\hat{x}} = A\hat{x} + Bu + L(y - C\hat{x})
-    \end{equation}
-
-    \item The estimation error dynamics are governed by $(A - LC)$, and the observer gain $L$ can be designed to place the eigenvalues at any desired locations if the system is observable.
-
-    \item The \textbf{separation principle} allows independent design of controller ($K$) and observer ($L$); the combined system's eigenvalues are the union of the two sets.
-
-    \item Observer poles should be faster than controller poles (typically 2--10 times) but not so fast as to amplify measurement noise excessively.
-\end{enumerate}
+The \textbf{separation principle} allows independent design of the controller gain $K$ and observer gain $L$; the combined closed-loop system's eigenvalues are simply the union of the controller and observer eigenvalues. In practice, observer poles should be placed faster than controller poles (typically 2--10 times) but not so fast as to amplify measurement noise excessively.
 
 \subsection{Design Procedure}
 
-\begin{enumerate}
-    \item Verify observability using the rank condition.
-    \item Select desired observer pole locations (faster than controller poles).
-    \item Compute observer gain $L$ using pole placement (Ackermann's formula, place command, or manual coefficient matching).
-    \item Implement the observer in software or hardware.
-    \item Use estimated states for state-feedback control: $u = -K\hat{x}$.
-\end{enumerate}
+The observer design procedure follows a systematic approach. First, verify observability using the rank condition on the observability matrix. Then select desired observer pole locations, ensuring they are faster than the controller poles. Next, compute the observer gain $L$ using pole placement methods such as Ackermann's formula, the \texttt{place} command, or manual coefficient matching. Implement the observer in software or hardware, and finally use the estimated states for state-feedback control via $u = -K\hat{x}$.
 
 \subsection{Looking Ahead}
 
 The Luenberger observer assumes perfect knowledge of the system model and deterministic operation. In Chapter 17, we will study the Linear Quadratic Regulator (LQR), which provides optimal state feedback. In Chapter 18, we will introduce the Kalman filter, which extends the observer concept to handle model uncertainty and measurement noise optimally.
 
 %% ============================================================================
-\section{Problems}
+\newpage
+\section{Exercises}
 %% ============================================================================
 
+\begin{exercise}
+Consider the system with:
+\begin{equation}
+A = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -1 & -3 & -3 \end{bmatrix}, \quad
+C = \begin{bmatrix} 1 & 0 & 0 \end{bmatrix}
+\end{equation}
 \begin{enumerate}
-    \item Consider the system with:
-    \begin{equation}
-    A = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -1 & -3 & -3 \end{bmatrix}, \quad
-    C = \begin{bmatrix} 1 & 0 & 0 \end{bmatrix}
-    \end{equation}
-    \begin{enumerate}
-        \item[(a)] Determine whether the system is observable.
-        \item[(b)] If observable, design an observer with all poles at $s = -10$.
-    \end{enumerate}
-
-    \item For the double integrator $\ddot{y} = u$ with output $y$ (position only):
-    \begin{enumerate}
-        \item[(a)] Write the state-space model.
-        \item[(b)] Check observability.
-        \item[(c)] Design an observer with poles at $s = -5 \pm 5j$.
-        \item[(d)] Simulate the observer response to an initial position error of 1 meter.
-    \end{enumerate}
-
-    \item Prove that a system in observer canonical form is always observable.
-
-    \item A system has open-loop poles at $s = -1$ and $s = -2$, and a controller has been designed with closed-loop poles at $s = -5 \pm 3j$. What observer pole locations would you recommend, and why?
-
-    \item For the observer-based controller in Example 4:
-    \begin{enumerate}
-        \item[(a)] Write the compensator as a transfer function from $y$ to $u$.
-        \item[(b)] Sketch the Bode plot of the compensator.
-        \item[(c)] Analyze the stability margins of the closed-loop system.
-    \end{enumerate}
-
-    \item Consider a system with:
-    \begin{equation}
-    A = \begin{bmatrix} -1 & 0 & 0 \\ 0 & -2 & 0 \\ 1 & 1 & -3 \end{bmatrix}, \quad
-    C = \begin{bmatrix} 0 & 0 & 1 \end{bmatrix}
-    \end{equation}
-    \begin{enumerate}
-        \item[(a)] Determine observability.
-        \item[(b)] Identify any unobservable modes.
-        \item[(c)] What physical interpretation might explain why these modes are unobservable?
-    \end{enumerate}
-
-    \item (Computer Exercise) Implement the motor velocity observer from the practical experiment in MATLAB/Simulink. Add measurement noise to the position signal and compare the noise sensitivity of:
-    \begin{enumerate}
-        \item[(a)] Numerical differentiation
-        \item[(b)] Numerical differentiation with low-pass filter
-        \item[(c)] Luenberger observer with different pole locations
-    \end{enumerate}
-    Plot the trade-off between convergence speed and noise amplification.
-
-    \item Derive the transfer function from measurement $y$ to state estimate $\hat{x}$ for a Luenberger observer. Show that as the observer poles approach infinity (infinitely fast observer), this transfer function approaches the ``pseudo-inverse'' relationship $\hat{x} \approx \mathcal{O}^{-1}[y; \dot{y}; \ldots]$.
+    \item[(a)] Determine whether the system is observable.
+    \item[(b)] If observable, design an observer with all poles at $s = -10$.
 \end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+For the double integrator $\ddot{y} = u$ with output $y$ (position only):
+\begin{enumerate}
+    \item[(a)] Write the state-space model.
+    \item[(b)] Check observability.
+    \item[(c)] Design an observer with poles at $s = -5 \pm 5j$.
+    \item[(d)] Simulate the observer response to an initial position error of 1 meter.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Prove that a system in observer canonical form is always observable.
+\end{exercise}
+
+\begin{exercise}
+A system has open-loop poles at $s = -1$ and $s = -2$, and a controller has been designed with closed-loop poles at $s = -5 \pm 3j$. What observer pole locations would you recommend, and why?
+\end{exercise}
+
+\begin{exercise}
+For the observer-based controller in Example 4:
+\begin{enumerate}
+    \item[(a)] Write the compensator as a transfer function from $y$ to $u$.
+    \item[(b)] Sketch the Bode plot of the compensator.
+    \item[(c)] Analyze the stability margins of the closed-loop system.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Consider a system with:
+\begin{equation}
+A = \begin{bmatrix} -1 & 0 & 0 \\ 0 & -2 & 0 \\ 1 & 1 & -3 \end{bmatrix}, \quad
+C = \begin{bmatrix} 0 & 0 & 1 \end{bmatrix}
+\end{equation}
+\begin{enumerate}
+    \item[(a)] Determine observability.
+    \item[(b)] Identify any unobservable modes.
+    \item[(c)] What physical interpretation might explain why these modes are unobservable?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+(Computer Exercise) Implement the motor velocity observer from the practical experiment in MATLAB/Simulink. Add measurement noise to the position signal and compare the noise sensitivity of:
+\begin{enumerate}
+    \item[(a)] Numerical differentiation
+    \item[(b)] Numerical differentiation with low-pass filter
+    \item[(c)] Luenberger observer with different pole locations
+\end{enumerate}
+Plot the trade-off between convergence speed and noise amplification.
+\end{exercise}
+
+\begin{exercise}
+Derive the transfer function from measurement $y$ to state estimate $\hat{x}$ for a Luenberger observer. Show that as the observer poles approach infinity (infinitely fast observer), this transfer function approaches the ``pseudo-inverse'' relationship $\hat{x} \approx \mathcal{O}^{-1}[y; \dot{y}; \ldots]$.
+\end{exercise}
+
+\begin{exercise}
+Consider a system where the output is a linear combination of states:
+\begin{equation}
+A = \begin{bmatrix} -2 & 1 \\ 0 & -3 \end{bmatrix}, \quad
+C = \begin{bmatrix} 1 & 1 \end{bmatrix}
+\end{equation}
+\begin{enumerate}
+    \item[(a)] Verify the system is observable.
+    \item[(b)] Design an observer with poles at $s = -10$ and $s = -12$.
+    \item[(c)] Compare the transient response of this observer with one having poles at $s = -5$ and $s = -6$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+\textbf{(Reduced-Order Observer)} For a second-order system where position is measured but velocity is not, design a first-order reduced-order observer that estimates only the unmeasured velocity state. Compare its performance with a full-order observer.
+\end{exercise}
 
 %% ============================================================================
 %% End of Chapter 16

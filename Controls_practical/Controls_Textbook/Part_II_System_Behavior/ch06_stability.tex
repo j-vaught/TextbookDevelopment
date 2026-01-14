@@ -73,6 +73,7 @@ The hunting problem was not merely an annoyance; it represented a fundamental li
 
 \subsection{Maxwell's ``On Governors'' (1868)}
 
+\begin{historicalbox}[Maxwell and the Birth of Control Theory]
 The breakthrough came from an unlikely source: James Clerk Maxwell, already famous for unifying electricity and magnetism, turned his attention to the governor problem in 1868. His paper ``On Governors,'' published in the Proceedings of the Royal Society of London, is now recognized as the founding document of control theory.
 
 Maxwell approached the problem with the tools of mathematical physics. He wrote the equations of motion for the governor-engine system as a set of linear differential equations and asked: under what conditions do small disturbances die out over time? This was the first rigorous formulation of the stability problem.
@@ -84,6 +85,7 @@ For second and third-order systems, Maxwell derived explicit conditions on the c
 \begin{quote}
 \textit{``The great difficulty of this theory lies in the determination of the conditions of stability of the motion... I am not aware of any method of determining the nature of the roots of an equation of a higher degree than the third.''}
 \end{quote}
+\end{historicalbox}
 
 \subsection{Routh's Criterion (1877)}
 
@@ -576,43 +578,43 @@ For a more dynamic demonstration, we can use an Arduino microcontroller to imple
 \caption{Motor Position Control with Adjustable Gain}
 \label{alg:motor_control}
 \begin{algorithmic}[1]
-\STATE \textbf{Initialize:}
-\STATE \hspace{1em} Configure PWM output pin and direction pin
-\STATE \hspace{1em} Configure encoder input pins with interrupts
-\STATE \hspace{1em} Set $\textit{encoderCount} \gets 0$
-\STATE \hspace{1em} Set $\textit{setpoint} \gets 0$
-\STATE \hspace{1em} Set $K_p \gets 1.0$ \COMMENT{Proportional gain}
-\STATE
-\STATE \textbf{Main Control Loop:}
-\WHILE{system is running}
-    \IF{command received from user interface}
-        \IF{command is ``set gain''}
-            \STATE $K_p \gets \text{new gain value}$
-        \ELSIF{command is ``set position''}
-            \STATE $\textit{setpoint} \gets \text{new position value}$
-        \ENDIF
-    \ENDIF
-    \STATE
-    \STATE \COMMENT{Proportional controller calculation}
-    \STATE $\textit{error} \gets \textit{setpoint} - \textit{encoderCount}$
-    \STATE $\textit{output} \gets K_p \times \textit{error}$
-    \STATE
-    \STATE \COMMENT{Apply control signal to motor}
-    \STATE $\textit{pwm} \gets \min(\max(|\textit{output}|, 0), 255)$
-    \STATE Set motor direction based on $\text{sign}(\textit{output})$
-    \STATE Apply PWM signal to motor driver
-    \STATE
-    \STATE \COMMENT{Log data for analysis}
-    \STATE Output: timestamp, setpoint, encoderCount
-    \STATE Wait for next control cycle (10 ms period)
-\ENDWHILE
-\STATE
-\STATE \textbf{Encoder Interrupt Handler:}
-\IF{encoder channel B is high}
-    \STATE $\textit{encoderCount} \gets \textit{encoderCount} + 1$
-\ELSE
-    \STATE $\textit{encoderCount} \gets \textit{encoderCount} - 1$
-\ENDIF
+\State \textbf{Initialize:}
+\State \hspace{1em} Configure PWM output pin and direction pin
+\State \hspace{1em} Configure encoder input pins with interrupts
+\State \hspace{1em} Set $\textit{encoderCount} \gets 0$
+\State \hspace{1em} Set $\textit{setpoint} \gets 0$
+\State \hspace{1em} Set $K_p \gets 1.0$ \Comment{Proportional gain}
+\State
+\State \textbf{Main Control Loop:}
+\While{system is running}
+    \If{command received from user interface}
+        \If{command is ``set gain''}
+            \State $K_p \gets \text{new gain value}$
+        \ElsIf{command is ``set position''}
+            \State $\textit{setpoint} \gets \text{new position value}$
+        \EndIf
+    \EndIf
+    \State
+    \State \Comment{Proportional controller calculation}
+    \State $\textit{error} \gets \textit{setpoint} - \textit{encoderCount}$
+    \State $\textit{output} \gets K_p \times \textit{error}$
+    \State
+    \State \Comment{Apply control signal to motor}
+    \State $\textit{pwm} \gets \min(\max(|\textit{output}|, 0), 255)$
+    \State Set motor direction based on $\text{sign}(\textit{output})$
+    \State Apply PWM signal to motor driver
+    \State
+    \State \Comment{Log data for analysis}
+    \State Output: timestamp, setpoint, encoderCount
+    \State Wait for next control cycle (10 ms period)
+\EndWhile
+\State
+\State \textbf{Encoder Interrupt Handler:}
+\If{encoder channel B is high}
+    \State $\textit{encoderCount} \gets \textit{encoderCount} + 1$
+\Else
+    \State $\textit{encoderCount} \gets \textit{encoderCount} - 1$
+\EndIf
 \end{algorithmic}
 \end{algorithm}
 
@@ -662,13 +664,11 @@ The experiment proceeds through five stages. First, establish a \textbf{baseline
 \label{sec:examples}
 %=============================================================================
 
-\begin{example}[Third-Order System Stability Analysis]
-\label{ex:third_order}
+\begin{examplebox}[Third-Order System Stability Analysis]
 Determine the stability of a system with characteristic polynomial:
 \begin{equation*}
 P(s) = s^3 + 4s^2 + 5s + 2
 \end{equation*}
-\end{example}
 
 \textbf{Solution:}
 
@@ -714,19 +714,16 @@ $s^0$ & 2 & \\
 All positive, no sign changes.
 
 \textbf{Conclusion:} The system is \textbf{stable}. All three poles are in the LHP.
-
-\hfill $\blacksquare$
+\end{examplebox}
 
 \vspace{1em}
 
-\begin{example}[Finding the Range of Stable Gain]
-\label{ex:gain_range}
+\begin{examplebox}[Finding the Range of Stable Gain]
 For the feedback system with open-loop transfer function:
 \begin{equation*}
 G(s)H(s) = \frac{K}{s(s+1)(s+4)}
 \end{equation*}
 determine the range of $K > 0$ for which the closed-loop system is stable.
-\end{example}
 
 \textbf{Solution:}
 
@@ -759,8 +756,7 @@ For stability, all first-column elements must be positive. The row $s^3$ element
 \textbf{Conclusion:} The system is stable for $\boxed{0 < K < 20}$.
 
 At $K = 20$, the system is marginally stable with poles on the imaginary axis.
-
-\hfill $\blacksquare$
+\end{examplebox}
 
 \vspace{1em}
 
@@ -1034,26 +1030,52 @@ Feedback Stabilization & Properly designed feedback can stabilize an inherently 
 \end{conceptbox}
 
 \newpage
-\section*{Problems}
+\section{Exercises}
 
-\begin{enumerate}
-\item For each polynomial, determine whether all roots are in the LHP:
+\begin{exercise}
+For each polynomial, determine whether all roots are in the LHP:
 \begin{enumerate}
 \item $s^3 + 6s^2 + 11s + 6$
 \item $s^3 + 2s^2 + s + 2$
 \item $s^4 + 2s^3 + 3s^2 + 4s + 5$
 \end{enumerate}
+\end{exercise}
 
-\item A feedback system has characteristic equation $s^3 + 3s^2 + (K+2)s + 4K = 0$. Find the range of $K$ for stability.
+\begin{exercise}
+A feedback system has characteristic equation $s^3 + 3s^2 + (K+2)s + 4K = 0$. Find the range of $K$ for stability.
+\end{exercise}
 
-\item Apply the Routh criterion to $s^6 + 2s^5 + 8s^4 + 12s^3 + 20s^2 + 16s + 16 = 0$. If there are imaginary axis roots, find them.
+\begin{exercise}
+Apply the Routh criterion to $s^6 + 2s^5 + 8s^4 + 12s^3 + 20s^2 + 16s + 16 = 0$. If there are imaginary axis roots, find them.
+\end{exercise}
 
-\item An open-loop unstable system has transfer function $G(s) = \frac{1}{s^2 - 4}$. Design a proportional controller $K$ such that the closed-loop system is stable. What is the minimum required gain?
+\begin{exercise}
+An open-loop unstable system has transfer function $G(s) = \frac{1}{s^2 - 4}$. Design a proportional controller $K$ such that the closed-loop system is stable. What is the minimum required gain?
+\end{exercise}
 
-\item Consider the inverted pendulum linearized about the upward position with transfer function $G(s) = \frac{1}{s^2 - \omega_n^2}$ where $\omega_n^2 = g/\ell$. Using PD control $C(s) = K_p + K_d s$, derive conditions on $K_p$ and $K_d$ for closed-loop stability.
+\begin{exercise}
+Consider the inverted pendulum linearized about the upward position with transfer function $G(s) = \frac{1}{s^2 - \omega_n^2}$ where $\omega_n^2 = g/\ell$. Using PD control $C(s) = K_p + K_d s$, derive conditions on $K_p$ and $K_d$ for closed-loop stability.
+\end{exercise}
 
-\item \textit{(Computer Exercise)} Using MATLAB or Python, verify your Routh array calculations from Problems 1-3 by computing the roots directly. Plot pole locations in the $s$-plane.
-\end{enumerate}
+\begin{exercise}
+\textit{(Computer Exercise)} Using MATLAB or Python, verify your Routh array calculations from Exercises 1-3 by computing the roots directly. Plot pole locations in the $s$-plane.
+\end{exercise}
+
+\begin{exercise}
+A unity feedback system has open-loop transfer function $G(s) = \frac{K(s+1)}{s(s-2)(s+5)}$. The plant is open-loop unstable. Determine the range of $K$ for which the closed-loop system is stable.
+\end{exercise}
+
+\begin{exercise}
+For the characteristic polynomial $s^4 + 3s^3 + 5s^2 + 4s + 2$, construct the complete Routh array. Determine whether the system is stable, marginally stable, or unstable. If unstable, state how many poles are in the RHP.
+\end{exercise}
+
+\begin{exercise}
+A system has the characteristic equation $s^4 + 2s^3 + 11s^2 + 18s + 18 = 0$. Using the Routh-Hurwitz criterion, determine if any roots lie on the imaginary axis. If so, find the frequencies of oscillation.
+\end{exercise}
+
+\begin{exercise}
+Explain why marginal stability is generally unacceptable in engineering practice. Provide at least three practical reasons with examples from real systems.
+\end{exercise}
 
 %=============================================================================
 % References
