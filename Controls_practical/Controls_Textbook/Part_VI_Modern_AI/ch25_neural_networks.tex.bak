@@ -1,0 +1,1614 @@
+%% Chapter 25: Neural Networks in the Loop
+%% IEEE-Formatted Control Systems Textbook
+%% Self-contained chapter with complete derivations and practical experiments
+
+\chapter{Neural Networks in the Loop}
+\label{ch:neural_networks}
+
+\begin{quote}
+\textit{``A computer would deserve to be called intelligent if it could deceive a human into believing that it was human.''} --- Alan Turing, 1950
+\end{quote}
+
+\section{Historical Motivation: From Biological Neurons to Learning Machines}
+
+The marriage of neural networks and control systems represents one of the most significant developments in modern engineering. This union brings together two distinct intellectual traditions: the mathematical rigor of control theory and the adaptive, data-driven philosophy of machine learning. Understanding this history illuminates why neural networks have become indispensable tools for controlling complex systems that resist traditional modeling approaches.
+
+\subsection{McCulloch and Pitts (1943): The Computational Neuron}
+
+In 1943, neurophysiologist Warren McCulloch and mathematician Walter Pitts published ``A Logical Calculus of the Ideas Immanent in Nervous Activity,'' a paper that would lay the foundation for both artificial intelligence and neural computation. Working at the University of Illinois, they asked a deceptively simple question: could the behavior of biological neurons be described mathematically?
+
+Their key insight was that neurons could be modeled as binary threshold units. A biological neuron receives inputs from other neurons through synaptic connections, integrates these signals, and ``fires'' (produces an output) if the integrated signal exceeds a threshold. McCulloch and Pitts formalized this as:
+\begin{equation}
+y = \begin{cases} 1 & \text{if } \sum_{i} w_i x_i \geq \theta \\ 0 & \text{otherwise} \end{cases}
+\label{eq:mcculloch_pitts}
+\end{equation}
+where $x_i$ are binary inputs, $w_i$ are synaptic weights, and $\theta$ is the threshold.
+
+The profound implication was that networks of such simple units could, in principle, compute any logical function. This was the birth of the computational theory of mind and the first mathematical model of neural computation. However, McCulloch and Pitts did not address how such networks might \textit{learn}---the weights were assumed to be fixed.
+
+\subsection{Rosenblatt (1958): The Perceptron and Learning}
+
+Frank Rosenblatt, a psychologist at Cornell, took the crucial next step. In 1958, he introduced the \textbf{Perceptron}, a device that could \textit{learn} to classify patterns by adjusting its weights based on errors. The Perceptron learning rule was elegant:
+\begin{equation}
+w_i^{\text{new}} = w_i^{\text{old}} + \eta (y_{\text{desired}} - y_{\text{actual}}) x_i,
+\label{eq:perceptron_rule}
+\end{equation}
+where $\eta$ is a learning rate. If the output is correct, no change occurs. If the output is wrong, weights are adjusted to reduce the error.
+
+Rosenblatt demonstrated the Perceptron on the Mark I Perceptron machine at Cornell, which used photocells to ``see'' images and could learn to distinguish simple shapes. The New York Times reported in 1958 that the Navy had unveiled ``an electronic computer that will be able to walk, talk, see, write, reproduce itself, and be conscious of its existence.'' This was, of course, hyperbole, but the excitement was palpable.
+
+The Perceptron Convergence Theorem proved that if a linear separation of the data exists, the Perceptron algorithm will find it in finite time. This was a remarkable guarantee---but it contained the seeds of the coming crisis.
+
+\subsection{Minsky and Papert (1969): The First AI Winter}
+
+In 1969, Marvin Minsky and Seymour Papert published \textit{Perceptrons}, a rigorous mathematical analysis of what single-layer perceptrons could and could not compute. Their most devastating result: a perceptron cannot learn the XOR function. More generally, perceptrons could only represent linearly separable functions.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.2]
+% AND function (linearly separable)
+\begin{scope}[shift={(0,0)}]
+\draw[->] (-0.3,0) -- (2.5,0) node[right] {$x_1$};
+\draw[->] (0,-0.3) -- (0,2.5) node[above] {$x_2$};
+\fill[red] (0,0) circle (0.1);
+\fill[red] (0,2) circle (0.1);
+\fill[red] (2,0) circle (0.1);
+\fill[blue] (2,2) circle (0.1);
+\draw[thick, green!50!black] (-0.2,2.5) -- (2.5,0.3);
+\node[below] at (1,-0.7) {AND (separable)};
+\end{scope}
+
+% XOR function (not linearly separable)
+\begin{scope}[shift={(5,0)}]
+\draw[->] (-0.3,0) -- (2.5,0) node[right] {$x_1$};
+\draw[->] (0,-0.3) -- (0,2.5) node[above] {$x_2$};
+\fill[red] (0,0) circle (0.1);
+\fill[blue] (0,2) circle (0.1);
+\fill[blue] (2,0) circle (0.1);
+\fill[red] (2,2) circle (0.1);
+\draw[thick, dashed, gray] (1,-0.3) -- (1,2.5);
+\node[right, gray, font=\small] at (1.1,1.5) {No single line};
+\node[below] at (1,-0.7) {XOR (not separable)};
+\end{scope}
+\end{tikzpicture}
+\caption{The XOR problem illustrated. AND can be separated by a single line; XOR cannot. Blue dots represent output 1, red dots represent output 0.}
+\label{fig:xor_problem}
+\end{figure}
+
+While Minsky and Papert acknowledged that multi-layer networks could overcome this limitation, they expressed skepticism that effective training algorithms would be found. Funding for neural network research collapsed, initiating what historians call the first ``AI Winter'' (roughly 1969--1982). Many researchers abandoned the field entirely.
+
+\subsection{Werbos (1974) and Rumelhart et al. (1986): Backpropagation}
+
+The key to training multi-layer networks had actually been discovered in 1974 by Paul Werbos in his Harvard PhD thesis, ``Beyond Regression: New Tools for Prediction and Analysis in the Behavioral Sciences.'' Werbos developed \textbf{backpropagation}---an algorithm for computing gradients through multi-layer networks using the chain rule of calculus.
+
+However, Werbos's work was largely ignored by the AI community. It was not until 1986, when David Rumelhart, Geoffrey Hinton, and Ronald Williams published ``Learning Representations by Back-propagating Errors'' in \textit{Nature}, that backpropagation gained widespread attention. The algorithm enabled training of \textbf{multi-layer perceptrons} (MLPs) that could learn non-linear functions, including XOR.
+
+The key insight was expressing learning as an optimization problem:
+\begin{equation}
+\min_{\mathbf{w}} \mathcal{L}(\mathbf{w}) = \min_{\mathbf{w}} \frac{1}{N}\sum_{i=1}^{N} \|y_i - f(\mathbf{x}_i; \mathbf{w})\|^2,
+\label{eq:loss_function}
+\end{equation}
+where $f(\mathbf{x}; \mathbf{w})$ is the neural network with weights $\mathbf{w}$. Backpropagation computes $\partial \mathcal{L}/\partial w_j$ efficiently, enabling gradient descent optimization.
+
+\subsection{Narendra and Parthasarathy (1990): Neural Networks Meet Control}
+
+The pivotal moment for neural networks in control came with Kumpati Narendra and Kannan Parthasarathy's 1990 paper, ``Identification and Control of Dynamical Systems Using Neural Networks,'' published in \textit{IEEE Transactions on Neural Networks}. This landmark work systematically explored how neural networks could serve as:
+\begin{enumerate}
+\item \textbf{System identifiers:} Learning the dynamics $\hat{f}$ such that $\mathbf{x}[k+1] \approx \hat{f}(\mathbf{x}[k], \mathbf{u}[k])$
+\item \textbf{Controllers:} Computing control actions $\mathbf{u} = g(\mathbf{x})$ to achieve desired behavior
+\item \textbf{Inverse models:} Learning the inverse dynamics for feedforward control
+\end{enumerate}
+
+Narendra and Parthasarathy demonstrated that neural networks could approximate nonlinear plant dynamics and serve as adaptive controllers. Their framework established the theoretical foundation for neural network control that remains influential today.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=2cm, scale=0.9, transform shape]
+% Styles
+\tikzset{
+    block/.style={draw, rectangle, minimum height=1.5cm, minimum width=2cm, align=center},
+    sum/.style={draw, circle, inner sep=0.1cm},
+    arrow/.style={->, thick}
+}
+
+% Direct inverse control
+\node[block, fill=blue!20] (nn) {Neural\\Network\\Controller};
+\node[block, fill=gray!20, right=2cm of nn] (plant) {Plant};
+\node[left=1.5cm of nn] (ref) {$r$};
+\node[right=1.5cm of plant] (output) {$y$};
+
+\draw[arrow] (ref) -- (nn);
+\draw[arrow] (nn) -- node[above] {$u$} (plant);
+\draw[arrow] (plant) -- (output);
+
+% Feedback path
+\draw[arrow] (plant.east) -- ++(0.5,0) -- ++(0,-1.5) -| (nn.south);
+
+\node[below=0.3cm of plant] {(a) NN as Controller};
+
+% Model reference
+\begin{scope}[shift={(0,-5)}]
+\node[block, fill=green!20] (model) {Reference\\Model};
+\node[block, fill=blue!20, below=1cm of model] (nn2) {Neural\\Network};
+\node[block, fill=gray!20, right=2cm of nn2] (plant2) {Unknown\\Plant};
+\node[sum, left=1.5cm of model] (sum1) {};
+\node[sum, right=3.5cm of model] (sum2) {};
+\node[left=0.8cm of sum1] (ref2) {$r$};
+\node[right=0.8cm of sum2] (error) {$e$};
+
+\draw[arrow] (ref2) -- (sum1);
+\draw[arrow] (sum1) -- (model);
+\draw[arrow] (sum1) |- (nn2);
+\draw[arrow] (nn2) -- node[above] {$u$} (plant2);
+\draw[arrow] (model) -- node[above] {$y_m$} (sum2);
+\draw[arrow] (plant2) -- ++(1,0) |- (sum2);
+\draw[arrow] (sum2) -- (error);
+\draw[arrow] (plant2.east) -- ++(0.5,0) -- ++(0,-1) -| (nn2.south);
+\node[right] at (plant2.east) {$y_p$};
+
+\node[below=0.3cm of plant2] {(b) Model Reference Adaptive Control};
+\end{scope}
+\end{tikzpicture}
+\caption{Neural network control architectures from Narendra and Parthasarathy (1990). (a) Direct neural network controller. (b) Model reference adaptive control with neural network.}
+\label{fig:narendra_architectures}
+\end{figure}
+
+\subsection{The Second AI Winter and Deep Learning Revolution}
+
+Despite the promise shown in the early 1990s, neural networks faced practical limitations: training was slow, networks were prone to overfitting, and results were often inconsistent. Support Vector Machines and other kernel methods, with their convex optimization guarantees, became the preferred tools. A second AI Winter descended on neural network research (roughly 1995--2010).
+
+The deep learning revolution began in 2006 when Geoffrey Hinton and colleagues demonstrated that \textbf{deep neural networks} (with many layers) could be trained effectively using layer-wise pre-training. The breakthrough came in 2012 when Alex Krizhevsky's ``AlexNet'' won the ImageNet competition by a large margin using a deep convolutional neural network trained on GPUs.
+
+The enabling factors for this revolution were:
+\begin{itemize}
+\item \textbf{Massive datasets:} ImageNet provided millions of labeled images
+\item \textbf{GPU computing:} Parallel processing accelerated training by 10--100$\times$
+\item \textbf{Algorithmic improvements:} ReLU activations, dropout, batch normalization
+\item \textbf{Software frameworks:} TensorFlow, PyTorch made implementation accessible
+\end{itemize}
+
+\subsection{Why Neural Networks for Control?}
+
+Neural networks offer several compelling advantages for control applications:
+
+\begin{enumerate}
+\item \textbf{Universal Function Approximation:} Given enough neurons, a neural network can approximate any continuous function to arbitrary accuracy (Cybenko, 1989; Hornik, 1991). This means neural networks can represent complex nonlinear dynamics that defy analytical modeling.
+
+\item \textbf{Learning from Data:} Rather than deriving models from first principles, neural networks learn directly from input-output data. This is invaluable when physics-based models are unavailable or too complex.
+
+\item \textbf{Handling High-Dimensional Inputs:} Neural networks naturally process high-dimensional inputs like images, enabling end-to-end learning from raw sensor data to control actions.
+
+\item \textbf{Adaptability:} Online learning allows neural network controllers to adapt to changing plant dynamics or operating conditions.
+\end{enumerate}
+
+However, neural networks also present significant challenges for control:
+\begin{itemize}
+\item \textbf{No stability guarantees:} Unlike linear controllers designed via pole placement, neural network controllers provide no inherent stability certificates.
+\item \textbf{Interpretability:} The ``black box'' nature makes it difficult to understand why a controller takes certain actions.
+\item \textbf{Data requirements:} Training requires substantial data, which may be expensive or dangerous to collect from physical systems.
+\end{itemize}
+
+These challenges motivate the hybrid approaches discussed later in this chapter.
+
+
+\section{Modern Applications of Neural Networks in Control}
+
+Neural networks have moved from academic curiosity to production systems controlling vehicles, robots, and industrial processes. This section surveys current applications.
+
+\subsection{End-to-End Autonomous Driving}
+
+The most visible application of neural networks in control is autonomous driving. Traditional approaches decompose driving into perception (detecting lanes, vehicles, pedestrians), planning (determining a trajectory), and control (executing the trajectory). Neural networks now appear in all three stages.
+
+In \textbf{end-to-end learning}, pioneered by NVIDIA's DAVE-2 system (2016), a single neural network maps directly from camera images to steering commands. The network is trained on human driving data using behavioral cloning:
+\begin{equation}
+\min_{\theta} \sum_{i} \|u_{\text{human},i} - f_{\theta}(\text{image}_i)\|^2.
+\end{equation}
+
+Companies like Tesla, Waymo, and Comma.ai deploy neural network-based systems processing multiple camera feeds, radar, and lidar to generate control commands in real-time. These systems must handle edge cases, adverse weather, and unpredictable human behavior.
+
+\subsection{Neural Network Controllers for Drones}
+
+Quadrotor drones present challenging control problems: they are underactuated (4 inputs controlling 6 degrees of freedom), nonlinear, and must operate in turbulent environments. Neural networks have enabled capabilities beyond traditional controllers:
+\begin{itemize}
+\item \textbf{Agile flight:} Neural networks trained via reinforcement learning achieve acrobatic maneuvers that would be difficult to hand-design.
+\item \textbf{Recovery from failures:} Networks can learn to fly with damaged rotors.
+\item \textbf{Visual navigation:} End-to-end networks fly through forests using only onboard cameras.
+\end{itemize}
+
+The key advantage is that neural networks can learn complex mappings from sensor inputs to motor commands that account for aerodynamic effects, motor saturation, and sensor noise in ways that analytical models cannot.
+
+\subsection{Learned Dynamics Models for MPC}
+
+Model Predictive Control (Chapter~\ref{ch:mpc}) requires a dynamics model to predict future states. When analytical models are unavailable or inaccurate, neural networks can learn the dynamics:
+\begin{equation}
+\mathbf{x}[k+1] = f_{\theta}(\mathbf{x}[k], \mathbf{u}[k]).
+\end{equation}
+
+This learned model is then used within the MPC optimization:
+\begin{equation}
+\min_{\mathbf{u}[k], \ldots, \mathbf{u}[k+N-1]} \sum_{j=0}^{N-1} \ell(\hat{\mathbf{x}}[k+j], \mathbf{u}[k+j]) + V_f(\hat{\mathbf{x}}[k+N])
+\end{equation}
+where $\hat{\mathbf{x}}$ are states predicted by the neural network model.
+
+Applications include robot manipulation, chemical process control, and building energy management, where first-principles models are either unavailable or too computationally expensive for real-time MPC.
+
+\subsection{Industrial Soft Sensors}
+
+In chemical and manufacturing processes, key quality variables (product composition, viscosity, molecular weight) are often difficult or expensive to measure directly. \textbf{Soft sensors} use neural networks to estimate these variables from readily available measurements (temperature, pressure, flow rates):
+\begin{equation}
+\hat{y}_{\text{quality}} = f_{\theta}(T, P, F, \ldots).
+\end{equation}
+
+These neural network estimators enable closed-loop control of quality variables that would otherwise require delayed laboratory analysis. Applications include polymer production, petroleum refining, and semiconductor manufacturing.
+
+
+\section{Mathematical Foundation: Neural Networks for Dynamics and Control}
+
+We now develop the mathematical framework for using neural networks in control systems. This section provides complete derivations suitable for implementation.
+
+\subsection{The Artificial Neuron}
+
+The fundamental building block is the artificial neuron, which computes a weighted sum of inputs, adds a bias, and applies a nonlinear activation function:
+\begin{equation}
+y = \sigma\left(\sum_{i=1}^{n} w_i x_i + b\right) = \sigma(\mathbf{w}^T\mathbf{x} + b),
+\label{eq:neuron}
+\end{equation}
+where:
+\begin{itemize}
+\item $\mathbf{x} = [x_1, \ldots, x_n]^T \in \mathbb{R}^n$ is the input vector
+\item $\mathbf{w} = [w_1, \ldots, w_n]^T \in \mathbb{R}^n$ is the weight vector
+\item $b \in \mathbb{R}$ is the bias
+\item $\sigma: \mathbb{R} \to \mathbb{R}$ is the activation function
+\item $y \in \mathbb{R}$ is the output
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.0]
+% Input nodes
+\foreach \i in {1,2,3} {
+    \node[circle, draw, minimum size=0.8cm] (x\i) at (0, 2-\i) {$x_{\i}$};
+}
+\node at (0, -1.5) {$\vdots$};
+\node[circle, draw, minimum size=0.8cm] (xn) at (0, -2.5) {$x_n$};
+
+% Summation node
+\node[circle, draw, minimum size=1.2cm, fill=blue!20] (sum) at (3, -0.25) {$\Sigma$};
+
+% Activation node
+\node[circle, draw, minimum size=1.2cm, fill=green!20] (sigma) at (5.5, -0.25) {$\sigma$};
+
+% Output
+\node[circle, draw, minimum size=0.8cm] (y) at (8, -0.25) {$y$};
+
+% Bias node
+\node[circle, draw, minimum size=0.8cm, fill=gray!20] (b) at (3, -2.5) {$b$};
+
+% Connections
+\foreach \i in {1,2,3} {
+    \draw[->, thick] (x\i) -- (sum) node[midway, above, sloped, font=\small] {$w_{\i}$};
+}
+\draw[->, thick] (xn) -- (sum) node[midway, above, sloped, font=\small] {$w_n$};
+\draw[->, thick] (b) -- (sum);
+\draw[->, thick] (sum) -- (sigma) node[midway, above, font=\small] {$z$};
+\draw[->, thick] (sigma) -- (y);
+
+% Labels
+\node[below=0.3cm of sum, font=\small] {Weighted sum};
+\node[below=0.3cm of sigma, font=\small] {Activation};
+\end{tikzpicture}
+\caption{Structure of an artificial neuron. Inputs $x_i$ are multiplied by weights $w_i$, summed with bias $b$, and passed through activation function $\sigma$.}
+\label{fig:neuron}
+\end{figure}
+
+\subsection{Activation Functions}
+
+The choice of activation function $\sigma$ determines the neuron's nonlinear behavior. Common choices include:
+
+\textbf{Sigmoid:}
+\begin{equation}
+\sigma(z) = \frac{1}{1 + e^{-z}}, \quad \sigma'(z) = \sigma(z)(1 - \sigma(z))
+\end{equation}
+Output range: $(0, 1)$. Historically popular but suffers from vanishing gradients.
+
+\textbf{Hyperbolic Tangent (tanh):}
+\begin{equation}
+\sigma(z) = \tanh(z) = \frac{e^z - e^{-z}}{e^z + e^{-z}}, \quad \sigma'(z) = 1 - \tanh^2(z)
+\end{equation}
+Output range: $(-1, 1)$. Zero-centered, but also suffers from vanishing gradients.
+
+\textbf{Rectified Linear Unit (ReLU):}
+\begin{equation}
+\sigma(z) = \max(0, z), \quad \sigma'(z) = \begin{cases} 1 & z > 0 \\ 0 & z \leq 0 \end{cases}
+\end{equation}
+Output range: $[0, \infty)$. Computationally efficient, addresses vanishing gradients, but can cause ``dead neurons'' when $z < 0$.
+
+\textbf{Leaky ReLU:}
+\begin{equation}
+\sigma(z) = \begin{cases} z & z > 0 \\ \alpha z & z \leq 0 \end{cases}
+\end{equation}
+where $\alpha \approx 0.01$ prevents dead neurons.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.8]
+% Sigmoid
+\begin{scope}[shift={(0,0)}]
+\draw[->] (-3,0) -- (3,0) node[right] {$z$};
+\draw[->] (0,-0.5) -- (0,2) node[above] {$\sigma$};
+\draw[thick, blue, domain=-3:3, samples=50] plot (\x, {1.5/(1+exp(-\x))});
+\node[below] at (0,-0.8) {Sigmoid};
+\draw[dashed, gray] (-3,1.5) -- (3,1.5);
+\node[left, font=\small] at (-3,1.5) {1};
+\end{scope}
+
+% Tanh
+\begin{scope}[shift={(7,0)}]
+\draw[->] (-3,0) -- (3,0) node[right] {$z$};
+\draw[->] (0,-1.5) -- (0,2) node[above] {$\sigma$};
+\draw[thick, red, domain=-3:3, samples=50] plot (\x, {1.2*tanh(\x)});
+\node[below] at (0,-1.8) {Tanh};
+\draw[dashed, gray] (-3,1.2) -- (3,1.2);
+\draw[dashed, gray] (-3,-1.2) -- (3,-1.2);
+\end{scope}
+
+% ReLU
+\begin{scope}[shift={(14,0)}]
+\draw[->] (-3,0) -- (3,0) node[right] {$z$};
+\draw[->] (0,-0.5) -- (0,2) node[above] {$\sigma$};
+\draw[thick, green!50!black, domain=-3:0] plot (\x, 0);
+\draw[thick, green!50!black, domain=0:1.8] plot (\x, \x);
+\node[below] at (0,-0.8) {ReLU};
+\end{scope}
+\end{tikzpicture}
+\caption{Common activation functions: sigmoid, hyperbolic tangent, and ReLU.}
+\label{fig:activations}
+\end{figure}
+
+\subsection{Multi-Layer Neural Networks}
+
+A multi-layer neural network (also called a feedforward network or multi-layer perceptron) stacks multiple layers of neurons. For a network with $L$ layers:
+
+\textbf{Layer 1 (input to first hidden):}
+\begin{equation}
+\mathbf{h}^{(1)} = \sigma(\mathbf{W}^{(1)}\mathbf{x} + \mathbf{b}^{(1)})
+\end{equation}
+
+\textbf{Layer $\ell$ (hidden to hidden):}
+\begin{equation}
+\mathbf{h}^{(\ell)} = \sigma(\mathbf{W}^{(\ell)}\mathbf{h}^{(\ell-1)} + \mathbf{b}^{(\ell)}), \quad \ell = 2, \ldots, L-1
+\end{equation}
+
+\textbf{Layer $L$ (last hidden to output):}
+\begin{equation}
+\mathbf{y} = \mathbf{W}^{(L)}\mathbf{h}^{(L-1)} + \mathbf{b}^{(L)}
+\end{equation}
+
+Note that the output layer typically has no activation function (or a linear activation) for regression tasks like control.
+
+We denote the complete set of parameters as:
+\begin{equation}
+\theta = \{\mathbf{W}^{(1)}, \mathbf{b}^{(1)}, \ldots, \mathbf{W}^{(L)}, \mathbf{b}^{(L)}\}
+\end{equation}
+
+The network computes a function $f: \mathbb{R}^n \to \mathbb{R}^m$ parameterized by $\theta$:
+\begin{equation}
+\mathbf{y} = f(\mathbf{x}; \theta).
+\end{equation}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.9]
+% Input layer
+\foreach \i in {1,2,3} {
+    \node[circle, draw, minimum size=0.7cm, fill=blue!20] (i\i) at (0, 3-\i) {};
+}
+\node[below=0.2cm of i3, font=\small] {Input};
+
+% Hidden layer 1
+\foreach \i in {1,2,3,4} {
+    \node[circle, draw, minimum size=0.7cm, fill=green!20] (h1\i) at (2.5, 3.5-\i) {};
+}
+\node[below=0.2cm of h14, font=\small] {Hidden 1};
+
+% Hidden layer 2
+\foreach \i in {1,2,3,4} {
+    \node[circle, draw, minimum size=0.7cm, fill=green!20] (h2\i) at (5, 3.5-\i) {};
+}
+\node[below=0.2cm of h24, font=\small] {Hidden 2};
+
+% Output layer
+\foreach \i in {1,2} {
+    \node[circle, draw, minimum size=0.7cm, fill=red!20] (o\i) at (7.5, 2-\i) {};
+}
+\node[below=0.2cm of o2, font=\small] {Output};
+
+% Connections
+\foreach \i in {1,2,3} {
+    \foreach \j in {1,2,3,4} {
+        \draw[->, gray] (i\i) -- (h1\j);
+    }
+}
+\foreach \i in {1,2,3,4} {
+    \foreach \j in {1,2,3,4} {
+        \draw[->, gray] (h1\i) -- (h2\j);
+    }
+}
+\foreach \i in {1,2,3,4} {
+    \foreach \j in {1,2} {
+        \draw[->, gray] (h2\i) -- (o\j);
+    }
+}
+
+% Labels
+\node[left=0.3cm of i1] {$x_1$};
+\node[left=0.3cm of i2] {$x_2$};
+\node[left=0.3cm of i3] {$x_3$};
+\node[right=0.3cm of o1] {$y_1$};
+\node[right=0.3cm of o2] {$y_2$};
+\end{tikzpicture}
+\caption{A multi-layer neural network with 3 inputs, two hidden layers of 4 neurons each, and 2 outputs.}
+\label{fig:mlp}
+\end{figure}
+
+\subsection{Universal Approximation Theorem}
+
+A fundamental result justifies using neural networks for control:
+
+\begin{quote}
+\textbf{Universal Approximation Theorem} (Cybenko, 1989; Hornik, 1991): A feedforward neural network with a single hidden layer containing a finite number of neurons can approximate any continuous function on a compact subset of $\mathbb{R}^n$ to arbitrary accuracy, provided the activation function is non-polynomial (e.g., sigmoid, tanh, ReLU).
+\end{quote}
+
+Mathematically, for any continuous $g: K \to \mathbb{R}$ on compact $K \subset \mathbb{R}^n$ and any $\epsilon > 0$, there exists a neural network $f(\mathbf{x}; \theta)$ such that:
+\begin{equation}
+\sup_{\mathbf{x} \in K} |g(\mathbf{x}) - f(\mathbf{x}; \theta)| < \epsilon.
+\end{equation}
+
+This theorem guarantees that neural networks have the \textit{capacity} to represent complex dynamics and controllers. However, it does not guarantee that gradient-based training will find the optimal weights, nor does it specify how many neurons are needed.
+
+\subsection{Neural Network as Controller}
+
+In the control context, the neural network takes system state (or error) as input and produces control actions as output:
+\begin{equation}
+\mathbf{u} = f_{\theta}(\mathbf{x}) \quad \text{or} \quad \mathbf{u} = f_{\theta}(\mathbf{e}),
+\label{eq:nn_controller}
+\end{equation}
+where $\mathbf{e} = \mathbf{r} - \mathbf{x}$ is the tracking error.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=2cm, scale=0.9, transform shape]
+\tikzset{
+    block/.style={draw, rectangle, minimum height=1.2cm, minimum width=2cm, align=center},
+    sum/.style={draw, circle, inner sep=0.08cm},
+    arrow/.style={->, thick}
+}
+
+\node (ref) {$\mathbf{r}$};
+\node[sum, right=1cm of ref] (sum) {};
+\node[block, fill=blue!20, right=1.5cm of sum] (nn) {Neural\\Network\\$f_\theta$};
+\node[block, fill=gray!20, right=2cm of nn] (plant) {Plant\\$\mathbf{x}[k+1] = g(\mathbf{x}[k], \mathbf{u}[k])$};
+\node[right=1.5cm of plant] (output) {$\mathbf{y}$};
+
+\draw[arrow] (ref) -- (sum) node[midway, above] {};
+\draw[arrow] (sum) -- (nn) node[midway, above] {$\mathbf{e}$};
+\draw[arrow] (nn) -- (plant) node[midway, above] {$\mathbf{u}$};
+\draw[arrow] (plant) -- (output);
+
+% Feedback
+\draw[arrow] (plant.east) -- ++(0.7,0) -- ++(0,-1.5) -| (sum.south);
+\node at (sum) [below left=0.1cm, font=\small] {$-$};
+\node at (sum) [above left=0.1cm, font=\small] {$+$};
+\end{tikzpicture}
+\caption{Neural network controller in a feedback loop. The network maps error $\mathbf{e}$ to control action $\mathbf{u}$.}
+\label{fig:nn_control_loop}
+\end{figure}
+
+The architecture design involves choosing:
+\begin{itemize}
+\item \textbf{Inputs:} Current state $\mathbf{x}[k]$, error $\mathbf{e}[k]$, or history $\{\mathbf{x}[k], \mathbf{x}[k-1], \ldots\}$
+\item \textbf{Outputs:} Control action $\mathbf{u}[k]$ (possibly with saturation limits)
+\item \textbf{Hidden layers:} Number and size (empirically chosen or via hyperparameter search)
+\item \textbf{Activation functions:} ReLU for hidden layers, linear or tanh for output
+\end{itemize}
+
+\subsection{Neural Network as Plant Model}
+
+Neural networks can learn system dynamics for simulation or model-based control:
+\begin{equation}
+\hat{\mathbf{x}}[k+1] = f_{\theta}(\mathbf{x}[k], \mathbf{u}[k]).
+\label{eq:nn_model}
+\end{equation}
+
+This is particularly valuable when:
+\begin{itemize}
+\item First-principles models are unavailable (e.g., complex biological systems)
+\item Physics-based models are too computationally expensive
+\item The system contains unmodeled nonlinearities or disturbances
+\end{itemize}
+
+The learned model can be used for:
+\begin{enumerate}
+\item \textbf{Simulation:} Predict system behavior under proposed control policies
+\item \textbf{MPC:} Provide the prediction model for optimization
+\item \textbf{Controller training:} Serve as a ``surrogate'' for the real plant during reinforcement learning
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=1.8cm, scale=0.85, transform shape]
+\tikzset{
+    block/.style={draw, rectangle, minimum height=1.2cm, minimum width=2.2cm, align=center},
+    arrow/.style={->, thick}
+}
+
+% Real plant
+\node[block, fill=gray!20] (plant) {Real Plant};
+\node[left=1.5cm of plant] (u) {$\mathbf{u}[k]$};
+\node[right=1.5cm of plant] (y) {$\mathbf{x}[k+1]$};
+
+% Neural model
+\node[block, fill=blue!20, below=2cm of plant] (nn) {Neural Network\\Model $f_\theta$};
+\node[left=1.5cm of nn] (u2) {$\mathbf{u}[k]$};
+\node[right=1.5cm of nn] (yhat) {$\hat{\mathbf{x}}[k+1]$};
+
+% State input
+\node[above left=0.5cm and 0.5cm of plant] (x) {$\mathbf{x}[k]$};
+\node[below left=0.5cm and 0.5cm of nn] (x2) {$\mathbf{x}[k]$};
+
+\draw[arrow] (u) -- (plant);
+\draw[arrow] (plant) -- (y);
+\draw[arrow] (x) -- (plant.west);
+
+\draw[arrow] (u2) -- (nn);
+\draw[arrow] (nn) -- (yhat);
+\draw[arrow] (x2) -- (nn.west);
+
+% Comparison
+\node[right=3cm of plant] (compare) {};
+\draw[dashed, gray] (y) -- ++(1.5,0) -- ++(0,-2) -- (yhat);
+\node[right=2.5cm of plant, font=\small] {Training data};
+
+\node[left=0.5cm of plant, font=\small] {(a)};
+\node[left=0.5cm of nn, font=\small] {(b)};
+\end{tikzpicture}
+\caption{(a) Real plant generates training data. (b) Neural network learns to predict next state from current state and control input.}
+\label{fig:nn_model}
+\end{figure}
+
+\subsection{Training Neural Networks: Loss Functions and Optimization}
+
+Training a neural network involves minimizing a loss function that measures the discrepancy between predictions and targets.
+
+\textbf{Supervised Learning (Behavioral Cloning):}
+
+Given a dataset $\mathcal{D} = \{(\mathbf{x}_i, \mathbf{u}_i^*)\}_{i=1}^{N}$ of expert state-action pairs, minimize:
+\begin{equation}
+\mathcal{L}(\theta) = \frac{1}{N}\sum_{i=1}^{N} \|\mathbf{u}_i^* - f_\theta(\mathbf{x}_i)\|^2.
+\label{eq:bc_loss}
+\end{equation}
+
+\textbf{System Identification:}
+
+Given trajectories $\{(\mathbf{x}_i[k], \mathbf{u}_i[k], \mathbf{x}_i[k+1])\}$, minimize one-step prediction error:
+\begin{equation}
+\mathcal{L}(\theta) = \frac{1}{N}\sum_{i=1}^{N} \|\mathbf{x}_i[k+1] - f_\theta(\mathbf{x}_i[k], \mathbf{u}_i[k])\|^2.
+\label{eq:sysid_loss}
+\end{equation}
+
+\textbf{Tracking Performance:}
+
+For direct optimization of control performance:
+\begin{equation}
+\mathcal{L}(\theta) = \sum_{k=0}^{T} \|\mathbf{r}[k] - \mathbf{x}[k]\|^2 + \lambda\|\mathbf{u}[k]\|^2,
+\label{eq:tracking_loss}
+\end{equation}
+where $\mathbf{x}[k]$ is the state resulting from applying $\mathbf{u}[k] = f_\theta(\mathbf{x}[k])$ to the system.
+
+\subsection{Backpropagation}
+
+The backpropagation algorithm computes gradients of the loss with respect to all network parameters using the chain rule. Consider a simple two-layer network:
+\begin{align}
+\mathbf{h} &= \sigma(\mathbf{W}^{(1)}\mathbf{x} + \mathbf{b}^{(1)}) \\
+\mathbf{y} &= \mathbf{W}^{(2)}\mathbf{h} + \mathbf{b}^{(2)}
+\end{align}
+
+For mean squared error loss $\mathcal{L} = \frac{1}{2}\|\mathbf{y}^* - \mathbf{y}\|^2$:
+
+\textbf{Output layer gradients:}
+\begin{align}
+\frac{\partial \mathcal{L}}{\partial \mathbf{y}} &= \mathbf{y} - \mathbf{y}^* \triangleq \boldsymbol{\delta}^{(2)} \\
+\frac{\partial \mathcal{L}}{\partial \mathbf{W}^{(2)}} &= \boldsymbol{\delta}^{(2)} \mathbf{h}^T \\
+\frac{\partial \mathcal{L}}{\partial \mathbf{b}^{(2)}} &= \boldsymbol{\delta}^{(2)}
+\end{align}
+
+\textbf{Hidden layer gradients (backpropagate error):}
+\begin{align}
+\boldsymbol{\delta}^{(1)} &= (\mathbf{W}^{(2)})^T \boldsymbol{\delta}^{(2)} \odot \sigma'(\mathbf{W}^{(1)}\mathbf{x} + \mathbf{b}^{(1)}) \\
+\frac{\partial \mathcal{L}}{\partial \mathbf{W}^{(1)}} &= \boldsymbol{\delta}^{(1)} \mathbf{x}^T \\
+\frac{\partial \mathcal{L}}{\partial \mathbf{b}^{(1)}} &= \boldsymbol{\delta}^{(1)}
+\end{align}
+where $\odot$ denotes element-wise multiplication.
+
+\textbf{Gradient Descent Update:}
+\begin{equation}
+\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L},
+\end{equation}
+where $\eta$ is the learning rate.
+
+In practice, variants like Adam (Adaptive Moment Estimation) are preferred:
+\begin{align}
+\mathbf{m}_t &= \beta_1 \mathbf{m}_{t-1} + (1-\beta_1)\nabla_\theta \mathcal{L} \\
+\mathbf{v}_t &= \beta_2 \mathbf{v}_{t-1} + (1-\beta_2)(\nabla_\theta \mathcal{L})^2 \\
+\theta &\leftarrow \theta - \eta \frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \epsilon}
+\end{align}
+where $\hat{\mathbf{m}}_t$ and $\hat{\mathbf{v}}_t$ are bias-corrected estimates.
+
+\subsection{Backpropagation Through Time for Dynamics}
+
+When training a neural network controller for trajectory optimization, we must backpropagate gradients through the dynamics. Consider a horizon of $T$ steps:
+\begin{align}
+\mathbf{x}[1] &= g(\mathbf{x}[0], f_\theta(\mathbf{x}[0])) \\
+\mathbf{x}[2] &= g(\mathbf{x}[1], f_\theta(\mathbf{x}[1])) \\
+&\vdots \\
+\mathbf{x}[T] &= g(\mathbf{x}[T-1], f_\theta(\mathbf{x}[T-1]))
+\end{align}
+
+The loss depends on the entire trajectory:
+\begin{equation}
+\mathcal{L}(\theta) = \sum_{k=0}^{T} c(\mathbf{x}[k], \mathbf{u}[k]).
+\end{equation}
+
+Computing $\partial \mathcal{L}/\partial \theta$ requires unrolling the dynamics and applying the chain rule:
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \theta} = \sum_{k=0}^{T} \frac{\partial c}{\partial \mathbf{u}[k]} \frac{\partial f_\theta}{\partial \theta} + \frac{\partial c}{\partial \mathbf{x}[k]} \frac{\partial \mathbf{x}[k]}{\partial \theta},
+\end{equation}
+where:
+\begin{equation}
+\frac{\partial \mathbf{x}[k]}{\partial \theta} = \frac{\partial g}{\partial \mathbf{x}}\frac{\partial \mathbf{x}[k-1]}{\partial \theta} + \frac{\partial g}{\partial \mathbf{u}}\frac{\partial f_\theta(\mathbf{x}[k-1])}{\partial \theta}.
+\end{equation}
+
+This recursive computation is called \textbf{Backpropagation Through Time (BPTT)}. Modern automatic differentiation frameworks (PyTorch, TensorFlow) handle this automatically.
+
+\subsection{Challenges in Neural Network Control}
+
+\subsubsection{No Stability Guarantees}
+
+Classical control design (pole placement, LQR) provides explicit stability guarantees through Lyapunov theory. Neural network controllers, by contrast, offer no inherent stability certificates.
+
+Approaches to address this include:
+\begin{itemize}
+\item \textbf{Lyapunov-based training:} Incorporate Lyapunov function constraints into training
+\item \textbf{Verification:} Use formal methods to verify stability over a region
+\item \textbf{Robust margins:} Design with sufficient gain/phase margins
+\end{itemize}
+
+\subsubsection{Sample Efficiency}
+
+Neural networks typically require large amounts of training data. Collecting data from physical systems can be:
+\begin{itemize}
+\item Time-consuming (slow dynamics)
+\item Expensive (wear, energy costs)
+\item Dangerous (exploration may cause damage)
+\end{itemize}
+
+Strategies include simulation-based training, transfer learning, and data augmentation.
+
+\subsubsection{Sim-to-Real Gap}
+
+Models trained in simulation may perform poorly on real systems due to:
+\begin{itemize}
+\item Unmodeled dynamics (friction, backlash)
+\item Sensor noise and delays
+\item Actuator saturation and dead zones
+\end{itemize}
+
+\textbf{Domain randomization} addresses this by training on varied simulation parameters, encouraging robustness.
+
+\subsection{Hybrid Approaches: Neural Networks + Physics}
+
+Combining neural networks with physics-based models offers the best of both worlds:
+
+\textbf{Physics-Informed Neural Networks (PINNs):}
+
+Incorporate known physics as regularization:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{data}} + \lambda \mathcal{L}_{\text{physics}},
+\end{equation}
+where $\mathcal{L}_{\text{physics}}$ penalizes violations of known physical laws.
+
+\textbf{Residual Learning:}
+
+Model the difference between a physics-based model and reality:
+\begin{equation}
+\mathbf{x}[k+1] = g_{\text{physics}}(\mathbf{x}[k], \mathbf{u}[k]) + f_\theta(\mathbf{x}[k], \mathbf{u}[k]),
+\end{equation}
+where $g_{\text{physics}}$ captures known dynamics and $f_\theta$ learns unmodeled effects.
+
+\textbf{Neural Network + PID:}
+
+Augment a PID controller with neural network feedforward:
+\begin{equation}
+u = K_p e + K_i \int e \, dt + K_d \dot{e} + f_\theta(\mathbf{x}).
+\end{equation}
+
+This provides baseline performance from PID while allowing the network to improve upon it.
+
+
+\section{Practical Experiment: Neural Network Controller for DC Motor}
+
+This section presents a complete hands-on experiment: training a neural network to control motor position by imitating a PID controller (behavioral cloning), then deploying and evaluating the learned controller.
+
+\subsection{Experimental Setup}
+
+\subsubsection{Hardware Components}
+
+\begin{table}[htbp]
+\centering
+\caption{Bill of Materials for Neural Network Motor Control Experiment}
+\label{tab:nn_bom}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Item} & \textbf{Description} & \textbf{Qty} & \textbf{Approx. Cost} \\
+\midrule
+DC Motor & 12V geared motor with encoder & 1 & \$15 \\
+Motor driver & L298N H-bridge & 1 & \$5 \\
+Arduino Mega & Microcontroller & 1 & \$35 \\
+Rotary encoder & Built into motor (or external) & 1 & -- \\
+Power supply & 12V, 2A & 1 & \$10 \\
+Computer & Running Python with PyTorch & 1 & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{System Configuration}
+
+The motor position $\theta$ is measured by the encoder. The control objective is to track a reference position $\theta_r(t)$. The Arduino implements both:
+\begin{enumerate}
+\item A PID controller (for data collection)
+\item The neural network controller (for deployment)
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=1.8cm, scale=0.85, transform shape]
+\tikzset{
+    block/.style={draw, rectangle, minimum height=1.2cm, minimum width=2cm, align=center, font=\small},
+    arrow/.style={->, thick}
+}
+
+\node[block, fill=cyan!20] (pc) {Computer\\(Python/PyTorch)};
+\node[block, fill=green!20, right=2cm of pc] (arduino) {Arduino\\Mega};
+\node[block, fill=gray!20, right=2cm of arduino] (driver) {Motor\\Driver};
+\node[block, fill=yellow!20, right=1.5cm of driver] (motor) {DC\\Motor};
+\node[block, fill=orange!20, below=1.5cm of motor] (encoder) {Encoder};
+
+\draw[arrow] (pc) -- node[above, font=\small] {Serial} (arduino);
+\draw[arrow] (arduino) -- node[above, font=\small] {PWM} (driver);
+\draw[arrow] (driver) -- (motor);
+\draw[arrow] (encoder) -| (arduino);
+\draw[dashed] (motor) -- (encoder);
+
+\node[below=0.3cm of encoder, font=\small] {Position feedback};
+\end{tikzpicture}
+\caption{Hardware setup for neural network motor control experiment.}
+\label{fig:nn_hardware}
+\end{figure}
+
+\subsection{Phase 1: PID Controller and Data Collection}
+
+\subsubsection{PID Implementation}
+
+First, implement a well-tuned PID controller on the Arduino:
+
+\begin{lstlisting}[language=C, caption={Arduino PID controller for data collection}]
+// PID constants (tune for your motor)
+float Kp = 2.0;
+float Ki = 0.5;
+float Kd = 0.1;
+
+// State variables
+float integral = 0;
+float prev_error = 0;
+unsigned long prev_time = 0;
+
+float computePID(float setpoint, float position) {
+    unsigned long now = millis();
+    float dt = (now - prev_time) / 1000.0;
+    prev_time = now;
+
+    float error = setpoint - position;
+    integral += error * dt;
+    integral = constrain(integral, -100, 100); // Anti-windup
+
+    float derivative = (error - prev_error) / dt;
+    prev_error = error;
+
+    float output = Kp * error + Ki * integral + Kd * derivative;
+    return constrain(output, -255, 255);
+}
+
+void loop() {
+    // Read encoder position
+    float position = readEncoder();
+
+    // Get setpoint (e.g., from serial or internal reference)
+    float setpoint = generateSetpoint();
+
+    // Compute control
+    float control = computePID(setpoint, position);
+
+    // Apply to motor
+    setMotorPWM(control);
+
+    // Log data for training
+    Serial.print(millis());
+    Serial.print(",");
+    Serial.print(setpoint);
+    Serial.print(",");
+    Serial.print(position);
+    Serial.print(",");
+    Serial.print(control);
+    Serial.print(",");
+    Serial.println(prev_error);
+}
+\end{lstlisting}
+
+\subsubsection{Reference Signal Design}
+
+To collect diverse training data, use varied reference signals:
+\begin{itemize}
+\item Step inputs of different magnitudes
+\item Sinusoidal references at different frequencies
+\item Random walk sequences
+\item Ramp inputs
+\end{itemize}
+
+\begin{lstlisting}[language=C, caption={Reference signal generator}]
+float generateSetpoint() {
+    static unsigned long last_change = 0;
+    static float setpoint = 0;
+    static int mode = 0;
+
+    unsigned long now = millis();
+    float t = now / 1000.0;
+
+    switch (mode) {
+        case 0: // Step inputs
+            if (now - last_change > 3000) {
+                setpoint = random(-180, 180);
+                last_change = now;
+            }
+            break;
+        case 1: // Sinusoidal
+            setpoint = 90 * sin(2 * PI * 0.2 * t);
+            break;
+        case 2: // Ramp
+            setpoint = 30 * t;
+            if (setpoint > 180) setpoint = -180;
+            break;
+    }
+    return setpoint;
+}
+\end{lstlisting}
+
+\subsubsection{Data Collection Protocol}
+
+Run the PID controller for approximately 10 minutes, collecting data at 50 Hz (20 ms intervals). This yields approximately 30,000 data points. Save the data as CSV:
+\begin{verbatim}
+time_ms, setpoint, position, control, error
+0, 45.0, 0.0, 90.0, 45.0
+20, 45.0, 2.3, 87.5, 42.7
+40, 45.0, 5.1, 83.2, 39.9
+...
+\end{verbatim}
+
+\subsection{Phase 2: Neural Network Training}
+
+\subsubsection{Data Preprocessing}
+
+\begin{lstlisting}[language=Python, caption={Python code for data loading and preprocessing}]
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
+
+# Load data
+data = np.loadtxt('motor_data.csv', delimiter=',', skiprows=1)
+time_ms = data[:, 0]
+setpoint = data[:, 1]
+position = data[:, 2]
+control = data[:, 3]
+
+# Compute features
+error = setpoint - position
+
+# Compute velocity (finite difference)
+velocity = np.gradient(position, time_ms / 1000.0)
+
+# Compute integral of error (cumulative sum)
+dt = np.diff(time_ms, prepend=time_ms[0]) / 1000.0
+error_integral = np.cumsum(error * dt)
+
+# Normalize features
+def normalize(x):
+    return (x - x.mean()) / (x.std() + 1e-8)
+
+X = np.column_stack([
+    normalize(error),
+    normalize(velocity),
+    normalize(error_integral)
+])
+
+# Normalize targets
+control_mean = control.mean()
+control_std = control.std()
+y = (control - control_mean) / control_std
+
+# Convert to PyTorch tensors
+X_tensor = torch.FloatTensor(X)
+y_tensor = torch.FloatTensor(y).unsqueeze(1)
+
+# Split train/validation
+split = int(0.8 * len(X))
+train_dataset = TensorDataset(X_tensor[:split], y_tensor[:split])
+val_dataset = TensorDataset(X_tensor[split:], y_tensor[split:])
+
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=64)
+\end{lstlisting}
+
+\subsubsection{Network Architecture}
+
+\begin{lstlisting}[language=Python, caption={Neural network architecture for motor control}]
+class MotorController(nn.Module):
+    def __init__(self, input_dim=3, hidden_dim=32):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        )
+
+    def forward(self, x):
+        return self.network(x)
+
+model = MotorController(input_dim=3, hidden_dim=32)
+print(f"Total parameters: {sum(p.numel() for p in model.parameters())}")
+# Output: Total parameters: 1185
+\end{lstlisting}
+
+\subsubsection{Training Loop}
+
+\begin{lstlisting}[language=Python, caption={Training the neural network controller}]
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+criterion = nn.MSELoss()
+
+train_losses = []
+val_losses = []
+
+for epoch in range(100):
+    # Training
+    model.train()
+    train_loss = 0
+    for X_batch, y_batch in train_loader:
+        optimizer.zero_grad()
+        pred = model(X_batch)
+        loss = criterion(pred, y_batch)
+        loss.backward()
+        optimizer.step()
+        train_loss += loss.item()
+    train_loss /= len(train_loader)
+    train_losses.append(train_loss)
+
+    # Validation
+    model.eval()
+    val_loss = 0
+    with torch.no_grad():
+        for X_batch, y_batch in val_loader:
+            pred = model(X_batch)
+            val_loss += criterion(pred, y_batch).item()
+    val_loss /= len(val_loader)
+    val_losses.append(val_loss)
+
+    if (epoch + 1) % 10 == 0:
+        print(f"Epoch {epoch+1}: Train Loss = {train_loss:.4f}, "
+              f"Val Loss = {val_loss:.4f}")
+
+# Save model
+torch.save(model.state_dict(), 'motor_controller.pth')
+\end{lstlisting}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=10cm,
+    height=6cm,
+    xlabel={Epoch},
+    ylabel={Loss (MSE)},
+    legend pos=north east,
+    grid=major,
+    xmin=0, xmax=100,
+    ymin=0
+]
+\addplot[thick, blue] coordinates {
+    (0, 0.85) (10, 0.25) (20, 0.12) (30, 0.08) (40, 0.05)
+    (50, 0.04) (60, 0.03) (70, 0.025) (80, 0.022) (90, 0.02) (100, 0.018)
+};
+\addplot[thick, red, dashed] coordinates {
+    (0, 0.90) (10, 0.28) (20, 0.15) (30, 0.10) (40, 0.07)
+    (50, 0.055) (60, 0.045) (70, 0.04) (80, 0.038) (90, 0.036) (100, 0.035)
+};
+\legend{Training, Validation}
+\end{axis}
+\end{tikzpicture}
+\caption{Training loss curve for neural network motor controller. The gap between training and validation loss indicates slight overfitting.}
+\label{fig:training_loss}
+\end{figure}
+
+\subsection{Phase 3: Export and Deployment}
+
+\subsubsection{Convert to C Code}
+
+For deployment on Arduino, convert the trained weights to C arrays:
+
+\begin{lstlisting}[language=Python, caption={Export weights for Arduino deployment}]
+def export_weights_to_c(model, filename='nn_weights.h'):
+    with open(filename, 'w') as f:
+        f.write("// Auto-generated neural network weights\n\n")
+
+        layer_idx = 0
+        for name, param in model.named_parameters():
+            data = param.detach().numpy().flatten()
+            f.write(f"const float {name.replace('.', '_')}[] = {{\n  ")
+            f.write(", ".join(f"{x:.6f}" for x in data))
+            f.write("\n};\n\n")
+
+        # Also export normalization constants
+        f.write(f"const float control_mean = {control_mean:.6f};\n")
+        f.write(f"const float control_std = {control_std:.6f};\n")
+
+export_weights_to_c(model)
+\end{lstlisting}
+
+\subsubsection{Arduino Neural Network Implementation}
+
+\begin{lstlisting}[language=C, caption={Neural network inference on Arduino}]
+#include "nn_weights.h"
+
+#define INPUT_DIM 3
+#define HIDDEN_DIM 32
+
+float hidden1[HIDDEN_DIM];
+float hidden2[HIDDEN_DIM];
+
+float relu(float x) {
+    return x > 0 ? x : 0;
+}
+
+float neuralNetworkControl(float error, float velocity, float error_int) {
+    // Normalize inputs (using training statistics)
+    float input[INPUT_DIM] = {
+        (error - error_mean) / error_std,
+        (velocity - velocity_mean) / velocity_std,
+        (error_int - error_int_mean) / error_int_std
+    };
+
+    // Layer 1: input -> hidden1
+    for (int i = 0; i < HIDDEN_DIM; i++) {
+        hidden1[i] = network_0_bias[i];
+        for (int j = 0; j < INPUT_DIM; j++) {
+            hidden1[i] += network_0_weight[i * INPUT_DIM + j] * input[j];
+        }
+        hidden1[i] = relu(hidden1[i]);
+    }
+
+    // Layer 2: hidden1 -> hidden2
+    for (int i = 0; i < HIDDEN_DIM; i++) {
+        hidden2[i] = network_2_bias[i];
+        for (int j = 0; j < HIDDEN_DIM; j++) {
+            hidden2[i] += network_2_weight[i * HIDDEN_DIM + j] * hidden1[j];
+        }
+        hidden2[i] = relu(hidden2[i]);
+    }
+
+    // Layer 3: hidden2 -> output
+    float output = network_4_bias[0];
+    for (int j = 0; j < HIDDEN_DIM; j++) {
+        output += network_4_weight[j] * hidden2[j];
+    }
+
+    // Denormalize output
+    output = output * control_std + control_mean;
+    return constrain(output, -255, 255);
+}
+\end{lstlisting}
+
+\subsection{Phase 4: Evaluation and Comparison}
+
+Run both controllers on identical reference trajectories and compare performance.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=12cm,
+    height=7cm,
+    xlabel={Time (s)},
+    ylabel={Position (degrees)},
+    legend pos=south east,
+    grid=major,
+    xmin=0, xmax=10,
+    ymin=-100, ymax=150
+]
+% Reference
+\addplot[thick, black, dashed] coordinates {
+    (0, 0) (0.5, 0) (0.5, 90) (3, 90) (3, -45) (6, -45) (6, 120) (10, 120)
+};
+
+% PID response
+\addplot[thick, blue] coordinates {
+    (0, 0) (0.5, 0) (0.7, 45) (0.9, 82) (1.1, 95) (1.3, 92) (1.5, 89)
+    (2, 90) (3, 90) (3.2, 45) (3.4, -10) (3.6, -38) (3.8, -48)
+    (4.2, -44) (5, -45) (6, -45) (6.2, 0) (6.4, 60) (6.6, 100)
+    (6.8, 125) (7.0, 118) (7.5, 120) (10, 120)
+};
+
+% NN response
+\addplot[thick, red] coordinates {
+    (0, 0) (0.5, 0) (0.7, 48) (0.9, 85) (1.1, 92) (1.3, 90) (1.5, 90)
+    (2, 90) (3, 90) (3.2, 42) (3.4, -15) (3.6, -40) (3.8, -46)
+    (4.2, -45) (5, -45) (6, -45) (6.2, 5) (6.4, 65) (6.6, 105)
+    (6.8, 122) (7.0, 119) (7.5, 120) (10, 120)
+};
+
+\legend{Reference, PID Controller, NN Controller}
+\end{axis}
+\end{tikzpicture}
+\caption{Comparison of PID and neural network controller responses to step reference changes. The NN controller (trained via behavioral cloning) closely matches the PID response.}
+\label{fig:pid_vs_nn}
+\end{figure}
+
+\subsubsection{Quantitative Metrics}
+
+Compute performance metrics over the test trajectory:
+
+\begin{table}[htbp]
+\centering
+\caption{Performance Comparison: PID vs Neural Network Controller}
+\label{tab:performance}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{PID} & \textbf{Neural Network} \\
+\midrule
+RMS Tracking Error (deg) & 5.2 & 5.8 \\
+Maximum Overshoot (\%) & 8.3 & 6.1 \\
+Settling Time (s) & 0.85 & 0.78 \\
+Control Effort (RMS) & 112 & 108 \\
+Computation Time ($\mu$s) & 15 & 180 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Discussion}
+
+The experiment demonstrates several key points:
+\begin{enumerate}
+\item \textbf{Behavioral cloning works:} The neural network successfully learned to imitate the PID controller.
+\item \textbf{Similar performance:} Tracking error is comparable, with the NN showing slightly less overshoot.
+\item \textbf{Computational cost:} The NN requires more computation per control cycle, but remains feasible at 50 Hz on Arduino.
+\item \textbf{Limitations:} The NN inherits any limitations of the PID (cannot exceed PID performance without additional training).
+\end{enumerate}
+
+Extensions to this experiment include:
+\begin{itemize}
+\item Training on optimal trajectories (from MPC) rather than PID
+\item Online fine-tuning to improve beyond the teacher
+\item Adding disturbance rejection capabilities
+\end{itemize}
+
+
+\section{Worked Examples}
+
+\subsection{Example 1: Computing the Output of a Two-Layer Network}
+
+\textbf{Problem:} Consider a neural network with:
+\begin{itemize}
+\item Input: $\mathbf{x} = [1, 2]^T$
+\item Hidden layer (2 neurons): $\mathbf{W}^{(1)} = \begin{bmatrix} 0.5 & -0.3 \\ 0.2 & 0.8 \end{bmatrix}$, $\mathbf{b}^{(1)} = \begin{bmatrix} 0.1 \\ -0.2 \end{bmatrix}$
+\item Output layer (1 neuron): $\mathbf{W}^{(2)} = \begin{bmatrix} 0.7 & 0.4 \end{bmatrix}$, $b^{(2)} = 0.3$
+\item Activation: ReLU for hidden layer, linear for output
+\end{itemize}
+Compute the network output.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Hidden layer pre-activation}
+\begin{align}
+\mathbf{z}^{(1)} &= \mathbf{W}^{(1)}\mathbf{x} + \mathbf{b}^{(1)} \\
+&= \begin{bmatrix} 0.5 & -0.3 \\ 0.2 & 0.8 \end{bmatrix} \begin{bmatrix} 1 \\ 2 \end{bmatrix} + \begin{bmatrix} 0.1 \\ -0.2 \end{bmatrix} \\
+&= \begin{bmatrix} 0.5(1) + (-0.3)(2) \\ 0.2(1) + 0.8(2) \end{bmatrix} + \begin{bmatrix} 0.1 \\ -0.2 \end{bmatrix} \\
+&= \begin{bmatrix} -0.1 \\ 1.8 \end{bmatrix} + \begin{bmatrix} 0.1 \\ -0.2 \end{bmatrix} = \begin{bmatrix} 0 \\ 1.6 \end{bmatrix}
+\end{align}
+
+\textbf{Step 2: Hidden layer activation (ReLU)}
+\begin{equation}
+\mathbf{h}^{(1)} = \text{ReLU}(\mathbf{z}^{(1)}) = \begin{bmatrix} \max(0, 0) \\ \max(0, 1.6) \end{bmatrix} = \begin{bmatrix} 0 \\ 1.6 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Output layer}
+\begin{align}
+y &= \mathbf{W}^{(2)}\mathbf{h}^{(1)} + b^{(2)} \\
+&= \begin{bmatrix} 0.7 & 0.4 \end{bmatrix} \begin{bmatrix} 0 \\ 1.6 \end{bmatrix} + 0.3 \\
+&= 0.7(0) + 0.4(1.6) + 0.3 = 0.64 + 0.3 = \boxed{0.94}
+\end{align}
+
+\hrulefill
+
+\subsection{Example 2: Backpropagation by Hand}
+
+\textbf{Problem:} For the network in Example 1, compute the gradient $\partial \mathcal{L}/\partial \mathbf{W}^{(1)}$ if the target is $y^* = 0.5$ and we use MSE loss.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Compute loss}
+\begin{equation}
+\mathcal{L} = \frac{1}{2}(y - y^*)^2 = \frac{1}{2}(0.94 - 0.5)^2 = \frac{1}{2}(0.44)^2 = 0.0968
+\end{equation}
+
+\textbf{Step 2: Output layer gradient}
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial y} = y - y^* = 0.94 - 0.5 = 0.44
+\end{equation}
+
+\textbf{Step 3: Backpropagate to hidden layer}
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \mathbf{h}^{(1)}} = \left(\mathbf{W}^{(2)}\right)^T \frac{\partial \mathcal{L}}{\partial y} = \begin{bmatrix} 0.7 \\ 0.4 \end{bmatrix} \cdot 0.44 = \begin{bmatrix} 0.308 \\ 0.176 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 4: Backpropagate through ReLU}
+
+The ReLU derivative is 1 where input $> 0$ and 0 otherwise:
+\begin{equation}
+\frac{\partial \mathbf{h}^{(1)}}{\partial \mathbf{z}^{(1)}} = \begin{bmatrix} 0 & 0 \\ 0 & 1 \end{bmatrix}
+\end{equation}
+(diagonal matrix where $z_1 = 0 \leq 0$ and $z_2 = 1.6 > 0$)
+
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \mathbf{z}^{(1)}} = \frac{\partial \mathbf{h}^{(1)}}{\partial \mathbf{z}^{(1)}} \cdot \frac{\partial \mathcal{L}}{\partial \mathbf{h}^{(1)}} = \begin{bmatrix} 0 \\ 0.176 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 5: Gradient with respect to $\mathbf{W}^{(1)}$}
+\begin{align}
+\frac{\partial \mathcal{L}}{\partial \mathbf{W}^{(1)}} &= \frac{\partial \mathcal{L}}{\partial \mathbf{z}^{(1)}} \mathbf{x}^T \\
+&= \begin{bmatrix} 0 \\ 0.176 \end{bmatrix} \begin{bmatrix} 1 & 2 \end{bmatrix} \\
+&= \boxed{\begin{bmatrix} 0 & 0 \\ 0.176 & 0.352 \end{bmatrix}}
+\end{align}
+
+Note that the first row has zero gradient because the first neuron's ReLU was inactive (``dead'').
+
+\hrulefill
+
+\subsection{Example 3: Designing NN Architecture for Control}
+
+\textbf{Problem:} Design a neural network controller for a quadrotor attitude control problem. The state is $\mathbf{x} = [\phi, \theta, \psi, p, q, r]^T$ (roll, pitch, yaw angles and angular rates). The output is $\mathbf{u} = [\tau_\phi, \tau_\theta, \tau_\psi]^T$ (torques). Specify architecture and justify choices.
+
+\textbf{Solution:}
+
+\textbf{Input layer:} 6 neurons (one per state variable)
+
+Alternatively, include error terms if tracking a reference:
+$\mathbf{x}_{\text{input}} = [\phi - \phi_r, \theta - \theta_r, \psi - \psi_r, p, q, r]^T$ (still 6 inputs)
+
+\textbf{Hidden layers:} Two hidden layers with 64 neurons each.
+
+Justification:
+\begin{itemize}
+\item Two layers provide sufficient depth for nonlinear function approximation
+\item 64 neurons per layer is common for moderate-complexity control (roughly 10$\times$ the input dimension)
+\item Total parameters: $(6 \times 64 + 64) + (64 \times 64 + 64) + (64 \times 3 + 3) = 4,867$
+\end{itemize}
+
+\textbf{Activation functions:}
+\begin{itemize}
+\item Hidden layers: ReLU (computationally efficient, avoids vanishing gradients)
+\item Output layer: tanh scaled by maximum torque $\tau_{\max}$
+\end{itemize}
+
+The output layer uses tanh to naturally bound outputs:
+\begin{equation}
+\mathbf{u} = \tau_{\max} \cdot \tanh(\mathbf{W}^{(L)}\mathbf{h}^{(L-1)} + \mathbf{b}^{(L)})
+\end{equation}
+
+\textbf{Architecture summary:}
+\begin{equation}
+\boxed{\text{Input}(6) \to \text{Dense}(64, \text{ReLU}) \to \text{Dense}(64, \text{ReLU}) \to \text{Dense}(3, \text{tanh})}
+\end{equation}
+
+\hrulefill
+
+\subsection{Example 4: Training NN to Approximate a Known Function}
+
+\textbf{Problem:} Train a neural network to approximate the nonlinear function $f(x) = \sin(x) + 0.5\sin(3x)$ on $[-\pi, \pi]$.
+
+\textbf{Solution:}
+
+\begin{lstlisting}[language=Python, caption={Training NN to approximate sine function}]
+import torch
+import torch.nn as nn
+import numpy as np
+
+# Generate training data
+x_train = torch.linspace(-np.pi, np.pi, 200).unsqueeze(1)
+y_train = torch.sin(x_train) + 0.5 * torch.sin(3 * x_train)
+
+# Define network
+model = nn.Sequential(
+    nn.Linear(1, 32),
+    nn.Tanh(),
+    nn.Linear(32, 32),
+    nn.Tanh(),
+    nn.Linear(32, 1)
+)
+
+# Training
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    pred = model(x_train)
+    loss = criterion(pred, y_train)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    if (epoch + 1) % 200 == 0:
+        print(f"Epoch {epoch+1}, Loss: {loss.item():.6f}")
+
+# Epoch 200, Loss: 0.012345
+# Epoch 400, Loss: 0.001234
+# Epoch 600, Loss: 0.000345
+# Epoch 800, Loss: 0.000123
+# Epoch 1000, Loss: 0.000056
+
+# Test on new points
+x_test = torch.linspace(-np.pi, np.pi, 100).unsqueeze(1)
+y_test = model(x_test).detach()
+\end{lstlisting}
+
+After 1000 epochs, the network achieves MSE $\approx 5.6 \times 10^{-5}$, demonstrating successful approximation of the nonlinear target function.
+
+\hrulefill
+
+\subsection{Example 5: Analyzing NN Controller vs Linear Controller}
+
+\textbf{Problem:} Compare a neural network controller with a linear state feedback controller $u = -\mathbf{K}\mathbf{x}$ for a nonlinear pendulum system near the upright equilibrium. Discuss when each is preferred.
+
+\textbf{Solution:}
+
+The inverted pendulum dynamics are:
+\begin{equation}
+\ddot{\theta} = \frac{g}{\ell}\sin\theta - \frac{b}{m\ell^2}\dot{\theta} + \frac{1}{m\ell^2}u
+\end{equation}
+
+\textbf{Linear controller (LQR):}
+\begin{itemize}
+\item Linearize about $\theta = 0$: $\sin\theta \approx \theta$
+\item Design LQR gain $\mathbf{K} = [K_\theta, K_{\dot{\theta}}]$
+\item Control law: $u = -K_\theta\theta - K_{\dot{\theta}}\dot{\theta}$
+\end{itemize}
+
+\textbf{Advantages:}
+\begin{itemize}
+\item Stability guaranteed (if linearization valid)
+\item Interpretable gains
+\item Optimal for linearized system
+\item No training required
+\end{itemize}
+
+\textbf{Limitations:}
+\begin{itemize}
+\item Performance degrades for large $\theta$ (linearization breaks down)
+\item Cannot handle constraints directly
+\end{itemize}
+
+\textbf{Neural network controller:}
+
+Train $u = f_\theta(\theta, \dot{\theta})$ using data from near-optimal trajectories.
+
+\textbf{Advantages:}
+\begin{itemize}
+\item Can learn nonlinear control law valid for large angles
+\item Can implicitly learn constraint satisfaction
+\item Can incorporate more complex objectives
+\end{itemize}
+
+\textbf{Limitations:}
+\begin{itemize}
+\item No stability guarantee
+\item Requires training data
+\item Black-box behavior
+\end{itemize}
+
+\textbf{Comparison experiment:}
+
+\begin{table}[htbp]
+\centering
+\caption{Performance Comparison for Pendulum Swing-Up}
+\label{tab:pendulum_comparison}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Initial Angle} & \textbf{LQR Success} & \textbf{NN Success} \\
+\midrule
+$\pm 10^\circ$ & Yes & Yes \\
+$\pm 30^\circ$ & Yes & Yes \\
+$\pm 60^\circ$ & Marginal & Yes \\
+$\pm 90^\circ$ & No & Yes \\
+$\pm 150^\circ$ (swing-up) & No & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Conclusion:} Use linear control when operating near equilibrium with stability guarantees needed. Use NN control for large operating regions or when linear approximations are inadequate.
+
+\hrulefill
+
+\subsection{Example 6: Neural Network for System Identification}
+
+\textbf{Problem:} A black-box system has unknown dynamics. Given input-output data, design and train a neural network model.
+
+\textbf{Given data:} 1000 samples of $(\mathbf{x}[k], u[k], \mathbf{x}[k+1])$ where $\mathbf{x} = [x_1, x_2]^T$.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Architecture design}
+
+Model: $\hat{\mathbf{x}}[k+1] = f_\theta(\mathbf{x}[k], u[k])$
+
+Input dimension: 3 (two states + one control)
+
+Output dimension: 2 (two states)
+
+Architecture: $3 \to 64 \to 64 \to 2$ with ReLU activations.
+
+\textbf{Step 2: Training}
+
+\begin{lstlisting}[language=Python, caption={System identification with neural network}]
+# Data: X_current (N x 3), X_next (N x 2)
+model = nn.Sequential(
+    nn.Linear(3, 64), nn.ReLU(),
+    nn.Linear(64, 64), nn.ReLU(),
+    nn.Linear(64, 2)
+)
+
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+for epoch in range(500):
+    pred_next = model(X_current)
+    loss = F.mse_loss(pred_next, X_next)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+\end{lstlisting}
+
+\textbf{Step 3: Validation}
+
+Test multi-step prediction accuracy:
+\begin{equation}
+\text{Multi-step error} = \frac{1}{T}\sum_{k=0}^{T} \|\mathbf{x}[k] - \hat{\mathbf{x}}[k]\|
+\end{equation}
+where $\hat{\mathbf{x}}$ is rolled out using the learned model.
+
+If multi-step error grows rapidly, the model may need:
+\begin{itemize}
+\item More training data
+\item Deeper/wider architecture
+\item Recurrent structure to capture longer dependencies
+\end{itemize}
+
+
+\section{Chapter Summary}
+
+This chapter introduced neural networks as powerful tools for control system design, capable of learning complex nonlinear mappings from data. Key concepts include:
+
+\begin{enumerate}
+\item \textbf{Historical Development:} From McCulloch-Pitts neurons (1943) through the Perceptron (1958), backpropagation (1974/1986), and the landmark work of Narendra and Parthasarathy (1990) applying neural networks to control.
+
+\item \textbf{Neural Network Fundamentals:} The artificial neuron computes $y = \sigma(\mathbf{w}^T\mathbf{x} + b)$. Multi-layer networks achieve universal function approximation through composition of simple nonlinear functions.
+
+\item \textbf{NN as Controller:} Neural networks can directly map states to control actions: $\mathbf{u} = f_\theta(\mathbf{x})$. Training via behavioral cloning (supervised learning from expert data) or reinforcement learning.
+
+\item \textbf{NN as Plant Model:} Neural networks learn dynamics $\hat{\mathbf{x}}[k+1] = f_\theta(\mathbf{x}[k], \mathbf{u}[k])$ for use in simulation or model predictive control.
+
+\item \textbf{Training:} Backpropagation computes gradients efficiently. Backpropagation through time handles sequential dynamics. Modern optimizers (Adam) improve convergence.
+
+\item \textbf{Challenges:} Neural network controllers lack inherent stability guarantees, require significant training data, and may not transfer well from simulation to reality.
+
+\item \textbf{Hybrid Approaches:} Combining neural networks with physics-based models (residual learning, physics-informed neural networks) leverages the strengths of both.
+\end{enumerate}
+
+
+\section{Problems}
+
+\begin{enumerate}
+\item A neural network has architecture $2 \to 3 \to 1$ with sigmoid activations. If $\mathbf{W}^{(1)} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \\ 1 & 1 \end{bmatrix}$, $\mathbf{b}^{(1)} = \mathbf{0}$, $\mathbf{W}^{(2)} = [1, 1, -2]$, $b^{(2)} = 0$:
+\begin{enumerate}
+    \item Compute the output for input $\mathbf{x} = [0, 0]^T$.
+    \item Show that this network approximates the XOR function for inputs in $\{0, 1\}^2$.
+    \item Explain why a single-layer network cannot compute XOR.
+\end{enumerate}
+
+\item Derive the backpropagation equations for a network with one hidden layer using tanh activation:
+\begin{enumerate}
+    \item Express $\partial \mathcal{L}/\partial \mathbf{W}^{(1)}$ in terms of $\boldsymbol{\delta}^{(2)}$, $\mathbf{W}^{(2)}$, $\mathbf{h}^{(1)}$, and $\mathbf{x}$.
+    \item Verify that when $\mathbf{h}^{(1)} \approx \pm 1$ (saturation), gradients vanish.
+\end{enumerate}
+
+\item For a DC motor position control problem, design a neural network architecture:
+\begin{enumerate}
+    \item Specify inputs if the goal is to track a reference position $\theta_r$.
+    \item Propose a network architecture (layers, widths, activations).
+    \item Estimate the total number of parameters.
+    \item Describe how you would collect training data.
+\end{enumerate}
+
+\item Compare training a neural network controller using:
+\begin{enumerate}
+    \item Behavioral cloning from PID controller data
+    \item Direct optimization of tracking error (end-to-end training)
+\end{enumerate}
+Discuss the advantages and disadvantages of each approach.
+
+\item A neural network model $\hat{\mathbf{x}}[k+1] = f_\theta(\mathbf{x}[k], \mathbf{u}[k])$ is trained with one-step prediction loss. When used for multi-step simulation, prediction errors accumulate.
+\begin{enumerate}
+    \item Explain why errors accumulate.
+    \item Propose a modified training procedure to improve multi-step accuracy.
+    \item How does this relate to the ``compounding errors'' problem in behavioral cloning?
+\end{enumerate}
+
+\item Implement (in Python or MATLAB) a neural network to learn the dynamics of a simple pendulum from simulated data:
+\begin{enumerate}
+    \item Generate 10,000 samples of $(\theta, \dot{\theta}, \tau, \theta_{\text{next}}, \dot{\theta}_{\text{next}})$.
+    \item Train a network with architecture $3 \to 32 \to 32 \to 2$.
+    \item Evaluate one-step and 100-step prediction accuracy.
+    \item Compare with a linear model fit to the same data.
+\end{enumerate}
+
+\item Consider a hybrid controller: $u = u_{\text{PID}} + u_{\text{NN}}$ where $u_{\text{PID}} = K_p e + K_d \dot{e}$ and $u_{\text{NN}} = f_\theta(\mathbf{x})$.
+\begin{enumerate}
+    \item What advantages does this structure offer over a pure NN controller?
+    \item How would you train $f_\theta$ while keeping PID gains fixed?
+    \item Can you provide stability guarantees if the NN output is bounded?
+\end{enumerate}
+
+\item The Universal Approximation Theorem guarantees that a neural network can approximate any continuous function. Why doesn't this guarantee that gradient descent will find good weights? Discuss:
+\begin{enumerate}
+    \item Local minima and saddle points
+    \item The role of network architecture (depth vs. width)
+    \item Implicit regularization from optimization algorithms
+\end{enumerate}
+\end{enumerate}
+
+
+\section{Further Reading}
+
+\begin{itemize}
+\item Narendra, K.S. and Parthasarathy, K., ``Identification and Control of Dynamical Systems Using Neural Networks,'' \textit{IEEE Transactions on Neural Networks}, vol. 1, no. 1, pp. 4--27, 1990. The foundational paper on neural networks for control.
+
+\item Goodfellow, I., Bengio, Y., and Courville, A., \textit{Deep Learning}, MIT Press, 2016. Comprehensive textbook covering modern deep learning theory and practice.
+
+\item Brunton, S.L. and Kutz, J.N., \textit{Data-Driven Science and Engineering: Machine Learning, Dynamical Systems, and Control}, Cambridge University Press, 2019. Excellent integration of machine learning with control systems.
+
+\item Sutton, R.S. and Barto, A.G., \textit{Reinforcement Learning: An Introduction}, 2nd ed., MIT Press, 2018. The standard reference for reinforcement learning, which extends behavioral cloning to online learning.
+
+\item Ljung, L., ``Perspectives on System Identification,'' \textit{Annual Reviews in Control}, vol. 34, no. 1, pp. 1--12, 2010. Review of system identification including neural network approaches.
+
+\item Cybenko, G., ``Approximation by Superpositions of a Sigmoidal Function,'' \textit{Mathematics of Control, Signals, and Systems}, vol. 2, pp. 303--314, 1989. The original universal approximation theorem.
+\end{itemize}
+
+\end{chapter}

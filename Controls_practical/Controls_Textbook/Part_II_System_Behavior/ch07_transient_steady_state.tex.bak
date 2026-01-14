@@ -1,0 +1,1870 @@
+% Chapter 7: Transient vs Steady-State Response
+% Complete IEEE-formatted LaTeX chapter for a control systems textbook
+% Self-contained document
+
+\documentclass[12pt,letterpaper]{book}
+
+% Essential packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usetikzlibrary{arrows.meta,positioning,shapes,calc,patterns,decorations.markings}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{listings}
+\usepackage{siunitx}
+\usepackage{hyperref}
+
+% Page geometry (IEEE-style margins)
+\geometry{
+    left=1in,
+    right=1in,
+    top=1in,
+    bottom=1in
+}
+
+% Header/footer configuration
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\leftmark}
+\fancyhead[RO]{\rightmark}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Custom colors
+\definecolor{controlblue}{RGB}{0,102,204}
+\definecolor{errorred}{RGB}{204,0,0}
+\definecolor{successgreen}{RGB}{0,153,0}
+\definecolor{codegray}{RGB}{245,245,245}
+
+% Custom environments
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{historicalbox}[1][]{
+    colback=blue!5!white,
+    colframe=controlblue,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{applicationbox}[1][]{
+    colback=green!5!white,
+    colframe=successgreen,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{examplebox}[1][]{
+    colback=gray!5!white,
+    colframe=black!70,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warningbox}[1][]{
+    colback=red!5!white,
+    colframe=errorred,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{keyconceptbox}[1][]{
+    colback=yellow!10!white,
+    colframe=orange!80!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% Code listing style
+\lstset{
+    backgroundcolor=\color{codegray},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    captionpos=b,
+    commentstyle=\color{green!60!black},
+    keywordstyle=\color{blue},
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    tabsize=4
+}
+
+% Document info
+\title{Control Systems: Theory and Practice}
+\author{Department of Electrical Engineering}
+\date{}
+
+\begin{document}
+
+\setcounter{chapter}{6}
+
+\chapter{Transient vs Steady-State Response}
+
+\begin{quote}
+\textit{``The engineer's eternal dilemma: you can have it fast, or you can have it accurate---but getting both requires wisdom.''}
+\vspace{0.5em}
+
+--- Attributed to early process control engineers, circa 1940
+\end{quote}
+
+\vspace{1em}
+
+\noindent
+When a control system responds to a command or disturbance, its behavior unfolds in two distinct phases. The \textbf{transient response} captures the dynamic journey from one state to another---characterized by speed, oscillation, and overshoot. The \textbf{steady-state response} describes where the system ultimately settles---and whether it reaches the intended target. Understanding and quantifying both aspects is essential for designing systems that are not merely stable, but \textit{well-behaved}.
+
+This chapter develops the mathematical framework for analyzing transient and steady-state performance, traces the historical evolution of performance specifications, and demonstrates practical methods for measuring and optimizing system response.
+
+%=============================================================================
+\section{Historical Development: The Quest for Performance Specifications}
+%=============================================================================
+
+The formal study of control system performance emerged from practical necessity. Early engineers knew intuitively that a system could be stable yet perform poorly---too slow, too oscillatory, or perpetually off-target. The challenge was developing quantitative measures that could guide design.
+
+%-----------------------------------------------------------------------------
+\subsection{Industrial Process Control: The Foundation (1920s--1940s)}
+%-----------------------------------------------------------------------------
+
+\begin{historicalbox}[The Birth of Performance Thinking]
+The modern conception of transient and steady-state specifications arose from the chemical and petroleum industries, where process control became economically essential during the early twentieth century.
+\end{historicalbox}
+
+The 1920s witnessed the transformation of industrial manufacturing from batch processing to continuous operation. Oil refineries, chemical plants, and paper mills required automatic control of temperature, pressure, flow rate, and composition. The pneumatic controller---operating on compressed air signals between 3 and 15 psi---became the standard actuator.
+
+Early operators noticed a fundamental problem: a controller that maintained steady temperature accurately might respond sluggishly to disturbances, allowing product quality to drift for extended periods. Conversely, a controller tuned for rapid response often oscillated persistently, creating new problems. The \textit{tradeoff between speed and stability} entered engineering consciousness.
+
+The instrumentation companies---notably Foxboro, Taylor Instrument, and Leeds \& Northrup---began documenting controller behavior systematically. Engineers developed what they called ``reaction curve'' methods: applying a step change to a process and recording the response on a strip chart recorder. From these curves, they extracted empirical measures:
+
+\begin{itemize}
+    \item \textbf{Dead time}: How long before the output began responding?
+    \item \textbf{Reaction rate}: How fast did the output change initially?
+    \item \textbf{Ultimate value}: Where did the output finally settle?
+    \item \textbf{Overshoot}: Did the output exceed the target before settling?
+\end{itemize}
+
+These practical measures, developed through industrial experience, would later be formalized mathematically.
+
+%-----------------------------------------------------------------------------
+\subsection{Servomechanisms and World War II: Speed Becomes Critical}
+%-----------------------------------------------------------------------------
+
+The Second World War transformed control engineering from an industrial specialty into a strategic technology. Military applications---gun turrets, radar tracking systems, torpedo steering, and aircraft autopilots---demanded performance that peaceful industry had never required.
+
+\begin{historicalbox}[The Fire Control Problem]
+Consider a naval gun turret tracking an aircraft. The turret must:
+\begin{enumerate}
+    \item Respond quickly enough to follow a maneuvering target
+    \item Avoid oscillating around the target (which would spray bullets uselessly)
+    \item Point accurately at the predicted intercept position
+    \item Operate reliably under combat conditions
+\end{enumerate}
+Each requirement translates to a performance specification.
+\end{historicalbox}
+
+The MIT Radiation Laboratory, established in 1940, became a center for servo theory development. Engineers including Gordon Brown, Albert Hall, and Nathaniel Nichols developed systematic methods for analyzing and designing servomechanisms. Their 1943 report, later published as \textit{Theory of Servomechanisms} (1947), established the vocabulary still used today.
+
+The radar tracking problem proved particularly instructive. A radar antenna must follow a target---perhaps an aircraft at several miles' distance---with sufficient accuracy for fire control computation. The antenna position servo must:
+
+\begin{itemize}
+    \item \textbf{Track with minimal lag}: If the target moves at constant angular velocity, the servo must follow with acceptably small \textit{velocity error}.
+    \item \textbf{Respond rapidly to maneuvers}: When the target changes course, the servo must adjust quickly---small \textit{rise time}.
+    \item \textbf{Avoid oscillation}: Hunting around the target position wastes time and may lose track entirely---controlled \textit{overshoot} and \textit{settling time}.
+\end{itemize}
+
+The mathematical analysis of these requirements led directly to the specifications we study today.
+
+%-----------------------------------------------------------------------------
+\subsection{Ziegler and Nichols: The First Systematic Tuning Rules (1942)}
+%-----------------------------------------------------------------------------
+
+In 1942, John G.\ Ziegler and Nathaniel B.\ Nichols of Taylor Instrument Companies published a landmark paper: ``Optimum Settings for Automatic Controllers.'' This work, appearing in the \textit{Transactions of the ASME}, provided the first widely-adopted method for selecting controller gains based on desired performance.
+
+\begin{historicalbox}[The Ziegler-Nichols Philosophy]
+Ziegler and Nichols recognized that industrial users needed practical tuning methods, not theoretical analysis. Their approach:
+\begin{enumerate}
+    \item Characterize the process through simple experiments
+    \item Apply formulas to calculate controller settings
+    \item Achieve ``quarter-amplitude damping''---a specific performance target
+\end{enumerate}
+\end{historicalbox}
+
+The ``quarter-amplitude damping'' criterion specified that each successive oscillation peak should be one-quarter the amplitude of the previous peak. This corresponds to a damping ratio $\zeta \approx 0.21$---quite oscillatory by modern standards, but providing rapid response.
+
+Ziegler and Nichols proposed two methods:
+
+\textbf{Open-Loop Method}: Apply a step input to the open-loop process. Measure the dead time $L$ and the slope $R$ of the response. Calculate controller gains from these parameters.
+
+\textbf{Closed-Loop Method}: With the controller in proportional-only mode, increase gain until the system exhibits sustained oscillation. Record the \textit{ultimate gain} $K_u$ and \textit{ultimate period} $T_u$. Calculate controller gains from these parameters.
+
+While subsequent research has produced many refinements, the Ziegler-Nichols methods remain in use eight decades later---a testament to their practical utility. More importantly, their work established that \textit{performance specifications should guide controller design}, not merely stability considerations.
+
+%-----------------------------------------------------------------------------
+\subsection{Telephone Switching: Precision Timing Requirements (1950s)}
+%-----------------------------------------------------------------------------
+
+The postwar expansion of telephone networks created new demands for control system performance. Automatic switching systems---replacing human operators---required electromechanical servos to position selector switches with extreme reliability.
+
+The dial telephone system exemplified timing-critical control. When a subscriber dialed a digit, the dial mechanism generated a series of pulses (one pulse for ``1,'' two for ``2,'' etc., with ten pulses for ``0''). Each pulse lasted nominally 100 milliseconds, with a 60\% break and 40\% make ratio. The receiving equipment had to:
+
+\begin{itemize}
+    \item Recognize pulses arriving at rates from 8 to 12 pulses per second
+    \item Distinguish between inter-digit pauses and end-of-dialing
+    \item Position stepper switches accurately within the pulse train timing
+    \item Operate reliably over millions of cycles
+\end{itemize}
+
+Bell Telephone Laboratories engineers developed sophisticated analysis methods for these timing-critical systems. The concepts of \textit{settling time} and \textit{timing margins} became central to switching system design. A selector that oscillated or settled slowly might miscount pulses, connecting calls incorrectly.
+
+This application demonstrated that transient specifications were not merely about ``fast versus slow''---they were about \textit{precise timing} in systems where errors had immediate, observable consequences.
+
+%-----------------------------------------------------------------------------
+\subsection{The Fundamental Tradeoff: Speed vs.\ Accuracy}
+%-----------------------------------------------------------------------------
+
+By the 1950s, control engineers had distilled decades of experience into a fundamental insight: \textit{improving transient response typically degrades steady-state accuracy, and vice versa}.
+
+Consider a simple proportional controller with gain $K_p$. Increasing $K_p$:
+\begin{itemize}
+    \item \textbf{Improves} steady-state accuracy (reduces position error)
+    \item \textbf{Improves} response speed (smaller rise time)
+    \item \textbf{Degrades} damping (more overshoot, longer settling time)
+    \item Eventually \textbf{destabilizes} the system
+\end{itemize}
+
+Adding integral action (creating a PI controller):
+\begin{itemize}
+    \item \textbf{Eliminates} steady-state error for step inputs
+    \item \textbf{Degrades} stability margins
+    \item \textbf{Slows} the transient response
+    \item Can cause \textbf{integrator windup} during saturation
+\end{itemize}
+
+This tradeoff---inherent to feedback control---motivates the careful study of performance specifications. The engineer must understand quantitatively how design choices affect each aspect of response, then select the best compromise for the application.
+
+%=============================================================================
+\section{Modern Applications: Where Performance Specifications Matter}
+%=============================================================================
+
+The transient and steady-state specifications developed in the mid-twentieth century remain central to modern control system design. Contemporary applications, while technologically transformed, face the same fundamental tradeoffs.
+
+%-----------------------------------------------------------------------------
+\subsection{Hard Disk Drive Head Positioning}
+%-----------------------------------------------------------------------------
+
+\begin{applicationbox}[Settling Time: The Critical Specification]
+A modern hard disk drive positions the read/write head over the correct track in approximately 4--8 milliseconds. With track densities exceeding 500,000 tracks per inch, the head must settle to within a fraction of a micrometer---and do so repeatedly, reliably, and quickly.
+\end{applicationbox}
+
+The disk drive servo exemplifies a settling-time-critical application. The head must:
+\begin{itemize}
+    \item Move rapidly from one track to another (\textit{seek})
+    \item Settle accurately on the target track (\textit{settle})
+    \item Maintain position during read/write operations (\textit{track following})
+\end{itemize}
+
+The seek-and-settle operation dominates drive performance. A servo that overshoots may cross the target track, requiring additional correction time. One that undershoots may never achieve the required positioning accuracy. Drive manufacturers invest enormous effort in optimizing the settling time---measured to the microsecond---while maintaining acceptable overshoot.
+
+The servo transfer function is carefully designed to provide:
+\begin{itemize}
+    \item Settling time $t_s < 5\,\text{ms}$ (for single-track seeks)
+    \item Overshoot $< 5\%$ of track pitch
+    \item Position error $< 10\%$ of track pitch during steady tracking
+\end{itemize}
+
+%-----------------------------------------------------------------------------
+\subsection{CNC Machining: Accuracy vs.\ Throughput}
+%-----------------------------------------------------------------------------
+
+Computer Numerical Control (CNC) machine tools present the classic accuracy-versus-speed tradeoff. A milling machine cutting a precision part must:
+\begin{itemize}
+    \item Move the cutting tool along programmed paths
+    \item Maintain positional accuracy within specified tolerances
+    \item Complete the operation in reasonable time
+\end{itemize}
+
+Higher feed rates increase throughput but stress the servo systems. Axis drives may exhibit:
+\begin{itemize}
+    \item \textbf{Following error}: The actual position lags the commanded position during motion
+    \item \textbf{Corner rounding}: At direction changes, the tool path deviates from the programmed geometry
+    \item \textbf{Vibration}: High accelerations excite mechanical resonances
+\end{itemize}
+
+Modern CNC controllers implement sophisticated servo algorithms that:
+\begin{itemize}
+    \item Limit jerk (rate of acceleration change) to reduce vibration
+    \item Use feedforward compensation to reduce following error
+    \item Adjust gains based on axis position and load
+\end{itemize}
+
+The performance specifications---particularly velocity error constants and settling times---directly impact achievable part accuracy and machining speed.
+
+%-----------------------------------------------------------------------------
+\subsection{Insulin Pumps: Overshoot is Dangerous}
+%-----------------------------------------------------------------------------
+
+\begin{warningbox}[Safety-Critical Control]
+In medical devices, performance specifications are not merely about quality---they concern patient safety. An insulin pump that overshoots could deliver a dangerous overdose.
+\end{warningbox}
+
+Insulin pump controllers must regulate blood glucose levels by modulating insulin delivery. The control challenge:
+\begin{itemize}
+    \item Glucose dynamics are slow (time constants of hours)
+    \item Meals create large disturbances
+    \item Individual patient responses vary widely
+    \item Both hyperglycemia (high glucose) and hypoglycemia (low glucose) are dangerous
+\end{itemize}
+
+Hypoglycemia---caused by excessive insulin---is immediately dangerous, potentially causing seizures, unconsciousness, or death. Therefore, insulin pump controllers are deliberately designed with:
+\begin{itemize}
+    \item \textbf{No overshoot} in the insulin delivery rate
+    \item \textbf{Conservative gain margins}
+    \item \textbf{Asymmetric response}: slower to increase delivery, faster to decrease
+\end{itemize}
+
+This application demonstrates that performance specifications must be chosen with application context. The ``optimal'' response for one application may be dangerous for another.
+
+%-----------------------------------------------------------------------------
+\subsection{Autonomous Vehicle Lane Keeping}
+%-----------------------------------------------------------------------------
+
+Self-driving vehicles must maintain lane position while traveling at highway speeds. The lane-keeping controller:
+\begin{itemize}
+    \item Senses lane boundaries through cameras and sensors
+    \item Commands steering adjustments to maintain center position
+    \item Responds to road curvature, wind gusts, and road imperfections
+\end{itemize}
+
+Performance requirements include:
+\begin{itemize}
+    \item \textbf{Settling time}: After a lane change, the vehicle should stabilize within 2--3 seconds
+    \item \textbf{Overshoot}: The vehicle should not oscillate within the lane (passenger discomfort, safety concern)
+    \item \textbf{Steady-state error}: The vehicle should track lane center with error less than 10 cm
+    \item \textbf{Disturbance rejection}: Wind gusts should cause minimal deviation
+\end{itemize}
+
+The lane-keeping problem also illustrates nested specifications: the position controller (maintaining lane center) must be coordinated with the heading controller (maintaining vehicle orientation) and the actuator dynamics (steering motor response).
+
+%=============================================================================
+\section{Mathematical Foundation: Transient Response Specifications}
+%=============================================================================
+
+We now develop the mathematical framework for analyzing transient response. Our treatment focuses on second-order systems, which capture the essential behavior of most practical controlled systems.
+
+%-----------------------------------------------------------------------------
+\subsection{The Standard Second-Order System}
+%-----------------------------------------------------------------------------
+
+Consider the closed-loop transfer function:
+\begin{equation}
+    G(s) = \frac{Y(s)}{R(s)} = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+    \label{eq:second_order_tf}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\omega_n$ = \textbf{natural frequency} (rad/s): the frequency of oscillation if undamped
+    \item $\zeta$ = \textbf{damping ratio} (dimensionless): the degree of damping relative to critical damping
+\end{itemize}
+
+The characteristic equation $s^2 + 2\zeta\omega_n s + \omega_n^2 = 0$ has roots:
+\begin{equation}
+    s_{1,2} = -\zeta\omega_n \pm \omega_n\sqrt{\zeta^2 - 1}
+    \label{eq:char_roots}
+\end{equation}
+
+The nature of these roots---and hence the system response---depends on $\zeta$:
+
+\begin{keyconceptbox}[Damping Ratio Classification]
+\begin{itemize}
+    \item $\zeta > 1$: \textbf{Overdamped} --- Two distinct real poles, no oscillation
+    \item $\zeta = 1$: \textbf{Critically damped} --- Repeated real pole, fastest non-oscillatory response
+    \item $0 < \zeta < 1$: \textbf{Underdamped} --- Complex conjugate poles, oscillatory response
+    \item $\zeta = 0$: \textbf{Undamped} --- Purely imaginary poles, sustained oscillation
+    \item $\zeta < 0$: \textbf{Unstable} --- Poles in right half-plane
+\end{itemize}
+\end{keyconceptbox}
+
+For the underdamped case ($0 < \zeta < 1$), the poles are:
+\begin{equation}
+    s_{1,2} = -\zeta\omega_n \pm j\omega_n\sqrt{1 - \zeta^2} = -\sigma \pm j\omega_d
+\end{equation}
+
+where $\sigma = \zeta\omega_n$ is the \textbf{exponential decay rate} and $\omega_d = \omega_n\sqrt{1-\zeta^2}$ is the \textbf{damped natural frequency}.
+
+%-----------------------------------------------------------------------------
+\subsection{Unit Step Response Derivation}
+%-----------------------------------------------------------------------------
+
+For a unit step input, $R(s) = 1/s$, the output is:
+\begin{equation}
+    Y(s) = \frac{\omega_n^2}{s(s^2 + 2\zeta\omega_n s + \omega_n^2)}
+\end{equation}
+
+Using partial fraction expansion for the underdamped case:
+\begin{equation}
+    Y(s) = \frac{1}{s} - \frac{s + 2\zeta\omega_n}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+Taking the inverse Laplace transform:
+\begin{equation}
+    y(t) = 1 - \frac{e^{-\zeta\omega_n t}}{\sqrt{1-\zeta^2}}\sin(\omega_d t + \phi)
+    \label{eq:step_response}
+\end{equation}
+
+where $\phi = \cos^{-1}(\zeta)$.
+
+Alternatively, this can be written as:
+\begin{equation}
+    y(t) = 1 - e^{-\zeta\omega_n t}\left[\cos(\omega_d t) + \frac{\zeta}{\sqrt{1-\zeta^2}}\sin(\omega_d t)\right]
+    \label{eq:step_response_alt}
+\end{equation}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=14cm,
+    height=9cm,
+    xlabel={Normalized Time $\omega_n t$},
+    ylabel={Output $y(t)$},
+    xmin=0, xmax=14,
+    ymin=0, ymax=1.8,
+    grid=both,
+    grid style={line width=0.2pt, draw=gray!30},
+    major grid style={line width=0.4pt,draw=gray!60},
+    legend pos=south east,
+    legend style={font=\small},
+    title={Second-Order System Step Response for Various $\zeta$}
+]
+% zeta = 0.1
+\addplot[thick, red, domain=0:14, samples=200]
+    {1 - exp(-0.1*x)*(cos(deg(sqrt(1-0.01)*x)) + 0.1/sqrt(1-0.01)*sin(deg(sqrt(1-0.01)*x)))};
+\addlegendentry{$\zeta = 0.1$}
+
+% zeta = 0.3
+\addplot[thick, orange, domain=0:14, samples=200]
+    {1 - exp(-0.3*x)*(cos(deg(sqrt(1-0.09)*x)) + 0.3/sqrt(1-0.09)*sin(deg(sqrt(1-0.09)*x)))};
+\addlegendentry{$\zeta = 0.3$}
+
+% zeta = 0.5
+\addplot[thick, yellow!80!black, domain=0:14, samples=200]
+    {1 - exp(-0.5*x)*(cos(deg(sqrt(1-0.25)*x)) + 0.5/sqrt(1-0.25)*sin(deg(sqrt(1-0.25)*x)))};
+\addlegendentry{$\zeta = 0.5$}
+
+% zeta = 0.7
+\addplot[thick, green!70!black, domain=0:14, samples=200]
+    {1 - exp(-0.7*x)*(cos(deg(sqrt(1-0.49)*x)) + 0.7/sqrt(1-0.49)*sin(deg(sqrt(1-0.49)*x)))};
+\addlegendentry{$\zeta = 0.707$}
+
+% zeta = 1.0 (critically damped)
+\addplot[thick, blue, domain=0:14, samples=200]
+    {1 - exp(-x)*(1 + x)};
+\addlegendentry{$\zeta = 1.0$}
+
+% zeta = 2.0 (overdamped)
+\addplot[thick, purple, domain=0:14, samples=200]
+    {1 - 2*exp(-0.268*x) + exp(-3.732*x)};
+\addlegendentry{$\zeta = 2.0$}
+
+% Reference line at y=1
+\addplot[dashed, black, thick] coordinates {(0,1) (14,1)};
+
+\end{axis}
+\end{tikzpicture}
+\caption{Unit step response of second-order systems with various damping ratios. Note the tradeoff: low $\zeta$ gives fast rise but large overshoot; high $\zeta$ eliminates overshoot but slows the response.}
+\label{fig:step_response_zeta}
+\end{figure}
+
+%-----------------------------------------------------------------------------
+\subsection{Rise Time}
+%-----------------------------------------------------------------------------
+
+\textbf{Rise time} $t_r$ measures how quickly the system responds to a step input. The standard definition is the time required for the output to rise from 10\% to 90\% of the final value.
+
+For an underdamped second-order system, the rise time can be approximated by:
+\begin{equation}
+    \boxed{t_r \approx \frac{1.8}{\omega_n} \quad \text{(for } \zeta \approx 0.5\text{)}}
+    \label{eq:rise_time_approx}
+\end{equation}
+
+A more accurate formula, valid for $0.3 < \zeta < 0.8$:
+\begin{equation}
+    t_r \approx \frac{1.76\zeta^3 - 0.417\zeta^2 + 1.039\zeta + 1}{\omega_n}
+\end{equation}
+
+For practical design, the following approximation is often used:
+\begin{equation}
+    t_r \approx \frac{\pi - \phi}{\omega_d} = \frac{\pi - \cos^{-1}(\zeta)}{\omega_n\sqrt{1-\zeta^2}}
+\end{equation}
+
+\begin{keyconceptbox}[Rise Time Insight]
+Rise time is primarily determined by $\omega_n$. To achieve faster rise time:
+\begin{itemize}
+    \item Increase $\omega_n$ (move poles farther from origin)
+    \item This typically requires higher gain
+    \item Higher gain often reduces damping ratio
+\end{itemize}
+\end{keyconceptbox}
+
+%-----------------------------------------------------------------------------
+\subsection{Peak Time}
+%-----------------------------------------------------------------------------
+
+\textbf{Peak time} $t_p$ is the time at which the output reaches its first (and maximum) peak. This occurs when $dy/dt = 0$ for the first time after $t = 0$.
+
+Differentiating equation~\eqref{eq:step_response} and setting equal to zero:
+\begin{equation}
+    \frac{dy}{dt} = \frac{\omega_n e^{-\zeta\omega_n t}}{\sqrt{1-\zeta^2}}\sin(\omega_d t) = 0
+\end{equation}
+
+The first positive solution occurs when $\omega_d t_p = \pi$:
+\begin{equation}
+    \boxed{t_p = \frac{\pi}{\omega_d} = \frac{\pi}{\omega_n\sqrt{1-\zeta^2}}}
+    \label{eq:peak_time}
+\end{equation}
+
+Note that peak time is only defined for underdamped systems ($\zeta < 1$); overdamped and critically damped systems do not overshoot.
+
+%-----------------------------------------------------------------------------
+\subsection{Percent Overshoot}
+%-----------------------------------------------------------------------------
+
+\textbf{Percent overshoot} (PO) quantifies how much the output exceeds its final value at the first peak:
+\begin{equation}
+    \text{PO} = \frac{y(t_p) - y(\infty)}{y(\infty)} \times 100\%
+\end{equation}
+
+For a unit step input to the standard second-order system:
+\begin{equation}
+    y(t_p) = 1 + e^{-\zeta\omega_n t_p} = 1 + e^{-\zeta\pi/\sqrt{1-\zeta^2}}
+\end{equation}
+
+Since $y(\infty) = 1$ for our normalized system:
+\begin{equation}
+    \boxed{\text{PO} = 100 \cdot e^{-\pi\zeta/\sqrt{1-\zeta^2}} \;\%}
+    \label{eq:percent_overshoot}
+\end{equation}
+
+This formula shows that percent overshoot depends \textit{only on damping ratio $\zeta$}, not on natural frequency $\omega_n$.
+
+\begin{table}[H]
+\centering
+\caption{Percent Overshoot vs.\ Damping Ratio}
+\label{tab:overshoot_zeta}
+\begin{tabular}{cc|cc}
+\toprule
+$\zeta$ & PO (\%) & $\zeta$ & PO (\%) \\
+\midrule
+0.1 & 72.9 & 0.6 & 9.5 \\
+0.2 & 52.7 & 0.7 & 4.6 \\
+0.3 & 37.2 & 0.8 & 1.5 \\
+0.4 & 25.4 & 0.9 & 0.2 \\
+0.5 & 16.3 & 1.0 & 0.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Inverse relationship}: Given a required maximum overshoot, we can solve for the minimum damping ratio:
+\begin{equation}
+    \boxed{\zeta = \frac{-\ln(\text{PO}/100)}{\sqrt{\pi^2 + \ln^2(\text{PO}/100)}}}
+    \label{eq:zeta_from_PO}
+\end{equation}
+
+%-----------------------------------------------------------------------------
+\subsection{Settling Time}
+%-----------------------------------------------------------------------------
+
+\textbf{Settling time} $t_s$ is the time required for the output to remain within a specified percentage (typically 2\% or 5\%) of the final value.
+
+The envelope of the oscillatory response is $1 \pm e^{-\zeta\omega_n t}/\sqrt{1-\zeta^2}$. For 2\% settling, we require:
+\begin{equation}
+    \frac{e^{-\zeta\omega_n t_s}}{\sqrt{1-\zeta^2}} \approx 0.02
+\end{equation}
+
+For moderate damping ratios ($0.5 < \zeta < 0.8$), where $1/\sqrt{1-\zeta^2} \approx 1$:
+\begin{equation}
+    e^{-\zeta\omega_n t_s} \approx 0.02
+\end{equation}
+
+Taking natural logarithm:
+\begin{equation}
+    -\zeta\omega_n t_s \approx \ln(0.02) \approx -4
+\end{equation}
+
+Therefore:
+\begin{equation}
+    \boxed{t_s \approx \frac{4}{\zeta\omega_n} = \frac{4}{\sigma} \quad \text{(2\% criterion)}}
+    \label{eq:settling_time_2}
+\end{equation}
+
+For 5\% settling:
+\begin{equation}
+    \boxed{t_s \approx \frac{3}{\zeta\omega_n} \quad \text{(5\% criterion)}}
+    \label{eq:settling_time_5}
+\end{equation}
+
+\begin{keyconceptbox}[Settling Time Insight]
+Settling time depends on the \textit{real part} of the poles: $\sigma = \zeta\omega_n$. To reduce settling time:
+\begin{itemize}
+    \item Increase $\omega_n$, or
+    \item Increase $\zeta$, or
+    \item Increase both (move poles left in s-plane)
+\end{itemize}
+\end{keyconceptbox}
+
+%-----------------------------------------------------------------------------
+\subsection{Summary: Transient Specifications}
+%-----------------------------------------------------------------------------
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=14cm,
+    height=10cm,
+    xlabel={Time $t$},
+    ylabel={Output $y(t)$},
+    xmin=0, xmax=10,
+    ymin=0, ymax=1.5,
+    grid=both,
+    grid style={line width=0.2pt, draw=gray!30},
+    major grid style={line width=0.4pt,draw=gray!60},
+    xtick={0,1.2,2.1,7},
+    xticklabels={$0$,$t_r$,$t_p$,$t_s$},
+    ytick={0,0.1,0.9,1.0,1.163,0.98,1.02},
+    yticklabels={$0$,$0.1$,$0.9$,$1.0$,$y_{peak}$,$0.98$,$1.02$},
+    title={Step Response with Transient Specifications Labeled}
+]
+
+% Main response curve (zeta = 0.5)
+\addplot[thick, controlblue, domain=0:10, samples=300]
+    {1 - exp(-0.5*x)*(cos(deg(sqrt(0.75)*x)) + 0.5/sqrt(0.75)*sin(deg(sqrt(0.75)*x)))};
+
+% Final value line
+\addplot[dashed, black] coordinates {(0,1) (10,1)};
+
+% 2% settling band
+\addplot[dashed, red, thin] coordinates {(0,0.98) (10,0.98)};
+\addplot[dashed, red, thin] coordinates {(0,1.02) (10,1.02)};
+\fill[red, opacity=0.1] (0,0.98) rectangle (10,1.02);
+
+% 10% line
+\addplot[dotted, gray] coordinates {(0,0.1) (10,0.1)};
+
+% 90% line
+\addplot[dotted, gray] coordinates {(0,0.9) (10,0.9)};
+
+% Rise time markers
+\draw[<->, thick, green!60!black] (axis cs:0.4,0.1) -- (axis cs:1.2,0.1)
+    node[midway, below] {$t_r$};
+\draw[dotted, green!60!black] (axis cs:0.4,0) -- (axis cs:0.4,0.1);
+\draw[dotted, green!60!black] (axis cs:1.2,0) -- (axis cs:1.2,0.9);
+
+% Peak time marker
+\draw[<->, thick, orange] (axis cs:0,-0.15) -- (axis cs:2.1,-0.15);
+\node[orange] at (axis cs:1.05,-0.25) {$t_p$};
+\draw[dotted, orange] (axis cs:2.1,0) -- (axis cs:2.1,1.163);
+
+% Overshoot marker
+\draw[<->, thick, purple] (axis cs:2.3,1) -- (axis cs:2.3,1.163);
+\node[purple, right] at (axis cs:2.35,1.08) {PO};
+
+% Settling time marker
+\draw[<->, thick, red] (axis cs:0,-0.35) -- (axis cs:7,-0.35);
+\node[red] at (axis cs:3.5,-0.45) {$t_s$};
+\draw[dotted, red] (axis cs:7,0) -- (axis cs:7,1);
+
+\end{axis}
+\end{tikzpicture}
+\caption{Step response of a second-order underdamped system with all transient specifications labeled. Rise time $t_r$: time from 10\% to 90\%. Peak time $t_p$: time to first peak. Percent overshoot: peak value minus final value. Settling time $t_s$: time to remain within 2\% of final value.}
+\label{fig:transient_specs_labeled}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Summary of Transient Specifications for Standard Second-Order Systems}
+\label{tab:transient_summary}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Specification} & \textbf{Formula} & \textbf{Depends on} \\
+\midrule
+Rise time (10\%--90\%) & $t_r \approx \dfrac{1.8}{\omega_n}$ & $\omega_n$ \\[1.5ex]
+Peak time & $t_p = \dfrac{\pi}{\omega_n\sqrt{1-\zeta^2}}$ & $\omega_n$, $\zeta$ \\[1.5ex]
+Percent overshoot & $\text{PO} = 100 \cdot e^{-\pi\zeta/\sqrt{1-\zeta^2}}$ & $\zeta$ only \\[1.5ex]
+Settling time (2\%) & $t_s \approx \dfrac{4}{\zeta\omega_n}$ & $\zeta\omega_n = \sigma$ \\[1.5ex]
+\bottomrule
+\end{tabular}
+\end{table}
+
+%=============================================================================
+\section{Mathematical Foundation: Steady-State Error Analysis}
+%=============================================================================
+
+While transient specifications describe \textit{how} a system reaches its final value, steady-state error analysis addresses \textit{whether} it reaches the correct value at all.
+
+%-----------------------------------------------------------------------------
+\subsection{The Final Value Theorem}
+%-----------------------------------------------------------------------------
+
+The \textbf{Final Value Theorem} provides a powerful method for determining the steady-state value directly from the Laplace transform, without inverting to the time domain.
+
+\begin{keyconceptbox}[Final Value Theorem]
+If $y(t)$ and $dy/dt$ are Laplace transformable, and if $\lim_{t\to\infty} y(t)$ exists and is finite, then:
+\begin{equation}
+    \boxed{\lim_{t\to\infty} y(t) = \lim_{s\to 0} sY(s)}
+    \label{eq:final_value_theorem}
+\end{equation}
+\end{keyconceptbox}
+
+\textbf{Important caveat}: The final value theorem is only valid when the limit exists---that is, when all poles of $sY(s)$ have negative real parts except possibly for a simple pole at $s = 0$. If the system is unstable, or if there are poles on the imaginary axis (other than at the origin), the theorem gives incorrect results.
+
+%-----------------------------------------------------------------------------
+\subsection{Unity Feedback Configuration}
+%-----------------------------------------------------------------------------
+
+Consider the standard unity feedback configuration:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    block/.style={draw, rectangle, minimum height=1cm, minimum width=1.5cm},
+    sum/.style={draw, circle, minimum size=0.6cm, inner sep=0pt},
+    >=Stealth
+]
+% Blocks
+\node[sum] (sum) at (0,0) {};
+\node[block] (G) at (3,0) {$G(s)$};
+
+% Labels
+\node at (sum.north east) [anchor=south west, font=\scriptsize] {$+$};
+\node at (sum.south east) [anchor=north west, font=\scriptsize] {$-$};
+
+% Input
+\draw[->] (-2,0) -- (sum) node[midway, above] {$R(s)$};
+
+% Error
+\draw[->] (sum) -- (G) node[midway, above] {$E(s)$};
+
+% Output
+\draw[->] (G) -- (5.5,0) node[midway, above] {};
+\node at (5.8,0) {$Y(s)$};
+
+% Feedback
+\draw[->] (4.5,0) -- (4.5,-1.2) -- (0,-1.2) -- (sum);
+
+\end{tikzpicture}
+\caption{Unity feedback configuration for steady-state error analysis.}
+\label{fig:unity_feedback}
+\end{figure}
+
+The error signal is:
+\begin{equation}
+    E(s) = R(s) - Y(s) = R(s) - G(s)E(s)
+\end{equation}
+
+Solving for $E(s)$:
+\begin{equation}
+    E(s) = \frac{R(s)}{1 + G(s)}
+    \label{eq:error_transfer}
+\end{equation}
+
+The steady-state error for a given input is:
+\begin{equation}
+    e_{ss} = \lim_{t\to\infty} e(t) = \lim_{s\to 0} sE(s) = \lim_{s\to 0} \frac{sR(s)}{1 + G(s)}
+    \label{eq:ess_general}
+\end{equation}
+
+%-----------------------------------------------------------------------------
+\subsection{System Type and Error Constants}
+%-----------------------------------------------------------------------------
+
+The \textbf{system type} is defined as the number of pure integrators ($1/s$ factors) in the open-loop transfer function $G(s)$.
+
+A general open-loop transfer function can be written as:
+\begin{equation}
+    G(s) = \frac{K(s+z_1)(s+z_2)\cdots}{s^N(s+p_1)(s+p_2)\cdots}
+\end{equation}
+
+where $N$ is the system type (number of integrators).
+
+\begin{keyconceptbox}[System Type Classification]
+\begin{itemize}
+    \item \textbf{Type 0}: No integrators --- $G(s) = K(\cdots)/[(\cdots)]$
+    \item \textbf{Type 1}: One integrator --- $G(s) = K(\cdots)/[s(\cdots)]$
+    \item \textbf{Type 2}: Two integrators --- $G(s) = K(\cdots)/[s^2(\cdots)]$
+\end{itemize}
+\end{keyconceptbox}
+
+We define three \textbf{error constants}:
+
+\textbf{Position error constant} (for step inputs):
+\begin{equation}
+    \boxed{K_p = \lim_{s\to 0} G(s)}
+    \label{eq:Kp}
+\end{equation}
+
+\textbf{Velocity error constant} (for ramp inputs):
+\begin{equation}
+    \boxed{K_v = \lim_{s\to 0} sG(s)}
+    \label{eq:Kv}
+\end{equation}
+
+\textbf{Acceleration error constant} (for parabolic inputs):
+\begin{equation}
+    \boxed{K_a = \lim_{s\to 0} s^2G(s)}
+    \label{eq:Ka}
+\end{equation}
+
+%-----------------------------------------------------------------------------
+\subsection{Steady-State Error for Standard Inputs}
+%-----------------------------------------------------------------------------
+
+\subsubsection{Step Input: $R(s) = 1/s$}
+
+\begin{equation}
+    e_{ss} = \lim_{s\to 0} \frac{s \cdot (1/s)}{1 + G(s)} = \lim_{s\to 0} \frac{1}{1 + G(s)} = \frac{1}{1 + K_p}
+    \label{eq:ess_step}
+\end{equation}
+
+\subsubsection{Ramp Input: $R(s) = 1/s^2$}
+
+\begin{equation}
+    e_{ss} = \lim_{s\to 0} \frac{s \cdot (1/s^2)}{1 + G(s)} = \lim_{s\to 0} \frac{1}{s + sG(s)} = \lim_{s\to 0} \frac{1}{sG(s)} = \frac{1}{K_v}
+    \label{eq:ess_ramp}
+\end{equation}
+
+\subsubsection{Parabolic Input: $R(s) = 1/s^3$}
+
+\begin{equation}
+    e_{ss} = \lim_{s\to 0} \frac{s \cdot (1/s^3)}{1 + G(s)} = \lim_{s\to 0} \frac{1}{s^2G(s)} = \frac{1}{K_a}
+    \label{eq:ess_parabola}
+\end{equation}
+
+%-----------------------------------------------------------------------------
+\subsection{Steady-State Error Summary by System Type}
+%-----------------------------------------------------------------------------
+
+\begin{table}[H]
+\centering
+\caption{Steady-State Error as a Function of System Type}
+\label{tab:ess_system_type}
+\begin{tabular}{c|ccc|ccc}
+\toprule
+\textbf{System} & \multicolumn{3}{c|}{\textbf{Error Constants}} & \multicolumn{3}{c}{\textbf{Steady-State Error $e_{ss}$}} \\
+\textbf{Type} & $K_p$ & $K_v$ & $K_a$ & Step & Ramp & Parabolic \\
+\midrule
+Type 0 & $K$ (finite) & 0 & 0 & $\dfrac{1}{1+K}$ & $\infty$ & $\infty$ \\[2ex]
+Type 1 & $\infty$ & $K$ (finite) & 0 & 0 & $\dfrac{1}{K}$ & $\infty$ \\[2ex]
+Type 2 & $\infty$ & $\infty$ & $K$ (finite) & 0 & 0 & $\dfrac{1}{K}$ \\[2ex]
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=14cm,
+    height=8cm,
+    xlabel={Time $t$},
+    ylabel={Response},
+    xmin=0, xmax=10,
+    ymin=0, ymax=4,
+    grid=both,
+    grid style={line width=0.2pt, draw=gray!30},
+    legend pos=north west,
+    legend style={font=\small},
+    title={Steady-State Error: Type 0 vs Type 1 System with Ramp Input}
+]
+
+% Ramp input
+\addplot[thick, black, dashed, domain=0:10] {0.3*x};
+\addlegendentry{Ramp input $r(t) = 0.3t$}
+
+% Type 0 response - finite error that grows
+\addplot[thick, red, domain=0:10, samples=100]
+    {0.3*x/(1+2) + (1-exp(-x))*(0.3*2/(1+2))};
+\addlegendentry{Type 0: error $\to \infty$}
+
+% Type 1 response - constant error
+\addplot[thick, blue, domain=0:10, samples=100]
+    {0.3*(x - 1 + exp(-x))};
+\addlegendentry{Type 1: constant velocity error}
+
+% Error annotation
+\draw[<->, thick, green!60!black] (axis cs:8,2.4) -- (axis cs:8,2.1);
+\node[green!60!black, right] at (axis cs:8.1,2.25) {$e_{ss} = 1/K_v$};
+
+\end{axis}
+\end{tikzpicture}
+\caption{Comparison of Type 0 and Type 1 systems tracking a ramp input. Type 0 systems have unbounded error; Type 1 systems have constant ``velocity error.''}
+\label{fig:type_comparison}
+\end{figure}
+
+%-----------------------------------------------------------------------------
+\subsection{Physical Interpretation}
+%-----------------------------------------------------------------------------
+
+The steady-state error behavior has clear physical meaning:
+
+\textbf{Type 0 (no integrator)}:
+\begin{itemize}
+    \item Can track a constant reference with finite error
+    \item The error decreases as gain increases: $e_{ss} = 1/(1+K_p)$
+    \item Cannot track a ramp---error grows without bound
+    \item Example: A spring-damper system with proportional control
+\end{itemize}
+
+\textbf{Type 1 (one integrator)}:
+\begin{itemize}
+    \item Tracks a constant reference with zero error
+    \item The integrator ``accumulates'' error until output matches reference
+    \item Can track a ramp with constant error: $e_{ss} = 1/K_v$
+    \item Cannot track a parabola---error grows without bound
+    \item Example: DC motor position control with velocity feedback
+\end{itemize}
+
+\textbf{Type 2 (two integrators)}:
+\begin{itemize}
+    \item Tracks both step and ramp with zero error
+    \item Can track a parabola with constant error
+    \item Often challenging to stabilize (requires careful compensation)
+    \item Example: Spacecraft attitude control (angular acceleration input)
+\end{itemize}
+
+%-----------------------------------------------------------------------------
+\subsection{The Speed-Accuracy Tradeoff Revisited}
+%-----------------------------------------------------------------------------
+
+The mathematical analysis reveals a fundamental tradeoff:
+
+\begin{itemize}
+    \item \textbf{Higher gain} reduces steady-state error ($e_{ss} \propto 1/K$)
+    \item \textbf{Higher gain} increases $\omega_n$, reducing rise time
+    \item \textbf{Higher gain} typically reduces damping ratio $\zeta$
+    \item \textbf{Lower $\zeta$} means more overshoot and longer settling time
+\end{itemize}
+
+\textbf{Adding integrators}:
+\begin{itemize}
+    \item Eliminates steady-state error for polynomial inputs of order $< N$
+    \item Adds phase lag, reducing phase margin
+    \item Can destabilize the system if not properly compensated
+    \item Slows the transient response
+\end{itemize}
+
+The control engineer must navigate these tradeoffs, selecting gains and compensation that achieve acceptable performance across all specifications.
+
+%=============================================================================
+\section{Design in the s-Plane: Meeting Multiple Specifications}
+%=============================================================================
+
+When multiple specifications must be satisfied simultaneously, the s-plane provides a geometric approach to controller design.
+
+%-----------------------------------------------------------------------------
+\subsection{s-Plane Design Regions}
+%-----------------------------------------------------------------------------
+
+Consider the following specifications for a second-order dominant system:
+\begin{itemize}
+    \item Settling time: $t_s \leq t_{s,\max}$
+    \item Percent overshoot: $\text{PO} \leq \text{PO}_{\max}$
+    \item (Optional) Rise time or natural frequency constraints
+\end{itemize}
+
+Each specification defines a region in the s-plane where the dominant poles must lie:
+
+\textbf{Settling time constraint}: From $t_s \approx 4/\sigma$:
+\begin{equation}
+    \sigma \geq \frac{4}{t_{s,\max}} \quad \Rightarrow \quad \text{Re}(s) \leq -\frac{4}{t_{s,\max}}
+\end{equation}
+
+\textbf{Overshoot constraint}: From equation~\eqref{eq:zeta_from_PO}:
+\begin{equation}
+    \zeta \geq \zeta_{\min} \quad \Rightarrow \quad \theta \leq \cos^{-1}(\zeta_{\min})
+\end{equation}
+where $\theta$ is the angle from the negative real axis.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.2]
+% Axes
+\draw[->] (-5,0) -- (1,0) node[right] {$\sigma$};
+\draw[->] (0,-3) -- (0,3) node[above] {$j\omega$};
+
+% Settling time line
+\draw[thick, red, dashed] (-3,-3) -- (-3,3);
+\node[red, left] at (-3,2.5) {$\sigma = -\frac{4}{t_s}$};
+\fill[red, opacity=0.1] (-5,-3) rectangle (-3,3);
+
+% Damping ratio lines
+\draw[thick, blue, dashed] (0,0) -- (-4.5,2.6);
+\draw[thick, blue, dashed] (0,0) -- (-4.5,-2.6);
+\node[blue] at (-2.5,2) {$\zeta = \cos\theta$};
+
+% Angle arc
+\draw[blue] (-1,0) arc (180:150:1);
+\node[blue] at (-0.7,0.35) {$\theta$};
+
+% Shaded allowable region
+\fill[green, opacity=0.2] (-3,0) -- (-3,1.73) -- (-4.5,2.6) -- (-4.5,-2.6) -- (-3,-1.73) -- cycle;
+
+% Example pole locations
+\filldraw[black] (-3.5,1.2) circle (2pt);
+\filldraw[black] (-3.5,-1.2) circle (2pt);
+\node[right] at (-3.4,1.2) {$s_{1,2}$};
+
+% Labels
+\node at (-4,-2.2) {\textbf{Allowable}};
+\node at (-4,-2.6) {\textbf{Region}};
+
+\node[text width=3cm, align=center] at (-1.5,-2.5) {Violates\\settling time};
+
+\end{tikzpicture}
+\caption{s-plane design region for specified settling time and percent overshoot. Dominant poles must lie within the shaded region to satisfy both constraints.}
+\label{fig:splane_design}
+\end{figure}
+
+%-----------------------------------------------------------------------------
+\subsection{Natural Frequency Constraints}
+%-----------------------------------------------------------------------------
+
+If a minimum rise time is specified, this translates to a minimum natural frequency:
+\begin{equation}
+    \omega_n \geq \frac{1.8}{t_{r,\max}}
+\end{equation}
+
+This adds an arc constraint: poles must lie outside a circle of radius $\omega_{n,\min}$ centered at the origin.
+
+Similarly, bandwidth or noise rejection requirements may impose a maximum natural frequency, creating an annular region.
+
+%=============================================================================
+\section{Practical Experiment: Motor Position Control System}
+%=============================================================================
+
+This experiment demonstrates transient and steady-state concepts through a physical motor position control system.
+
+%-----------------------------------------------------------------------------
+\subsection{Experimental Setup}
+%-----------------------------------------------------------------------------
+
+\textbf{Hardware components}:
+\begin{itemize}
+    \item DC motor with optical encoder (e.g., Pololu 37D gearmotor with 64 CPR encoder)
+    \item Arduino Uno or Mega microcontroller
+    \item L298N or similar H-bridge motor driver
+    \item 12V power supply for motor
+    \item USB connection for data logging
+\end{itemize}
+
+\textbf{System configuration}:
+\begin{itemize}
+    \item Encoder provides position feedback (quadrature decoding)
+    \item Arduino implements digital PID control
+    \item PWM output drives motor through H-bridge
+    \item Serial communication for command input and data output
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    block/.style={draw, rectangle, minimum height=1cm, minimum width=2.5cm, font=\small},
+    smallblock/.style={draw, rectangle, minimum height=0.8cm, minimum width=1.8cm, font=\footnotesize},
+    >=Stealth
+]
+% Blocks
+\node[block] (arduino) at (0,0) {Arduino\\(Controller)};
+\node[block] (driver) at (4,0) {H-Bridge\\Driver};
+\node[block] (motor) at (8,0) {DC Motor\\+ Gearbox};
+\node[smallblock] (encoder) at (8,-2) {Encoder};
+\node[smallblock] (pc) at (-4,0) {PC/Serial\\Monitor};
+
+% Connections
+\draw[->] (pc) -- (arduino) node[midway, above] {Commands};
+\draw[->] (arduino) -- (driver) node[midway, above] {PWM};
+\draw[->] (driver) -- (motor) node[midway, above] {Power};
+\draw[->] (motor) -- (encoder);
+\draw[->] (encoder) -- (0,-2) -- (arduino) node[midway, below] {Pulses};
+\draw[->] (arduino) -- (pc) node[midway, below, yshift=-0.5cm] {Data};
+
+% Power
+\draw[<-] (driver.south) -- ++(0,-0.5) node[below] {12V};
+\draw[<-] (arduino.south) -- ++(0,-0.5) node[below] {5V};
+
+\end{tikzpicture}
+\caption{Block diagram of the experimental motor position control system.}
+\label{fig:experiment_setup}
+\end{figure}
+
+%-----------------------------------------------------------------------------
+\subsection{Controller Implementation}
+%-----------------------------------------------------------------------------
+
+The Arduino implements a discrete-time PID controller:
+
+\begin{lstlisting}[language=C++, caption={Arduino PID Position Control}]
+// PID Position Controller for DC Motor
+// Sample time: 10 ms
+
+const float Ts = 0.010;  // Sample time in seconds
+
+// Controller gains (adjustable)
+float Kp = 2.0;    // Proportional gain
+float Ki = 0.5;    // Integral gain
+float Kd = 0.1;    // Derivative gain
+
+// State variables
+long position = 0;        // Current position (encoder counts)
+long setpoint = 0;        // Desired position
+float integral = 0;       // Integral accumulator
+long prevPosition = 0;    // Previous position
+
+void controlLoop() {
+    // Read encoder position
+    position = readEncoder();
+
+    // Calculate error
+    float error = (float)(setpoint - position);
+
+    // Proportional term
+    float P = Kp * error;
+
+    // Integral term (with anti-windup)
+    integral += error * Ts;
+    integral = constrain(integral, -1000, 1000);
+    float I = Ki * integral;
+
+    // Derivative term (on measurement to avoid kick)
+    float derivative = (position - prevPosition) / Ts;
+    float D = -Kd * derivative;
+
+    // Total output
+    float output = P + I + D;
+
+    // Apply to motor (PWM: -255 to +255)
+    setMotor((int)constrain(output, -255, 255));
+
+    // Store for next iteration
+    prevPosition = position;
+
+    // Log data to serial
+    Serial.print(millis());
+    Serial.print(",");
+    Serial.print(setpoint);
+    Serial.print(",");
+    Serial.println(position);
+}
+\end{lstlisting}
+
+%-----------------------------------------------------------------------------
+\subsection{Experimental Procedure}
+%-----------------------------------------------------------------------------
+
+\subsubsection{Experiment 1: Measuring Step Response}
+
+\begin{enumerate}
+    \item Set initial position: $\theta_0 = 0$ counts
+    \item Command step change: $\theta_{ref} = 1000$ counts (approximately 1 revolution)
+    \item Record position every 10 ms via serial port
+    \item Repeat for three different proportional gains: $K_p = 1.0, 2.0, 4.0$
+    \item Keep $K_i = 0$ and $K_d = 0$ initially
+\end{enumerate}
+
+\subsubsection{Expected Results}
+
+\textbf{Low gain} ($K_p = 1.0$):
+\begin{itemize}
+    \item Slow rise time
+    \item Minimal or no overshoot
+    \item Large steady-state error (proportional control only)
+    \item Long settling time due to slow approach to final value
+\end{itemize}
+
+\textbf{Medium gain} ($K_p = 2.0$):
+\begin{itemize}
+    \item Moderate rise time
+    \item Some overshoot (perhaps 10--20\%)
+    \item Smaller steady-state error
+    \item Reasonable settling time
+\end{itemize}
+
+\textbf{High gain} ($K_p = 4.0$):
+\begin{itemize}
+    \item Fast rise time
+    \item Significant overshoot (perhaps 30--50\%)
+    \item Small steady-state error
+    \item Long settling time due to oscillation
+    \item May approach instability
+\end{itemize}
+
+\subsubsection{Experiment 2: Eliminating Steady-State Error}
+
+\begin{enumerate}
+    \item Return to medium proportional gain: $K_p = 2.0$
+    \item Add integral action: $K_i = 0.2$, then $K_i = 0.5$
+    \item Observe effect on steady-state error and transient response
+\end{enumerate}
+
+\textbf{Expected observations}:
+\begin{itemize}
+    \item Steady-state error reduced to zero with integral action
+    \item Overshoot may increase initially
+    \item Settling time may increase
+    \item Too much integral gain causes slow oscillation
+\end{itemize}
+
+%-----------------------------------------------------------------------------
+\subsection{Data Analysis}
+%-----------------------------------------------------------------------------
+
+From the recorded data, measure and calculate:
+
+\textbf{Rise time} ($t_r$): Identify times when position crosses 10\% and 90\% of final value. Calculate $t_r = t_{90\%} - t_{10\%}$.
+
+\textbf{Percent overshoot}:
+\begin{equation}
+    \text{PO} = \frac{\theta_{\max} - \theta_{final}}{\theta_{final}} \times 100\%
+\end{equation}
+
+\textbf{Settling time} ($t_s$): Find the time after which position remains within 2\% of final value.
+
+\textbf{Steady-state error}:
+\begin{equation}
+    e_{ss} = \theta_{ref} - \theta_{final}
+\end{equation}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=14cm,
+    height=8cm,
+    xlabel={Time (seconds)},
+    ylabel={Position (encoder counts)},
+    xmin=0, xmax=2,
+    ymin=0, ymax=1400,
+    grid=both,
+    grid style={line width=0.2pt, draw=gray!30},
+    legend pos=south east,
+    legend style={font=\small},
+    title={Expected Experimental Results: Effect of Proportional Gain}
+]
+
+% Reference
+\addplot[thick, black, dashed] coordinates {(0,0) (0.01,0) (0.01,1000) (2,1000)};
+\addlegendentry{Reference}
+
+% Low gain response
+\addplot[thick, blue, domain=0:2, samples=100]
+    {1000*(1 - exp(-2*x))/(1 + 0.5)};
+\addlegendentry{$K_p = 1.0$ (slow, large error)}
+
+% Medium gain response
+\addplot[thick, green!70!black, domain=0:2, samples=100]
+    {1000*(1 - 1.15*exp(-3*x)*cos(deg(4*x-0.3)))/(1+0.3)};
+\addlegendentry{$K_p = 2.0$ (balanced)}
+
+% High gain response
+\addplot[thick, red, domain=0:2, samples=100]
+    {1000*(1 - 1.4*exp(-2*x)*cos(deg(8*x-0.2)))/(1+0.15)};
+\addlegendentry{$K_p = 4.0$ (fast, oscillatory)}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Qualitative illustration of expected experimental results showing the speed-damping tradeoff as proportional gain varies.}
+\label{fig:experiment_results}
+\end{figure}
+
+%-----------------------------------------------------------------------------
+\subsection{Discussion Questions}
+%-----------------------------------------------------------------------------
+
+\begin{enumerate}
+    \item Why does proportional control alone result in steady-state error?
+
+    \textit{With proportional control, the motor torque is proportional to error. In steady state, the motor must overcome friction; this requires nonzero torque, hence nonzero error.}
+
+    \item How does integral action eliminate steady-state error?
+
+    \textit{The integrator accumulates error over time. Even a small steady-state error causes the integral term to grow, eventually producing sufficient torque to drive error to zero.}
+
+    \item Why might integral action increase overshoot?
+
+    \textit{The integral term ``remembers'' past error. During the approach to setpoint, the integral builds up. After crossing the setpoint, this accumulated integral continues pushing the output, causing overshoot.}
+
+    \item What physical factors limit how high you can set the gains?
+
+    \textit{Motor saturation (maximum voltage/current), mechanical resonances, sensor noise amplification, sampling rate limitations, and time delays in the system.}
+\end{enumerate}
+
+%=============================================================================
+\section{Worked Examples}
+%=============================================================================
+
+\begin{examplebox}[Example 7.1: Calculating Transient Specifications from Pole Location]
+A second-order system has closed-loop poles at $s = -3 \pm j4$. Calculate all transient specifications.
+
+\textbf{Solution}:
+
+\textit{Step 1}: Extract $\zeta$ and $\omega_n$ from pole locations.
+
+The poles are in the form $s = -\sigma \pm j\omega_d$, where:
+\begin{align}
+    \sigma &= 3 \text{ rad/s} \\
+    \omega_d &= 4 \text{ rad/s}
+\end{align}
+
+Natural frequency:
+\begin{equation}
+    \omega_n = \sqrt{\sigma^2 + \omega_d^2} = \sqrt{9 + 16} = 5 \text{ rad/s}
+\end{equation}
+
+Damping ratio:
+\begin{equation}
+    \zeta = \frac{\sigma}{\omega_n} = \frac{3}{5} = 0.6
+\end{equation}
+
+\textit{Step 2}: Calculate transient specifications.
+
+Rise time:
+\begin{equation}
+    t_r \approx \frac{1.8}{\omega_n} = \frac{1.8}{5} = 0.36 \text{ s}
+\end{equation}
+
+Peak time:
+\begin{equation}
+    t_p = \frac{\pi}{\omega_d} = \frac{\pi}{4} = 0.785 \text{ s}
+\end{equation}
+
+Percent overshoot:
+\begin{equation}
+    \text{PO} = 100 \cdot e^{-\pi\zeta/\sqrt{1-\zeta^2}} = 100 \cdot e^{-\pi(0.6)/\sqrt{1-0.36}} = 100 \cdot e^{-2.356} = 9.5\%
+\end{equation}
+
+Settling time (2\%):
+\begin{equation}
+    t_s = \frac{4}{\sigma} = \frac{4}{3} = 1.33 \text{ s}
+\end{equation}
+
+\textbf{Summary}: $t_r = 0.36$ s, $t_p = 0.785$ s, PO $= 9.5\%$, $t_s = 1.33$ s.
+\end{examplebox}
+
+\vspace{1em}
+
+\begin{examplebox}[Example 7.2: Determining System Type from Transfer Function]
+Classify the following systems by type and determine their error constants:
+
+(a) $G(s) = \dfrac{50(s+2)}{(s+5)(s+10)}$
+
+(b) $G(s) = \dfrac{20}{s(s+4)}$
+
+(c) $G(s) = \dfrac{100}{s^2(s+5)}$
+
+\textbf{Solution}:
+
+\textbf{(a)} Count integrators: The denominator is $(s+5)(s+10)$---no factors of $s$.
+
+System Type: \textbf{Type 0}
+
+Error constants:
+\begin{align}
+    K_p &= \lim_{s\to 0} G(s) = \frac{50(2)}{(5)(10)} = 2 \\
+    K_v &= \lim_{s\to 0} sG(s) = 0 \\
+    K_a &= \lim_{s\to 0} s^2G(s) = 0
+\end{align}
+
+\textbf{(b)} Count integrators: The denominator has one factor of $s$.
+
+System Type: \textbf{Type 1}
+
+Error constants:
+\begin{align}
+    K_p &= \lim_{s\to 0} G(s) = \lim_{s\to 0} \frac{20}{s(s+4)} = \infty \\
+    K_v &= \lim_{s\to 0} sG(s) = \lim_{s\to 0} \frac{20}{s+4} = \frac{20}{4} = 5 \\
+    K_a &= \lim_{s\to 0} s^2G(s) = 0
+\end{align}
+
+\textbf{(c)} Count integrators: The denominator has $s^2$.
+
+System Type: \textbf{Type 2}
+
+Error constants:
+\begin{align}
+    K_p &= \infty \\
+    K_v &= \lim_{s\to 0} sG(s) = \lim_{s\to 0} \frac{100}{s(s+5)} = \infty \\
+    K_a &= \lim_{s\to 0} s^2G(s) = \lim_{s\to 0} \frac{100}{s+5} = \frac{100}{5} = 20
+\end{align}
+\end{examplebox}
+
+\vspace{1em}
+
+\begin{examplebox}[Example 7.3: Steady-State Error for Step and Ramp Inputs]
+For a unity feedback system with $G(s) = \dfrac{100}{s(s+10)}$, calculate the steady-state error for:
+
+(a) A unit step input, $r(t) = 1$
+
+(b) A unit ramp input, $r(t) = t$
+
+(c) A ramp input with slope 5, $r(t) = 5t$
+
+\textbf{Solution}:
+
+First, identify the system type: one integrator in denominator $\Rightarrow$ \textbf{Type 1}.
+
+Calculate error constants:
+\begin{align}
+    K_p &= \lim_{s\to 0} \frac{100}{s(s+10)} = \infty \\
+    K_v &= \lim_{s\to 0} s \cdot \frac{100}{s(s+10)} = \frac{100}{10} = 10
+\end{align}
+
+\textbf{(a) Unit step input}:
+
+For Type 1 system with step input:
+\begin{equation}
+    e_{ss} = \frac{1}{1 + K_p} = \frac{1}{1 + \infty} = \boxed{0}
+\end{equation}
+
+\textbf{(b) Unit ramp input}:
+
+For Type 1 system with ramp input $R(s) = 1/s^2$:
+\begin{equation}
+    e_{ss} = \frac{1}{K_v} = \frac{1}{10} = \boxed{0.1 \text{ units}}
+\end{equation}
+
+\textbf{(c) Ramp with slope 5}:
+
+For a ramp $r(t) = 5t$, so $R(s) = 5/s^2$. The steady-state error scales with the input:
+\begin{equation}
+    e_{ss} = \frac{5}{K_v} = \frac{5}{10} = \boxed{0.5 \text{ units}}
+\end{equation}
+\end{examplebox}
+
+\vspace{1em}
+
+\begin{examplebox}[Example 7.4: Design to Meet Transient Specifications]
+Design a second-order system (specify $\zeta$ and $\omega_n$) to meet the following specifications:
+\begin{itemize}
+    \item Percent overshoot: PO $\leq 10\%$
+    \item Settling time: $t_s \leq 2$ s (2\% criterion)
+\end{itemize}
+
+\textbf{Solution}:
+
+\textit{Step 1}: Determine minimum damping ratio from overshoot specification.
+
+From equation~\eqref{eq:zeta_from_PO}:
+\begin{equation}
+    \zeta \geq \frac{-\ln(0.10)}{\sqrt{\pi^2 + \ln^2(0.10)}} = \frac{2.303}{\sqrt{9.87 + 5.30}} = \frac{2.303}{3.89} = 0.592
+\end{equation}
+
+So we need $\zeta \geq 0.592$. Choose $\zeta = 0.6$ for design margin.
+
+\textit{Step 2}: Determine minimum $\sigma$ from settling time specification.
+
+From $t_s = 4/\sigma \leq 2$ s:
+\begin{equation}
+    \sigma \geq \frac{4}{2} = 2 \text{ rad/s}
+\end{equation}
+
+\textit{Step 3}: Calculate minimum $\omega_n$.
+
+Since $\sigma = \zeta\omega_n$:
+\begin{equation}
+    \omega_n \geq \frac{\sigma}{\zeta} = \frac{2}{0.6} = 3.33 \text{ rad/s}
+\end{equation}
+
+\textit{Step 4}: Choose design values.
+
+Select $\zeta = 0.6$ and $\omega_n = 3.5$ rad/s (with margin).
+
+\textbf{Verification}:
+\begin{align}
+    \text{PO} &= 100 \cdot e^{-\pi(0.6)/\sqrt{1-0.36}} = 9.5\% \leq 10\% \quad \checkmark \\
+    t_s &= \frac{4}{0.6 \times 3.5} = 1.90 \text{ s} \leq 2 \text{ s} \quad \checkmark
+\end{align}
+
+\textbf{Transfer function}:
+\begin{equation}
+    G(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2} = \frac{12.25}{s^2 + 4.2s + 12.25}
+\end{equation}
+
+\textbf{Pole locations}: $s = -2.1 \pm j2.8$
+\end{examplebox}
+
+\vspace{1em}
+
+\begin{examplebox}[Example 7.5: Choosing Gain to Achieve Target Steady-State Error]
+A unity feedback system has the open-loop transfer function:
+\begin{equation}
+    G(s) = \frac{K}{(s+2)(s+5)}
+\end{equation}
+
+Find the value of $K$ such that the steady-state error for a unit step input is 10\%.
+
+\textbf{Solution}:
+
+\textit{Step 1}: Identify system type.
+
+No integrators in $G(s)$ $\Rightarrow$ \textbf{Type 0}
+
+\textit{Step 2}: Calculate $K_p$ in terms of $K$.
+\begin{equation}
+    K_p = \lim_{s\to 0} G(s) = \frac{K}{(2)(5)} = \frac{K}{10}
+\end{equation}
+
+\textit{Step 3}: Set up equation for steady-state error.
+
+For a Type 0 system with unit step input:
+\begin{equation}
+    e_{ss} = \frac{1}{1 + K_p} = 0.10
+\end{equation}
+
+\textit{Step 4}: Solve for $K_p$ and then $K$.
+\begin{align}
+    \frac{1}{1 + K_p} &= 0.10 \\
+    1 + K_p &= 10 \\
+    K_p &= 9
+\end{align}
+
+Therefore:
+\begin{equation}
+    \frac{K}{10} = 9 \quad \Rightarrow \quad \boxed{K = 90}
+\end{equation}
+
+\textit{Step 5}: Verify and check stability.
+
+The closed-loop transfer function is:
+\begin{equation}
+    T(s) = \frac{90}{(s+2)(s+5) + 90} = \frac{90}{s^2 + 7s + 10 + 90} = \frac{90}{s^2 + 7s + 100}
+\end{equation}
+
+Characteristic equation: $s^2 + 7s + 100 = 0$
+
+Poles: $s = \frac{-7 \pm \sqrt{49-400}}{2} = \frac{-7 \pm j18.7}{2} = -3.5 \pm j9.4$
+
+Both poles in LHP $\Rightarrow$ stable.
+
+Damping ratio: $\zeta = 3.5/10.05 = 0.35$
+
+This gives significant overshoot (PO $\approx 31\%$). If transient performance is also important, a different approach (adding compensation) may be needed.
+\end{examplebox}
+
+\vspace{1em}
+
+\begin{examplebox}[Example 7.6: Complete System Design]
+Design a controller for the plant $G_p(s) = \dfrac{10}{s(s+5)}$ to achieve:
+\begin{itemize}
+    \item Zero steady-state error for step inputs
+    \item Steady-state error $\leq 0.05$ units for a unit ramp input
+    \item Percent overshoot $\leq 20\%$
+    \item Settling time $\leq 1$ s
+\end{itemize}
+
+\textbf{Solution}:
+
+\textit{Step 1}: Analyze the open-loop system.
+
+The plant has one integrator $\Rightarrow$ Type 1 system. This automatically gives zero steady-state error for step inputs.
+
+\textit{Step 2}: Determine required $K_v$ for ramp error specification.
+
+For ramp error $e_{ss} = 1/K_v \leq 0.05$:
+\begin{equation}
+    K_v \geq 20
+\end{equation}
+
+\textit{Step 3}: Determine controller structure.
+
+Use proportional control $G_c(s) = K$. The open-loop function becomes:
+\begin{equation}
+    G(s) = \frac{10K}{s(s+5)}
+\end{equation}
+
+Calculate $K_v$:
+\begin{equation}
+    K_v = \lim_{s\to 0} sG(s) = \lim_{s\to 0} \frac{10K}{s+5} = \frac{10K}{5} = 2K
+\end{equation}
+
+For $K_v \geq 20$: $2K \geq 20 \Rightarrow K \geq 10$.
+
+\textit{Step 4}: Check transient specifications.
+
+Closed-loop transfer function with $K = 10$:
+\begin{equation}
+    T(s) = \frac{100}{s^2 + 5s + 100}
+\end{equation}
+
+Compare with standard form: $\omega_n^2 = 100 \Rightarrow \omega_n = 10$ rad/s, and $2\zeta\omega_n = 5 \Rightarrow \zeta = 0.25$.
+
+Check overshoot:
+\begin{equation}
+    \text{PO} = 100 \cdot e^{-\pi(0.25)/\sqrt{1-0.0625}} = 100 \cdot e^{-0.811} = 44.4\%
+\end{equation}
+
+This exceeds the 20\% specification!
+
+\textit{Step 5}: Revise design with compensation.
+
+We need to increase damping without sacrificing $K_v$. Add a lead compensator:
+\begin{equation}
+    G_c(s) = K\frac{s+a}{s+b} \quad \text{with } b > a
+\end{equation}
+
+Choose $a = 2$ and $b = 20$ (lead ratio of 10):
+\begin{equation}
+    G_c(s) = K\frac{s+2}{s+20}
+\end{equation}
+
+With this compensator:
+\begin{equation}
+    K_v = \lim_{s\to 0} s \cdot K\frac{s+2}{s+20} \cdot \frac{10}{s(s+5)} = \frac{10K \cdot 2}{20 \cdot 5} = \frac{K}{5}
+\end{equation}
+
+For $K_v \geq 20$: $K \geq 100$.
+
+With $K = 100$, the open-loop function is:
+\begin{equation}
+    G(s) = \frac{1000(s+2)}{s(s+5)(s+20)}
+\end{equation}
+
+This third-order system must be analyzed numerically or via root locus. The lead compensator adds phase lead near crossover, improving damping.
+
+\textbf{Design verification} (via root locus or simulation):
+\begin{itemize}
+    \item Dominant poles at approximately $s = -4 \pm j4$
+    \item Effective $\zeta \approx 0.7$, effective $\omega_n \approx 5.7$ rad/s
+    \item PO $\approx 5\%$ (meets spec)
+    \item $t_s \approx 1.0$ s (meets spec)
+    \item $e_{ss,ramp} = 1/20 = 0.05$ (meets spec)
+\end{itemize}
+\end{examplebox}
+
+%=============================================================================
+\section{Diagrams and Visual Reference}
+%=============================================================================
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.1]
+% Axes
+\draw[->] (-6,0) -- (1.5,0) node[right] {$\sigma$ (Real)};
+\draw[->] (0,-4) -- (0,4) node[above] {$j\omega$ (Imaginary)};
+
+% Constant sigma lines (settling time)
+\foreach \x in {-5,-4,-3,-2,-1} {
+    \draw[gray!50, dashed] (\x,-4) -- (\x,4);
+}
+\node[gray] at (-4,3.5) {$t_s = 4/|\sigma|$};
+
+% Constant omega_n arcs (natural frequency)
+\foreach \r in {1,2,3,4} {
+    \draw[blue!30] (0,0) circle (\r);
+}
+\node[blue] at (1.5,3) {$\omega_n$};
+
+% Constant zeta lines (damping)
+\foreach \angle in {10,20,30,45,60,75} {
+    \draw[orange!50] (0,0) -- ({-5*cos(\angle)},{5*sin(\angle)});
+    \draw[orange!50] (0,0) -- ({-5*cos(\angle)},{-5*sin(\angle)});
+}
+\node[orange] at (-4.5,1) {$\zeta$};
+
+% Labels for key damping values
+\node[font=\footnotesize] at ({-4*cos(45)},{4*sin(45)+0.3}) {$\zeta=0.707$};
+\node[font=\footnotesize] at ({-4*cos(60)+0.3},{4*sin(60)}) {$\zeta=0.5$};
+\node[font=\footnotesize] at ({-4*cos(75)+0.5},{4*sin(75)-0.2}) {$\zeta=0.26$};
+
+% Example poles
+\filldraw[red] (-2,2.5) circle (3pt) node[right] {Underdamped};
+\filldraw[red] (-2,-2.5) circle (3pt);
+\filldraw[green!60!black] (-3,0) circle (3pt) node[above right] {Critically damped};
+\filldraw[blue] (-4.5,0) circle (3pt) node[above] {Overdamped};
+\filldraw[blue] (-1.5,0) circle (3pt);
+
+% Stability boundary
+\draw[very thick, red] (0,-4) -- (0,4);
+\node[red, rotate=90] at (0.4,2) {Stability boundary};
+
+\end{tikzpicture}
+\caption{s-plane showing lines of constant settling time ($\sigma$), constant natural frequency ($\omega_n$), and constant damping ratio ($\zeta$). Poles must lie in the left half-plane for stability.}
+\label{fig:splane_lines}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=14cm,
+    height=8cm,
+    xlabel={Damping Ratio $\zeta$},
+    ylabel={Normalized Time $(\omega_n \cdot t)$},
+    xmin=0, xmax=1,
+    ymin=0, ymax=20,
+    grid=both,
+    legend pos=north east,
+    title={Transient Specifications vs.\ Damping Ratio}
+]
+
+% Rise time (normalized)
+\addplot[thick, blue, domain=0.1:0.95, samples=50]
+    {(pi - acos(x)*pi/180) / sqrt(1-x^2)};
+\addlegendentry{$\omega_n t_r$ (rise time)}
+
+% Peak time (normalized)
+\addplot[thick, red, domain=0.1:0.95, samples=50]
+    {pi / sqrt(1-x^2)};
+\addlegendentry{$\omega_n t_p$ (peak time)}
+
+% Settling time (normalized)
+\addplot[thick, green!60!black, domain=0.1:0.95, samples=50]
+    {4/x};
+\addlegendentry{$\omega_n t_s$ (settling time)}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Normalized transient specifications as functions of damping ratio. Note: rise time has a minimum near $\zeta = 0.4$; settling time decreases monotonically with $\zeta$.}
+\label{fig:specs_vs_zeta}
+\end{figure}
+
+%=============================================================================
+\section{Summary}
+%=============================================================================
+
+This chapter has developed the framework for analyzing and specifying control system performance in both transient and steady-state regimes.
+
+\subsection*{Key Concepts}
+
+\textbf{Transient Response Specifications}:
+\begin{itemize}
+    \item \textbf{Rise time} ($t_r$): Measures response speed; primarily determined by $\omega_n$
+    \item \textbf{Peak time} ($t_p$): Time to first overshoot; $t_p = \pi/\omega_d$
+    \item \textbf{Percent overshoot} (PO): Depends only on $\zeta$; lower $\zeta$ means more overshoot
+    \item \textbf{Settling time} ($t_s$): Time to reach steady state; $t_s \approx 4/(\zeta\omega_n)$
+\end{itemize}
+
+\textbf{Steady-State Error Analysis}:
+\begin{itemize}
+    \item \textbf{System type}: Number of integrators in open-loop transfer function
+    \item \textbf{Error constants} ($K_p$, $K_v$, $K_a$): Determine error magnitude for polynomial inputs
+    \item Type 0: Finite step error, infinite ramp error
+    \item Type 1: Zero step error, finite ramp error
+    \item Type 2: Zero step and ramp error, finite parabolic error
+\end{itemize}
+
+\textbf{Fundamental Tradeoffs}:
+\begin{itemize}
+    \item Higher gain reduces steady-state error but often increases overshoot
+    \item Faster response (higher $\omega_n$) requires higher gain
+    \item Adding integrators eliminates steady-state error but reduces stability margins
+    \item The s-plane provides a geometric framework for balancing multiple specifications
+\end{itemize}
+
+\subsection*{Design Guidelines}
+
+\begin{enumerate}
+    \item Begin by determining required $\zeta$ from overshoot specification
+    \item Calculate required $\sigma = \zeta\omega_n$ from settling time specification
+    \item Determine minimum $\omega_n$ from the ratio $\sigma/\zeta$
+    \item Check steady-state error requirements; add integrators or increase gain as needed
+    \item Verify that stability margins remain adequate
+    \item Use compensation (lead, lag, or PID) to satisfy conflicting requirements
+\end{enumerate}
+
+%=============================================================================
+\section*{Problems}
+%=============================================================================
+
+\begin{enumerate}
+    \item A second-order system has poles at $s = -2 \pm j3$. Calculate:
+    \begin{enumerate}
+        \item Natural frequency $\omega_n$ and damping ratio $\zeta$
+        \item Rise time, peak time, percent overshoot, and settling time
+        \item The closed-loop transfer function (assuming unity DC gain)
+    \end{enumerate}
+
+    \item For the system $G(s) = \dfrac{20(s+3)}{s^2(s+5)(s+10)}$:
+    \begin{enumerate}
+        \item Determine the system type
+        \item Calculate all error constants
+        \item Find the steady-state error for inputs $r(t) = 5$, $r(t) = 2t$, and $r(t) = t^2$
+    \end{enumerate}
+
+    \item Design a second-order system to achieve:
+    \begin{itemize}
+        \item Settling time $\leq 0.5$ s
+        \item Percent overshoot $\leq 5\%$
+    \end{itemize}
+    Specify $\zeta$, $\omega_n$, and pole locations.
+
+    \item A unity feedback system has $G(s) = \dfrac{K}{s+10}$.
+    \begin{enumerate}
+        \item What is the system type?
+        \item Find $K$ for 5\% steady-state error to a step input
+        \item With this $K$, what is the closed-loop time constant?
+    \end{enumerate}
+
+    \item For the motor control experiment, if the measured step response shows:
+    \begin{itemize}
+        \item Rise time: 0.15 s
+        \item Overshoot: 25\%
+        \item Settling time: 0.8 s
+    \end{itemize}
+    Estimate the effective $\zeta$ and $\omega_n$ of the closed-loop system.
+
+    \item A Type 1 system must track a ramp input with velocity 10 units/s with steady-state error less than 0.1 units. What minimum velocity error constant $K_v$ is required?
+
+    \item Sketch the allowable region in the s-plane for dominant poles that satisfy:
+    \begin{itemize}
+        \item Settling time $\leq 2$ s
+        \item Overshoot $\leq 15\%$
+        \item Rise time $\leq 0.5$ s
+    \end{itemize}
+
+    \item Explain why adding an integrator to improve steady-state error may degrade transient performance. What compensation technique can restore good transient response?
+
+    \item A hard disk servo must position the head within 0.1 $\mu$m of the target track within 4 ms. If the maximum acceptable overshoot is 2\%, estimate the required $\zeta$ and $\omega_n$.
+
+    \item Compare the step responses of three systems, all with $\omega_n = 5$ rad/s:
+    \begin{enumerate}
+        \item $\zeta = 0.3$
+        \item $\zeta = 0.7$
+        \item $\zeta = 1.5$
+    \end{enumerate}
+    Calculate and tabulate all transient specifications. Which provides the best compromise between speed and smoothness?
+\end{enumerate}
+
+%=============================================================================
+\section*{Further Reading}
+%=============================================================================
+
+\begin{enumerate}
+    \item Ziegler, J.G., and Nichols, N.B., ``Optimum Settings for Automatic Controllers,'' \textit{Transactions of the ASME}, Vol.\ 64, pp.\ 759--768, 1942. (The foundational paper on performance-based tuning.)
+
+    \item James, H.M., Nichols, N.B., and Phillips, R.S., \textit{Theory of Servomechanisms}, McGraw-Hill, 1947. (The MIT Radiation Laboratory's wartime research, declassified and published.)
+
+    \item Franklin, G.F., Powell, J.D., and Emami-Naeini, A., \textit{Feedback Control of Dynamic Systems}, 8th ed., Pearson, 2019. (Comprehensive modern treatment of transient and steady-state analysis.)
+
+    \item Ogata, K., \textit{Modern Control Engineering}, 5th ed., Prentice Hall, 2010. (Clear derivations of all second-order system formulas.)
+
+    \item Bennett, S., \textit{A History of Control Engineering}, Peter Peregrinus, 1993. (Excellent historical context for the development of performance specifications.)
+\end{enumerate}
+
+\end{document}
