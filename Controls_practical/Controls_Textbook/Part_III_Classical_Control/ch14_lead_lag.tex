@@ -16,6 +16,12 @@ This chapter introduces lead and lag compensation---powerful frequency-domain de
 \section{Historical Motivation: From Anti-Aircraft Guns to Modern Servos}
 \label{sec:lead_lag_history}
 
+\begin{historicalbox}[The Fire Control Problem of World War II]
+The development of lead-lag compensation is inextricably linked to the military demands of the Second World War. As aircraft speeds increased dramatically during the 1930s and 1940s---from approximately 200 mph in early-war fighters to over 400 mph in late-war aircraft---anti-aircraft fire control systems faced an unprecedented challenge: how to predict where a rapidly maneuvering target would be by the time a projectile reached it.
+
+The mathematical problem was clear: to hit a moving target, the fire control system needed to \textit{predict} future position. In control terms, this meant incorporating derivative action---the system needed to respond not just to where the target \textit{was}, but to where it was \textit{going}. Henrik Wade Bode, working at Bell Telephone Laboratories, provided the theoretical framework through his work on frequency-domain analysis, introducing what we now call Bode plots. The M9 gun director, developed by Bell Labs and deployed in 1943, used analog lead-lag networks to achieve tracking accuracy that was considered miraculous at the time.
+\end{historicalbox}
+
 \subsection{The Fire Control Problem of World War II}
 
 The development of lead-lag compensation is inextricably linked to the military demands of the Second World War. As aircraft speeds increased dramatically during the 1930s and 1940s---from approximately 200 mph in early-war fighters to over 400 mph in late-war aircraft---anti-aircraft fire control systems faced an unprecedented challenge: how to predict where a rapidly maneuvering target would be by the time a projectile reached it.
@@ -46,15 +52,7 @@ The mathematical problem was clear: to hit a moving target, the fire control sys
 
 \subsection{The Limitation of Pure PID Control}
 
-Engineers quickly discovered that while PID control could theoretically provide the necessary derivative action, practical implementation faced severe obstacles:
-
-\begin{enumerate}
-    \item \textbf{Noise amplification:} Pure derivative action ($D(s) = K_d s$) amplifies high-frequency noise unboundedly. Radar tracking data, corrupted by electrical noise and atmospheric effects, produced unacceptable jitter in the control signal.
-
-    \item \textbf{Phase margin deficiency:} Many servo systems had inadequate phase margin at the desired crossover frequency. Simply increasing gain to improve tracking speed would push the system toward instability.
-
-    \item \textbf{Steady-state accuracy vs. transient response:} Achieving both small steady-state error (requiring high loop gain) and fast, well-damped transient response (requiring adequate phase margin) seemed mutually exclusive with simple gain adjustment.
-\end{enumerate}
+Engineers quickly discovered that while PID control could theoretically provide the necessary derivative action, practical implementation faced severe obstacles. First, pure derivative action ($D(s) = K_d s$) amplifies high-frequency noise unboundedly, and radar tracking data corrupted by electrical noise and atmospheric effects produced unacceptable jitter in the control signal. Second, many servo systems had inadequate phase margin at the desired crossover frequency, meaning that simply increasing gain to improve tracking speed would push the system toward instability. Third, achieving both small steady-state error (requiring high loop gain) and fast, well-damped transient response (requiring adequate phase margin) seemed mutually exclusive with simple gain adjustment.
 
 \subsection{Bode's Revolutionary Contribution}
 
@@ -122,12 +120,7 @@ provides \textit{high gain at low frequencies} (improving steady-state accuracy)
 
 \subsection{Lead-Lag: The Best of Both Worlds}
 
-By cascading lead and lag compensators, engineers could simultaneously:
-\begin{itemize}
-    \item Increase phase margin at the crossover frequency (via lead)
-    \item Boost low-frequency gain for steady-state accuracy (via lag)
-    \item Maintain bounded high-frequency gain for noise rejection
-\end{itemize}
+By cascading lead and lag compensators, engineers could simultaneously increase phase margin at the crossover frequency through lead compensation, boost low-frequency gain for steady-state accuracy through lag compensation, and maintain bounded high-frequency gain for noise rejection.
 
 This cascade approach became the standard methodology for precision servo design and remains widely used today.
 
@@ -141,23 +134,13 @@ While born from military necessity, lead-lag compensation techniques have become
 
 \subsection{Hard Disk Drive Servo Systems}
 
-Modern hard disk drives position read/write heads with nanometer precision over spinning platters at 7200 RPM or higher. The servo system must:
-\begin{itemize}
-    \item Achieve settling times under 5 milliseconds for track-to-track seeks
-    \item Maintain position accuracy within approximately 10 nanometers during read/write operations
-    \item Reject disturbances from disk flutter, bearing vibration, and external shocks
-\end{itemize}
+Modern hard disk drives position read/write heads with nanometer precision over spinning platters at 7200 RPM or higher. The servo system must achieve settling times under 5 milliseconds for track-to-track seeks, maintain position accuracy within approximately 10 nanometers during read/write operations, and reject disturbances from disk flutter, bearing vibration, and external shocks.
 
 Lead compensation provides the phase margin necessary for fast seeking, while lag compensation ensures the head remains precisely on track despite low-frequency disturbances. The constraints are severe: sampling rates exceed 20 kHz, and stability margins must account for manufacturing variations across millions of units.
 
 \subsection{Antenna Tracking Systems}
 
-Satellite communication and radio telescope systems require tracking moving objects (satellites in orbit, celestial sources) with arc-second precision. The challenges include:
-\begin{itemize}
-    \item Large mechanical inertia of antenna structures
-    \item Wind loading as a time-varying disturbance
-    \item Structural resonances that limit achievable bandwidth
-\end{itemize}
+Satellite communication and radio telescope systems require tracking moving objects (satellites in orbit, celestial sources) with arc-second precision. The challenges include large mechanical inertia of antenna structures, wind loading as a time-varying disturbance, and structural resonances that limit achievable bandwidth.
 
 Lead-lag compensation shapes the loop response to maximize tracking bandwidth while providing robustness to resonance excitation. The Deep Space Network antennas, for example, use sophisticated lead-lag networks to maintain communication with spacecraft billions of kilometers away.
 
@@ -187,11 +170,7 @@ Both lead and lag compensators share the same mathematical form:
 
 where $z = 1/\tau$ is the zero location, $p = 1/(\alpha\tau)$ is the pole location, and $\alpha = z/p = p_{\text{freq}}/z_{\text{freq}}$ in terms of break frequencies.
 
-The distinction between lead and lag compensation lies solely in the relationship between $z$ and $p$:
-\begin{itemize}
-    \item \textbf{Lead compensator:} $p > z$ (equivalently, $\alpha > 1$)
-    \item \textbf{Lag compensator:} $z > p$ (equivalently, $\alpha < 1$)
-\end{itemize}
+The distinction between lead and lag compensation lies solely in the relationship between $z$ and $p$. For a lead compensator, $p > z$ (equivalently, $\alpha > 1$), while for a lag compensator, $z > p$ (equivalently, $\alpha < 1$).
 
 \subsection{Lead Compensator Analysis}
 
@@ -346,29 +325,23 @@ This is exactly halfway (in dB) between the low-frequency and high-frequency asy
 
 \subsubsection{Lead Compensator Design Procedure}
 
-Given specifications for phase margin improvement $\phi_{\text{needed}}$ and desired crossover frequency $\omega_c$:
-
-\begin{enumerate}
-    \item \textbf{Determine required $\alpha$:} Add 5°--12° safety margin to $\phi_{\text{needed}}$ to account for the gain increase at $\omega_m$, then solve:
-    \begin{equation}
-    \alpha = \frac{1 + \sin(\phi_m)}{1 - \sin(\phi_m)}
-    \label{eq:alpha_from_phi}
-    \end{equation}
-
-    \item \textbf{Calculate zero and pole locations:} Place $\omega_m = \omega_c$ (desired crossover frequency):
-    \begin{align}
-    z &= \frac{\omega_c}{\sqrt{\alpha}} \\
-    p &= \omega_c \sqrt{\alpha}
-    \label{eq:zp_from_omega}
-    \end{align}
-
-    \item \textbf{Determine $K_c$:} Adjust $K_c$ so the compensated loop gain magnitude equals 0 dB at $\omega_c$. Since the lead compensator contributes $-10\log_{10}(\alpha)$ dB at $\omega_m$:
-    \begin{equation}
-    K_c = \sqrt{\alpha} \cdot |G(j\omega_c)|^{-1}
-    \label{eq:Kc_lead}
-    \end{equation}
-    where $G(s)$ is the uncompensated plant.
-\end{enumerate}
+Given specifications for phase margin improvement $\phi_{\text{needed}}$ and desired crossover frequency $\omega_c$, the design proceeds as follows. First, determine the required $\alpha$ by adding 5°--12° safety margin to $\phi_{\text{needed}}$ to account for the gain increase at $\omega_m$, then solve:
+\begin{equation}
+\alpha = \frac{1 + \sin(\phi_m)}{1 - \sin(\phi_m)}
+\label{eq:alpha_from_phi}
+\end{equation}
+Second, calculate the zero and pole locations by placing $\omega_m = \omega_c$ (desired crossover frequency):
+\begin{align}
+z &= \frac{\omega_c}{\sqrt{\alpha}} \\
+p &= \omega_c \sqrt{\alpha}
+\label{eq:zp_from_omega}
+\end{align}
+Third, determine $K_c$ by adjusting it so the compensated loop gain magnitude equals 0 dB at $\omega_c$. Since the lead compensator contributes $-10\log_{10}(\alpha)$ dB at $\omega_m$:
+\begin{equation}
+K_c = \sqrt{\alpha} \cdot |G(j\omega_c)|^{-1}
+\label{eq:Kc_lead}
+\end{equation}
+where $G(s)$ is the uncompensated plant.
 
 \subsection{Lag Compensator Analysis}
 
@@ -444,33 +417,15 @@ Now $\beta = z/p > 1$, and the DC gain is $K_c \cdot \beta > K_c$.
 
 \subsubsection{Design Philosophy}
 
-The lag compensator provides two benefits:
-\begin{enumerate}
-    \item \textbf{Low-frequency gain boost:} The factor $\beta = z/p$ increases the DC loop gain, reducing steady-state error.
-    \item \textbf{Minimal phase impact at crossover:} By placing both $z$ and $p$ well below the crossover frequency $\omega_c$, the phase lag contribution at $\omega_c$ is small (typically 5°--10°).
-\end{enumerate}
+The lag compensator provides two key benefits. First, the factor $\beta = z/p$ provides a low-frequency gain boost that increases the DC loop gain, thereby reducing steady-state error. Second, by placing both $z$ and $p$ well below the crossover frequency $\omega_c$, the phase lag contribution at $\omega_c$ remains small (typically 5°--10°), ensuring minimal phase impact at crossover.
 
 \subsubsection{Lag Compensator Design Procedure}
 
-Given required steady-state error improvement and existing phase margin:
-
-\begin{enumerate}
-    \item \textbf{Determine $\beta$:} Calculate the ratio of current steady-state error to desired error:
-    \begin{equation}
-    \beta = \frac{e_{\text{ss,current}}}{e_{\text{ss,desired}}}
-    \end{equation}
-
-    \item \textbf{Find current crossover frequency $\omega_c$:} From the uncompensated Bode plot.
-
-    \item \textbf{Place lag compensator zero:} Choose $z$ such that $z \leq \omega_c / 10$. This ensures the phase lag at $\omega_c$ is acceptably small:
-    \begin{equation}
-    \phi_{\text{lag}}(\omega_c) = \tan^{-1}\left(\frac{\omega_c}{z}\right) - \tan^{-1}\left(\frac{\omega_c}{p}\right) \approx -5° \text{ to } -10°
-    \end{equation}
-
-    \item \textbf{Calculate pole:} $p = z/\beta$.
-
-    \item \textbf{Set $K_c$:} Typically $K_c = 1$ since the gain boost comes from the $\beta$ factor. Adjust if needed to maintain the original crossover frequency.
-\end{enumerate}
+Given the required steady-state error improvement and existing phase margin, the design procedure proceeds as follows. First, determine $\beta$ by calculating the ratio of current steady-state error to desired error: $\beta = e_{\text{ss,current}}/e_{\text{ss,desired}}$. Second, find the current crossover frequency $\omega_c$ from the uncompensated Bode plot. Third, place the lag compensator zero by choosing $z$ such that $z \leq \omega_c / 10$, which ensures the phase lag at $\omega_c$ is acceptably small:
+\begin{equation}
+\phi_{\text{lag}}(\omega_c) = \tan^{-1}\left(\frac{\omega_c}{z}\right) - \tan^{-1}\left(\frac{\omega_c}{p}\right) \approx -5° \text{ to } -10°
+\end{equation}
+Fourth, calculate the pole location as $p = z/\beta$. Fifth, set $K_c$, which is typically equal to 1 since the gain boost comes from the $\beta$ factor; adjust if needed to maintain the original crossover frequency.
 
 \subsection{Lead-Lag Compensator}
 
@@ -552,13 +507,7 @@ where $p_{\text{lead}} > z_{\text{lead}}$ and $z_{\text{lag}} > p_{\text{lag}}$.
 
 \subsubsection{Design Approach}
 
-\begin{enumerate}
-    \item \textbf{Design lead stage first:} Determine the phase margin improvement needed and place the lead compensator to provide maximum phase at the desired crossover frequency.
-
-    \item \textbf{Design lag stage second:} Calculate the additional low-frequency gain needed for steady-state accuracy. Place the lag zero at least one decade below the crossover frequency.
-
-    \item \textbf{Verify stability:} Check that the total phase margin with both stages is adequate, accounting for the small phase lag contribution from the lag stage at crossover.
-\end{enumerate}
+The design approach for lead-lag compensation proceeds in three stages. First, design the lead stage by determining the phase margin improvement needed and placing the lead compensator to provide maximum phase at the desired crossover frequency. Second, design the lag stage by calculating the additional low-frequency gain needed for steady-state accuracy and placing the lag zero at least one decade below the crossover frequency. Third, verify stability by checking that the total phase margin with both stages is adequate, accounting for the small phase lag contribution from the lag stage at crossover.
 
 \subsection{Root Locus Interpretation}
 
@@ -614,25 +563,27 @@ Lead-lag compensation can also be understood through root locus analysis.
 
 \subsection{Objective}
 
-This experiment demonstrates the practical benefits of lead compensation by implementing a position servo on a DC motor. You will:
-\begin{enumerate}
-    \item Characterize the uncompensated system response
-    \item Design a lead compensator to improve phase margin
-    \item Implement the compensator digitally on an Arduino
-    \item Measure and compare step responses before and after compensation
-\end{enumerate}
+This experiment demonstrates the practical benefits of lead compensation by implementing a position servo on a DC motor. You will characterize the uncompensated system response, design a lead compensator to improve phase margin, implement the compensator digitally on an Arduino, and measure and compare step responses before and after compensation.
 
 \subsection{Required Equipment}
 
-\begin{itemize}
-    \item DC motor with encoder (e.g., 12V geared motor, 48 CPR encoder)
-    \item Arduino Mega or similar microcontroller
-    \item L298N motor driver or equivalent H-bridge
-    \item Potentiometer (10k$\Omega$) for setpoint
-    \item 12V power supply
-    \item Oscilloscope or serial plotter for response visualization
-    \item Computer with Arduino IDE
-\end{itemize}
+\begin{table}[htbp]
+\centering
+\caption{Equipment Required for Lead Compensation Experiment}
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Specification} \\
+\midrule
+DC motor with encoder & 12V geared motor, 48 CPR encoder \\
+Microcontroller & Arduino Mega or similar \\
+Motor driver & L298N or equivalent H-bridge \\
+Potentiometer & 10k$\Omega$ for setpoint input \\
+Power supply & 12V DC \\
+Visualization & Oscilloscope or serial plotter \\
+Software & Computer with Arduino IDE \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{System Model}
 
@@ -656,49 +607,35 @@ This system has 90° of phase lag from the integrator and additional lag from th
 
 First, characterize your motor's parameters:
 
-\begin{lstlisting}[language=C, caption={Motor identification - step response test}]
-// Motor identification sketch
-const int motorPWM = 5;      // PWM output
-const int motorDir = 4;      // Direction
-const int encoderA = 2;      // Encoder channel A
-const int encoderB = 3;      // Encoder channel B
-
-volatile long encoderCount = 0;
-unsigned long startTime;
-
-void setup() {
-    Serial.begin(115200);
-    pinMode(motorPWM, OUTPUT);
-    pinMode(motorDir, OUTPUT);
-    pinMode(encoderA, INPUT_PULLUP);
-    pinMode(encoderB, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(encoderA),
-                    encoderISR, RISING);
-
-    // Apply step voltage
-    digitalWrite(motorDir, HIGH);
-    analogWrite(motorPWM, 128);  // 50% duty cycle
-    startTime = millis();
-}
-
-void loop() {
-    if (millis() - startTime < 2000) {
-        // Log position vs time for 2 seconds
-        Serial.print(millis() - startTime);
-        Serial.print(",");
-        Serial.println(encoderCount);
-        delay(10);
-    } else {
-        analogWrite(motorPWM, 0);  // Stop motor
-        while(1);  // Halt
-    }
-}
-
-void encoderISR() {
-    if (digitalRead(encoderB) == LOW) encoderCount++;
-    else encoderCount--;
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Motor Identification via Step Response Test}
+\begin{algorithmic}[1]
+\State \textbf{Initialize:}
+\State \hspace{1em} Configure motor PWM and direction pins as outputs
+\State \hspace{1em} Configure encoder channels A and B as inputs with pull-up resistors
+\State \hspace{1em} Attach interrupt to encoder channel A on rising edge
+\State \hspace{1em} Set $\text{encoderCount} \gets 0$
+\State
+\State \textbf{Apply Step Input:}
+\State \hspace{1em} Set motor direction to forward
+\State \hspace{1em} Set PWM duty cycle to 50\%
+\State \hspace{1em} Record $\text{startTime} \gets \text{currentTime}$
+\State
+\State \textbf{Data Logging Loop:}
+\While{$\text{currentTime} - \text{startTime} < 2000$ ms}
+    \State Output timestamp and encoder count to serial port
+    \State Wait 10 ms
+\EndWhile
+\State Set PWM duty cycle to 0\% (stop motor)
+\State
+\State \textbf{Encoder Interrupt Service Routine:}
+\If{encoder channel B is LOW}
+    \State $\text{encoderCount} \gets \text{encoderCount} + 1$
+\Else
+    \State $\text{encoderCount} \gets \text{encoderCount} - 1$
+\EndIf
+\end{algorithmic}
+\end{algorithm}
 
 From the velocity response data, identify $K_m$ (steady-state velocity per volt) and $\tau_m$ (time to reach 63\% of final velocity).
 
@@ -706,43 +643,31 @@ From the velocity response data, identify $K_m$ (steady-state velocity per volt)
 
 Implement proportional control and observe the step response:
 
-\begin{lstlisting}[language=C, caption={Proportional control baseline}]
-// Proportional position control
-const float Kp = 5.0;  // Start with low gain
-const int setpointPin = A0;
-
-void loop() {
-    // Read setpoint from potentiometer
-    int setpointRaw = analogRead(setpointPin);
-    float setpoint = map(setpointRaw, 0, 1023, -500, 500);
-
-    // Calculate error
-    float error = setpoint - encoderCount;
-
-    // Proportional control
-    float controlSignal = Kp * error;
-
-    // Apply saturation and output
-    controlSignal = constrain(controlSignal, -255, 255);
-
-    if (controlSignal >= 0) {
-        digitalWrite(motorDir, HIGH);
-        analogWrite(motorPWM, (int)controlSignal);
-    } else {
-        digitalWrite(motorDir, LOW);
-        analogWrite(motorPWM, (int)(-controlSignal));
-    }
-
-    // Log for analysis
-    Serial.print(millis());
-    Serial.print(",");
-    Serial.print(setpoint);
-    Serial.print(",");
-    Serial.println(encoderCount);
-
-    delay(5);  // 200 Hz sample rate
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Proportional Position Control Baseline}
+\begin{algorithmic}[1]
+\State \textbf{Parameters:} $K_p \gets 5.0$ (proportional gain, start low)
+\State
+\Loop
+    \State Read setpoint from potentiometer (analog input)
+    \State Map raw value to range $[-500, 500]$ counts
+    \State $\text{error} \gets \text{setpoint} - \text{encoderCount}$
+    \State $\text{controlSignal} \gets K_p \cdot \text{error}$
+    \State Saturate controlSignal to range $[-255, 255]$
+    \State
+    \If{$\text{controlSignal} \geq 0$}
+        \State Set motor direction to forward
+        \State Set PWM to controlSignal
+    \Else
+        \State Set motor direction to reverse
+        \State Set PWM to $|\text{controlSignal}|$
+    \EndIf
+    \State
+    \State Log timestamp, setpoint, and encoder count
+    \State Wait 5 ms (200 Hz sample rate)
+\EndLoop
+\end{algorithmic}
+\end{algorithm}
 
 Increase $K_p$ until the system shows significant overshoot (indicating low phase margin). Record this gain and the step response characteristics.
 
@@ -750,13 +675,7 @@ Increase $K_p$ until the system shows significant overshoot (indicating low phas
 
 For a typical motor with $\tau_m = 0.05$ s and desired crossover at $\omega_c = 30$ rad/s:
 
-\textbf{Design calculations:}
-\begin{enumerate}
-    \item Desired phase margin: 50° (need $\phi_m \approx 55°$ accounting for gain change)
-    \item Calculate $\alpha$: $\sin(55°) = 0.819 = (\alpha-1)/(\alpha+1)$, so $\alpha = 10$
-    \item Zero location: $z = \omega_c/\sqrt{\alpha} = 30/\sqrt{10} \approx 9.5$ rad/s
-    \item Pole location: $p = \omega_c \sqrt{\alpha} = 30\sqrt{10} \approx 95$ rad/s
-\end{enumerate}
+\textbf{Design calculations:} The desired phase margin is 50°, which means we need $\phi_m \approx 55°$ when accounting for gain change. From $\sin(55°) = 0.819 = (\alpha-1)/(\alpha+1)$, we obtain $\alpha = 10$. The zero location is then $z = \omega_c/\sqrt{\alpha} = 30/\sqrt{10} \approx 9.5$ rad/s, and the pole location is $p = \omega_c \sqrt{\alpha} = 30\sqrt{10} \approx 95$ rad/s.
 
 In the discrete domain (Tustin transform with $T_s = 0.005$ s):
 \begin{equation}
@@ -765,72 +684,41 @@ C(z) = K_c \frac{1 + a_1 z^{-1}}{1 + b_1 z^{-1}}
 
 \subsubsection{Step 4: Digital Lead Compensator Implementation}
 
-\begin{lstlisting}[language=C, caption={Digital lead compensator implementation}]
-// Lead-compensated position control
-const float Kp = 8.0;     // Higher gain now stable
-
-// Lead compensator coefficients (Tustin, Ts=5ms)
-// Continuous: C(s) = (s+9.5)/(s+95), then scaled
-const float a1 = -0.907;  // (1 - z*Ts/2)/(1 + z*Ts/2)
-const float b1 = -0.621;  // (1 - p*Ts/2)/(1 + p*Ts/2)
-const float Kc = 3.16;    // sqrt(alpha) compensation
-
-// Filter states
-float x_prev = 0;  // Previous input
-float y_prev = 0;  // Previous output
-
-float leadCompensator(float x) {
-    // Difference equation: y[n] = -b1*y[n-1] + Kc*(x[n] + a1*x[n-1])
-    float y = -b1 * y_prev + Kc * (x + a1 * x_prev);
-
-    // Update states
-    x_prev = x;
-    y_prev = y;
-
-    return y;
-}
-
-void loop() {
-    static unsigned long lastTime = 0;
-    unsigned long now = micros();
-
-    // Enforce consistent sample rate
-    if (now - lastTime >= 5000) {  // 5ms = 200 Hz
-        lastTime = now;
-
-        // Read setpoint
-        int setpointRaw = analogRead(setpointPin);
-        float setpoint = map(setpointRaw, 0, 1023, -500, 500);
-
-        // Calculate error
-        float error = setpoint - encoderCount;
-
-        // Apply proportional gain
-        float proportionalOutput = Kp * error;
-
-        // Apply lead compensator
-        float compensatedOutput = leadCompensator(proportionalOutput);
-
-        // Apply saturation and output
-        compensatedOutput = constrain(compensatedOutput, -255, 255);
-
-        if (compensatedOutput >= 0) {
-            digitalWrite(motorDir, HIGH);
-            analogWrite(motorPWM, (int)compensatedOutput);
-        } else {
-            digitalWrite(motorDir, LOW);
-            analogWrite(motorPWM, (int)(-compensatedOutput));
-        }
-
-        // Log data
-        Serial.print(millis());
-        Serial.print(",");
-        Serial.print(setpoint);
-        Serial.print(",");
-        Serial.println(encoderCount);
-    }
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Digital Lead Compensator Implementation}
+\begin{algorithmic}[1]
+\State \textbf{Parameters:}
+\State \hspace{1em} $K_p \gets 8.0$ (higher gain now stable with compensation)
+\State \hspace{1em} $a_1 \gets -0.907$ (Tustin coefficient for zero)
+\State \hspace{1em} $b_1 \gets -0.621$ (Tustin coefficient for pole)
+\State \hspace{1em} $K_c \gets 3.16$ ($\sqrt{\alpha}$ compensation factor)
+\State \hspace{1em} $T_s \gets 5$ ms (sample period)
+\State
+\State \textbf{State Variables:}
+\State \hspace{1em} $x_{\text{prev}} \gets 0$, $y_{\text{prev}} \gets 0$
+\State
+\Function{LeadCompensator}{$x$}
+    \State $y \gets -b_1 \cdot y_{\text{prev}} + K_c \cdot (x + a_1 \cdot x_{\text{prev}})$
+    \State $x_{\text{prev}} \gets x$
+    \State $y_{\text{prev}} \gets y$
+    \State \Return $y$
+\EndFunction
+\State
+\State \textbf{Main Control Loop:}
+\Loop
+    \If{$T_s$ has elapsed since last sample}
+        \State Read setpoint from potentiometer
+        \State Map to range $[-500, 500]$ counts
+        \State $\text{error} \gets \text{setpoint} - \text{encoderCount}$
+        \State $\text{propOutput} \gets K_p \cdot \text{error}$
+        \State $\text{compOutput} \gets \text{LeadCompensator}(\text{propOutput})$
+        \State Saturate compOutput to $[-255, 255]$
+        \State Apply compOutput to motor (set direction and PWM)
+        \State Log timestamp, setpoint, and encoder count
+    \EndIf
+\EndLoop
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Expected Results}
 
@@ -872,11 +760,7 @@ void loop() {
 \label{fig:step_response_comparison}
 \end{figure}
 
-You should observe:
-\begin{enumerate}
-    \item \textbf{With proportional control only:} Either slow response (low $K_p$) or significant overshoot and oscillation (high $K_p$).
-    \item \textbf{With lead compensation:} Faster rise time \textit{and} reduced overshoot. The phase margin improvement allows higher effective gain without sacrificing stability.
-\end{enumerate}
+You should observe the following behavior. With proportional control only, the system exhibits either slow response when using low $K_p$ or significant overshoot and oscillation when using high $K_p$. With lead compensation, however, the system achieves faster rise time \textit{and} reduced overshoot simultaneously. The phase margin improvement allows higher effective gain without sacrificing stability.
 
 \subsection{Verifying Phase Margin Improvement}
 
@@ -894,8 +778,7 @@ Compare the overshoot before and after compensation to verify improved damping.
 \section{Example Problems}
 \label{sec:lead_lag_examples}
 
-\subsection{Example 14.1: Lead Compensator for Specified Phase Margin}
-
+\begin{examplebox}[Example 14.1: Lead Compensator for Specified Phase Margin]
 \textbf{Problem:} A unity-feedback system has plant transfer function:
 \[
 G(s) = \frac{10}{s(s+2)}
@@ -966,8 +849,9 @@ At $\omega = 4$:
 \end{align}
 
 The achieved phase margin exceeds the specification, as expected due to our safety margin.
+\end{examplebox}
 
-\subsection{Example 14.2: Lag Compensator for Steady-State Error}
+\begin{examplebox}[Example 14.2: Lag Compensator for Steady-State Error]
 
 \textbf{Problem:} A unity-feedback system has:
 \[
@@ -1023,6 +907,7 @@ At $\omega_c = 1.26$ rad/s:
 Phase margin reduction is only about 5°, leaving approximately 30° phase margin.
 
 New velocity constant: $K_v = 10 \cdot 1 = 10$ s$^{-1}$ $\checkmark$
+\end{examplebox}
 
 \subsection{Example 14.3: Maximum Phase Lead Calculation}
 
@@ -1163,19 +1048,19 @@ y[n] = 0.6 \, y[n-1] + 1.68 \, x[n] - 1.52 \, x[n-1]
 \]
 
 \textbf{Implementation:}
-\begin{lstlisting}[language=C, caption={Digital lead compensator difference equation}]
-float digitalLeadCompensator(float x) {
-    static float x_prev = 0;
-    static float y_prev = 0;
-
-    float y = 0.6 * y_prev + 1.68 * x - 1.52 * x_prev;
-
-    x_prev = x;
-    y_prev = y;
-
-    return y;
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Digital Lead Compensator Difference Equation}
+\begin{algorithmic}[1]
+\State \textbf{State Variables:} $x_{\text{prev}} \gets 0$, $y_{\text{prev}} \gets 0$
+\State
+\Function{DigitalLeadCompensator}{$x$}
+    \State $y \gets 0.6 \cdot y_{\text{prev}} + 1.68 \cdot x - 1.52 \cdot x_{\text{prev}}$
+    \State $x_{\text{prev}} \gets x$
+    \State $y_{\text{prev}} \gets y$
+    \State \Return $y$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Example 14.6: Phase Margin from Bode Plot}
 
@@ -1232,81 +1117,90 @@ Solving numerically: $u \approx 4$, so $\omega_c \approx 2$ rad/s.
 \section{Chapter Summary}
 \label{sec:lead_lag_summary}
 
-Lead-lag compensation provides powerful tools for shaping the frequency response of control systems:
+Lead-lag compensation provides powerful tools for shaping the frequency response of control systems. Lead compensation adds phase in the mid-frequency range, improving phase margin and enabling faster response without sacrificing stability; the maximum phase lead is $\phi_m = \sin^{-1}((\alpha-1)/(\alpha+1))$, occurring at $\omega_m = \sqrt{zp}$. Lag compensation boosts low-frequency gain to reduce steady-state error while contributing minimal phase lag at the crossover frequency, with the key being to place the compensator break frequencies well below crossover. Lead-lag compensation combines both techniques when simultaneously improved phase margin and steady-state accuracy are required. These techniques have remained essential from WWII fire control to modern hard disk drives, demonstrating the enduring value of frequency-domain design methods.
 
-\begin{itemize}
-    \item \textbf{Lead compensation} adds phase in the mid-frequency range, improving phase margin and enabling faster response without sacrificing stability. The maximum phase lead is $\phi_m = \sin^{-1}((\alpha-1)/(\alpha+1))$, occurring at $\omega_m = \sqrt{zp}$.
-
-    \item \textbf{Lag compensation} boosts low-frequency gain to reduce steady-state error while contributing minimal phase lag at the crossover frequency. The key is placing the compensator break frequencies well below crossover.
-
-    \item \textbf{Lead-lag compensation} combines both techniques when simultaneously improved phase margin and steady-state accuracy are required.
-
-    \item These techniques have remained essential from WWII fire control to modern hard disk drives, demonstrating the enduring value of frequency-domain design methods.
-\end{itemize}
-
-\section{Problems}
+\newpage
+\section{Exercises}
 \label{sec:lead_lag_problems}
 
+\begin{exercise}
+A system has open-loop transfer function $G(s) = 50/(s(s+5)(s+10))$. Design a lead compensator to achieve a phase margin of at least 45°.
+\end{exercise}
+
+\begin{exercise}
+For the compensator $C(s) = K(s+a)/(s+b)$ with $a = 3$ and $b = 15$:
 \begin{enumerate}
-    \item A system has open-loop transfer function $G(s) = 50/(s(s+5)(s+10))$. Design a lead compensator to achieve a phase margin of at least 45°.
-
-    \item For the compensator $C(s) = K(s+a)/(s+b)$ with $a = 3$ and $b = 15$:
-    \begin{enumerate}
-        \item Is this a lead or lag compensator?
-        \item Calculate the maximum phase contribution and the frequency at which it occurs.
-        \item Sketch the Bode plot (magnitude and phase).
-    \end{enumerate}
-
-    \item Design a lag compensator for $G(s) = 10/(s(s+1))$ to increase the velocity error constant from 10 to 100 s$^{-1}$ while maintaining at least 40° phase margin.
-
-    \item Convert the lead compensator $C(s) = (s+5)/(s+25)$ to discrete time using:
-    \begin{enumerate}
-        \item Tustin transformation with $T_s = 0.02$ s
-        \item Forward Euler method with $T_s = 0.02$ s
-    \end{enumerate}
-    Compare the frequency responses of the two discrete implementations.
-
-    \item A position control system has plant $G(s) = K/(s(\tau s + 1))$ with $K = 10$ and $\tau = 0.1$ s. The system uses unity feedback with proportional gain $K_p$.
-    \begin{enumerate}
-        \item Find the value of $K_p$ that gives 30° phase margin.
-        \item Design a lead compensator to achieve 50° phase margin while doubling the crossover frequency.
-        \item Calculate the improvement in settling time you would expect.
-    \end{enumerate}
-
-    \item For the lead-lag compensator:
-    \[
-    C(s) = 5 \cdot \frac{s+2}{s+20} \cdot \frac{s+0.5}{s+0.05}
-    \]
-    \begin{enumerate}
-        \item Identify the lead and lag stages.
-        \item Calculate the DC gain.
-        \item Calculate the high-frequency gain.
-        \item At what frequency does the lead stage provide maximum phase?
-    \end{enumerate}
-
-    \item \textbf{Laboratory:} Implement the lead compensator from Example 14.5 on an Arduino controlling a DC motor. Compare the step response with proportional-only control using the same crossover frequency. Measure:
-    \begin{enumerate}
-        \item Rise time
-        \item Percent overshoot
-        \item Settling time
-    \end{enumerate}
-
-    \item A hard disk drive head positioning system has transfer function:
-    \[
-    G(s) = \frac{10^6}{s^2(s+1000)}
-    \]
-    Design a lead-lag compensator to achieve:
-    \begin{enumerate}
-        \item Zero steady-state position error to a step input (already satisfied)
-        \item Velocity error constant $K_v \geq 10^4$ s$^{-1}$
-        \item Phase margin $\geq 40°$
-        \item Gain margin $\geq 10$ dB
-    \end{enumerate}
-
-    \item Prove that for a lead compensator $C(s) = K_c(s+z)/(s+p)$ with $p > z$, the gain at the frequency of maximum phase is exactly the geometric mean of the low-frequency and high-frequency gains (in linear, not dB, scale).
-
-    \item A power system stabilizer requires phase lead of 60° at the inter-area oscillation frequency of 0.5 Hz. Design a two-stage lead compensator (cascade of two lead stages) to achieve this specification while limiting the high-frequency gain increase to 20 dB.
+    \item Is this a lead or lag compensator?
+    \item Calculate the maximum phase contribution and the frequency at which it occurs.
+    \item Sketch the Bode plot (magnitude and phase).
 \end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Design a lag compensator for $G(s) = 10/(s(s+1))$ to increase the velocity error constant from 10 to 100 s$^{-1}$ while maintaining at least 40° phase margin.
+\end{exercise}
+
+\begin{exercise}
+Convert the lead compensator $C(s) = (s+5)/(s+25)$ to discrete time using:
+\begin{enumerate}
+    \item Tustin transformation with $T_s = 0.02$ s
+    \item Forward Euler method with $T_s = 0.02$ s
+\end{enumerate}
+Compare the frequency responses of the two discrete implementations.
+\end{exercise}
+
+\begin{exercise}
+A position control system has plant $G(s) = K/(s(\tau s + 1))$ with $K = 10$ and $\tau = 0.1$ s. The system uses unity feedback with proportional gain $K_p$.
+\begin{enumerate}
+    \item Find the value of $K_p$ that gives 30° phase margin.
+    \item Design a lead compensator to achieve 50° phase margin while doubling the crossover frequency.
+    \item Calculate the improvement in settling time you would expect.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+For the lead-lag compensator:
+\[
+C(s) = 5 \cdot \frac{s+2}{s+20} \cdot \frac{s+0.5}{s+0.05}
+\]
+\begin{enumerate}
+    \item Identify the lead and lag stages.
+    \item Calculate the DC gain.
+    \item Calculate the high-frequency gain.
+    \item At what frequency does the lead stage provide maximum phase?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+\textbf{Laboratory:} Implement the lead compensator from Example 14.5 on an Arduino controlling a DC motor. Compare the step response with proportional-only control using the same crossover frequency. Measure:
+\begin{enumerate}
+    \item Rise time
+    \item Percent overshoot
+    \item Settling time
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A hard disk drive head positioning system has transfer function:
+\[
+G(s) = \frac{10^6}{s^2(s+1000)}
+\]
+Design a lead-lag compensator to achieve:
+\begin{enumerate}
+    \item Zero steady-state position error to a step input (already satisfied)
+    \item Velocity error constant $K_v \geq 10^4$ s$^{-1}$
+    \item Phase margin $\geq 40°$
+    \item Gain margin $\geq 10$ dB
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Prove that for a lead compensator $C(s) = K_c(s+z)/(s+p)$ with $p > z$, the gain at the frequency of maximum phase is exactly the geometric mean of the low-frequency and high-frequency gains (in linear, not dB, scale).
+\end{exercise}
+
+\begin{exercise}
+A power system stabilizer requires phase lead of 60° at the inter-area oscillation frequency of 0.5 Hz. Design a two-stage lead compensator (cascade of two lead stages) to achieve this specification while limiting the high-frequency gain increase to 20 dB.
+\end{exercise}
 
 %% ============================================================================
 %% REFERENCES FOR THIS CHAPTER
@@ -1314,16 +1208,5 @@ Lead-lag compensation provides powerful tools for shaping the frequency response
 \section*{Further Reading}
 \addcontentsline{toc}{section}{Further Reading}
 
-\begin{itemize}
-    \item Bode, H.W., ``Network Analysis and Feedback Amplifier Design,'' Van Nostrand, 1945. The foundational text on frequency-domain design.
+For foundational understanding of frequency-domain design, the reader should consult Bode's seminal ``Network Analysis and Feedback Amplifier Design'' (Van Nostrand, 1945). Franklin, Powell, and Emami-Naeini's ``Feedback Control of Dynamic Systems'' (Pearson, 7th edition, 2015) provides excellent coverage of lead-lag design in Chapters 6 and 7. For historical context on fire control system development, Mindell's ``Between Human and Machine: Feedback, Control, and Computing Before Cybernetics'' (Johns Hopkins University Press, 2002) offers a fascinating account. Additional coverage of frequency response design methods can be found in Dorf and Bishop's ``Modern Control Systems'' (Pearson, 13th edition, 2016), particularly Chapter 10, while Ogata's ``Modern Control Engineering'' (Pearson, 5th edition, 2010) provides comprehensive treatment of compensator design with many examples.
 
-    \item Franklin, G.F., Powell, J.D., and Emami-Naeini, A., ``Feedback Control of Dynamic Systems,'' Pearson, 7th edition, 2015. Chapters 6 and 7 provide excellent coverage of lead-lag design.
-
-    \item Mindell, D.A., ``Between Human and Machine: Feedback, Control, and Computing Before Cybernetics,'' Johns Hopkins University Press, 2002. Fascinating historical account of fire control system development.
-
-    \item Dorf, R.C. and Bishop, R.H., ``Modern Control Systems,'' Pearson, 13th edition, 2016. Chapter 10 covers frequency response design methods.
-
-    \item Ogata, K., ``Modern Control Engineering,'' Pearson, 5th edition, 2010. Comprehensive treatment of compensator design with many examples.
-\end{itemize}
-
-\end{chapter}

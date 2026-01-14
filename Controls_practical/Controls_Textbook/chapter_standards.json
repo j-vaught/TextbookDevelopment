@@ -1,0 +1,425 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Control Systems Textbook Chapter Standards",
+  "description": "Machine-readable standards for automated chapter validation",
+  "version": "1.0.0",
+
+  "critical_checks": {
+    "description": "Must pass - compilation will fail or content is incorrect",
+    "rules": [
+      {
+        "id": "CRIT-001",
+        "name": "algorithm_syntax",
+        "description": "Algorithm environments must use algpseudocode syntax",
+        "check_type": "regex_absence",
+        "pattern": "\\\\(STATE|WHILE|IF|FOR|RETURN|REQUIRE|ENSURE|ENDIF|ENDWHILE|ENDFOR|ELSIF)\\b",
+        "message": "Wrong algorithm syntax - use \\State, \\While, \\If, etc. instead of uppercase"
+      },
+      {
+        "id": "CRIT-002",
+        "name": "no_code_blocks",
+        "description": "No language-specific code blocks",
+        "check_type": "regex_absence",
+        "pattern": "\\\\begin\\{lstlisting\\}",
+        "message": "Code blocks (lstlisting) not allowed - use algorithm environment"
+      },
+      {
+        "id": "CRIT-003",
+        "name": "no_documentclass",
+        "description": "Chapter files must not have standalone preamble",
+        "check_type": "regex_absence",
+        "pattern": "\\\\documentclass",
+        "message": "Chapter contains \\documentclass - remove preamble"
+      },
+      {
+        "id": "CRIT-004",
+        "name": "no_abstract",
+        "description": "Abstract environment not valid in book chapters",
+        "check_type": "regex_absence",
+        "pattern": "\\\\begin\\{abstract\\}",
+        "message": "Abstract environment not valid in book class"
+      },
+      {
+        "id": "CRIT-005",
+        "name": "no_placeholders",
+        "description": "No placeholder or TODO content",
+        "check_type": "regex_absence",
+        "pattern": "(?i)(TODO|PLACEHOLDER|\\[FIGURE\\]|\\[INSERT|TBD\\])",
+        "message": "Placeholder content found - implement fully"
+      },
+      {
+        "id": "CRIT-006",
+        "name": "has_chapter",
+        "description": "Must have chapter declaration",
+        "check_type": "regex_presence",
+        "pattern": "\\\\chapter\\{",
+        "message": "No \\chapter{} declaration found"
+      }
+    ]
+  },
+
+  "style_checks": {
+    "description": "Should pass - affects quality and consistency",
+    "rules": [
+      {
+        "id": "STYLE-001",
+        "name": "minimal_bullets",
+        "description": "Minimize bullet point usage",
+        "check_type": "count_max",
+        "pattern": "\\\\begin\\{itemize\\}",
+        "threshold": 2,
+        "message": "Excessive bullet points - convert to prose or tables"
+      },
+      {
+        "id": "STYLE-002",
+        "name": "sharp_corners",
+        "description": "All boxes must use sharp corners",
+        "check_type": "regex_absence",
+        "pattern": "rounded corners",
+        "message": "Rounded corners found - use sharp corners"
+      },
+      {
+        "id": "STYLE-003",
+        "name": "booktabs_tables",
+        "description": "Tables must use booktabs style",
+        "check_type": "regex_absence",
+        "pattern": "\\\\hline",
+        "message": "\\hline found - use \\toprule/\\midrule/\\bottomrule"
+      },
+      {
+        "id": "STYLE-004",
+        "name": "has_historical_section",
+        "description": "Should have historical context section",
+        "check_type": "regex_presence",
+        "pattern": "\\\\section\\{.*[Hh]istor",
+        "message": "No Historical Context section found"
+      },
+      {
+        "id": "STYLE-005",
+        "name": "has_lab_section",
+        "description": "Should have laboratory section",
+        "check_type": "regex_presence",
+        "pattern": "\\\\section\\{.*(Lab|Experiment)",
+        "message": "No Laboratory/Experiment section found"
+      },
+      {
+        "id": "STYLE-006",
+        "name": "has_exercises_section",
+        "description": "Should have exercises section",
+        "check_type": "regex_presence",
+        "pattern": "\\\\section\\{.*[Ee]xercise",
+        "message": "No Exercises section found"
+      },
+      {
+        "id": "STYLE-007",
+        "name": "exercises_newpage",
+        "description": "Exercises section should start on new page",
+        "check_type": "context_check",
+        "pattern": "\\\\newpage[\\s\\n]*\\\\section\\{.*[Ee]xercise",
+        "message": "Exercises should be preceded by \\newpage"
+      }
+    ]
+  },
+
+  "quality_metrics": {
+    "description": "Recommended thresholds for content quality",
+    "metrics": [
+      {
+        "id": "QUAL-001",
+        "name": "figure_count",
+        "description": "Number of figures",
+        "pattern": "\\\\begin\\{figure\\}",
+        "minimum": 5,
+        "recommended": 8,
+        "message": "Consider adding more figures"
+      },
+      {
+        "id": "QUAL-002",
+        "name": "exercise_count",
+        "description": "Number of exercises",
+        "pattern": "\\\\begin\\{exercise\\}",
+        "minimum": 10,
+        "recommended": 15,
+        "message": "Consider adding more exercises"
+      },
+      {
+        "id": "QUAL-003",
+        "name": "example_count",
+        "description": "Number of worked examples",
+        "pattern": "\\\\begin\\{examplebox\\}",
+        "minimum": 2,
+        "recommended": 4,
+        "message": "Consider adding more worked examples"
+      },
+      {
+        "id": "QUAL-004",
+        "name": "historical_box_count",
+        "description": "Number of historical boxes",
+        "pattern": "\\\\begin\\{historicalbox\\}",
+        "minimum": 1,
+        "recommended": 2,
+        "message": "Consider adding historical context boxes"
+      },
+      {
+        "id": "QUAL-005",
+        "name": "equation_count",
+        "description": "Number of display equations",
+        "pattern": "\\\\begin\\{(equation|align)",
+        "minimum": 10,
+        "recommended": 20,
+        "message": "Consider adding more mathematical content"
+      },
+      {
+        "id": "QUAL-006",
+        "name": "algorithm_count",
+        "description": "Number of algorithms",
+        "pattern": "\\\\begin\\{algorithm\\}",
+        "minimum": 0,
+        "recommended": 2,
+        "message": "Consider adding algorithm boxes where appropriate"
+      }
+    ]
+  },
+
+  "required_sections": {
+    "description": "Sections that must appear in each chapter",
+    "sections": [
+      {
+        "name": "Chapter Declaration",
+        "pattern": "\\\\chapter\\{",
+        "required": true,
+        "order": 1
+      },
+      {
+        "name": "Historical Context",
+        "pattern": "\\\\section\\{.*[Hh]istor",
+        "required": true,
+        "order": 2
+      },
+      {
+        "name": "Mathematical Foundations",
+        "pattern": "\\\\section\\{.*(Mathematical|Theory|Foundations|Analysis)",
+        "required": false,
+        "order": 3
+      },
+      {
+        "name": "Design/Implementation",
+        "pattern": "\\\\section\\{.*(Design|Implementation|Practical)",
+        "required": false,
+        "order": 4
+      },
+      {
+        "name": "Examples",
+        "pattern": "\\\\section\\{.*[Ee]xample",
+        "required": false,
+        "order": 5
+      },
+      {
+        "name": "Laboratory Experiment",
+        "pattern": "\\\\section\\{.*(Lab|Experiment)",
+        "required": true,
+        "order": 6
+      },
+      {
+        "name": "Summary",
+        "pattern": "\\\\section\\{.*[Ss]ummary",
+        "required": true,
+        "order": 7
+      },
+      {
+        "name": "Exercises",
+        "pattern": "\\\\section\\{.*[Ee]xercise",
+        "required": true,
+        "order": 8,
+        "special_requirements": ["must_be_preceded_by_newpage"]
+      }
+    ]
+  },
+
+  "macro_reference": {
+    "description": "Available macros defined in main_textbook.tex",
+    "categories": {
+      "vectors_matrices": [
+        "\\vect{}", "\\mat{}",
+        "\\bA", "\\bB", "\\bC", "\\bD", "\\bF", "\\bG", "\\bH", "\\bI", "\\bJ", "\\bK", "\\bL", "\\bM",
+        "\\bN", "\\bP", "\\bQ", "\\bR", "\\bS", "\\bT", "\\bU", "\\bV", "\\bW", "\\bX", "\\bY", "\\bZ",
+        "\\bx", "\\bu", "\\by", "\\bz", "\\bw", "\\bv", "\\bq", "\\bp", "\\br", "\\be",
+        "\\bzero", "\\bone"
+      ],
+      "state_space": [
+        "\\state", "\\stateder", "\\inputvec", "\\outputvec"
+      ],
+      "transforms": [
+        "\\Laplace", "\\invLaplace", "\\ztrans"
+      ],
+      "sets": [
+        "\\Real", "\\R", "\\Complex", "\\N", "\\Z"
+      ],
+      "operators": [
+        "\\transpose", "\\trans", "\\inv", "\\half",
+        "\\rank", "\\trace", "\\diag", "\\eig",
+        "\\argmin", "\\argmax"
+      ],
+      "frequency_response": [
+        "\\jw", "\\magn{}", "\\phase{}", "\\dB", "\\degrees"
+      ],
+      "pid": [
+        "\\Kp", "\\Ki", "\\Kd", "\\Ti", "\\Td"
+      ],
+      "calculus": [
+        "\\e", "\\j", "\\diff", "\\pd{}{}", "\\grad"
+      ],
+      "reinforcement_learning": [
+        "\\policy", "\\vfunc", "\\qfunc", "\\discount",
+        "\\states", "\\actions", "\\reward", "\\returns", "\\advantage",
+        "\\E", "\\Prob", "\\Var"
+      ],
+      "utility": [
+        "\\norm{}", "\\abs{}", "\\real", "\\imag", "\\lr", "\\To"
+      ]
+    }
+  },
+
+  "box_environments": {
+    "description": "Available tcolorbox environments and their purposes",
+    "environments": [
+      {
+        "name": "examplebox",
+        "color": "blue",
+        "purpose": "Worked examples with step-by-step solutions",
+        "usage": "\\begin{examplebox}[Title]...\\end{examplebox}"
+      },
+      {
+        "name": "historicalbox",
+        "color": "brown",
+        "purpose": "Historical context, anecdotes, inventor stories",
+        "usage": "\\begin{historicalbox}[Title]...\\end{historicalbox}"
+      },
+      {
+        "name": "conceptbox",
+        "color": "green",
+        "purpose": "Key concept explanations and intuition",
+        "usage": "\\begin{conceptbox}[Title]...\\end{conceptbox}"
+      },
+      {
+        "name": "warningbox",
+        "color": "red",
+        "purpose": "Common mistakes, pitfalls, cautions",
+        "usage": "\\begin{warningbox}[Title]...\\end{warningbox}"
+      },
+      {
+        "name": "notebox",
+        "color": "yellow",
+        "purpose": "Important notes, clarifications, asides",
+        "usage": "\\begin{notebox}[Title]...\\end{notebox}"
+      },
+      {
+        "name": "keyconceptbox",
+        "color": "purple",
+        "purpose": "Fundamental definitions or key theorems",
+        "usage": "\\begin{keyconceptbox}[Title]...\\end{keyconceptbox}"
+      },
+      {
+        "name": "keypoint",
+        "color": "light blue",
+        "purpose": "Summary key points",
+        "usage": "\\begin{keypoint}[Title]...\\end{keypoint}"
+      },
+      {
+        "name": "designtip",
+        "color": "light green",
+        "purpose": "Practical design advice and rules of thumb",
+        "usage": "\\begin{designtip}[Title]...\\end{designtip}"
+      },
+      {
+        "name": "experimentbox",
+        "color": "orange",
+        "purpose": "Lab procedure highlights, safety notes",
+        "usage": "\\begin{experimentbox}[Title]...\\end{experimentbox}"
+      },
+      {
+        "name": "applicationbox",
+        "color": "teal",
+        "purpose": "Real-world applications and case studies",
+        "usage": "\\begin{applicationbox}[Title]...\\end{applicationbox}"
+      }
+    ]
+  },
+
+  "algorithm_syntax": {
+    "description": "Correct algpseudocode syntax (NOT algorithmic)",
+    "correct_commands": {
+      "State": "Basic statement",
+      "If{cond}...ElsIf{cond}...Else...EndIf": "Conditional",
+      "While{cond}...EndWhile": "While loop",
+      "For{range}...EndFor": "For loop",
+      "ForAll{range}...EndFor": "For all loop",
+      "Repeat...Until{cond}": "Repeat until",
+      "Loop...EndLoop": "Infinite loop",
+      "Require": "Preconditions/inputs",
+      "Ensure": "Postconditions/outputs",
+      "Return": "Return value",
+      "Comment{text}": "Inline comment",
+      "Function{name}{args}...EndFunction": "Function definition",
+      "Procedure{name}{args}...EndProcedure": "Procedure definition",
+      "Call{func}{args}": "Function call"
+    },
+    "wrong_commands_to_avoid": [
+      "\\STATE", "\\WHILE", "\\IF", "\\FOR", "\\RETURN",
+      "\\REQUIRE", "\\ENSURE", "\\ENDIF", "\\ENDWHILE", "\\ENDFOR",
+      "\\ELSIF", "\\COMMENT", "\\FUNCTION", "\\PROCEDURE", "\\CALL"
+    ]
+  },
+
+  "label_conventions": {
+    "description": "Naming conventions for cross-references",
+    "format": "<type>:<chapter>:<descriptive_name>",
+    "types": {
+      "eq": "Equations",
+      "fig": "Figures",
+      "tab": "Tables",
+      "alg": "Algorithms",
+      "sec": "Sections",
+      "thm": "Theorems",
+      "def": "Definitions",
+      "ex": "Examples",
+      "ch": "Chapters"
+    },
+    "examples": [
+      "eq:ch5:damping_ratio",
+      "fig:ch13:bode_plot",
+      "tab:ch11:tuning_params",
+      "alg:ch17:lqr_design"
+    ]
+  },
+
+  "agent_instructions": {
+    "description": "Instructions for validation agents",
+    "validation_workflow": [
+      "1. Read the chapter file completely",
+      "2. Run all critical_checks - any failure is blocking",
+      "3. Run all style_checks - failures should be fixed",
+      "4. Calculate quality_metrics - report deficiencies",
+      "5. Verify required_sections are present",
+      "6. Check that macros used are from macro_reference",
+      "7. Verify algorithm syntax matches algorithm_syntax.correct_commands",
+      "8. Generate report with findings and recommendations"
+    ],
+    "fix_workflow": [
+      "1. Address all critical errors first",
+      "2. Fix style violations systematically",
+      "3. Add content to meet quality thresholds",
+      "4. Re-validate after fixes",
+      "5. Compile to verify no LaTeX errors introduced"
+    ],
+    "reporting_format": {
+      "status": "PASS | NEEDS_WORK | FAILED",
+      "critical_errors": ["list of CRIT-XXX violations"],
+      "style_violations": ["list of STYLE-XXX violations"],
+      "quality_metrics": {
+        "metric_name": {"current": 0, "minimum": 0, "recommended": 0}
+      },
+      "recommendations": ["list of suggested improvements"]
+    }
+  }
+}

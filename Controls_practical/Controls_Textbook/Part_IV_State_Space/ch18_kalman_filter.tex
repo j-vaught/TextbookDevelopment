@@ -11,6 +11,10 @@
 
 \section{Historical Motivation: The Problem of Noisy Measurements}
 
+\begin{historicalbox}[The Birth of Optimal Filtering (1960)]
+In autumn 1960, Rudolf Kalman published ``A New Approach to Linear Filtering and Prediction Problems,'' fundamentally transforming estimation theory. Unlike Wiener's earlier frequency-domain approach requiring infinite measurement history, Kalman's method works directly in the time domain with recursive computation, maintaining only a finite ``state'' that summarizes all relevant past information. Stanley Schmidt at NASA Ames recognized its transformative potential for Apollo navigation, implementing the first practical Kalman filter to fuse drifting IMU data with star tracker and radar measurements. The Apollo Guidance Computer, with less power than a modern calculator, could not solve the Riccati equation in real-time---engineers pre-computed optimal trajectories stored as polynomials. On July 20, 1969, when Neil Armstrong guided Eagle to the Sea of Tranquility, he was following trajectories computed using these same principles.
+\end{historicalbox}
+
 \subsection{Rudolf Kalman and the Birth of Optimal Filtering}
 
 In the autumn of 1960, Rudolf Emil Kalman, a young Hungarian-American mathematician working at the Research Institute for Advanced Studies (RIAS) in Baltimore, published a paper that would fundamentally transform how engineers and scientists think about estimation. Titled ``A New Approach to Linear Filtering and Prediction Problems,'' this landmark work in the \textit{Journal of Basic Engineering} introduced what we now call the Kalman filter~\cite{kalman1960}.
@@ -19,33 +23,11 @@ Kalman's genius lay not in solving an entirely new problem, but in providing a r
 
 \subsection{Before Kalman: The Wiener Filter}
 
-The problem of optimal filtering had been tackled most famously by Norbert Wiener during World War II. Wiener, working on the problem of anti-aircraft fire control, developed what became known as the Wiener filter in the 1940s. His approach, while mathematically elegant, had significant practical limitations:
-
-\begin{enumerate}
-    \item \textbf{Frequency domain formulation:} The Wiener filter operates in the frequency domain, requiring spectral analysis and the solution of integral equations (the Wiener-Hopf equation).
-
-    \item \textbf{Infinite data assumption:} The classical Wiener filter assumes access to an infinite history of past measurements---clearly impractical for real-time applications.
-
-    \item \textbf{Stationary processes only:} Wiener's approach requires that the statistical properties of signals remain constant over time.
-
-    \item \textbf{No state-space structure:} The Wiener filter does not naturally accommodate the physical structure of dynamic systems with known governing equations.
-\end{enumerate}
+The problem of optimal filtering had been tackled most famously by Norbert Wiener during World War II. Wiener, working on the problem of anti-aircraft fire control, developed what became known as the Wiener filter in the 1940s. His approach, while mathematically elegant, had significant practical limitations. The Wiener filter operates in the frequency domain, requiring spectral analysis and the solution of integral equations known as the Wiener-Hopf equation. Additionally, the classical Wiener filter assumes access to an infinite history of past measurements, which is clearly impractical for real-time applications. Wiener's approach also requires that the statistical properties of signals remain constant over time, limiting it to stationary processes only. Finally, the Wiener filter does not naturally accommodate the physical structure of dynamic systems with known governing equations, lacking the state-space structure that would later prove so powerful.
 
 \subsection{Kalman's Revolutionary Insight}
 
-Kalman's approach differed fundamentally from Wiener's in several crucial ways:
-
-\begin{itemize}
-    \item \textbf{Time domain:} The Kalman filter works directly in the time domain, making it natural for dynamic systems described by differential equations.
-
-    \item \textbf{Recursive computation:} Rather than requiring all past data, the Kalman filter maintains only a finite ``state'' that summarizes all relevant past information. Each new measurement updates this state efficiently.
-
-    \item \textbf{Finite memory:} The filter requires only storage proportional to the state dimension, not the measurement history.
-
-    \item \textbf{Non-stationary systems:} Time-varying systems and noise characteristics are handled naturally.
-
-    \item \textbf{State-space foundation:} The filter leverages the state-space representation of dynamic systems, connecting estimation to the broader framework of modern control theory.
-\end{itemize}
+Kalman's approach differed fundamentally from Wiener's in several crucial ways. First, the Kalman filter works directly in the time domain, making it natural for dynamic systems described by differential equations. Rather than requiring all past data, the Kalman filter employs recursive computation, maintaining only a finite ``state'' that summarizes all relevant past information; each new measurement updates this state efficiently. This means the filter requires only storage proportional to the state dimension, not the measurement history, giving it a finite memory requirement. The framework naturally handles time-varying systems and noise characteristics, accommodating non-stationary systems with ease. Finally, the filter leverages the state-space representation of dynamic systems, connecting estimation to the broader framework of modern control theory through its state-space foundation.
 
 The mathematical elegance of Kalman's solution is remarkable: the filter is not just \textit{one} optimal estimator, but \textit{the} optimal linear estimator in the minimum mean-square error sense. Under Gaussian noise assumptions, it is the optimal estimator of any kind.
 
@@ -53,17 +35,7 @@ The mathematical elegance of Kalman's solution is remarkable: the filter is not 
 
 While Kalman's paper established the theoretical foundation, it was Stanley Schmidt at NASA's Ames Research Center who recognized its transformative potential for space navigation. Schmidt had been wrestling with the challenge of navigating spacecraft to the moon---a problem requiring unprecedented accuracy with inherently noisy sensors.
 
-Consider the challenges facing Apollo navigation engineers:
-
-\begin{itemize}
-    \item \textbf{Inertial Measurement Unit (IMU) drift:} Gyroscopes and accelerometers drift over time, accumulating errors that would be catastrophic over a multi-day mission.
-
-    \item \textbf{Star tracker noise:} Optical measurements of star positions provided absolute attitude information but were subject to sensor noise.
-
-    \item \textbf{Radar ranging errors:} Distance measurements to Earth contained both random noise and systematic biases.
-
-    \item \textbf{Limited computing power:} The Apollo Guidance Computer had approximately 74 KB of memory and operated at 0.043 MHz---a tiny fraction of a modern smartphone's capability.
-\end{itemize}
+Consider the challenges facing Apollo navigation engineers. The Inertial Measurement Unit (IMU) suffered from drift, as gyroscopes and accelerometers accumulated errors over time that would be catastrophic over a multi-day mission. Star trackers provided absolute attitude information through optical measurements of star positions, but these were subject to sensor noise. Radar ranging measurements to Earth contained both random noise and systematic biases. Perhaps most constraining was the limited computing power available: the Apollo Guidance Computer had approximately 74 KB of memory and operated at 0.043 MHz---a tiny fraction of a modern smartphone's capability.
 
 Schmidt implemented the first practical Kalman filter for Apollo navigation, demonstrating that the recursive structure made real-time implementation feasible even with severely limited computing resources. His implementation fused IMU data (high bandwidth but drifting) with star tracker and radar data (lower bandwidth but absolute) to maintain accurate position and velocity estimates throughout the mission.
 
@@ -100,16 +72,7 @@ Modern navigation systems in aircraft, ships, and vehicles routinely fuse GPS (G
 
 \subsection{Self-Driving Car Localization}
 
-Autonomous vehicles face an acute localization challenge: they must know their position and orientation with centimeter-level accuracy to navigate safely. Modern self-driving systems employ sophisticated Kalman filter variants (Extended Kalman Filters, Unscented Kalman Filters, particle filters) to fuse data from:
-\begin{itemize}
-    \item LIDAR point clouds matched against high-definition maps
-    \item Camera-based lane and landmark detection
-    \item Radar measurements of surrounding vehicles
-    \item GPS and differential GPS corrections
-    \item Wheel odometry and IMU data
-\end{itemize}
-
-The resulting estimate is far more accurate and reliable than any single sensor could provide.
+Autonomous vehicles face an acute localization challenge: they must know their position and orientation with centimeter-level accuracy to navigate safely. Modern self-driving systems employ sophisticated Kalman filter variants (Extended Kalman Filters, Unscented Kalman Filters, particle filters) to fuse data from multiple sources: LIDAR point clouds matched against high-definition maps, camera-based lane and landmark detection, radar measurements of surrounding vehicles, GPS and differential GPS corrections, and wheel odometry combined with IMU data. The resulting estimate is far more accurate and reliable than any single sensor could provide.
 
 \subsection{Weather Prediction}
 
@@ -117,15 +80,7 @@ Numerical weather prediction is one of the most computationally intensive applic
 
 \subsection{Financial Time Series}
 
-Financial engineers apply Kalman filtering to estimate hidden market states from observable prices. Applications include:
-\begin{itemize}
-    \item Estimating the ``true'' volatility of assets from noisy price observations
-    \item Tracking time-varying risk parameters in portfolio management
-    \item Filtering high-frequency trading signals from market microstructure noise
-    \item Estimating unobservable macroeconomic factors from economic indicators
-\end{itemize}
-
-The financial application highlights that Kalman filtering is not limited to physical systems---any domain with dynamic evolution and noisy observation can benefit.
+Financial engineers apply Kalman filtering to estimate hidden market states from observable prices. Applications include estimating the ``true'' volatility of assets from noisy price observations, tracking time-varying risk parameters in portfolio management, filtering high-frequency trading signals from market microstructure noise, and estimating unobservable macroeconomic factors from economic indicators. The financial application highlights that Kalman filtering is not limited to physical systems---any domain with dynamic evolution and noisy observation can benefit.
 
 \section{Mathematical Foundation}
 
@@ -145,14 +100,7 @@ Consider a linear time-invariant system subject to random disturbances:
 \label{eq:system_model}
 \end{equation}
 
-where:
-\begin{itemize}
-    \item $\mathbf{x}(t) \in \mathbb{R}^n$ is the state vector we wish to estimate
-    \item $\mathbf{u}(t) \in \mathbb{R}^m$ is the known control input
-    \item $\mathbf{y}(t) \in \mathbb{R}^p$ is the measured output
-    \item $\mathbf{w}(t) \in \mathbb{R}^n$ is the process noise (disturbance)
-    \item $\mathbf{v}(t) \in \mathbb{R}^p$ is the measurement noise
-\end{itemize}
+In this formulation, $\mathbf{x}(t) \in \mathbb{R}^n$ is the state vector we wish to estimate, $\mathbf{u}(t) \in \mathbb{R}^m$ is the known control input, $\mathbf{y}(t) \in \mathbb{R}^p$ is the measured output, $\mathbf{w}(t) \in \mathbb{R}^n$ is the process noise (disturbance), and $\mathbf{v}(t) \in \mathbb{R}^p$ is the measurement noise.
 
 The noise processes are assumed to be white Gaussian noise with known statistics:
 \begin{align}
@@ -204,11 +152,7 @@ The Kalman filter has the structure of an observer (as studied in Chapter~\ref{c
 
 The term $(\mathbf{y}(t) - C\hat{\mathbf{x}}(t))$ is called the \textbf{innovation} or \textbf{residual}---it represents the difference between what we actually measure and what we predicted we would measure. The Kalman gain $K(t)$ determines how much we ``trust'' this innovation to correct our estimate.
 
-\textbf{Intuition:} The filter is essentially a model-based predictor with feedback correction:
-\begin{itemize}
-    \item The term $A\hat{\mathbf{x}} + B\mathbf{u}$ uses our system model to predict how the state evolves.
-    \item The term $K(\mathbf{y} - C\hat{\mathbf{x}})$ corrects this prediction based on actual measurements.
-\end{itemize}
+\textbf{Intuition:} The filter is essentially a model-based predictor with feedback correction. The term $A\hat{\mathbf{x}} + B\mathbf{u}$ uses our system model to predict how the state evolves, while the term $K(\mathbf{y} - C\hat{\mathbf{x}})$ corrects this prediction based on actual measurements.
 
 If we trust our model perfectly and distrust measurements ($K \to 0$), we simply propagate the model. If we trust measurements perfectly and distrust the model ($K \to$ large), we heavily weight the innovation.
 
@@ -257,12 +201,7 @@ K(t) = P(t)C^\top R^{-1}
 \label{eq:kalman_gain}
 \end{equation}
 
-This is the \textbf{optimal Kalman gain}. It has a beautiful intuitive interpretation:
-\begin{itemize}
-    \item $P$ represents our uncertainty in the state estimate.
-    \item $C^\top$ projects measurement information back to state space.
-    \item $R^{-1}$ weights the measurement correction inversely with measurement noise---we trust low-noise measurements more.
-\end{itemize}
+This is the \textbf{optimal Kalman gain}. It has a beautiful intuitive interpretation: $P$ represents our uncertainty in the state estimate, $C^\top$ projects measurement information back to state space, and $R^{-1}$ weights the measurement correction inversely with measurement noise---we trust low-noise measurements more.
 
 \subsection{The Continuous-Time Riccati Equation}
 
@@ -288,7 +227,7 @@ This is the \textbf{algebraic Riccati equation} (ARE) for estimation. The steady
 
 \subsection{Summary: Continuous-Time Kalman Filter}
 
-\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,title=Continuous-Time Kalman Filter]
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,title=Continuous-Time Kalman Filter,sharp corners]
 \textbf{System Model:}
 \begin{align*}
 \dot{\mathbf{x}} &= A\mathbf{x} + B\mathbf{u} + \mathbf{w}, \quad \mathbf{w} \sim \mathcal{N}(0, Q) \\
@@ -320,7 +259,7 @@ where $\mathbf{w}_k \sim \mathcal{N}(0, Q_d)$ and $\mathbf{v}_k \sim \mathcal{N}
 
 The discrete Kalman filter operates in a two-phase cycle: \textbf{predict} and \textbf{update}.
 
-\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,title=Discrete-Time Kalman Filter Algorithm]
+\begin{tcolorbox}[colback=green!5!white,colframe=green!75!black,title=Discrete-Time Kalman Filter Algorithm,sharp corners]
 \textbf{Initialization:}
 \begin{align*}
 \hat{\mathbf{x}}_0 &= E[\mathbf{x}_0] \\
@@ -345,12 +284,7 @@ P_k &= (I - K_kC)P_k^- \quad \text{(a posteriori covariance)}
 
 The notation uses superscript $-$ for ``a priori'' (before measurement update) and no superscript for ``a posteriori'' (after measurement update).
 
-\textbf{Interpretation of the predict-update cycle:}
-\begin{enumerate}
-    \item \textbf{Predict:} Use the system model to predict where we expect the state to be. Our uncertainty grows due to process noise ($P$ increases by $Q$).
-
-    \item \textbf{Update:} Incorporate the new measurement to correct our prediction. Our uncertainty decreases as the measurement provides information.
-\end{enumerate}
+\textbf{Interpretation of the predict-update cycle:} In the predict phase, we use the system model to predict where we expect the state to be, and our uncertainty grows due to process noise ($P$ increases by $Q$). In the update phase, we incorporate the new measurement to correct our prediction, and our uncertainty decreases as the measurement provides information.
 
 \subsection{Understanding the Kalman Gain}
 
@@ -360,37 +294,13 @@ The Kalman gain formula deserves closer examination:
 K_k = P_k^- C^\top (CP_k^-C^\top + R)^{-1}
 \end{equation}
 
-\textbf{Limiting cases:}
-
-\begin{enumerate}
-    \item \textbf{Very noisy measurements} ($R \to \infty$): \\
-    $K_k \to 0$. We ignore the measurements because they are too noisy to be useful.
-
-    \item \textbf{Perfect measurements} ($R \to 0$): \\
-    $K_k \to (CP_k^-)^{-1}$ (pseudoinverse). We trust the measurement completely.
-
-    \item \textbf{High model uncertainty} ($P_k^- \to \infty$): \\
-    $K_k \to C^\dagger$ (pseudoinverse of $C$). We heavily weight measurements because we don't trust our model.
-
-    \item \textbf{Perfect model/state knowledge} ($P_k^- \to 0$): \\
-    $K_k \to 0$. We already know the state perfectly; measurements add nothing.
-\end{enumerate}
+\textbf{Limiting cases:} The behavior of the Kalman gain in extreme scenarios reveals its underlying logic. When measurements are very noisy ($R \to \infty$), the gain approaches zero ($K_k \to 0$), meaning we ignore the measurements because they are too noisy to be useful. Conversely, with perfect measurements ($R \to 0$), the gain approaches $K_k \to (CP_k^-)^{-1}$ (pseudoinverse), indicating we trust the measurement completely. When model uncertainty is high ($P_k^- \to \infty$), the gain approaches $K_k \to C^\dagger$ (pseudoinverse of $C$), heavily weighting measurements because we don't trust our model. Finally, with perfect model or state knowledge ($P_k^- \to 0$), the gain approaches zero since we already know the state perfectly and measurements add nothing.
 
 \subsection{Tuning $Q$ and $R$: Model vs.\ Sensor Confidence}
 
-The covariance matrices $Q$ and $R$ are the primary ``tuning knobs'' of the Kalman filter:
+The covariance matrices $Q$ and $R$ are the primary ``tuning knobs'' of the Kalman filter. The process noise covariance $Q$ represents uncertainty in the system model; large $Q$ means we don't trust our model---perhaps due to unmodeled dynamics, disturbances, or parameter uncertainty---and the filter will weight measurements more heavily. The measurement noise covariance $R$ represents sensor noise; large $R$ means we don't trust our sensors, and the filter will weight the model prediction more heavily, producing smoother but less responsive estimates.
 
-\begin{itemize}
-    \item \textbf{Process noise covariance $Q$:} Represents uncertainty in the system model. Large $Q$ means we don't trust our model---perhaps due to unmodeled dynamics, disturbances, or parameter uncertainty. The filter will weight measurements more heavily.
-
-    \item \textbf{Measurement noise covariance $R$:} Represents sensor noise. Large $R$ means we don't trust our sensors. The filter will weight the model prediction more heavily, producing smoother but less responsive estimates.
-\end{itemize}
-
-The \textbf{ratio} $Q/R$ (in a scalar sense) determines the filter's behavior:
-\begin{itemize}
-    \item High $Q/R$: Fast, responsive tracking but potentially noisy estimates.
-    \item Low $Q/R$: Smooth estimates but sluggish response to actual state changes.
-\end{itemize}
+The \textbf{ratio} $Q/R$ (in a scalar sense) determines the filter's behavior. A high $Q/R$ ratio produces fast, responsive tracking but potentially noisy estimates, while a low $Q/R$ ratio yields smooth estimates but sluggish response to actual state changes.
 
 In practice, $R$ can often be determined from sensor specifications or calibration. $Q$ is typically harder to specify and is often treated as a tuning parameter adjusted based on filter performance.
 
@@ -408,11 +318,7 @@ A^\top P + PA - PBR^{-1}B^\top P + Q = 0
 AP + PA^\top - PC^\top R^{-1}CP + Q = 0
 \end{equation}
 
-These are the same equation with $A \leftrightarrow A^\top$ and $B \leftrightarrow C^\top$! This duality means:
-\begin{itemize}
-    \item If $(A, B)$ is controllable, the LQR problem has a unique stabilizing solution.
-    \item If $(A, C)$ is observable, the Kalman filter problem has a unique stabilizing solution.
-\end{itemize}
+These are the same equation with $A \leftrightarrow A^\top$ and $B \leftrightarrow C^\top$! This duality means that if $(A, B)$ is controllable, the LQR problem has a unique stabilizing solution, and if $(A, C)$ is observable, the Kalman filter problem has a unique stabilizing solution.
 
 This leads to the profound \textbf{separation principle}: for linear systems with Gaussian noise, optimal control and optimal estimation can be designed independently and combined. The certainty-equivalent LQG (Linear Quadratic Gaussian) controller uses the Kalman filter estimate as if it were the true state.
 
@@ -422,39 +328,17 @@ In this experiment, we implement a Kalman filter to fuse accelerometer and gyros
 
 \subsection{The Sensor Fusion Problem}
 
-An IMU typically contains:
-\begin{itemize}
-    \item \textbf{Accelerometer:} Measures linear acceleration including gravity. Can estimate tilt angle from gravity direction but is noisy and sensitive to vibration and dynamic acceleration.
+An IMU typically contains two primary sensors. The accelerometer measures linear acceleration including gravity, and can estimate tilt angle from the gravity direction, but is noisy and sensitive to vibration and dynamic acceleration. The gyroscope measures angular velocity and can be integrated to estimate angle changes, but drifts over time due to bias and noise accumulation.
 
-    \item \textbf{Gyroscope:} Measures angular velocity. Can be integrated to estimate angle changes but drifts over time due to bias and noise accumulation.
-\end{itemize}
-
-Neither sensor alone provides a satisfactory angle estimate:
-\begin{itemize}
-    \item Accelerometer: Accurate in steady state but noisy during motion.
-    \item Gyroscope: Smooth during motion but drifts in steady state.
-\end{itemize}
+Neither sensor alone provides a satisfactory angle estimate. The accelerometer is accurate in steady state but noisy during motion, while the gyroscope is smooth during motion but drifts in steady state.
 
 The Kalman filter optimally combines these complementary sensors, using the gyroscope for short-term smoothness and the accelerometer for long-term accuracy.
 
 \subsection{Hardware Setup}
 
-\textbf{Components:}
-\begin{itemize}
-    \item Arduino Uno or similar microcontroller
-    \item MPU6050 6-axis IMU module (accelerometer + gyroscope)
-    \item USB cable for serial communication
-    \item Breadboard and jumper wires
-    \item Optional: 3D-printed tilting platform
-\end{itemize}
+\textbf{Components:} The hardware setup requires an Arduino Uno or similar microcontroller, an MPU6050 6-axis IMU module (containing both accelerometer and gyroscope), a USB cable for serial communication, a breadboard with jumper wires, and optionally a 3D-printed tilting platform for testing.
 
-\textbf{Wiring (I2C connection):}
-\begin{itemize}
-    \item MPU6050 VCC $\to$ Arduino 5V
-    \item MPU6050 GND $\to$ Arduino GND
-    \item MPU6050 SCL $\to$ Arduino A5 (SCL)
-    \item MPU6050 SDA $\to$ Arduino A4 (SDA)
-\end{itemize}
+\textbf{Wiring (I2C connection):} Connect the MPU6050 VCC pin to Arduino 5V, the GND pin to Arduino GND, the SCL pin to Arduino A5 (SCL), and the SDA pin to Arduino A4 (SDA).
 
 \subsection{Mathematical Model for Angle Estimation}
 
@@ -480,130 +364,71 @@ The gyroscope reading $\omega_{\text{gyro}}$ is used as an input to predict angl
 
 where $\theta_{\text{accel}} = \arctan(a_x / a_z)$ is the angle derived from accelerometer readings.
 
-\subsection{Arduino Implementation}
+\subsection{Implementation}
 
-\begin{lstlisting}[language=C++, caption={Kalman Filter for IMU Sensor Fusion}]
-#include <Wire.h>
+The following algorithm presents the Kalman filter for IMU sensor fusion in language-agnostic pseudocode. This can be implemented on any microcontroller or computing platform.
 
-// MPU6050 registers
-const int MPU_ADDR = 0x68;
-
-// Kalman filter variables
-float angle = 0;          // Estimated angle
-float bias = 0;           // Estimated gyro bias
-float P[2][2] = {{1, 0}, {0, 1}};  // Error covariance
-
-// Noise parameters (tune these!)
-float Q_angle = 0.001;    // Process noise - angle
-float Q_bias = 0.003;     // Process noise - bias
-float R_measure = 0.03;   // Measurement noise
-
-float dt;
-unsigned long lastTime;
-
-void setup() {
-    Serial.begin(115200);
-    Wire.begin();
-
-    // Initialize MPU6050
-    Wire.beginTransmission(MPU_ADDR);
-    Wire.write(0x6B);  // PWR_MGMT_1 register
-    Wire.write(0);     // Wake up
-    Wire.endTransmission(true);
-
-    lastTime = micros();
-}
-
-void loop() {
-    // Calculate time step
-    unsigned long now = micros();
-    dt = (now - lastTime) / 1000000.0;
-    lastTime = now;
-
-    // Read accelerometer and gyroscope
-    int16_t ax, ay, az, gx, gy, gz;
-    readMPU6050(&ax, &ay, &az, &gx, &gy, &gz);
-
-    // Convert to physical units
-    float accelAngle = atan2(ax, az) * 180.0 / PI;
-    float gyroRate = gy / 131.0;  // degrees/sec
-
-    // === KALMAN FILTER ===
-
-    // Predict step
-    float rate = gyroRate - bias;
-    angle += dt * rate;
-
-    // Update error covariance (predict)
-    P[0][0] += dt * (dt*P[1][1] - P[0][1] - P[1][0] + Q_angle);
-    P[0][1] -= dt * P[1][1];
-    P[1][0] -= dt * P[1][1];
-    P[1][1] += Q_bias * dt;
-
-    // Update step
-    float innovation = accelAngle - angle;
-    float S = P[0][0] + R_measure;  // Innovation covariance
-
-    // Kalman gain
-    float K[2];
-    K[0] = P[0][0] / S;
-    K[1] = P[1][0] / S;
-
-    // Update state
-    angle += K[0] * innovation;
-    bias += K[1] * innovation;
-
-    // Update error covariance
-    float P00_temp = P[0][0];
-    float P01_temp = P[0][1];
-    P[0][0] -= K[0] * P00_temp;
-    P[0][1] -= K[0] * P01_temp;
-    P[1][0] -= K[1] * P00_temp;
-    P[1][1] -= K[1] * P01_temp;
-
-    // Output for visualization
-    Serial.print("Accel:");
-    Serial.print(accelAngle);
-    Serial.print(",Gyro:");
-    Serial.print(angle - K[0]*innovation);  // Gyro-only estimate
-    Serial.print(",Kalman:");
-    Serial.println(angle);
-
-    delay(10);
-}
-
-void readMPU6050(int16_t* ax, int16_t* ay, int16_t* az,
-                 int16_t* gx, int16_t* gy, int16_t* gz) {
-    Wire.beginTransmission(MPU_ADDR);
-    Wire.write(0x3B);  // Starting register
-    Wire.endTransmission(false);
-    Wire.requestFrom(MPU_ADDR, 14, true);
-
-    *ax = Wire.read() << 8 | Wire.read();
-    *ay = Wire.read() << 8 | Wire.read();
-    *az = Wire.read() << 8 | Wire.read();
-    Wire.read(); Wire.read();  // Skip temperature
-    *gx = Wire.read() << 8 | Wire.read();
-    *gy = Wire.read() << 8 | Wire.read();
-    *gz = Wire.read() << 8 | Wire.read();
-}
-\end{lstlisting}
+\begin{algorithm}
+\caption{Kalman Filter for IMU Sensor Fusion}
+\begin{algorithmic}[1]
+\State \textbf{Initialize:}
+\State $\theta \gets 0$ \Comment{Estimated angle}
+\State $b \gets 0$ \Comment{Estimated gyro bias}
+\State $P \gets \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$ \Comment{Error covariance matrix}
+\State $Q_\theta \gets 0.001$, $Q_b \gets 0.003$, $R \gets 0.03$ \Comment{Noise parameters}
+\State $t_{\text{prev}} \gets \text{CurrentTime}()$
+\State
+\State \textbf{Initialize IMU sensor via I2C interface}
+\State
+\While{true}
+    \State $t_{\text{now}} \gets \text{CurrentTime}()$
+    \State $\Delta t \gets t_{\text{now}} - t_{\text{prev}}$
+    \State $t_{\text{prev}} \gets t_{\text{now}}$
+    \State
+    \State \Comment{Read sensor data}
+    \State $(a_x, a_y, a_z, \omega_x, \omega_y, \omega_z) \gets \text{ReadIMU}()$
+    \State $\theta_{\text{accel}} \gets \arctan(a_x / a_z)$ \Comment{Angle from accelerometer}
+    \State $\dot{\theta}_{\text{gyro}} \gets \omega_y / 131$ \Comment{Angular rate from gyroscope}
+    \State
+    \State \Comment{--- Predict Step ---}
+    \State $\dot{\theta} \gets \dot{\theta}_{\text{gyro}} - b$
+    \State $\theta \gets \theta + \Delta t \cdot \dot{\theta}$
+    \State
+    \State \Comment{Update error covariance (predict)}
+    \State $P_{00} \gets P_{00} + \Delta t \cdot (\Delta t \cdot P_{11} - P_{01} - P_{10} + Q_\theta)$
+    \State $P_{01} \gets P_{01} - \Delta t \cdot P_{11}$
+    \State $P_{10} \gets P_{10} - \Delta t \cdot P_{11}$
+    \State $P_{11} \gets P_{11} + Q_b \cdot \Delta t$
+    \State
+    \State \Comment{--- Update Step ---}
+    \State $\nu \gets \theta_{\text{accel}} - \theta$ \Comment{Innovation}
+    \State $S \gets P_{00} + R$ \Comment{Innovation covariance}
+    \State
+    \State \Comment{Compute Kalman gain}
+    \State $K_0 \gets P_{00} / S$
+    \State $K_1 \gets P_{10} / S$
+    \State
+    \State \Comment{Update state estimate}
+    \State $\theta \gets \theta + K_0 \cdot \nu$
+    \State $b \gets b + K_1 \cdot \nu$
+    \State
+    \State \Comment{Update error covariance}
+    \State $P_{00}^{\text{temp}} \gets P_{00}$, $P_{01}^{\text{temp}} \gets P_{01}$
+    \State $P_{00} \gets P_{00} - K_0 \cdot P_{00}^{\text{temp}}$
+    \State $P_{01} \gets P_{01} - K_0 \cdot P_{01}^{\text{temp}}$
+    \State $P_{10} \gets P_{10} - K_1 \cdot P_{00}^{\text{temp}}$
+    \State $P_{11} \gets P_{11} - K_1 \cdot P_{01}^{\text{temp}}$
+    \State
+    \State \textbf{Output:} $\theta$ \Comment{Filtered angle estimate}
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Visualization and Tuning}
 
-Use the Arduino Serial Plotter or a Python script to visualize the three signals:
-\begin{enumerate}
-    \item \textbf{Accelerometer angle:} Noisy but unbiased
-    \item \textbf{Gyroscope-integrated angle:} Smooth but drifting
-    \item \textbf{Kalman-filtered angle:} Best of both worlds!
-\end{enumerate}
+Use the Arduino Serial Plotter or a Python script to visualize the three signals: the accelerometer angle (noisy but unbiased), the gyroscope-integrated angle (smooth but drifting), and the Kalman-filtered angle (which combines the best properties of both sensors).
 
-\textbf{Tuning experiments:}
-\begin{itemize}
-    \item Increase $Q_{\text{angle}}$: Filter responds faster but is noisier
-    \item Increase $R_{\text{measure}}$: Filter is smoother but responds slower
-    \item Increase $Q_{\text{bias}}$: Better tracking of gyro bias drift
-\end{itemize}
+\textbf{Tuning experiments:} To understand the filter's behavior, try adjusting the noise parameters. Increasing $Q_{\text{angle}}$ causes the filter to respond faster but produces noisier estimates. Increasing $R_{\text{measure}}$ makes the filter smoother but slower to respond. Increasing $Q_{\text{bias}}$ improves tracking of gyro bias drift.
 
 \begin{figure}[htbp]
 \centering
@@ -639,8 +464,7 @@ Use the Arduino Serial Plotter or a Python script to visualize the three signals
 
 \section{Worked Examples}
 
-\subsection{Example 1: 1D Position Estimation with Velocity Measurement}
-
+\begin{examplebox}[1D Position Estimation with Velocity Measurement]
 \textbf{Problem:} A vehicle moves along a straight line. We have a noisy position measurement (GPS) and want to estimate both position and velocity.
 
 \textbf{Solution:}
@@ -687,8 +511,9 @@ Innovation: $y_1 - C\hat{\mathbf{x}}_1^- = 2.5 - 0 = 2.5$
 \end{align}
 
 The filter estimates position at 2.08 m and infers velocity of 1.04 m/s from a single measurement!
+\end{examplebox}
 
-\subsection{Example 2: Steady-State Kalman Gain}
+\begin{examplebox}[Steady-State Kalman Gain for Scalar System]
 
 \textbf{Problem:} Find the steady-state Kalman gain for a scalar system:
 \begin{align}
@@ -740,14 +565,11 @@ K_\infty = \frac{P_\infty}{P_\infty + r} = \frac{0.274}{0.274 + 1} = 0.215
 \end{equation}
 
 This means at steady state, the filter weights the measurement at about 21.5\% and the prediction at about 78.5\%.
+\end{examplebox}
 
 \subsection{Example 3: Effect of $Q$ and $R$ on Filter Behavior}
 
-\textbf{Problem:} For the system in Example 2, compare the steady-state gain for:
-\begin{enumerate}[(a)]
-    \item $q = 0.01$, $r = 1$ (trust model more)
-    \item $q = 1$, $r = 0.01$ (trust measurements more)
-\end{enumerate}
+\textbf{Problem:} For the system in Example 2, compare the steady-state gain for two cases: (a) $q = 0.01$, $r = 1$ (trust model more), and (b) $q = 1$, $r = 0.01$ (trust measurements more).
 
 \textbf{Solution:}
 
@@ -887,7 +709,7 @@ The combined estimate is more accurate than either individual sensor!
 \centering
 \begin{tikzpicture}[node distance=3cm, auto]
     % Nodes
-    \node[draw, rounded corners, fill=blue!20, minimum width=3cm, minimum height=1.5cm] (predict) {
+    \node[draw, rectangle, fill=blue!20, minimum width=3cm, minimum height=1.5cm] (predict) {
         \begin{tabular}{c}
         \textbf{PREDICT} \\
         $\hat{x}^- = A\hat{x} + Bu$ \\
@@ -895,7 +717,7 @@ The combined estimate is more accurate than either individual sensor!
         \end{tabular}
     };
 
-    \node[draw, rounded corners, fill=green!20, minimum width=3cm, minimum height=1.5cm, right=2cm of predict] (update) {
+    \node[draw, rectangle, fill=green!20, minimum width=3cm, minimum height=1.5cm, right=2cm of predict] (update) {
         \begin{tabular}{c}
         \textbf{UPDATE} \\
         $K = P^-C^\top(CP^-C^\top + R)^{-1}$ \\
@@ -1001,50 +823,54 @@ The combined estimate is more accurate than either individual sensor!
 
 The Kalman filter represents one of the crowning achievements of twentieth-century applied mathematics. By combining optimal estimation theory with recursive computation, Rudolf Kalman solved the fundamental problem of extracting accurate state information from noisy measurements in a computationally tractable way.
 
-\textbf{Key concepts:}
-\begin{enumerate}
-    \item \textbf{Optimal estimation:} The Kalman filter minimizes mean-square estimation error.
+\textbf{Key concepts:} The Kalman filter achieves optimal estimation by minimizing mean-square estimation error. Its recursive structure maintains only a state estimate and error covariance, requiring bounded memory regardless of measurement history length. The predict-update cycle propagates the estimate forward in time and then corrects it based on new measurements. The Kalman gain optimally weights innovation based on relative model and measurement uncertainties. Through sensor fusion, multiple noisy sensors can be combined to achieve accuracy exceeding any individual sensor. Finally, the duality with LQR reveals that estimation and control are mathematically dual problems solved by the same Riccati equation structure.
 
-    \item \textbf{Recursive structure:} The filter maintains only a state estimate and error covariance, requiring bounded memory regardless of measurement history length.
-
-    \item \textbf{Predict-update cycle:} Each cycle propagates the estimate forward in time and then corrects it based on new measurements.
-
-    \item \textbf{Kalman gain:} Optimally weights innovation based on relative model and measurement uncertainties.
-
-    \item \textbf{Sensor fusion:} Multiple noisy sensors can be combined to achieve accuracy exceeding any individual sensor.
-
-    \item \textbf{Duality with LQR:} Estimation and control are mathematically dual problems solved by the same Riccati equation structure.
-\end{enumerate}
-
-\textbf{Practical considerations:}
-\begin{itemize}
-    \item Tune $Q$ and $R$ to balance smoothness vs. responsiveness
-    \item The filter is optimal only when the linear Gaussian assumptions hold
-    \item For nonlinear systems, consider Extended Kalman Filter (EKF) or Unscented Kalman Filter (UKF)
-    \item Numerical stability requires care in covariance propagation
-\end{itemize}
+\textbf{Practical considerations:} When implementing the Kalman filter, tune $Q$ and $R$ to balance smoothness versus responsiveness. Remember that the filter is optimal only when the linear Gaussian assumptions hold; for nonlinear systems, consider the Extended Kalman Filter (EKF) or Unscented Kalman Filter (UKF). Numerical stability requires care in covariance propagation, particularly for ill-conditioned systems.
 
 The Kalman filter's influence extends far beyond control engineering into navigation, signal processing, econometrics, and machine learning. Understanding its principles provides a foundation for the entire field of sequential estimation.
 
+\newpage
 \section{Exercises}
 
-\begin{enumerate}
-    \item \textbf{Scalar Kalman filter:} For the system $x_{k+1} = 0.95x_k + w_k$, $y_k = x_k + v_k$ with $Q = 1$ and $R = 10$, compute the steady-state Kalman gain.
+\begin{exercise}
+\textbf{(Scalar Kalman filter)} For the system $x_{k+1} = 0.95x_k + w_k$, $y_k = x_k + v_k$ with $Q = 1$ and $R = 10$, compute the steady-state Kalman gain.
+\end{exercise}
 
-    \item \textbf{Prediction without measurement:} If a Kalman filter runs for several time steps without receiving measurements, describe what happens to the error covariance $P$.
+\begin{exercise}
+\textbf{(Prediction without measurement)} If a Kalman filter runs for several time steps without receiving measurements, describe what happens to the error covariance $P$.
+\end{exercise}
 
-    \item \textbf{Observability and Kalman filter:} Explain why an unobservable mode cannot be estimated by the Kalman filter.
+\begin{exercise}
+\textbf{(Observability and Kalman filter)} Explain why an unobservable mode cannot be estimated by the Kalman filter.
+\end{exercise}
 
-    \item \textbf{Tuning trade-offs:} A tracking filter follows a maneuvering target. Should $Q$ be set high or low? Justify your answer.
+\begin{exercise}
+\textbf{(Tuning trade-offs)} A tracking filter follows a maneuvering target. Should $Q$ be set high or low? Justify your answer.
+\end{exercise}
 
-    \item \textbf{IMU fusion derivation:} Derive the complete state-space model for fusing accelerometer and gyroscope measurements to estimate pitch and roll angles.
+\begin{exercise}
+\textbf{(IMU fusion derivation)} Derive the complete state-space model for fusing accelerometer and gyroscope measurements to estimate pitch and roll angles.
+\end{exercise}
 
-    \item \textbf{Numerical experiment:} Implement the discrete Kalman filter in MATLAB/Python for a double integrator (position from noisy velocity measurements). Plot the estimation error versus time for various $Q/R$ ratios.
+\begin{exercise}
+\textbf{(Numerical experiment)} Implement the discrete Kalman filter in MATLAB/Python for a double integrator (position from noisy velocity measurements). Plot the estimation error versus time for various $Q/R$ ratios.
+\end{exercise}
 
-    \item \textbf{Innovation sequence:} The innovation sequence $\nu_k = y_k - C\hat{x}_k^-$ should be white noise if the filter is correctly tuned. Design an experiment to test this property.
+\begin{exercise}
+\textbf{(Innovation sequence)} The innovation sequence $\nu_k = y_k - C\hat{x}_k^-$ should be white noise if the filter is correctly tuned. Design an experiment to test this property.
+\end{exercise}
 
-    \item \textbf{Joseph form:} The covariance update $P = (I-KC)P^-$ can suffer from numerical issues. Research and explain the ``Joseph form'' update and why it is more numerically stable.
-\end{enumerate}
+\begin{exercise}
+\textbf{(Joseph form)} The covariance update $P = (I-KC)P^-$ can suffer from numerical issues. Research and explain the ``Joseph form'' update and why it is more numerically stable.
+\end{exercise}
+
+\begin{exercise}
+\textbf{(Sensor fusion with different rates)} Consider a system where GPS provides position at 1 Hz while an IMU provides acceleration at 100 Hz. Describe how to modify the Kalman filter to handle these different measurement rates.
+\end{exercise}
+
+\begin{exercise}
+\textbf{(Extended Kalman Filter introduction)} For a nonlinear system $x_{k+1} = f(x_k) + w_k$ with measurement $y_k = h(x_k) + v_k$, derive the linearized Kalman filter equations using Jacobian matrices. This is known as the Extended Kalman Filter (EKF).
+\end{exercise}
 
 \section{Further Reading}
 

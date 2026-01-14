@@ -31,6 +31,10 @@ Solving these equations for practical cable designs required considerable mathem
 
 \subsection{Oliver Heaviside and Operational Calculus}
 
+\begin{historicalbox}[Oliver Heaviside: The Maverick Engineer]
+Oliver Heaviside (1850--1925) was one of the most remarkable figures in the history of engineering mathematics. Largely self-taught and working in isolation after leaving his position as a telegraph operator due to increasing deafness, Heaviside developed mathematical techniques that were decades ahead of their time. His operational calculus initially faced fierce opposition from mathematicians who objected to his lack of rigorous foundations. When challenged about the validity of his methods, Heaviside famously replied: ``Shall I refuse my dinner because I do not fully understand the process of digestion?'' His work also included the reformulation of Maxwell's equations into their modern vector form, the prediction of the Kennelly--Heaviside layer in the atmosphere, and the concept of impedance. Despite his profound contributions, Heaviside died in poverty, largely unrecognized during his lifetime.
+\end{historicalbox}
+
 Enter Oliver Heaviside (1850--1925), a self-taught English mathematician and electrical engineer whose unconventional methods would revolutionize the analysis of electrical systems. Working in isolation after leaving his position as a telegraph operator, Heaviside developed what he called \textit{operational calculus}---a symbolic method that treated the differential operator $\diff/\diff t$ as an algebraic quantity.
 
 Heaviside introduced the operator $p = \diff/\diff t$ and manipulated it according to algebraic rules. For instance, to solve the differential equation
@@ -829,26 +833,38 @@ f_c = \frac{1}{2\pi \times 10000 \times 100 \times 10^{-9}} = \frac{1}{2\pi \tim
 
 \subsubsection{Arduino-Based Measurement Procedure}
 
-\begin{enumerate}
-    \item \textbf{Circuit Assembly:} Connect the RC filter with Arduino's PWM output (pin 9) as input and analog input (A0) measuring $v_{\text{out}}$.
-
-    \item \textbf{Generate Test Frequencies:} Use the \texttt{tone()} function or direct timer manipulation to generate square waves at frequencies from 10 Hz to 10 kHz.
-
-    \item \textbf{Measure Response:} For each frequency, measure the peak-to-peak amplitude of the output relative to the input.
-
-    \item \textbf{Calculate Gain:} $|H(f)| = V_{\text{out,pp}} / V_{\text{in,pp}}$
-
-    \item \textbf{Find Cutoff:} Identify the frequency where gain drops to 0.707 ($-3$ dB).
-\end{enumerate}
+\begin{algorithm}
+\caption{RC Filter Frequency Response Measurement (Arduino)}
+\begin{algorithmic}[1]
+\State \textbf{Circuit Assembly:} Connect RC filter with PWM output (pin 9) as input and analog input (A0) measuring $v_{\text{out}}$
+\State \textbf{Initialize:} Set frequency range from 10 Hz to 10 kHz
+\For{each test frequency $f$ in range}
+    \State Generate square wave at frequency $f$ using tone() or timer manipulation
+    \State Measure peak-to-peak amplitude of output $V_{\text{out,pp}}$
+    \State Measure peak-to-peak amplitude of input $V_{\text{in,pp}}$
+    \State Calculate gain: $|H(f)| \gets V_{\text{out,pp}} / V_{\text{in,pp}}$
+    \State Record frequency and gain values
+\EndFor
+\State \textbf{Find Cutoff:} Identify frequency where $|H(f)| = 0.707$ ($-3$ dB)
+\end{algorithmic}
+\end{algorithm}
 
 \subsubsection{Function Generator Method (Preferred)}
 
-\begin{enumerate}
-    \item Apply sinusoidal input from function generator (1 V$_{\text{pp}}$)
-    \item Sweep frequency: 10, 20, 50, 100, 159, 200, 500, 1000, 2000, 5000 Hz
-    \item Measure output amplitude and phase on oscilloscope
-    \item Plot Bode diagram (magnitude in dB vs. log frequency)
-\end{enumerate}
+\begin{algorithm}
+\caption{RC Filter Frequency Response Measurement (Function Generator)}
+\begin{algorithmic}[1]
+\State Apply sinusoidal input from function generator at 1 V$_{\text{pp}}$
+\State Define frequency sweep points: 10, 20, 50, 100, 159, 200, 500, 1000, 2000, 5000 Hz
+\For{each frequency $f$ in sweep points}
+    \State Set function generator to frequency $f$
+    \State Measure output amplitude $V_{\text{out}}$ on oscilloscope
+    \State Measure phase shift $\phi$ between input and output
+    \State Calculate gain in dB: $|H|_{\text{dB}} \gets 20\log_{10}(V_{\text{out}}/V_{\text{in}})$
+\EndFor
+\State Plot Bode diagram: magnitude (dB) vs. $\log(f)$
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Expected Results and Analysis}
 
@@ -872,70 +888,42 @@ f_c = \frac{1}{2\pi \times 10000 \times 100 \times 10^{-9}} = \frac{1}{2\pi \tim
 \end{tabular}
 \end{table}
 
-Compare measured values to theory. Typical discrepancies arise from:
-\begin{itemize}
-    \item Component tolerances (resistors typically $\pm 5\%$, capacitors $\pm 10\%$)
-    \item Oscilloscope input capacitance (adds to $C$)
-    \item Function generator output impedance (adds to $R$)
-\end{itemize}
+Compare measured values to theory. Typical discrepancies arise from component tolerances (resistors typically $\pm 5\%$, capacitors $\pm 10\%$), oscilloscope input capacitance which effectively adds to $C$, and function generator output impedance which effectively adds to $R$.
 
-\subsection{Alternative: Python/MATLAB Simulation}
+\subsection{Alternative: Computational Simulation}
 
-For those without laboratory equipment, the following Python code demonstrates transfer function concepts through simulation.
+For those without laboratory equipment, the following algorithm demonstrates transfer function concepts through simulation.
 
-\begin{lstlisting}[style=pythonstyle, caption={Python simulation of cascaded first-order systems}]
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy import signal
-
-# Define two first-order transfer functions
-# G1(s) = 2/(s+1),  G2(s) = 3/(s+2)
-G1 = signal.TransferFunction([2], [1, 1])
-G2 = signal.TransferFunction([3], [1, 2])
-
-# Cascade: G(s) = G1(s) * G2(s)
-# Multiply numerators and convolve denominators
-num_cascade = np.convolve(G1.num, G2.num)
-den_cascade = np.convolve(G1.den, G2.den)
-G_cascade = signal.TransferFunction(num_cascade, den_cascade)
-
-print("G1(s) =", G1)
-print("G2(s) =", G2)
-print("G_cascade(s) =", G_cascade)
-
-# Verify: G(s) = 6 / (s^2 + 3s + 2) = 6 / [(s+1)(s+2)]
-
-# Step response comparison
-t = np.linspace(0, 10, 1000)
-t1, y1 = signal.step(G1, T=t)
-t2, y2 = signal.step(G2, T=t)
-tc, yc = signal.step(G_cascade, T=t)
-
-plt.figure(figsize=(10, 6))
-plt.subplot(2, 1, 1)
-plt.plot(t1, y1, 'b-', label='$G_1(s)$')
-plt.plot(t2, y2, 'g-', label='$G_2(s)$')
-plt.plot(tc, yc, 'r-', label='$G_1 G_2$ (cascade)', linewidth=2)
-plt.xlabel('Time (s)')
-plt.ylabel('Step Response')
-plt.legend()
-plt.grid(True)
-plt.title('Step Response of Individual and Cascaded Systems')
-
-# Bode plot
-plt.subplot(2, 1, 2)
-w = np.logspace(-2, 2, 500)
-w, mag_c, phase_c = signal.bode(G_cascade, w)
-plt.semilogx(w, mag_c)
-plt.xlabel('Frequency (rad/s)')
-plt.ylabel('Magnitude (dB)')
-plt.grid(True)
-plt.title('Bode Magnitude Plot of Cascade System')
-
-plt.tight_layout()
-plt.savefig('cascade_response.png', dpi=150)
-plt.show()
-\end{lstlisting}
+\begin{algorithm}
+\caption{Cascaded First-Order System Analysis}
+\begin{algorithmic}[1]
+\State \textbf{Define transfer functions:}
+\State $G_1(s) \gets 2/(s+1)$ with numerator $[2]$ and denominator $[1, 1]$
+\State $G_2(s) \gets 3/(s+2)$ with numerator $[3]$ and denominator $[1, 2]$
+\State
+\State \textbf{Compute cascade transfer function:}
+\State $\text{num\_cascade} \gets \text{convolve}([2], [3]) = [6]$
+\State $\text{den\_cascade} \gets \text{convolve}([1,1], [1,2]) = [1, 3, 2]$
+\State $G_{\text{cascade}}(s) \gets 6/(s^2 + 3s + 2)$
+\State
+\State \textbf{Compute step responses:}
+\State Create time vector $t$ from 0 to 10 seconds with 1000 points
+\For{each system $G \in \{G_1, G_2, G_{\text{cascade}}\}$}
+    \State Compute step response $y(t)$ using inverse Laplace transform
+    \State Store response for plotting
+\EndFor
+\State
+\State \textbf{Compute Bode magnitude plot:}
+\State Create frequency vector $\omega$ from $10^{-2}$ to $10^{2}$ rad/s (log-spaced)
+\For{each frequency $\omega_i$}
+    \State Compute $|G_{\text{cascade}}(j\omega_i)|$
+    \State Convert to decibels: $\text{mag}_{\text{dB}} \gets 20\log_{10}|G|$
+\EndFor
+\State
+\State \textbf{Generate plots:} Step response comparison and Bode magnitude
+\State \Return Step response curves and frequency response data
+\end{algorithmic}
+\end{algorithm}
 
 Running this code verifies that cascading $G_1(s) = 2/(s+1)$ and $G_2(s) = 3/(s+2)$ yields:
 \begin{equation}
@@ -948,6 +936,10 @@ The poles of the cascade system are at $s = -1$ and $s = -2$, the combination of
 \section{Example Problems}
 \label{sec:examples}
 %=============================================================================
+
+\begin{examplebox}[RLC Circuit Analysis]
+The series RLC circuit is a fundamental second-order system that appears throughout electrical engineering. By analyzing this circuit using transfer functions, we can predict its frequency response, identify resonance conditions, and understand how the component values affect system behavior. This example demonstrates how impedance methods simplify circuit analysis in the Laplace domain.
+\end{examplebox}
 
 \begin{example}[Transfer Function of an RLC Circuit]
 \label{ex:rlc}
@@ -984,6 +976,10 @@ Dividing by $LC$:
 
 where $\omega_n = 1/\sqrt{LC}$ and $\zeta = \frac{R}{2}\sqrt{C/L}$.
 \end{example}
+
+\begin{examplebox}[Systematic Block Diagram Reduction]
+Complex control systems often consist of multiple interconnected subsystems. Block diagram reduction provides a systematic method to find the overall transfer function by successively simplifying series, parallel, and feedback connections. This example illustrates the step-by-step process of reducing a multi-loop system to a single transfer function.
+\end{examplebox}
 
 \begin{example}[Block Diagram Reduction]
 \label{ex:block_reduction}
@@ -1060,15 +1056,11 @@ find the poles and zeros, sketch the pole-zero plot, and determine if the system
 
 \textbf{Zeros:} Set numerator = 0: $s + 2 = 0 \Rightarrow z_1 = -2$
 
-\textbf{Poles:} Set denominator = 0:
-\begin{itemize}
-    \item From $(s+1)$: $p_1 = -1$
-    \item From $(s^2 + 4s + 8) = 0$: Using quadratic formula:
-    \begin{equation}
-    s = \frac{-4 \pm \sqrt{16-32}}{2} = \frac{-4 \pm \sqrt{-16}}{2} = -2 \pm 2\j
-    \end{equation}
-    So $p_2 = -2 + 2\j$ and $p_3 = -2 - 2\j$
-\end{itemize}
+\textbf{Poles:} Setting the denominator equal to zero yields two factors. From $(s+1) = 0$, we obtain $p_1 = -1$. From $(s^2 + 4s + 8) = 0$, applying the quadratic formula gives:
+\begin{equation}
+s = \frac{-4 \pm \sqrt{16-32}}{2} = \frac{-4 \pm \sqrt{-16}}{2} = -2 \pm 2\j
+\end{equation}
+Thus $p_2 = -2 + 2\j$ and $p_3 = -2 - 2\j$.
 
 \begin{figure}[h]
 \centering
@@ -1156,12 +1148,7 @@ Multiplying both sides by $s(s+1)(s+4)$:
 10 = A(s+1)(s+4) + Bs(s+4) + Cs(s+1)
 \end{equation}
 
-\textbf{Finding coefficients:}
-\begin{itemize}
-    \item $s = 0$: $10 = A(1)(4) \Rightarrow A = 10/4 = 2.5$
-    \item $s = -1$: $10 = B(-1)(3) \Rightarrow B = -10/3$
-    \item $s = -4$: $10 = C(-4)(-3) \Rightarrow C = 10/12 = 5/6$
-\end{itemize}
+\textbf{Finding coefficients:} Substituting $s = 0$ gives $10 = A(1)(4)$, so $A = 10/4 = 2.5$. Substituting $s = -1$ gives $10 = B(-1)(3)$, so $B = -10/3$. Substituting $s = -4$ gives $10 = C(-4)(-3)$, so $C = 10/12 = 5/6$.
 
 Therefore:
 \begin{equation}
@@ -1173,11 +1160,7 @@ Y(s) = \frac{2.5}{s} - \frac{10/3}{s+1} + \frac{5/6}{s+4}
 \boxed{y(t) = 2.5 - \frac{10}{3}\e^{-t} + \frac{5}{6}\e^{-4t}, \quad t \geq 0}
 \end{equation}
 
-\textbf{Verification:}
-\begin{itemize}
-    \item Initial value: $y(0) = 2.5 - 10/3 + 5/6 = 2.5 - 3.33 + 0.83 = 0$ \checkmark
-    \item Final value: $y(\infty) = 2.5$ (matches $\lim_{s\to 0}sY(s) = 10/4 = 2.5$) \checkmark
-\end{itemize}
+\textbf{Verification:} The initial value is $y(0) = 2.5 - 10/3 + 5/6 = 2.5 - 3.33 + 0.83 = 0$, which confirms correct behavior. The final value is $y(\infty) = 2.5$, which matches $\lim_{s\to 0}sY(s) = 10/4 = 2.5$, verifying consistency with the final value theorem.
 \end{example}
 
 %=============================================================================
@@ -1185,56 +1168,81 @@ Y(s) = \frac{2.5}{s} - \frac{10/3}{s+1} + \frac{5/6}{s+4}
 \label{sec:summary}
 %=============================================================================
 
-This chapter has established the mathematical framework for analyzing linear time-invariant systems through transfer functions and block diagrams. The key concepts are:
+This chapter has established the mathematical framework for analyzing linear time-invariant systems through transfer functions and block diagrams.
 
-\begin{enumerate}
-    \item \textbf{Historical context:} Transfer functions evolved from Heaviside's operational calculus (1880s) through the formalization efforts of telephone engineers (1920s--30s), providing a powerful abstraction for system analysis.
+Historically, transfer functions evolved from Heaviside's operational calculus in the 1880s through the formalization efforts of telephone engineers in the 1920s and 1930s, providing a powerful abstraction for system analysis. The mathematical foundation rests on the Laplace transform, $F(s) = \int_0^\infty f(t)\e^{-st}\,\diff t$, which converts differential equations to algebraic equations in the complex variable $s$.
 
-    \item \textbf{Laplace transform:} The integral transform $F(s) = \int_0^\infty f(t)\e^{-st}\,\diff t$ converts differential equations to algebraic equations in the complex variable $s$.
+The transfer function, defined as the ratio $G(s) = Y(s)/U(s)$ with zero initial conditions, completely characterizes an LTI system's input-output behavior. The poles and zeros of this rational function carry physical significance: poles determine natural response modes and stability, while zeros shape the frequency response. For BIBO stability, all poles must have negative real parts.
 
-    \item \textbf{Transfer function:} The ratio $G(s) = Y(s)/U(s)$ with zero initial conditions completely characterizes an LTI system's input-output behavior.
+Block diagram algebra provides systematic rules for interconnecting systems. For series connections, the overall transfer function is the product $G = G_1 G_2$. For parallel connections, the transfer functions add: $G = G_1 + G_2$. For negative feedback configurations, the closed-loop transfer function is $G = G_{\text{fwd}}/(1 + G_{\text{fwd}}H)$.
 
-    \item \textbf{Poles and zeros:} Poles determine natural response modes and stability; zeros shape the frequency response. All poles must have negative real parts for BIBO stability.
-
-    \item \textbf{Block diagram algebra:}
-    \begin{itemize}
-        \item Series: $G = G_1 G_2$
-        \item Parallel: $G = G_1 + G_2$
-        \item Feedback: $G = G_{\text{fwd}}/(1 + G_{\text{fwd}}H)$
-    \end{itemize}
-
-    \item \textbf{Practical verification:} Transfer function predictions can be validated experimentally using simple circuits like RC filters, comparing measured frequency response to theoretical calculations.
-\end{enumerate}
+Finally, transfer function predictions can be validated experimentally using simple circuits like RC filters, comparing measured frequency response to theoretical calculations. This practical verification reinforces the connection between mathematical abstraction and physical reality.
 
 The transfer function representation enables modular system design, frequency-domain analysis, and stability assessment---capabilities that form the foundation for the control system design methods developed in subsequent chapters.
 
+\newpage
 %=============================================================================
-\section*{Problems}
-\addcontentsline{toc}{section}{Problems}
+\section{Exercises}
+\label{sec:exercises}
 %=============================================================================
 
-\begin{enumerate}
-    \item Find the Laplace transform of $f(t) = t^2\e^{-3t}$ using transform properties.
+\begin{exercise}
+Find the Laplace transform of $f(t) = t^2\e^{-3t}$ using transform properties.
+\end{exercise}
 
-    \item Derive the transfer function for the mechanical system shown below, where $x$ is the displacement output and $F$ is the force input.
+\begin{exercise}
+Derive the transfer function for a mass-spring-damper system where the mass $m = 2$ kg is connected to a spring with stiffness $k = 18$ N/m and a damper with coefficient $b = 6$ N$\cdot$s/m. The input is the applied force $F(t)$ and the output is the displacement $x(t)$.
+\end{exercise}
 
-    \item For $G(s) = \dfrac{s+3}{s^2+5s+6}$, find the poles and zeros, and determine the partial fraction expansion.
+\begin{exercise}
+For $G(s) = \dfrac{s+3}{s^2+5s+6}$, find the poles and zeros, and determine the partial fraction expansion.
+\end{exercise}
 
-    \item Reduce the following block diagram to a single transfer function:
-    [Block diagram with forward path $G_1G_2G_3$ and two feedback loops]
+\begin{exercise}
+Consider a feedback control system with forward path transfer function $G(s) = \dfrac{K}{s(s+2)(s+5)}$ and unity feedback. Reduce the block diagram to find the closed-loop transfer function, and determine the value of $K$ that places one closed-loop pole at $s = -1$.
+\end{exercise}
 
-    \item An RC high-pass filter has transfer function $H(s) = \dfrac{RCs}{RCs+1}$. Sketch the Bode magnitude plot and find the cutoff frequency.
+\begin{exercise}
+An RC high-pass filter has transfer function $H(s) = \dfrac{RCs}{RCs+1}$. Sketch the Bode magnitude plot and find the cutoff frequency. What is the slope of the magnitude plot at low frequencies?
+\end{exercise}
 
-    \item Using the final value theorem, find the steady-state error for a unity feedback system with $G(s) = \dfrac{10}{s(s+2)}$ subjected to a unit ramp input.
+\begin{exercise}
+Using the final value theorem, find the steady-state error for a unity feedback system with $G(s) = \dfrac{10}{s(s+2)}$ subjected to a unit ramp input.
+\end{exercise}
 
-    \item A system has poles at $s = -1 \pm 2\j$ and a zero at $s = -3$. Write the transfer function (with DC gain = 1) and sketch the step response qualitatively.
+\begin{exercise}
+A system has poles at $s = -1 \pm 2\j$ and a zero at $s = -3$. Write the transfer function (with DC gain = 1) and sketch the step response qualitatively, indicating whether overshoot will occur.
+\end{exercise}
 
-    \item Design (choose $R$ and $C$ values for) an RC low-pass filter with cutoff frequency $f_c = 1$ kHz.
+\begin{exercise}
+Design (choose $R$ and $C$ values for) an RC low-pass filter with cutoff frequency $f_c = 1$ kHz. Verify your design by computing the magnitude response at 100 Hz, 1 kHz, and 10 kHz.
+\end{exercise}
 
-    \item Apply Mason's gain formula to find the transfer function of the signal flow graph with three forward paths and two non-touching loops.
+\begin{exercise}
+Apply Mason's gain formula to find the transfer function of a system with forward path $G_1 G_2 G_3$, where $G_1 = 2$, $G_2 = \dfrac{1}{s+1}$, $G_3 = \dfrac{3}{s+2}$, an inner feedback loop around $G_2$ with gain $H_1 = 0.5$, and an outer feedback loop around the entire forward path with gain $H_2 = 1$.
+\end{exercise}
 
-    \item For the RLC circuit of Example~\ref{ex:rlc}, find component values $R$, $L$, $C$ that give $\omega_n = 100$ rad/s and $\zeta = 0.5$.
+\begin{exercise}
+For the RLC circuit of Example~\ref{ex:rlc}, find component values $R$, $L$, $C$ that give $\omega_n = 100$ rad/s and $\zeta = 0.5$. Assume $C = 100\ \mu$F and determine $L$ and $R$.
+\end{exercise}
+
+\begin{exercise}
+A cascade of two first-order systems has overall transfer function $G(s) = \dfrac{6}{(s+1)(s+3)}$.
+\begin{enumerate}[(a)]
+    \item Find the step response $y(t)$ using partial fractions.
+    \item Determine the time constant of the dominant pole.
+    \item Calculate the 10\%--90\% rise time of the step response.
 \end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+The transfer function of a notch filter is given by $H(s) = \dfrac{s^2 + \omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}$ where $\omega_n = 120\pi$ rad/s (60 Hz) and $\zeta = 0.1$.
+\begin{enumerate}[(a)]
+    \item Find the poles and zeros of this transfer function.
+    \item Sketch the pole-zero plot.
+    \item Explain why this filter is called a ``notch'' filter based on its frequency response characteristics.
+\end{enumerate}
+\end{exercise}
 
 %=============================================================================
 % Bibliography would go here in a full textbook
