@@ -1,0 +1,144 @@
+\section{Deep Learning Optical Flow Methods}
+\label{sec:deep_learning_flow}
+
+The application of deep learning to optical flow estimation has fundamentally transformed the field over the past decade. Beginning with the seminal FlowNet architecture in 2015, convolutional neural networks (CNNs) and, more recently, transformer-based architectures have progressively surpassed traditional variational methods in both accuracy and computational efficiency. This section provides a comprehensive review of deep learning approaches to optical flow estimation, with particular emphasis on their applicability to fluid and liquid flow tracking from RGB camera imagery.
+
+\subsection{Foundational Architectures}
+
+\subsubsection{FlowNet and FlowNet 2.0}
+
+FlowNet \cite{dosovitskiy2015flownet} represented the first successful application of CNNs to optical flow estimation as a supervised learning problem. The architecture proposed two variants: FlowNetS (simple) employing a generic encoder-decoder structure, and FlowNetC (correlation) incorporating a correlation layer to match feature vectors at different spatial locations. A critical contribution was the introduction of the Flying Chairs synthetic dataset, which provided sufficient training data for deep network optimization. Despite training on synthetic data with unrealistic motion patterns, FlowNet demonstrated remarkable generalization to real-world benchmarks such as Sintel and KITTI, achieving competitive accuracy at 5--10 frames per second \cite{dosovitskiy2015flownet}.
+
+FlowNet 2.0 \cite{ilg2017flownet2} substantially advanced the original architecture through three key innovations: (1) a carefully designed training data schedule demonstrating that the order of data presentation significantly impacts final precision; (2) a stacked architecture with intermediate flow warping, where multiple FlowNet modules are cascaded with the second image warped using intermediate flow estimates; and (3) specialized sub-networks for small displacement estimation. The resulting architecture reduced estimation error by more than 50\% compared to the original FlowNet while maintaining real-time performance at 8--140 fps depending on configuration \cite{ilg2017flownet2}. Notably, two smaller cascaded networks consistently outperformed single larger networks despite having fewer parameters, suggesting that iterative refinement is more effective than increased model capacity.
+
+\subsubsection{PWC-Net}
+
+PWC-Net \cite{sun2018pwcnet} introduced a compact yet highly effective architecture built upon three classical principles: pyramidal processing, warping, and cost volume construction. The network constructs a learnable feature pyramid from input images, warps features of the second image using current flow estimates, and processes cost volumes through a compact CNN decoder. This design philosophy enabled PWC-Net to achieve 17 times smaller model size than FlowNet 2.0 while outperforming all contemporary methods on the MPI Sintel final pass and KITTI 2015 benchmarks at approximately 35 fps \cite{sun2018pwcnet}. PWC-Net won the optical flow competition of the Robust Vision Challenge, establishing the effectiveness of incorporating classical computer vision principles into deep learning frameworks.
+
+\subsubsection{LiteFlowNet Family}
+
+The LiteFlowNet series \cite{hui2018liteflownet,hui2020liteflownet2,hui2020liteflownet3} addressed the computational overhead of existing methods while maintaining competitive accuracy. LiteFlowNet \cite{hui2018liteflownet} introduced specialized modules including pyramidal features, cascaded flow inference with sub-pixel refinement, feature warping (f-warp) layers, and flow regularization through feature-driven local convolution. The resulting architecture was 30 times smaller than FlowNet 2.0 and 1.36 times faster while achieving superior accuracy on Sintel and KITTI benchmarks \cite{hui2018liteflownet}.
+
+LiteFlowNet2 \cite{hui2020liteflownet2} further improved upon its predecessor, achieving 23.3\% better accuracy on Sintel Clean, 12.8\% on Sintel Final, and 18.8\% on KITTI 2015, while being 2.2 times faster and 25.3 times smaller than FlowNet 2.0. LiteFlowNet3 \cite{hui2020liteflownet3} addressed the issue of outliers in cost volumes through adaptive modulation and explored local flow consistency by replacing inaccurate estimates with accurate ones from nearby positions via novel flow field warping.
+
+\subsection{Recurrent Architectures: RAFT and Variants}
+
+\subsubsection{RAFT: Recurrent All-Pairs Field Transforms}
+
+RAFT \cite{teed2020raft} introduced a paradigm shift in optical flow estimation through its novel recurrent architecture. The method consists of three main components: (1) a feature encoder extracting per-pixel features from both input images along with a context encoder processing only the first image; (2) a correlation layer constructing a 4D $W \times H \times W \times H$ correlation volume from inner products of all feature vector pairs, pooled at multiple scales; and (3) a lightweight recurrent update operator that iteratively refines optical flow through correlation volume lookups \cite{teed2020raft}.
+
+The key innovation of RAFT lies in its all-pairs correlation volume, which captures both local and global motion information at multiple resolutions, and its weight-tied iterative refinement, allowing variable iteration counts during inference. On KITTI, RAFT achieved an F1-all error of 5.10\%, representing a 16\% reduction from previous state-of-the-art. On Sintel final pass, RAFT obtained an end-point error of 2.855 pixels, a 30\% reduction from the best published result \cite{teed2020raft}. The architecture demonstrated strong cross-dataset generalization and high efficiency in inference time, training speed, and parameter count.
+
+\subsubsection{GMA: Global Motion Aggregation}
+
+Building upon RAFT, GMA \cite{jiang2021gma} introduced a transformer-based global motion aggregation module to address optical flow estimation in occluded regions. The method leverages self-attention mechanisms to find long-range dependencies between pixels in the first image and performs global aggregation on corresponding motion features. The underlying assumption is that semantically similar pixels exhibit relatively homogeneous motion, enabling motion propagation from non-occluded to occluded regions \cite{jiang2021gma}.
+
+GMA achieved 13.6\% improvement in average end-point error on Sintel Final and 13.7\% on Sintel Clean, with particularly strong improvements of 20.7\% in occluded regions compared to 9.3\% in non-occluded regions. The module adds only 0.6M parameters with a 20\% increase in inference time on an RTX 3090 \cite{jiang2021gma}.
+
+\subsubsection{SEA-RAFT}
+
+SEA-RAFT \cite{wang2024searaft}, presented at ECCV 2024 as a Best Paper Award candidate, introduced a simplified, more efficient, and more accurate version of RAFT. Key contributions include: (1) a mixture of Laplace loss function for improved training; (2) direct regression of initial flow for faster convergence in iterative refinement; and (3) rigid-motion pre-training to improve generalization \cite{wang2024searaft}.
+
+Architectural simplifications replaced custom RAFT components with standard modules---feature and context encoders were replaced with standard ResNets, and the convolutional GRU was replaced with a simple RNN using ConvNext blocks. SEA-RAFT achieved state-of-the-art accuracy on the Spring benchmark with 3.69 EPE and 0.36 1-pixel outlier rate, representing 22.9\% and 17.8\% error reductions respectively, while operating at least 2.3 times faster than existing methods \cite{wang2024searaft}.
+
+\subsection{Transformer-Based Architectures}
+
+\subsubsection{FlowFormer}
+
+FlowFormer \cite{huang2022flowformer} represented the first deep integration of transformers with cost volumes for optical flow estimation. The architecture tokenizes the 4D cost volume, encodes cost tokens into a latent cost memory using alternate-group transformer (AGT) layers, and decodes the memory via a recurrent transformer decoder with dynamic positional cost queries \cite{huang2022flowformer}.
+
+On the Sintel benchmark, FlowFormer achieved 1.159 and 2.088 average end-point error on clean and final passes, representing 16.5\% and 15.5\% error reductions from previous best results. Without Sintel training data, FlowFormer achieved 0.64 and 1.50 AEPE on Sintel training set clean and final passes, outperforming the best published results by 50.4\% and 45.3\% respectively \cite{huang2022flowformer}.
+
+\subsubsection{FlowFormer++ and VideoFlow}
+
+FlowFormer++ \cite{shi2023flowformerpp} extended the original architecture with Masked Cost Volume Autoencoding (MCVA) for pretraining, which leverages unlabeled data to enhance the cost-volume encoder. This approach achieved 1.07 and 1.94 AEPE on Sintel clean and final passes, with 7.76\% and 7.18\% error reductions from FlowFormer \cite{shi2023flowformerpp}.
+
+VideoFlow \cite{shi2023videoflow} exploited temporal cues from multiple frames for optical flow estimation. The TRi-frame Optical Flow (TROF) module estimates bi-directional flows for center frames in triplets, while the MOtion Propagation (MOP) module bridges multiple TROFs to propagate motion features. VideoFlow ranked first on all public benchmarks at its release, achieving 1.649 and 0.991 AEPE on Sintel final and clean passes (15.1\% and 7.6\% improvements) and 3.65\% F1-all on KITTI-2015 (19.2\% improvement) \cite{shi2023videoflow}.
+
+\subsection{Unsupervised and Self-Supervised Learning}
+
+The reliance on labeled training data presents significant challenges for domain-specific applications, particularly in fluid flow measurement where ground truth is difficult to obtain. Unsupervised and self-supervised approaches address this limitation by training networks using photometric consistency and smoothness constraints derived from classical variational methods.
+
+SelFlow \cite{liu2019selflow} introduced self-supervised learning for optical flow by distilling reliable flow estimates from non-occluded pixels and using these predictions as pseudo ground truth for hallucinated occlusions. This approach achieved the highest accuracy among unsupervised methods on Sintel and KITTI benchmarks \cite{liu2019selflow}. Subsequent work has explored deep feature similarity for unsupervised learning \cite{liu2020unsupervised}, replacing handcrafted features like census transforms with learned multi-layer feature representations.
+
+Multi-frame approaches such as M2Flow have addressed occlusion handling in unsupervised settings by integrating motion information across frames through Motion Information Propagation modules. These methods demonstrate that temporal consistency can partially compensate for the lack of ground truth supervision.
+
+\subsection{Application to Fluid Flow Tracking}
+
+\subsubsection{Deep Learning for Particle Image Velocimetry}
+
+The application of deep learning optical flow methods to Particle Image Velocimetry (PIV) has emerged as a particularly active research area. Traditional PIV algorithms suffer from limited spatial resolution due to interrogation window requirements and can fail in regions with high particle density or complex flow patterns. Deep learning approaches, particularly those based on RAFT, have demonstrated superior performance in these challenging scenarios.
+
+Cai et al. first proposed using improved LiteFlowNet architectures for velocity field reconstruction in PIV applications \cite{cai2019pivliteflownet}. Subsequent work has combined blueprint convolution and attention mechanisms with LiteFlowNet3 to create lightweight networks suitable for real-time flow measurement while maintaining reconstruction accuracy \cite{zhang2024lightweight}. These modifications reduce parameter counts while preserving accuracy through efficient convolution strategies.
+
+Studies comparing deep learning optical flow (DLOF) with traditional PIV have found that DLOF produces significantly more accurate velocity fields for densely labeled samples \cite{zhang2024dlof}. The breakdown of traditional PIV algorithms at high particle densities arises from unreliable contrast variation detection, particularly in directions parallel to flow structures. Deep learning methods, with their learned feature representations, demonstrate greater robustness to these challenges.
+
+\subsubsection{Transfer Learning from Natural Images to Fluid Flows}
+
+Transfer learning has emerged as a critical technique for applying deep optical flow models trained on synthetic or natural image datasets to fluid flow applications. PIV-FlowDiffuser \cite{xu2024pivflowdiffuser} employs denoising diffusion models with transfer learning, initializing from pre-trained optical flow weights and fine-tuning on PIV-specific datasets. This approach enhances generalization and promotes efficient training compared to training from scratch.
+
+RAFT-StereoPIV \cite{wang2024raftstereoPIV} leverages deep optical flow learning for stereoscopic PIV analysis, enabling real-time aerodynamic analysis from both wind tunnel and on-site measurements. The method demonstrates that architectures developed for natural images can effectively transfer to scientific imaging applications with appropriate domain adaptation.
+
+Physics-informed approaches complement transfer learning by incorporating physical laws into training. These methods reconstruct dense velocity fields from sparse experimental data while enforcing conservation equations, bridging the gap between data-driven learning and physics-based constraints.
+
+\subsubsection{Domain Adaptation Strategies}
+
+The domain gap between synthetic training data and real-world fluid flow imagery presents a significant challenge. Several strategies have been developed to address this:
+
+\textbf{Style Transfer Adaptation:} Methods extract diverse style statistics from target domains and use them during training to generate synthetic features containing source content with target appearance \cite{chen2024styleadapt}. This approach has proven effective for adapting optical flow models to challenging environments including adverse weather conditions.
+
+\textbf{Cumulative Domain Adaptation:} CH2DA-Flow \cite{zheng2024ch2da} and UCDA-Flow \cite{yan2023ucda} propose progressive adaptation frameworks that transfer knowledge through intermediate domains. For foggy scenes, cost volume correlations share similar distributions between synthetic and real degraded domains, enabling correlation-alignment motion adaptation for synthetic-to-real knowledge distillation.
+
+\textbf{Teacher-Student Learning:} In applications where ground truth is unavailable, teacher-student frameworks enable domain adaptation by training fast student models on pseudo-labels generated by accurate but slow teacher networks \cite{shao2020teacherstudent}. This approach is particularly valuable for real-time medical and industrial applications.
+
+\subsection{Comparison with Traditional Methods}
+
+Traditional optical flow methods, including Lucas-Kanade \cite{lucas1981iterative} and Horn-Schunck \cite{horn1981determining}, rely on fundamental assumptions of brightness constancy and spatial smoothness. Lucas-Kanade provides efficient sparse flow estimation through local linear approximations, while Horn-Schunck produces dense flow fields through global optimization with smoothness regularization. These methods remain valuable for their computational efficiency and interpretability but struggle with large motions, occlusions, and illumination changes.
+
+Deep learning methods have systematically addressed these limitations:
+
+\begin{itemize}
+    \item \textbf{Large Displacements:} Multi-scale pyramidal processing and all-pairs correlation volumes enable handling of motions spanning tens to hundreds of pixels.
+    \item \textbf{Occlusions:} Self-attention mechanisms (GMA) and multi-frame temporal reasoning (VideoFlow) propagate motion information to occluded regions.
+    \item \textbf{Illumination Invariance:} Learned feature representations demonstrate greater robustness to lighting variations than handcrafted similarity measures.
+    \item \textbf{Complex Scenes:} End-to-end learning captures scene-specific priors beyond simple smoothness assumptions.
+\end{itemize}
+
+Table~\ref{tab:dl_comparison} summarizes key characteristics of representative deep learning optical flow methods.
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of deep learning optical flow methods. EPE values are reported on Sintel Final test set where available.}
+\label{tab:dl_comparison}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Method} & \textbf{Year} & \textbf{Architecture} & \textbf{Parameters} & \textbf{Sintel Final EPE} & \textbf{Key Innovation} \\
+\hline
+FlowNet \cite{dosovitskiy2015flownet} & 2015 & CNN & 38M & 7.22 & First CNN for flow \\
+FlowNet 2.0 \cite{ilg2017flownet2} & 2017 & Stacked CNN & 162M & 4.09 & Cascaded refinement \\
+PWC-Net \cite{sun2018pwcnet} & 2018 & Pyramid CNN & 9.4M & 3.45 & Cost volume + warping \\
+LiteFlowNet \cite{hui2018liteflownet} & 2018 & Lightweight CNN & 5.4M & 3.78 & Feature-driven regularization \\
+RAFT \cite{teed2020raft} & 2020 & Recurrent & 5.3M & 2.86 & All-pairs correlation \\
+GMA \cite{jiang2021gma} & 2021 & RAFT + Attention & 5.9M & 2.47 & Global motion aggregation \\
+FlowFormer \cite{huang2022flowformer} & 2022 & Transformer & 18.2M & 2.09 & Cost volume tokenization \\
+VideoFlow \cite{shi2023videoflow} & 2023 & Multi-frame & 23.5M & 1.65 & Temporal cues \\
+SEA-RAFT \cite{wang2024searaft} & 2024 & Simplified RAFT & 4.7M & 2.01 & Efficient refinement \\
+\hline
+\end{tabular}
+\end{table}
+
+However, deep learning methods require substantial computational resources and may not achieve real-time performance on embedded systems. For applications demanding low latency with limited hardware, traditional methods or highly optimized lightweight networks remain relevant choices. The selection between traditional and deep learning approaches should consider accuracy requirements, computational constraints, and the availability of domain-specific training data.
+
+\subsection{Current Challenges and Future Directions}
+
+Despite remarkable progress, several challenges remain in applying deep learning optical flow to fluid flow tracking:
+
+\textbf{Domain Specificity:} Models trained on natural images may not optimally transfer to scientific imaging modalities with different noise characteristics, particle distributions, and motion patterns. Domain-specific datasets and adaptation strategies remain active research areas.
+
+\textbf{Physical Consistency:} Current deep learning methods do not explicitly enforce physical constraints such as incompressibility or boundary conditions. Physics-informed neural networks represent a promising direction for incorporating domain knowledge.
+
+\textbf{Uncertainty Quantification:} Reliable uncertainty estimates are critical for scientific applications but remain underexplored in deep optical flow. Probabilistic formulations and ensemble methods offer potential solutions.
+
+\textbf{Temporal Coherence:} While methods like VideoFlow exploit multi-frame information, ensuring temporally coherent flow fields for long video sequences remains challenging, particularly in the presence of periodic or quasi-periodic motions common in fluid flows.
+
+\textbf{Resolution and Detail:} High-resolution flow estimation for fine-scale turbulent structures requires careful architectural design to balance computational cost with spatial accuracy.
