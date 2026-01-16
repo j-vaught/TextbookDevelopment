@@ -1,0 +1,135 @@
+\section{Recent Neural Network Approaches for PIV}
+\label{sec:neural_piv}
+
+The integration of deep learning with particle image velocimetry (PIV) has emerged as a transformative paradigm in experimental fluid mechanics, offering unprecedented improvements in accuracy, spatial resolution, and computational efficiency over traditional cross-correlation methods. This section surveys the most significant neural network architectures and methodologies developed between 2023 and 2025 for flow field estimation from particle images.
+
+\subsection{Deep Optical Flow Networks for PIV}
+
+The application of optical flow networks to PIV has evolved rapidly from early convolutional approaches to sophisticated recurrent and transformer-based architectures. The foundational work by Lee et al.~\cite{lee2017piv_dcnn} introduced PIV-DCNN, a cascaded deep convolutional neural network employing four-level regression for coarse-to-fine velocity estimation. While pioneering, this architecture exhibited limitations for large displacements exceeding 12 pixels per frame.
+
+Modern optical flow methods have substantially improved upon these early efforts. The Recurrent All-Pairs Field Transforms (RAFT) architecture~\cite{teed2020raft}, originally developed for computer vision, has been adapted extensively for PIV applications. Lagemann et al.~\cite{lagemann2021deep_recurrent} demonstrated that deep recurrent optical flow learning provides superior accuracy compared to conventional correlation-based methods, particularly for complex turbulent flows. Their approach leverages iterative refinement through gated recurrent units to progressively improve displacement estimates.
+
+The LiteFlowNet family~\cite{hui2018liteflownet} has spawned numerous PIV-specific variants. Cai et al.~\cite{cai2019piv_liteflownet} adapted LiteFlowNet for PIV, demonstrating that lightweight architectures can achieve competitive accuracy with significantly reduced computational overhead. Recent work by Zhang et al.~\cite{zhang2024lightweight} proposes PIV-SLiteFlowNet3-BC, which combines blueprint separable convolution with convolutional block attention modules (CBAM) to compress model parameters while enhancing feature extraction. Their experimental results show a 37.71\% reduction in average endpoint error compared to the baseline LiteFlowNet3.
+
+\subsection{Neural Optical Flow with Physical Constraints}
+
+A significant advancement in neural PIV methods is the incorporation of physical constraints directly into the learning framework. Neural Optical Flow (NOF)~\cite{zhang2024nof} represents a paradigm shift by parameterizing the velocity field using continuous neural-implicit representations rather than discrete displacement fields. The key innovation lies in formulating the loss function as the discrepancy between the advected intensity field and observed particle images:
+\begin{equation}
+\mathcal{L}_{\text{data}} = \sum_{i} \left\| I_1(\mathbf{x}_i) - I_2(\mathbf{x}_i + \mathbf{u}(\mathbf{x}_i)) \right\|^2
+\end{equation}
+where $I_1$ and $I_2$ are consecutive particle images and $\mathbf{u}$ is the neural-parameterized velocity field.
+
+NOF further incorporates soft constraints based on Navier-Stokes residuals:
+\begin{equation}
+\mathcal{L}_{\text{physics}} = \lambda_1 \left\| \frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u} \cdot \nabla)\mathbf{u} + \frac{1}{\rho}\nabla p - \nu \nabla^2 \mathbf{u} \right\|^2 + \lambda_2 \left\| \nabla \cdot \mathbf{u} \right\|^2
+\end{equation}
+enabling direct pressure inference from PIV images while enforcing mass continuity as either a soft or hard constraint for both two-dimensional and three-dimensional flows.
+
+Jiang et al.~\cite{jiang2024highres} proposed neural networks based on FlowNetS incorporating optical flow conservation with velocity regularization terms. They demonstrated that networks with first-order smoothing regularization or second-order grad(curl)-grad(div) regularization yield higher-resolution, higher-accuracy flow fields compared to unconstrained approaches.
+
+\subsection{Physics-Informed Neural Networks for Flow Reconstruction}
+
+Physics-informed neural networks (PINNs)~\cite{raissi2019pinns} have emerged as powerful tools for flow field reconstruction from sparse PIV measurements. Lu et al.~\cite{lu2024pinn_piv} presented an approach for reconstructing high-frequency, full-field flows by integrating sparse, low-temporal-resolution PIV data with high-temporal-resolution pressure probe measurements. This spatial-temporal data fusion exploits the complementary strengths of different measurement modalities.
+
+The turbulence model augmented PINN framework by Xu et al.~\cite{xu2024turbulence_pinn} demonstrates that combining sparse pointwise velocity measurements with Reynolds-averaged Navier-Stokes (RANS) equations through data assimilation can reconstruct mean flows with higher accuracy than conventional RANS solvers using standard turbulence models. This approach bridges the gap between data assimilation using PINNs and variational methods.
+
+Wang et al.~\cite{wang2023pinn_reconstruction} showed that PINNs yield better reconstructed flow fields than classic neural networks, achieving larger structural similarity index (SSIM) values and smaller mean squared errors. The physics constraints enable prediction in unmeasured regions, effectively expanding the coverage of PIV measurements beyond the original field of view.
+
+A notable challenge with PINNs for fluid flows is convergence to local minima, particularly for stiff problems. Li et al.~\cite{li2025pinn_reinit} proposed a re-initialization training strategy that periodically modulates training parameters, enabling the network to escape local minima and explore alternative solutions. This technique significantly improves convergence for complex flow configurations.
+
+\subsection{Diffusion Models for PIV}
+
+The application of denoising diffusion probabilistic models to PIV represents one of the most recent innovations in the field. Zhu et al.~\cite{zhu2025piv_flowdiffuser} introduced PIV-FlowDiffuser, which employs an iterative denoising diffusion framework for velocity field estimation. The model operates by progressively refining flow estimates through learned denoising steps:
+\begin{equation}
+\mathbf{u}_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left(\mathbf{u}_t - \frac{1-\alpha_t}{\sqrt{1-\bar{\alpha}_t}}\boldsymbol{\epsilon}_\theta(\mathbf{u}_t, t, I_1, I_2)\right) + \sigma_t \mathbf{z}
+\end{equation}
+where $\boldsymbol{\epsilon}_\theta$ is the learned noise prediction network conditioned on particle images.
+
+PIV-FlowDiffuser achieves a 59.4\% reduction in average endpoint error (AEE) compared to the RAFT-PIV baseline on Cai's benchmark dataset. The explicit correction mechanism iteratively refines estimated flow fields, effectively suppressing the characteristic noise patterns often observed in deep learning-based PIV estimators. The diffusion framework's inherent ability to model complex distributions enables robust handling of ambiguous flow regions.
+
+\subsection{Lightweight Networks for Real-Time PIV}
+
+The deployment of deep learning PIV in real-time applications necessitates lightweight architectures with efficient inference. LightPIVNet~\cite{wang2021lightpivnet} pioneered this direction by demonstrating that effective convolutional neural networks for PIV need not be computationally expensive. Subsequent work has focused on further reducing model complexity while maintaining accuracy.
+
+Zhang et al.~\cite{zhang2024lightweight} achieved substantial parameter reduction through blueprint convolution, which decomposes standard convolutions into efficient pointwise and depthwise operations. Their attention-enhanced architecture improves particle image feature extraction while maintaining real-time processing capability.
+
+Lagemann et al.~\cite{lagemann2024raft_stereopiv} introduced RAFT-StereoPIV-Small, reducing the original RAFT-StereoPIV model from 5.3 million to 2.2 million parameters (approximately 59\% reduction) while preserving accuracy on benchmark datasets. This smaller variant enables deployment on edge computing platforms for on-site aerodynamic measurements.
+
+Chen et al.~\cite{chen2025lowcost_piv} presented an end-to-end deep learning model enabling velocity field reconstruction using low-cost laser emitters and conventional cameras. Their approach demonstrates robust performance with particle density variations from 0.8 to 1.2 and Gaussian noise levels below 10\%, making PIV measurements more accessible for resource-constrained applications.
+
+\subsection{Vision Transformers and Attention Mechanisms}
+
+The transformer architecture~\cite{vaswani2017attention}, originally developed for natural language processing, has been adapted for PIV with notable success. Twins-PIVNet~\cite{reddy2025twins_pivnet} leverages a spatial attention-based Vision Transformer for optical flow estimation. The self-attention mechanism captures multi-scale features of particle motion, addressing a key limitation of convolutional architectures: their restricted receptive fields that limit utilization of global contextual information.
+
+In comparative studies, Twins-PIVNet outperforms existing methods with accuracy improvements of 51\% for backstep flow, 42\% for DNS-turbulence cases, and 33\% for surface quasi-geostrophic flow. The model exhibits strong generalization on experimental PIV data and faster inference times compared to other deep learning PIV methods.
+
+Liu et al.~\cite{liu2024deepst_cc} proposed DeepST-CC, which embeds the Swin Transformer into the RAFT optical flow architecture with an integrated cross-correlation strategy. The attention mechanism enhances feature representations of flow images while the cross-correlation embedding improves robustness in real flow scenarios where previous deep learning methods lacked generalization.
+
+FlowFormer-PIV~\cite{yu2025flowformer_piv} applies the transformer-based FlowFormer architecture to PIV analysis. While achieving comparable results to RAFT-PIV on synthetic images, FlowFormer-PIV demonstrates improved performance on real experimental images, suggesting that transformer architectures may better handle the domain gap between synthetic training data and experimental measurements.
+
+\subsection{Stereoscopic and Three-Dimensional PIV}
+
+Extension of deep learning methods to stereoscopic PIV enables full three-component velocity measurement. RAFT-StereoPIV~\cite{lagemann2024raft_stereopiv} adapts the recurrent all-pairs field transforms architecture for stereoscopic particle image analysis. The method was developed for the ``Ring of Fire'' (RoF) technique, a large-scale, non-intrusive PIV measurement approach for analyzing flow topology around full-scale transiting objects.
+
+RAFT-StereoPIV demonstrates remarkable performance, achieving 68\% error reduction on Problem Class 2 validation data and 47\% error reduction on unseen Problem Class 1 test data compared to previous state-of-the-art methods. A key advantage is the 16$\times$ higher spatial resolution compared to traditional stereoscopic PIV methods, while eliminating the need for manual preprocessing. The trained network produces flow estimates maintaining the spatial resolution of input image sequences.
+
+The model was trained using a multi-fidelity dataset comprising both Reynolds-averaged Navier-Stokes (RANS) and direct numerical simulation (DNS) data, demonstrating that combining simulation fidelity levels can improve generalization to experimental conditions.
+
+\subsection{Domain Adaptation and Transfer Learning}
+
+A persistent challenge for deep learning PIV is the domain gap between synthetic training data and real experimental particle images. Transfer learning has emerged as an effective strategy to bridge this gap.
+
+PIV-FlowDiffuser~\cite{zhu2025piv_flowdiffuser} employs a two-stage transfer learning approach: (1) pre-training on large-scale optical flow datasets from the computer vision community (Sintel, KITTI), then (2) fine-tuning on synthetic PIV datasets. This strategy significantly reduces training time while enhancing generalization, even under substantial domain shifts. The fine-tuned model benefits from generic motion features learned from diverse large-scale datasets.
+
+Chen et al.~\cite{chen2025lowcost_piv} demonstrated that transfer learning from tandem-cylinder models yields 14.3\% performance improvement and accelerated convergence in single-cylinder applications. Pre-training on related flow configurations enables effective adaptation with limited PIV-specific training data.
+
+For environmental flow velocimetry, Matthew et al.~\cite{matthew2024environmental_piv} investigated generalization of deep learning methods from laboratory to field conditions. Limited fine-tuning of UnLiteFlowNet-PIV on laboratory data improved performance on drone-based imagery, indicating potential for unsupervised learning approaches in scenarios where ground truth data is unavailable.
+
+\subsection{Unsupervised Learning Approaches}
+
+The requirement for ground truth velocity fields in supervised learning poses a significant challenge, as such data is difficult to obtain for real experimental flows. Unsupervised learning methods address this limitation by training without explicit velocity labels.
+
+UnLiteFlowNet-PIV~\cite{liu2020unliteflownet} pioneered unsupervised PIV by replacing ground truth supervision with photometric loss between consecutive frames, bidirectional flow consistency loss, and spatial smoothness regularization:
+\begin{equation}
+\mathcal{L}_{\text{unsup}} = \mathcal{L}_{\text{photo}} + \lambda_{\text{cons}}\mathcal{L}_{\text{consistency}} + \lambda_{\text{smooth}}\mathcal{L}_{\text{smooth}}
+\end{equation}
+
+Zhang et al.~\cite{zhang2023unsupervised_liteflownet3} applied improved LiteFlowNet3 with unsupervised learning to PIV for the first time, achieving up to 30.89\% accuracy enhancement on specific datasets. Since obtaining real flow field ground truth is inherently difficult, unsupervised methods are often more practical for training on experimental data.
+
+Chong et al.~\cite{chong2022unsupervised_crosscorr} proposed combining unsupervised learning with embedded cross-correlation and divergence-free constraints. The cross-correlation integration leverages classical PIV methodology while the physical constraint improves accuracy compared to purely data-driven unsupervised approaches.
+
+UnPWCNet-PIV~\cite{zhang2023unpwcnet} introduced an unsupervised network using pyramid, warping, and cost volume components for dense velocity reconstruction. While previous unsupervised methods were limited to rough flow reconstructions, UnPWCNet-PIV achieves accuracy approaching supervised methods through architectural innovations.
+
+\subsection{Benchmark Datasets and Evaluation}
+
+Standardized benchmarks are essential for rigorous evaluation of deep learning PIV methods. The Problem Class datasets introduced by Cai et al.~\cite{cai2019piv_liteflownet} remain widely used, comprising diverse fluid motion structures from CFD simulations including cylinder flow, DNS turbulence, and surface quasi-geostrophic (SQG) flow.
+
+Recent work has expanded benchmark coverage significantly. The MCFormer benchmark~\cite{mcformer2024} provides a large-scale synthetic dataset generated from diverse CFD simulations (Johns Hopkins Turbulence Databases, Blasius boundary layer) with unprecedented variety in particle densities, flow velocities, and continuous motion. This enables standardized evaluation across algorithms for the first time.
+
+SynthPix~\cite{synthpix2024} introduces a high-performance synthetic image generator implemented in JAX, achieving throughput several orders of magnitude higher than existing tools. The ability to generate virtually unlimited training samples supports data-hungry deep learning workflows while providing accurate ground truth for algorithm assessment.
+
+FED-PV~\cite{fed_pv2024} extends benchmarking to event-based cameras by providing a particle frame/event generator synthesizing both conventional image sequences and event stream data. This enables evaluation of emerging neuromorphic sensing approaches for flow measurement.
+
+\subsection{Super-Resolution and High-Resolution Reconstruction}
+
+Deep learning enables reconstruction of high-resolution velocity fields from low-resolution PIV measurements, addressing fundamental limitations of traditional methods. Fukami et al.~\cite{fukami2023superres} provided a comprehensive survey of machine learning-based super-resolution for vortical flows, including the PIV2DSR network specifically designed for two-dimensional PIV enhancement.
+
+Multi-fidelity physics-informed neural networks (MPINN)~\cite{mpinn2024} decompose data correlation into linear and nonlinear components for super-resolution reconstruction. This physics-guided approach achieves robust upscaling even with up to 10\% missing data in the low-resolution input.
+
+Recent work~\cite{hou2024superres_comparison} compared five super-resolution architectures for upscaling low-resolution flow data, demonstrating that encoder-decoder networks with physics constraints consistently outperform purely data-driven approaches. The integration of physical laws during training enables accurate reconstruction of fine-scale flow features that would otherwise be unresolvable.
+
+\subsection{Summary and Future Directions}
+
+Neural network approaches for PIV have matured rapidly, with state-of-the-art methods now achieving substantial improvements over traditional cross-correlation techniques in accuracy, spatial resolution, and robustness. Key advances include:
+
+\begin{itemize}
+\item Recurrent architectures (RAFT-based) providing iterative refinement for complex flows
+\item Physics-informed learning incorporating Navier-Stokes constraints
+\item Diffusion models enabling iterative denoising for improved accuracy
+\item Vision transformers capturing global context through self-attention
+\item Lightweight architectures enabling real-time deployment
+\item Transfer learning bridging domain gaps between synthetic and experimental data
+\item Unsupervised methods eliminating the need for ground truth labels
+\end{itemize}
+
+Future research directions include multi-modal fusion combining PIV with other measurement modalities, extension to volumetric three-dimensional measurements, improved uncertainty quantification, and deployment on embedded systems for in-situ flow diagnostics. The continued development of comprehensive benchmarks and open-source implementations will be essential for advancing the field toward robust, practical applications in experimental fluid mechanics.
