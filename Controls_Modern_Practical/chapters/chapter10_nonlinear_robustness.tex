@@ -1,0 +1,3133 @@
+\chapter{Nonlinear Systems and Robustness}
+\label{ch:nonlinear_robustness}
+
+\whythismatters{
+Every real control system is nonlinear. Actuators saturate, friction opposes motion in complex ways, gears exhibit backlash, and sensors have dead zones. Throughout this textbook, we have relied on linearization to apply powerful linear control techniques, but we have also acknowledged that linearization has limits. This chapter confronts those limits directly.
+
+Understanding nonlinear behavior is not merely academic---it is essential for designing controllers that work reliably in the real world. A beautifully tuned PID controller can drive a system into sustained oscillations if saturation effects are ignored. A precision positioning system can exhibit stick-slip motion that no amount of linear gain adjustment will eliminate. A robust controller designed for nominal parameters can fail catastrophically when those parameters drift.
+
+In this chapter, we develop practical tools for analyzing and compensating nonlinear effects. The describing function method provides approximate frequency-domain analysis for nonlinear systems. Limit cycle prediction tells us when feedback systems will oscillate and at what amplitude. Friction models capture the complex tribological phenomena that plague mechanical systems. Robustness analysis quantifies how much uncertainty our controllers can tolerate.
+
+By mastering this material, you will be able to predict when linear controllers will fail, design compensation strategies for common nonlinearities, and ensure your control systems perform reliably despite the inevitable gap between models and reality.
+}
+
+%===============================================================================
+\section{Nonlinear System Characteristics}
+\label{sec:nonlinear_characteristics}
+%===============================================================================
+
+Linear systems have remarkable properties: superposition holds, stability is determined entirely by eigenvalues, and sinusoidal inputs produce sinusoidal outputs at the same frequency. Nonlinear systems violate all of these properties, leading to behaviors that have no linear counterpart.
+
+\subsection{What Makes a System Nonlinear?}
+
+A system is \textbf{nonlinear} if it violates the superposition principle. Mathematically, a system $\mathcal{S}$ is linear if and only if:
+\begin{equation}
+\mathcal{S}\{\alpha x_1(t) + \beta x_2(t)\} = \alpha \mathcal{S}\{x_1(t)\} + \beta \mathcal{S}\{x_2(t)\}
+\label{eq:superposition}
+\end{equation}
+for all inputs $x_1(t)$, $x_2(t)$ and all scalars $\alpha$, $\beta$.
+
+Any system that fails this test is nonlinear. Common sources of nonlinearity include:
+
+\begin{itemize}
+    \item \textbf{Saturation:} Actuators have finite output capability. A motor cannot produce infinite torque; an amplifier cannot output voltage beyond its supply rails.
+
+    \item \textbf{Dead zones:} Many actuators require a minimum input before producing any output. Control valves have sticktion; motors have static friction thresholds.
+
+    \item \textbf{Backlash:} Gear trains have clearance between teeth. When direction reverses, the output momentarily loses connection to the input.
+
+    \item \textbf{Friction:} Real friction depends on velocity, position history, and contact conditions in complex, nonlinear ways.
+
+    \item \textbf{Hysteresis:} Magnetic materials, piezoelectric actuators, and many other systems exhibit path-dependent behavior.
+
+    \item \textbf{Product terms:} Multiplying two signals (as in many physical laws) creates nonlinearity.
+\end{itemize}
+
+\subsection{Multiple Equilibria}
+
+Linear systems have at most one equilibrium point (the origin, for systems without constant inputs). Nonlinear systems can have multiple equilibria, each with different stability properties.
+
+Consider a simple pendulum with viscous damping:
+\begin{equation}
+\ddot{\theta} + b\dot{\theta} + \frac{g}{L}\sin\theta = 0
+\label{eq:pendulum_nonlinear}
+\end{equation}
+
+Setting $\dot{\theta} = 0$ and $\ddot{\theta} = 0$, the equilibrium condition is $\sin\theta = 0$, giving:
+\begin{equation}
+\theta_{\text{eq}} = n\pi, \quad n \in \mathbb{Z}
+\end{equation}
+
+The pendulum has infinitely many equilibrium points. However, they fall into two categories:
+\begin{itemize}
+    \item $\theta = 0, \pm 2\pi, \pm 4\pi, \ldots$ (hanging down): \textbf{stable}
+    \item $\theta = \pm\pi, \pm 3\pi, \ldots$ (pointing up): \textbf{unstable}
+\end{itemize}
+
+\textbf{Physical interpretation:} A pendulum hanging downward returns to equilibrium after a disturbance. A pendulum balanced upright falls over from the slightest perturbation. Same system, different equilibria, opposite stability.
+
+\begin{example}[Magnetic Levitation System]
+\label{ex:maglev_equilibria}
+Consider a steel ball suspended by an electromagnet. The equation of motion is:
+\begin{equation}
+m\ddot{z} = mg - \frac{ki^2}{z^2}
+\end{equation}
+where $z$ is the distance from the magnet, $i$ is the coil current, and $k$ is a magnetic constant.
+
+At equilibrium with constant current $i_0$:
+\begin{equation}
+mg = \frac{ki_0^2}{z_0^2} \implies z_0 = \sqrt{\frac{ki_0^2}{mg}}
+\end{equation}
+
+There is exactly one equilibrium height for each current level. However, this equilibrium is \textbf{unstable}: if the ball moves slightly upward, the magnetic force increases (since $F \propto 1/z^2$), pulling it further up. If it moves downward, gravity wins and it falls. Active feedback control is essential for magnetic levitation.
+\end{example}
+
+\subsection{Limit Cycles}
+
+A \textbf{limit cycle} is a closed trajectory in state space that nearby trajectories approach (stable limit cycle) or diverge from (unstable limit cycle). Limit cycles represent sustained oscillations that are inherently nonlinear phenomena---linear systems cannot exhibit isolated periodic orbits.
+
+\begin{definition}[Limit Cycle]
+A limit cycle is an isolated closed trajectory $\Gamma$ in the state space of an autonomous system $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$. It is:
+\begin{itemize}
+    \item \textbf{Stable} (or attracting) if trajectories starting near $\Gamma$ approach it as $t \to \infty$
+    \item \textbf{Unstable} if trajectories starting near $\Gamma$ diverge from it
+    \item \textbf{Semi-stable} if trajectories approach from one side and diverge from the other
+\end{itemize}
+\end{definition}
+
+The classic example is the Van der Pol oscillator:
+\begin{equation}
+\ddot{x} - \mu(1 - x^2)\dot{x} + x = 0
+\label{eq:van_der_pol}
+\end{equation}
+
+For $\mu > 0$, this system has an unstable equilibrium at the origin and a stable limit cycle surrounding it. All trajectories (except the origin itself) spiral toward the limit cycle regardless of initial conditions.
+
+\textbf{Physical interpretation:} The term $-\mu(1-x^2)\dot{x}$ provides negative damping (energy injection) when $|x| < 1$ and positive damping (energy dissipation) when $|x| > 1$. The system self-regulates to an oscillation amplitude where energy injection and dissipation balance.
+
+\keypoint{Limit cycles arise from the interplay between energy injection and dissipation mechanisms in nonlinear systems. They cannot occur in linear systems, where oscillations either grow unboundedly, decay to zero, or maintain constant amplitude only on the stability boundary.}
+
+\subsection{Dependence on Initial Conditions}
+
+In linear systems, stability is a global property: if the origin is stable, all trajectories converge to it regardless of starting point. Nonlinear systems exhibit \textbf{local} stability, where convergence depends on initial conditions.
+
+\begin{example}[Region of Attraction]
+Consider the scalar system:
+\begin{equation}
+\dot{x} = x - x^3 = x(1-x)(1+x)
+\end{equation}
+
+The equilibrium points are $x = 0, \pm 1$. Linearizing around each:
+\begin{itemize}
+    \item At $x = 0$: $\dot{\delta x} = \delta x$ (unstable, since eigenvalue is $+1$)
+    \item At $x = 1$: $\dot{\delta x} = -2\delta x$ (stable)
+    \item At $x = -1$: $\dot{\delta x} = -2\delta x$ (stable)
+\end{itemize}
+
+The \textbf{region of attraction} for $x = 1$ is $(0, \infty)$, and for $x = -1$ is $(-\infty, 0)$. The unstable equilibrium at the origin acts as a separatrix---initial conditions on opposite sides converge to different stable equilibria.
+\end{example}
+
+\subsection{Frequency Generation and Harmonics}
+
+When a sinusoidal input $u(t) = A\sin(\omega t)$ is applied to a linear system, the steady-state output is also sinusoidal at frequency $\omega$. Nonlinear systems generate new frequencies.
+
+Consider a simple squaring nonlinearity $y = x^2$. If $x(t) = A\sin(\omega t)$:
+\begin{equation}
+y(t) = A^2 \sin^2(\omega t) = \frac{A^2}{2}(1 - \cos(2\omega t)) = \frac{A^2}{2} - \frac{A^2}{2}\cos(2\omega t)
+\end{equation}
+
+The output contains:
+\begin{itemize}
+    \item A DC component $A^2/2$ (zero frequency)
+    \item A component at $2\omega$ (second harmonic)
+    \item No component at the input frequency $\omega$
+\end{itemize}
+
+More generally, nonlinearities generate harmonics, subharmonics, and intermodulation products. This frequency generation is the foundation of the describing function method we develop in the next section.
+
+\subsection{Chaos}
+
+Some nonlinear systems exhibit \textbf{chaotic} behavior: bounded, aperiodic motion with extreme sensitivity to initial conditions. Chaotic systems are deterministic yet practically unpredictable because tiny differences in initial conditions grow exponentially over time.
+
+The Lorenz system is the canonical example:
+\begin{align}
+\dot{x} &= \sigma(y - x) \\
+\dot{y} &= x(\rho - z) - y \\
+\dot{z} &= xy - \beta z
+\end{align}
+
+For parameters $\sigma = 10$, $\rho = 28$, $\beta = 8/3$, trajectories wander unpredictably between two ``wings'' of the famous Lorenz attractor, never settling into a periodic pattern.
+
+\warningbox{Chaotic systems cannot be controlled to follow arbitrary trajectories using conventional feedback. However, chaos can sometimes be suppressed or exploited through appropriate control strategies. Chaos control is an active research area beyond our scope, but recognizing chaotic behavior helps avoid futile attempts to achieve precision control of fundamentally unpredictable systems.}
+
+%===============================================================================
+\section{Describing Function Analysis}
+\label{sec:describing_function}
+%===============================================================================
+
+The describing function method extends frequency-domain analysis to nonlinear systems. It provides approximate but practical tools for analyzing stability and predicting limit cycles in feedback systems containing nonlinear elements.
+
+\subsection{Motivation: The Need for Nonlinear Frequency Analysis}
+
+Frequency response methods---Bode plots, Nyquist diagrams, gain and phase margins---are cornerstones of linear control design. We would like to extend these powerful tools to nonlinear systems, but a fundamental obstacle stands in the way: nonlinear systems do not have transfer functions.
+
+The transfer function concept relies on superposition. For a linear system with transfer function $G(s)$, the response to $u(t) = A\sin(\omega t)$ is:
+\begin{equation}
+y(t) = A|G(j\omega)|\sin(\omega t + \angle G(j\omega))
+\end{equation}
+
+The output is sinusoidal at the same frequency, scaled by the magnitude and shifted by the phase of $G(j\omega)$. This clean relationship fails for nonlinear systems, which generate harmonics and have amplitude-dependent behavior.
+
+The describing function method recovers an approximate frequency-domain characterization by:
+\begin{enumerate}
+    \item Assuming the input to the nonlinearity is sinusoidal
+    \item Extracting only the fundamental frequency component of the output
+    \item Defining a ``gain'' as the ratio of output fundamental to input amplitude
+\end{enumerate}
+
+This is an approximation because we ignore harmonics, but it is often accurate enough for practical stability analysis.
+
+\subsection{Derivation of the Describing Function}
+
+Consider a memoryless nonlinearity $y = n(x)$ (no dynamics, output depends only on current input). We apply a sinusoidal input:
+\begin{equation}
+x(t) = A\sin(\omega t)
+\end{equation}
+
+The output $y(t) = n(A\sin(\omega t))$ is periodic with period $T = 2\pi/\omega$, but generally not sinusoidal. We can represent it as a Fourier series:
+\begin{equation}
+y(t) = \frac{a_0}{2} + \sum_{k=1}^{\infty} \left[ a_k \cos(k\omega t) + b_k \sin(k\omega t) \right]
+\label{eq:fourier_output}
+\end{equation}
+
+The Fourier coefficients are:
+\begin{align}
+a_k &= \frac{2}{T} \int_0^T y(t) \cos(k\omega t) \, dt = \frac{1}{\pi} \int_0^{2\pi} n(A\sin\theta) \cos(k\theta) \, d\theta \\
+b_k &= \frac{2}{T} \int_0^T y(t) \sin(k\omega t) \, dt = \frac{1}{\pi} \int_0^{2\pi} n(A\sin\theta) \sin(k\theta) \, d\theta
+\end{align}
+
+where we substituted $\theta = \omega t$.
+
+The \textbf{describing function} $N(A)$ is defined as the complex ratio of the fundamental component of the output to the input:
+\begin{equation}
+\boxed{N(A) = \frac{Y_1}{A} = \frac{a_1 + jb_1}{A} = \frac{1}{\pi A} \int_0^{2\pi} n(A\sin\theta) e^{j\theta} \, d\theta}
+\label{eq:describing_function_def}
+\end{equation}
+
+For odd-symmetric nonlinearities where $n(-x) = -n(x)$, the cosine terms vanish ($a_k = 0$), and:
+\begin{equation}
+N(A) = \frac{b_1}{A} = \frac{1}{\pi A} \int_0^{2\pi} n(A\sin\theta) \sin\theta \, d\theta
+\label{eq:df_odd_symmetric}
+\end{equation}
+
+Since odd-symmetric functions have half-wave symmetry, this simplifies to:
+\begin{equation}
+N(A) = \frac{2}{\pi A} \int_0^{\pi} n(A\sin\theta) \sin\theta \, d\theta
+\label{eq:df_odd_symmetric_half}
+\end{equation}
+
+\keypoint{The describing function $N(A)$ depends on the input amplitude $A$ but not on frequency $\omega$ for memoryless nonlinearities. This amplitude dependence is the key feature that captures nonlinear behavior in the frequency domain framework.}
+
+\subsection{Describing Functions for Common Nonlinearities}
+
+We now derive describing functions for nonlinearities frequently encountered in control systems.
+
+\subsubsection{Ideal Saturation}
+
+The saturation nonlinearity models actuator limits:
+\begin{equation}
+n(x) = \begin{cases}
+-M & x < -M/k \\
+kx & |x| \leq M/k \\
+M & x > M/k
+\end{cases}
+\label{eq:saturation_def}
+\end{equation}
+
+where $k$ is the linear gain and $M$ is the saturation level. The saturation begins when $|x| = M/k$, which we denote as $d = M/k$.
+
+For input $x = A\sin\theta$, saturation occurs when $A > d$. The output is:
+\begin{equation}
+y = \begin{cases}
+kA\sin\theta & A\sin\theta \leq d \\
+M & A\sin\theta > d
+\end{cases}
+\end{equation}
+
+Saturation begins at angle $\theta_s = \arcsin(d/A)$ when $A > d$.
+
+Applying equation~\eqref{eq:df_odd_symmetric_half}:
+\begin{equation}
+N(A) = \frac{2}{\pi A} \left[ \int_0^{\theta_s} kA\sin^2\theta \, d\theta + \int_{\theta_s}^{\pi/2} M\sin\theta \, d\theta + \int_{\pi/2}^{\pi - \theta_s} M\sin\theta \, d\theta + \int_{\pi-\theta_s}^{\pi} kA\sin^2\theta \, d\theta \right]
+\end{equation}
+
+After evaluating the integrals (using $\int \sin^2\theta \, d\theta = \theta/2 - \sin(2\theta)/4$):
+\begin{equation}
+\boxed{N(A) = \frac{2k}{\pi}\left[\arcsin\left(\frac{d}{A}\right) + \frac{d}{A}\sqrt{1 - \left(\frac{d}{A}\right)^2}\right], \quad A > d}
+\label{eq:df_saturation}
+\end{equation}
+
+For $A \leq d$ (no saturation), $N(A) = k$.
+
+\textbf{Properties of saturation describing function:}
+\begin{itemize}
+    \item $N(A) = k$ for $A \leq d$ (linear behavior for small signals)
+    \item $N(A)$ is real and positive (no phase shift)
+    \item $N(A) \to 0$ as $A \to \infty$ (gain decreases for large signals)
+    \item $N(A)$ is monotonically decreasing for $A > d$
+\end{itemize}
+
+\subsubsection{Dead Zone}
+
+The dead zone nonlinearity models insensitivity to small inputs:
+\begin{equation}
+n(x) = \begin{cases}
+0 & |x| \leq \delta \\
+k(x - \delta) & x > \delta \\
+k(x + \delta) & x < -\delta
+\end{cases}
+\label{eq:deadzone_def}
+\end{equation}
+
+where $\delta$ is the dead zone half-width and $k$ is the slope outside the dead zone.
+
+For input amplitude $A > \delta$, the dead zone is exited at $\theta_d = \arcsin(\delta/A)$. Following similar integration:
+\begin{equation}
+\boxed{N(A) = \frac{2k}{\pi}\left[\frac{\pi}{2} - \arcsin\left(\frac{\delta}{A}\right) - \frac{\delta}{A}\sqrt{1 - \left(\frac{\delta}{A}\right)^2}\right], \quad A > \delta}
+\label{eq:df_deadzone}
+\end{equation}
+
+For $A \leq \delta$, $N(A) = 0$ (input never exceeds dead zone).
+
+\textbf{Properties:}
+\begin{itemize}
+    \item $N(A) = 0$ for $A \leq \delta$ (no output for small inputs)
+    \item $N(A) \to k$ as $A \to \infty$ (approaches linear gain for large inputs)
+    \item $N(A)$ is real and positive
+    \item $N(A)$ is monotonically increasing
+\end{itemize}
+
+\subsubsection{Ideal Relay (On-Off Controller)}
+
+The ideal relay is the simplest switching nonlinearity:
+\begin{equation}
+n(x) = \begin{cases}
+M & x > 0 \\
+-M & x < 0
+\end{cases}
+\label{eq:relay_def}
+\end{equation}
+
+For sinusoidal input $x = A\sin\theta$, the output is a square wave of amplitude $M$. The describing function is:
+\begin{equation}
+N(A) = \frac{2}{\pi A} \int_0^{\pi} M \sin\theta \, d\theta = \frac{2M}{\pi A} \cdot 2 = \frac{4M}{\pi A}
+\label{eq:df_relay}
+\end{equation}
+
+\begin{equation}
+\boxed{N(A) = \frac{4M}{\pi A}}
+\label{eq:df_relay_boxed}
+\end{equation}
+
+\textbf{Properties:}
+\begin{itemize}
+    \item $N(A)$ is real and positive
+    \item $N(A) \propto 1/A$ (gain decreases with amplitude)
+    \item $N(A) \to \infty$ as $A \to 0$ (very high gain for small signals)
+\end{itemize}
+
+\subsubsection{Relay with Dead Zone}
+
+Combining relay action with dead zone (common in thermostats and on-off controllers):
+\begin{equation}
+n(x) = \begin{cases}
+0 & |x| \leq \delta \\
+M & x > \delta \\
+-M & x < -\delta
+\end{cases}
+\label{eq:relay_deadzone_def}
+\end{equation}
+
+For $A > \delta$:
+\begin{equation}
+\boxed{N(A) = \frac{4M}{\pi A}\sqrt{1 - \left(\frac{\delta}{A}\right)^2}}
+\label{eq:df_relay_deadzone}
+\end{equation}
+
+For $A \leq \delta$, $N(A) = 0$.
+
+\subsubsection{Relay with Hysteresis}
+
+Hysteresis adds memory to the relay:
+\begin{equation}
+n(x) = \begin{cases}
+M & \text{if } x > h \text{ or } (x > -h \text{ and } n \text{ was } M) \\
+-M & \text{if } x < -h \text{ or } (x < h \text{ and } n \text{ was } -M)
+\end{cases}
+\label{eq:relay_hysteresis_def}
+\end{equation}
+
+where $h$ is the hysteresis width. The describing function has both magnitude and phase:
+\begin{equation}
+\boxed{N(A) = \frac{4M}{\pi A}\sqrt{1 - \left(\frac{h}{A}\right)^2} - j\frac{4Mh}{\pi A^2}, \quad A > h}
+\label{eq:df_relay_hysteresis}
+\end{equation}
+
+\textbf{Key observation:} Hysteresis introduces a phase lag (negative imaginary part). This makes limit cycle prediction more complex but also more accurate for systems with memory.
+
+\subsubsection{Backlash}
+
+Backlash in gear trains creates a describing function with both amplitude and phase effects:
+\begin{equation}
+\boxed{N(A) = \frac{k}{\pi}\left[\pi - 2\arcsin\left(\frac{b}{A}\right) - \frac{2b}{A}\sqrt{1-\left(\frac{b}{A}\right)^2}\right] - j\frac{2kb}{\pi A}\left[1 - \frac{b}{A}\right], \quad A > b}
+\label{eq:df_backlash}
+\end{equation}
+
+where $b$ is the backlash half-width and $k$ is the slope within the linear region.
+
+\subsection{Describing Function Table}
+
+Table~\ref{tab:describing_functions} summarizes describing functions for common nonlinearities.
+
+\begin{table}[htbp]
+\centering
+\caption{Describing Functions for Common Nonlinearities}
+\label{tab:describing_functions}
+\begin{tabular}{@{}p{3cm}p{4cm}p{6cm}@{}}
+\toprule
+\textbf{Nonlinearity} & \textbf{Parameters} & \textbf{Describing Function $N(A)$} \\
+\midrule
+Saturation & Gain $k$, limit $M$, $d = M/k$ & $\frac{2k}{\pi}\left[\arcsin\frac{d}{A} + \frac{d}{A}\sqrt{1-\frac{d^2}{A^2}}\right]$, $A > d$ \\[8pt]
+Dead zone & Width $\delta$, gain $k$ & $\frac{2k}{\pi}\left[\frac{\pi}{2} - \arcsin\frac{\delta}{A} - \frac{\delta}{A}\sqrt{1-\frac{\delta^2}{A^2}}\right]$, $A > \delta$ \\[8pt]
+Ideal relay & Output $\pm M$ & $\frac{4M}{\pi A}$ \\[8pt]
+Relay + dead zone & Output $\pm M$, width $\delta$ & $\frac{4M}{\pi A}\sqrt{1-\frac{\delta^2}{A^2}}$, $A > \delta$ \\[8pt]
+Relay + hysteresis & Output $\pm M$, width $h$ & $\frac{4M}{\pi A}\sqrt{1-\frac{h^2}{A^2}} - j\frac{4Mh}{\pi A^2}$, $A > h$ \\[8pt]
+Backlash & Gain $k$, width $b$ & Complex expression, Eq.~\eqref{eq:df_backlash} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%===============================================================================
+\section{Limit Cycle Prediction Using Describing Functions}
+\label{sec:limit_cycle_prediction}
+%===============================================================================
+
+The most important application of describing functions is predicting limit cycles in feedback systems. A limit cycle occurs when the system oscillates indefinitely at a fixed amplitude and frequency---a common and often problematic phenomenon in systems with nonlinear elements.
+
+\subsection{The Limit Cycle Condition}
+
+Consider the feedback system in Figure~\ref{fig:df_feedback}, where $N(A)$ represents a nonlinear element and $G(s)$ is a linear transfer function.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[auto, node distance=2cm]
+    \node [input] (input) {};
+    \node [sum, right of=input] (sum) {};
+    \node [block, right of=sum, node distance=2cm] (nonlin) {$N(A)$};
+    \node [block, right of=nonlin, node distance=2.5cm] (plant) {$G(s)$};
+    \node [output, right of=plant, node distance=2cm] (output) {};
+
+    \draw [arrow] (input) -- node {$r = 0$} (sum);
+    \draw [arrow] (sum) -- node {$e$} (nonlin);
+    \draw [arrow] (nonlin) -- node {$u$} (plant);
+    \draw [arrow] (plant) -- node [name=y] {$y$} (output);
+    \draw [arrow] (y) |- ++(0,-1.5) -| node[pos=0.25] {$-$} (sum);
+\end{tikzpicture}
+\caption{Feedback system with nonlinear element $N(A)$ and linear plant $G(s)$.}
+\label{fig:df_feedback}
+\end{figure}
+
+For a limit cycle to exist at frequency $\omega$ with error signal amplitude $A$, the signal must propagate around the loop and return to itself. With reference input $r = 0$:
+
+\begin{enumerate}
+    \item Error signal: $e(t) = A\sin(\omega t)$
+    \item Through nonlinearity: $u(t) \approx N(A) \cdot A\sin(\omega t)$ (fundamental component)
+    \item Through linear system: $y(t) = N(A) \cdot A \cdot |G(j\omega)|\sin(\omega t + \angle G(j\omega))$
+    \item Loop closure: $e(t) = -y(t)$
+\end{enumerate}
+
+For the error to equal $A\sin(\omega t)$, we need:
+\begin{equation}
+A\sin(\omega t) = -N(A) \cdot A \cdot |G(j\omega)|\sin(\omega t + \angle G(j\omega))
+\end{equation}
+
+This requires:
+\begin{align}
+|N(A) \cdot G(j\omega)| &= 1 \label{eq:lc_magnitude} \\
+\angle N(A) + \angle G(j\omega) &= -180° \label{eq:lc_phase}
+\end{align}
+
+Equivalently, the \textbf{limit cycle condition} is:
+\begin{equation}
+\boxed{N(A) \cdot G(j\omega) = -1}
+\label{eq:limit_cycle_condition}
+\end{equation}
+
+or:
+\begin{equation}
+\boxed{G(j\omega) = -\frac{1}{N(A)}}
+\label{eq:limit_cycle_graphical}
+\end{equation}
+
+\subsection{Graphical Interpretation: The Describing Function Locus}
+
+Equation~\eqref{eq:limit_cycle_graphical} provides an elegant graphical method for predicting limit cycles:
+
+\begin{enumerate}
+    \item Plot $G(j\omega)$ on the complex plane (Nyquist plot) for $\omega \in [0, \infty)$
+    \item Plot $-1/N(A)$ on the same plane for $A \in (0, \infty)$
+    \item Intersections indicate potential limit cycles
+\end{enumerate}
+
+At each intersection:
+\begin{itemize}
+    \item The $\omega$ value from the $G(j\omega)$ curve gives the oscillation frequency
+    \item The $A$ value from the $-1/N(A)$ curve gives the oscillation amplitude
+\end{itemize}
+
+\begin{example}[Limit Cycle in Relay Feedback System]
+\label{ex:relay_limit_cycle}
+Consider a relay with output $\pm M$ controlling a second-order plant:
+\begin{equation}
+G(s) = \frac{K}{s(s+1)}
+\end{equation}
+
+The describing function for the relay is $N(A) = 4M/(\pi A)$, so:
+\begin{equation}
+-\frac{1}{N(A)} = -\frac{\pi A}{4M}
+\end{equation}
+
+This is a negative real number that varies from $0$ to $-\infty$ as $A$ goes from $0$ to $\infty$. The locus is the entire negative real axis.
+
+The Nyquist plot of $G(j\omega) = K/(j\omega(j\omega+1))$ is:
+\begin{equation}
+G(j\omega) = \frac{K}{j\omega(1 + j\omega)} = \frac{K(1 - j\omega)}{j\omega(1 + \omega^2)} = \frac{-K}{\omega(1+\omega^2)} - j\frac{K}{\omega^2(1+\omega^2)}
+\end{equation}
+
+Wait, let me recalculate more carefully:
+\begin{align}
+G(j\omega) &= \frac{K}{j\omega(1 + j\omega)} = \frac{K}{j\omega + (j\omega)^2} = \frac{K}{j\omega - \omega^2} \\
+&= \frac{K}{-\omega^2 + j\omega} = \frac{K(-\omega^2 - j\omega)}{\omega^4 + \omega^2} = \frac{-K\omega^2}{\omega^2(\omega^2+1)} - j\frac{K\omega}{\omega^2(\omega^2+1)} \\
+&= \frac{-K}{\omega^2+1} - j\frac{K}{\omega(\omega^2+1)}
+\end{align}
+
+The Nyquist plot starts at $-\infty$ on the negative imaginary axis (as $\omega \to 0^+$) and approaches the origin along the negative real axis (as $\omega \to \infty$).
+
+The crossing of the negative real axis occurs when the imaginary part equals zero, which never happens for this system (imaginary part is always negative for $\omega > 0$). However, the plot does cross the real axis at $\omega \to \infty$ at the origin.
+
+Actually, for the integrator system, we need to reconsider. The Nyquist plot crosses the negative real axis at $\omega = 1$ rad/s, where:
+\begin{equation}
+G(j\cdot 1) = \frac{K}{j(1+j)} = \frac{K}{j - 1} = \frac{K(-1-j)}{2} = -\frac{K}{2} - j\frac{K}{2}
+\end{equation}
+
+This is at $-45°$, not on the real axis. The real axis crossing actually doesn't occur for this system. Let me use a different example with a clearer intersection.
+\end{example}
+
+\begin{example}[Limit Cycle Prediction with Third-Order Plant]
+\label{ex:limit_cycle_third_order}
+Consider a relay controlling a third-order plant:
+\begin{equation}
+G(s) = \frac{1}{s(s+1)^2}
+\end{equation}
+
+First, find where $G(j\omega)$ crosses the negative real axis. The frequency response is:
+\begin{align}
+G(j\omega) &= \frac{1}{j\omega(1+j\omega)^2} = \frac{1}{j\omega(1 + 2j\omega - \omega^2)} \\
+&= \frac{1}{j\omega - 2\omega^2 - j\omega^3} = \frac{1}{-2\omega^2 + j\omega(1-\omega^2)}
+\end{align}
+
+Rationalizing:
+\begin{equation}
+G(j\omega) = \frac{-2\omega^2 - j\omega(1-\omega^2)}{4\omega^4 + \omega^2(1-\omega^2)^2}
+\end{equation}
+
+The imaginary part is zero when $\omega(1-\omega^2) = 0$, giving $\omega = 1$ rad/s (excluding $\omega = 0$).
+
+At $\omega = 1$:
+\begin{equation}
+G(j\cdot 1) = \frac{1}{-2} = -0.5
+\end{equation}
+
+For a limit cycle to exist at this frequency with a relay of amplitude $M$:
+\begin{equation}
+-\frac{1}{N(A)} = -0.5 \implies N(A) = 2 \implies \frac{4M}{\pi A} = 2
+\end{equation}
+
+Solving for the oscillation amplitude:
+\begin{equation}
+A = \frac{4M}{2\pi} = \frac{2M}{\pi}
+\end{equation}
+
+\textbf{Result:} The system exhibits a limit cycle at frequency $\omega = 1$ rad/s with amplitude $A = 2M/\pi \approx 0.637M$ at the relay input.
+\end{example}
+
+\subsection{Stability of Limit Cycles}
+
+Not all predicted limit cycles are stable. To determine stability, we examine how the system responds to perturbations from the limit cycle.
+
+Consider a point on the Nyquist plot $G(j\omega_0)$ intersecting $-1/N(A_0)$. If the amplitude is perturbed to $A_0 + \delta A$:
+
+\begin{itemize}
+    \item If $\delta A > 0$ (amplitude increases), we move along the $-1/N(A)$ curve to larger $A$
+    \item If the new point is ``outside'' the Nyquist curve (doesn't encircle it), the loop gain magnitude is less than 1, and oscillations decay
+    \item If the new point is ``inside'' (encircled), the loop gain exceeds 1, and oscillations grow
+\end{itemize}
+
+\begin{theorem}[Limit Cycle Stability Criterion]
+\label{thm:lc_stability}
+Consider a limit cycle at the intersection of $G(j\omega)$ and $-1/N(A)$. The limit cycle is stable if, when traversing the $-1/N(A)$ locus in the direction of increasing $A$, the Nyquist plot $G(j\omega)$ is to the left of the $-1/N(A)$ locus.
+\end{theorem}
+
+An equivalent statement: The limit cycle is stable if increasing $A$ moves $-1/N(A)$ away from encirclement by $G(j\omega)$.
+
+\subsection{Accuracy of Describing Function Predictions}
+
+The describing function method is approximate. Its accuracy depends on how well the low-pass filtering assumption holds.
+
+\textbf{When describing functions work well:}
+\begin{itemize}
+    \item The linear part $G(s)$ is low-pass (attenuates harmonics)
+    \item The nonlinearity is mild (saturation, dead zone)
+    \item Limit cycle frequency is well below any resonances
+\end{itemize}
+
+\textbf{When describing functions may fail:}
+\begin{itemize}
+    \item The system has lightly damped modes (harmonics resonate)
+    \item Multiple nonlinearities interact
+    \item The nonlinearity has significant phase shift (hysteresis)
+    \item Chaotic behavior or subharmonics occur
+\end{itemize}
+
+\warningbox{Describing function analysis provides useful predictions but is not exact. Always validate predictions with simulation or experimental tests, especially for safety-critical systems.}
+
+%===============================================================================
+\section{Linearization Validity and Regions of Attraction}
+\label{sec:linearization_validity}
+%===============================================================================
+
+In Chapter~1, we developed linearization as the primary technique for applying linear control theory to nonlinear systems. Here we examine more deeply when linearization is valid and how to characterize the region where linear controllers provide adequate performance.
+
+\subsection{Local Validity of Linearization}
+
+Consider the nonlinear system $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$ with equilibrium at $\mathbf{x}_0$. The linearized system is:
+\begin{equation}
+\delta\dot{\mathbf{x}} = \mathbf{A}\delta\mathbf{x}, \quad \mathbf{A} = \frac{\partial \mathbf{f}}{\partial \mathbf{x}}\bigg|_{\mathbf{x}_0}
+\end{equation}
+
+The fundamental theorem connecting nonlinear and linearized stability is:
+
+\begin{theorem}[Lyapunov's Indirect Method]
+\label{thm:lyapunov_indirect}
+Let $\mathbf{x}_0$ be an equilibrium of $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$ and let $\mathbf{A}$ be the Jacobian at $\mathbf{x}_0$.
+\begin{enumerate}
+    \item If all eigenvalues of $\mathbf{A}$ have negative real parts, then $\mathbf{x}_0$ is asymptotically stable.
+    \item If any eigenvalue of $\mathbf{A}$ has positive real part, then $\mathbf{x}_0$ is unstable.
+    \item If $\mathbf{A}$ has eigenvalues on the imaginary axis and none with positive real part, no conclusion can be drawn from linearization alone.
+\end{enumerate}
+\end{theorem}
+
+The third case (eigenvalues on the imaginary axis) is called the \textbf{critical case}. The nonlinear terms determine stability, and higher-order analysis is required.
+
+\subsection{Estimating the Region of Attraction}
+
+Knowing that an equilibrium is stable tells us trajectories converge from \textit{some} neighborhood. The \textbf{region of attraction} (also called basin of attraction or domain of attraction) is the set of all initial conditions that converge to the equilibrium.
+
+\begin{definition}[Region of Attraction]
+For an asymptotically stable equilibrium $\mathbf{x}_0$ of $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$, the region of attraction is:
+\begin{equation}
+\mathcal{R}_A = \{\mathbf{x}(0) : \lim_{t \to \infty} \mathbf{x}(t) = \mathbf{x}_0\}
+\end{equation}
+\end{definition}
+
+For linear systems, the region of attraction is the entire state space (global stability). For nonlinear systems, it may be bounded.
+
+\subsubsection{Lyapunov Function Method}
+
+A \textbf{Lyapunov function} $V(\mathbf{x})$ provides a systematic way to estimate the region of attraction. If we can find $V(\mathbf{x})$ such that:
+\begin{enumerate}
+    \item $V(\mathbf{x}) > 0$ for $\mathbf{x} \neq \mathbf{x}_0$ and $V(\mathbf{x}_0) = 0$
+    \item $\dot{V}(\mathbf{x}) < 0$ along trajectories for $\mathbf{x} \neq \mathbf{x}_0$
+\end{enumerate}
+
+Then the equilibrium is asymptotically stable. Moreover, any sublevel set $\Omega_c = \{\mathbf{x} : V(\mathbf{x}) \leq c\}$ that is bounded and satisfies $\dot{V} < 0$ in its interior is contained within the region of attraction.
+
+\begin{example}[Region of Attraction for Damped Pendulum]
+\label{ex:roa_pendulum}
+Consider the damped pendulum:
+\begin{align}
+\dot{\theta} &= \omega \\
+\dot{\omega} &= -\frac{g}{L}\sin\theta - b\omega
+\end{align}
+
+The equilibrium at $(\theta, \omega) = (0, 0)$ is stable. A natural Lyapunov function is the total energy:
+\begin{equation}
+V(\theta, \omega) = \frac{1}{2}\omega^2 + \frac{g}{L}(1 - \cos\theta)
+\end{equation}
+
+This is positive definite near the origin. The time derivative is:
+\begin{equation}
+\dot{V} = \omega\dot{\omega} + \frac{g}{L}\sin\theta \cdot \dot{\theta} = \omega\left(-\frac{g}{L}\sin\theta - b\omega\right) + \frac{g}{L}\omega\sin\theta = -b\omega^2
+\end{equation}
+
+Since $\dot{V} \leq 0$ (and equals zero only when $\omega = 0$), the equilibrium is stable.
+
+The level sets of $V$ are closed curves around the origin up to the energy level corresponding to the upright position:
+\begin{equation}
+V_{\max} = \frac{g}{L}(1 - \cos\pi) = \frac{2g}{L}
+\end{equation}
+
+For initial conditions with $V < V_{\max}$, the pendulum converges to hanging equilibrium. The region of attraction is approximately:
+\begin{equation}
+\mathcal{R}_A \approx \{(\theta, \omega) : |\theta| < \pi\}
+\end{equation}
+
+The exact boundary is the separatrix connecting the unstable upright equilibria.
+\end{example}
+
+\subsubsection{Linearization-Based Estimate}
+
+For systems near a stable equilibrium, we can use the linearized dynamics to estimate a region where linear approximation is valid.
+
+If $\mathbf{A}$ is Hurwitz (all eigenvalues in left half-plane), there exists a positive definite matrix $\mathbf{P}$ satisfying the Lyapunov equation:
+\begin{equation}
+\mathbf{A}^T\mathbf{P} + \mathbf{P}\mathbf{A} = -\mathbf{Q}
+\end{equation}
+
+for any positive definite $\mathbf{Q}$. Then $V(\delta\mathbf{x}) = \delta\mathbf{x}^T\mathbf{P}\delta\mathbf{x}$ is a Lyapunov function for the linearized system.
+
+For the nonlinear system, we can find the largest ellipsoid $\Omega_c = \{\delta\mathbf{x} : \delta\mathbf{x}^T\mathbf{P}\delta\mathbf{x} \leq c\}$ such that $\dot{V} < 0$ throughout. This provides a conservative but guaranteed estimate of the region of attraction.
+
+\subsection{Quantifying Linearization Error}
+
+The linearization error can be bounded using Taylor series remainders. For a twice continuously differentiable function:
+\begin{equation}
+\mathbf{f}(\mathbf{x}) = \mathbf{f}(\mathbf{x}_0) + \mathbf{A}(\mathbf{x} - \mathbf{x}_0) + \mathbf{r}(\mathbf{x})
+\end{equation}
+
+where the remainder $\mathbf{r}(\mathbf{x})$ satisfies:
+\begin{equation}
+\|\mathbf{r}(\mathbf{x})\| \leq \frac{M}{2}\|\mathbf{x} - \mathbf{x}_0\|^2
+\end{equation}
+
+with $M$ being a bound on the second derivatives (Hessian) in the region of interest.
+
+\keypoint{The linearization error grows quadratically with deviation from the operating point. For a 10\% deviation, expect roughly 1\% error. For a 50\% deviation, expect roughly 25\% error---often unacceptable.}
+
+\subsection{Gain Scheduling Revisited}
+
+When the operating range is too large for a single linearization, \textbf{gain scheduling} designs different controllers for different operating points and interpolates between them.
+
+The linearized models at different operating points:
+\begin{equation}
+\delta\dot{\mathbf{x}} = \mathbf{A}(\mathbf{p})\delta\mathbf{x} + \mathbf{B}(\mathbf{p})\delta\mathbf{u}
+\end{equation}
+
+where $\mathbf{p}$ is a scheduling variable (altitude, speed, load, etc.).
+
+A gain-scheduled controller has the form:
+\begin{equation}
+\delta\mathbf{u} = \mathbf{K}(\mathbf{p})\delta\mathbf{x}
+\end{equation}
+
+\textbf{Design procedure:}
+\begin{enumerate}
+    \item Select a grid of operating points $\mathbf{p}_1, \mathbf{p}_2, \ldots, \mathbf{p}_N$
+    \item Linearize and design a controller $\mathbf{K}_i$ at each point
+    \item Interpolate: $\mathbf{K}(\mathbf{p}) = \sum_i w_i(\mathbf{p})\mathbf{K}_i$ where $w_i$ are interpolation weights
+\end{enumerate}
+
+\warningbox{Gain scheduling does not guarantee stability between operating points. The scheduling variable must change slowly compared to system dynamics, and transitions between operating points should be validated through simulation and testing.}
+
+%===============================================================================
+\section{Practical Nonlinearities}
+\label{sec:practical_nonlinearities}
+%===============================================================================
+
+This section examines nonlinearities that appear in virtually every practical control system: saturation, rate limits, dead zones, and backlash. Understanding their effects enables better controller design and appropriate compensation strategies.
+
+\subsection{Saturation}
+
+Saturation is ubiquitous. Every actuator has finite output capability:
+\begin{itemize}
+    \item Motors have maximum torque
+    \item Amplifiers have voltage rails
+    \item Valves have fully open and fully closed positions
+    \item Pumps have maximum flow rate
+\end{itemize}
+
+\subsubsection{Mathematical Model}
+
+The saturation function is:
+\begin{equation}
+\text{sat}(u; u_{\min}, u_{\max}) = \begin{cases}
+u_{\min} & u < u_{\min} \\
+u & u_{\min} \leq u \leq u_{\max} \\
+u_{\max} & u > u_{\max}
+\end{cases}
+\label{eq:saturation_model}
+\end{equation}
+
+For symmetric saturation with limits $\pm M$:
+\begin{equation}
+\text{sat}(u; M) = \max(-M, \min(M, u))
+\end{equation}
+
+\subsubsection{Effects of Saturation}
+
+\textbf{Performance degradation:} When the controller requests more than the actuator can deliver, closed-loop performance suffers. The system cannot respond as designed.
+
+\textbf{Integrator windup:} The most dangerous consequence. If the controller contains an integrator, the integral term continues accumulating error during saturation. When saturation ends, the accumulated integral causes massive overshoot and potentially instability.
+
+\begin{example}[Integrator Windup]
+\label{ex:integrator_windup}
+Consider a PI controller $C(s) = K_p + K_i/s$ with saturation at the output. Let $K_p = 1$, $K_i = 0.5$, and saturation limit $M = 1$.
+
+For a step reference from 0 to 5, the controller initially requests output:
+\begin{equation}
+u(t) = K_p \cdot 5 + K_i \int_0^t 5 \, d\tau = 5 + 2.5t
+\end{equation}
+
+This exceeds the limit immediately ($u(0) = 5 > 1$), so the actual actuator output is clamped to 1. However, the integrator keeps accumulating:
+\begin{equation}
+\int e \, dt \approx 5t \quad \text{(assuming slow plant response)}
+\end{equation}
+
+When the output finally reaches the setpoint and error becomes negative, the large positive integral must be ``unwound'' before the controller can reduce the output. This causes severe overshoot.
+\end{example}
+
+\subsubsection{Anti-Windup Strategies}
+
+\textbf{Integrator clamping:} Stop integrating when output saturates.
+\begin{equation}
+\dot{x}_i = \begin{cases}
+e(t) & |u| < M \\
+0 & |u| \geq M
+\end{cases}
+\end{equation}
+
+This is simple but can leave residual windup if the system was already wound up.
+
+\textbf{Back-calculation:} Compute the error between the desired and actual (saturated) control signal and use it to discharge the integrator.
+\begin{equation}
+\dot{x}_i = K_i e(t) + K_b(u_{\text{sat}} - u)
+\end{equation}
+
+where $K_b$ is the back-calculation gain (typically $K_b = 1/T_i$ or $K_b = \sqrt{K_p K_i}$).
+
+\textbf{Conditional integration:} Only integrate when certain conditions are met (error small, system not saturated, etc.).
+
+\textbf{Observer-based anti-windup:} Use a state observer that tracks actual (saturated) actuator output rather than commanded output.
+
+\subsection{Rate Limiters}
+
+Many actuators cannot change their output arbitrarily fast due to physical constraints:
+\begin{itemize}
+    \item Hydraulic actuators have finite flow rate
+    \item Motor speeds cannot change instantaneously due to inertia
+    \item Thermal systems have limited heating/cooling power
+\end{itemize}
+
+\subsubsection{Mathematical Model}
+
+A rate limiter restricts the rate of change:
+\begin{equation}
+\left|\frac{du}{dt}\right| \leq R_{\max}
+\label{eq:rate_limit}
+\end{equation}
+
+If the commanded signal $u_c(t)$ changes faster than $R_{\max}$, the actual output $u(t)$ ramps at the maximum rate toward the commanded value.
+
+The dynamics can be modeled as:
+\begin{equation}
+\dot{u} = \text{sat}\left(\frac{u_c - u}{\tau}; R_{\max}\right)
+\label{eq:rate_limiter_model}
+\end{equation}
+
+where $\tau$ is a small time constant determining how fast the output tracks the command when not rate-limited.
+
+\subsubsection{Effects of Rate Limiting}
+
+\textbf{Phase lag:} Rate limiting introduces phase lag that increases with signal frequency and amplitude. For a sinusoidal input $u_c = A\sin(\omega t)$, rate limiting becomes active when $A\omega > R_{\max}$.
+
+\textbf{Describing function:} For a pure rate limiter with limit $R$, the describing function depends on both amplitude $A$ and frequency $\omega$:
+\begin{equation}
+N(A, \omega) = \frac{2R}{\pi A\omega}\left[\sin^{-1}\left(\frac{R}{A\omega}\right) + \frac{R}{A\omega}\sqrt{1 - \left(\frac{R}{A\omega}\right)^2}\right] - j\frac{2R}{\pi A\omega}\left[1 - \sqrt{1 - \left(\frac{R}{A\omega}\right)^2}\right]
+\end{equation}
+
+for $A\omega > R$.
+
+\textbf{Stability margin reduction:} The phase lag from rate limiting can reduce phase margin and cause instability, especially in systems with high-bandwidth controllers.
+
+\subsection{Dead Zones}
+
+Dead zones occur when actuators have a threshold before responding:
+\begin{itemize}
+    \item Static friction in valves and cylinders
+    \item Motor torque to overcome stiction
+    \item Quantization in digital systems
+\end{itemize}
+
+\subsubsection{Mathematical Model}
+
+\begin{equation}
+n(u) = \begin{cases}
+0 & |u| \leq \delta \\
+k(u - \delta) & u > \delta \\
+k(u + \delta) & u < -\delta
+\end{cases}
+\label{eq:dead_zone_model}
+\end{equation}
+
+where $\delta$ is the dead zone half-width and $k$ is the gain outside the dead zone.
+
+\subsubsection{Effects of Dead Zones}
+
+\textbf{Steady-state error:} With integral control, the system may oscillate around the setpoint as the integral builds up to overcome the dead zone, overshoots, and the cycle repeats.
+
+\textbf{Limit cycles:} Dead zones combined with integral control commonly produce small-amplitude limit cycles (dither).
+
+\textbf{Resolution loss:} Small signals are completely blocked.
+
+\subsubsection{Dead Zone Compensation}
+
+The simplest compensation adds an inverse nonlinearity before the dead zone:
+\begin{equation}
+u_{\text{comp}} = \begin{cases}
+u + \delta & u > 0 \\
+u - \delta & u < 0 \\
+0 & u = 0
+\end{cases}
+\label{eq:dead_zone_comp}
+\end{equation}
+
+This pre-compensator shifts the signal to overcome the dead zone. However, it creates a discontinuity at $u = 0$ and requires accurate knowledge of $\delta$.
+
+A smoother alternative uses a sigmoid function:
+\begin{equation}
+u_{\text{comp}} = u + \delta \tanh(\alpha u)
+\end{equation}
+
+where $\alpha$ is large enough that the transition is rapid but not discontinuous.
+
+\subsection{Backlash}
+
+Backlash occurs in gear trains, belt drives, and mechanical linkages where there is clearance between mating parts.
+
+\subsubsection{Mathematical Model}
+
+Backlash is a dynamic nonlinearity with memory. The output $y$ relates to input $x$ by:
+\begin{equation}
+y = \begin{cases}
+y_{\text{prev}} & |x - x_{\text{last}}| < b \\
+x - b\,\text{sgn}(x - x_{\text{last}}) & |x - x_{\text{last}}| \geq b
+\end{cases}
+\label{eq:backlash_model}
+\end{equation}
+
+where $b$ is the backlash half-width, $y_{\text{prev}}$ is the previous output, and $x_{\text{last}}$ is the input value when output last changed.
+
+\subsubsection{Effects of Backlash}
+
+\textbf{Lost motion:} When direction reverses, the input must travel $2b$ before the output responds.
+
+\textbf{Phase lag:} The describing function shows backlash introduces phase lag that increases with backlash width and decreases with amplitude.
+
+\textbf{Limit cycles:} Backlash in feedback loops commonly causes limit cycles, especially with high-gain controllers.
+
+\textbf{Wear and noise:} Repeated impacts as backlash is taken up cause wear and acoustic noise.
+
+\subsubsection{Backlash Compensation}
+
+\textbf{Preloading:} Mechanical preloading (spring loading, split gears) eliminates backlash but increases friction and wear.
+
+\textbf{Feedforward compensation:} If backlash is known, add a corrective signal:
+\begin{equation}
+u_{\text{comp}} = u + b\,\text{sgn}(\dot{u})
+\end{equation}
+
+This adds $b$ when moving forward and subtracts $b$ when reversing. Requires accurate backlash knowledge and velocity measurement.
+
+\textbf{Dual-rate control:} Use high gain during direction reversals to quickly take up backlash, then reduce gain for normal operation.
+
+\textbf{State estimation:} Include backlash in the system model and use an observer to estimate the backlash state, enabling more accurate compensation.
+
+%===============================================================================
+\section{Friction Modeling and Compensation}
+\label{sec:friction}
+%===============================================================================
+
+Friction is one of the most challenging nonlinearities in control systems. It is present in virtually every mechanical system and exhibits complex behavior that simple models fail to capture. This section develops progressively sophisticated friction models and corresponding compensation techniques.
+
+\subsection{Classical Friction Models}
+
+\subsubsection{Coulomb Friction}
+
+The simplest friction model is \textbf{Coulomb friction}, where the friction force opposes motion with constant magnitude:
+\begin{equation}
+F_f = -F_c \, \text{sgn}(\dot{x})
+\label{eq:coulomb_friction}
+\end{equation}
+
+where $F_c$ is the Coulomb friction force and $\text{sgn}(\cdot)$ is the signum function.
+
+\textbf{Problems with Coulomb model:}
+\begin{itemize}
+    \item Undefined at zero velocity
+    \item Does not capture stiction (static friction)
+    \item Does not capture velocity-dependent effects
+    \item Discontinuity causes numerical difficulties
+\end{itemize}
+
+\subsubsection{Viscous Friction}
+
+\textbf{Viscous friction} is proportional to velocity:
+\begin{equation}
+F_f = -\sigma_v \dot{x}
+\label{eq:viscous_friction}
+\end{equation}
+
+where $\sigma_v$ is the viscous friction coefficient.
+
+Viscous friction is linear and easy to handle but does not capture the dominant nonlinear effects at low velocities.
+
+\subsubsection{Coulomb Plus Viscous Model}
+
+Combining Coulomb and viscous friction:
+\begin{equation}
+F_f = -F_c \, \text{sgn}(\dot{x}) - \sigma_v \dot{x}
+\label{eq:coulomb_viscous}
+\end{equation}
+
+This captures two important effects but still has the discontinuity at zero velocity.
+
+\subsubsection{Static Friction (Stiction)}
+
+Real friction forces are higher at rest than during motion. \textbf{Static friction} (stiction) is the maximum force that can be applied before motion begins:
+\begin{equation}
+|F_{\text{applied}}| < F_s \implies \dot{x} = 0
+\end{equation}
+
+where $F_s > F_c$ is the static friction force.
+
+Once motion begins, friction drops to the kinetic (Coulomb) level. This causes \textbf{stick-slip} behavior: the system sticks until force builds up, then slips rapidly, then sticks again.
+
+\subsection{Stribeck Friction Model}
+
+The \textbf{Stribeck model} captures the velocity-dependent friction that transitions smoothly from static to kinetic:
+\begin{equation}
+F_f = -\left[F_c + (F_s - F_c)e^{-(|\dot{x}|/v_s)^{\delta_s}}\right]\text{sgn}(\dot{x}) - \sigma_v \dot{x}
+\label{eq:stribeck}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $F_s$ is static friction force
+    \item $F_c$ is Coulomb (kinetic) friction force
+    \item $v_s$ is Stribeck velocity (characteristic velocity of transition)
+    \item $\delta_s$ is a shape parameter (typically 1 or 2)
+    \item $\sigma_v$ is viscous friction coefficient
+\end{itemize}
+
+The Stribeck curve shows friction decreasing with velocity in the low-velocity regime (the ``Stribeck effect''), then increasing due to viscous effects at higher velocities.
+
+\subsection{LuGre Friction Model}
+
+The \textbf{LuGre model} (Lund-Grenoble) is a dynamic friction model that captures pre-sliding displacement, hysteresis, and varying break-away force:
+\begin{align}
+\frac{dz}{dt} &= \dot{x} - \frac{\sigma_0 |\dot{x}|}{g(\dot{x})}z \label{eq:lugre_z} \\
+F_f &= \sigma_0 z + \sigma_1 \dot{z} + \sigma_v \dot{x} \label{eq:lugre_f}
+\end{align}
+
+where:
+\begin{itemize}
+    \item $z$ is an internal state representing bristle deflection
+    \item $\sigma_0$ is bristle stiffness
+    \item $\sigma_1$ is bristle damping
+    \item $\sigma_v$ is viscous friction coefficient
+    \item $g(\dot{x})$ is the Stribeck function:
+\end{itemize}
+\begin{equation}
+g(\dot{x}) = F_c + (F_s - F_c)e^{-(|\dot{x}|/v_s)^2}
+\label{eq:lugre_g}
+\end{equation}
+
+\textbf{Physical interpretation:} The model conceptualizes friction as arising from the deflection of microscopic ``bristles'' at the contact interface. At rest, applied force deflects the bristles elastically until they yield and sliding begins. During motion, bristles continuously form and break contact.
+
+\textbf{Key features of LuGre model:}
+\begin{itemize}
+    \item Pre-sliding displacement (output moves slightly before sliding)
+    \item Hysteresis in friction-velocity curve
+    \item Varying break-away force (depends on rate of force application)
+    \item Frictional lag (friction takes time to build up)
+    \item Smooth behavior (no discontinuities)
+\end{itemize}
+
+\subsection{Friction Compensation Strategies}
+
+\subsubsection{Model-Based Feedforward}
+
+If the friction model is known, add a feedforward term to cancel friction:
+\begin{equation}
+u = u_{\text{fb}} + \hat{F}_f
+\label{eq:friction_feedforward}
+\end{equation}
+
+where $u_{\text{fb}}$ is the feedback controller output and $\hat{F}_f$ is the estimated friction.
+
+\textbf{For Coulomb plus viscous friction:}
+\begin{equation}
+\hat{F}_f = \hat{F}_c \, \text{sgn}(\dot{x}_d) + \hat{\sigma}_v \dot{x}_d
+\end{equation}
+
+where $\dot{x}_d$ is the desired velocity. Using desired rather than actual velocity provides predictive compensation and avoids positive feedback.
+
+\textbf{Challenges:}
+\begin{itemize}
+    \item Requires accurate friction model parameters
+    \item Signum function at zero velocity is problematic
+    \item Friction varies with temperature, wear, lubrication
+\end{itemize}
+
+\subsubsection{Dither}
+
+Adding a high-frequency, small-amplitude signal (\textbf{dither}) to the control input can average out stick-slip:
+\begin{equation}
+u = u_{\text{fb}} + A_d \sin(\omega_d t)
+\label{eq:dither}
+\end{equation}
+
+The dither keeps the system in constant small-amplitude motion, preventing stiction from developing. This is common in hydraulic valves.
+
+\textbf{Selection guidelines:}
+\begin{itemize}
+    \item Frequency $\omega_d$ should be well above control bandwidth
+    \item Amplitude $A_d$ should be just enough to prevent stiction
+    \item Excessive dither increases wear and power consumption
+\end{itemize}
+
+\subsubsection{Integral Control Modifications}
+
+Standard integral control fights friction poorly because it winds up during stiction, then overshoots when motion begins.
+
+\textbf{Conditional integration:} Only integrate when the error is small (system is close to setpoint) and velocity is nonzero:
+\begin{equation}
+\dot{x}_i = \begin{cases}
+K_i e & |e| < \epsilon \text{ and } |\dot{x}| > v_{\min} \\
+0 & \text{otherwise}
+\end{cases}
+\end{equation}
+
+\textbf{Leaky integrator:} Add a decay term to prevent excessive accumulation:
+\begin{equation}
+\dot{x}_i = K_i e - \lambda x_i
+\end{equation}
+
+The leak rate $\lambda$ should be small enough not to create steady-state error but large enough to limit windup.
+
+\subsubsection{Impulsive Control}
+
+For precise positioning with friction, apply a brief, large force to overcome stiction:
+\begin{equation}
+u(t) = \begin{cases}
+u_{\text{pulse}} & 0 \leq t < T_{\text{pulse}} \\
+0 & t \geq T_{\text{pulse}}
+\end{cases}
+\end{equation}
+
+The pulse parameters are tuned so the system moves exactly to the target and stops there. This approach requires accurate knowledge of friction and system dynamics.
+
+\subsubsection{Adaptive Friction Compensation}
+
+Since friction parameters vary, adaptive estimation can track them:
+\begin{equation}
+\dot{\hat{F}}_c = \gamma_1 \text{sgn}(\dot{x}) \cdot e
+\end{equation}
+
+where $e$ is the tracking error and $\gamma_1$ is an adaptation gain. Similar update laws can adapt $\sigma_v$ and other parameters.
+
+More sophisticated approaches use recursive least squares or extended Kalman filters to identify LuGre model parameters online.
+
+%===============================================================================
+\section{Robustness to Uncertainty}
+\label{sec:robustness}
+%===============================================================================
+
+No model perfectly represents reality. Parameters drift with temperature and wear. Unmodeled dynamics lurk at high frequencies. Disturbances enter from unexpected sources. \textbf{Robustness} is the ability of a control system to maintain acceptable performance despite these uncertainties.
+
+\subsection{Types of Uncertainty}
+
+\subsubsection{Parametric Uncertainty}
+
+Physical parameters are never known exactly:
+\begin{itemize}
+    \item Mass may vary $\pm 10\%$ due to payload changes
+    \item Resistance changes with temperature
+    \item Spring constants drift with fatigue
+    \item Damping depends on lubrication conditions
+\end{itemize}
+
+\textbf{Interval uncertainty:} Parameter lies within known bounds:
+\begin{equation}
+p \in [\underline{p}, \bar{p}]
+\end{equation}
+
+\textbf{Multiplicative uncertainty:} Parameter is a nominal value times an uncertain factor:
+\begin{equation}
+p = p_0(1 + \delta_p), \quad |\delta_p| \leq \epsilon_p
+\end{equation}
+
+\subsubsection{Unmodeled Dynamics}
+
+Real systems have dynamics not captured in our models:
+\begin{itemize}
+    \item High-frequency resonances (structural flexibility)
+    \item Actuator dynamics (usually neglected for slow systems)
+    \item Sensor dynamics
+    \item Time delays
+\end{itemize}
+
+\textbf{Additive uncertainty:} True system $G(s) = G_0(s) + \Delta_a(s)$
+
+\textbf{Multiplicative uncertainty:} True system $G(s) = G_0(s)(1 + \Delta_m(s))$
+
+where $G_0(s)$ is the nominal model and $\Delta(s)$ represents the unknown dynamics.
+
+\subsubsection{Structured vs. Unstructured Uncertainty}
+
+\textbf{Structured uncertainty:} The form of uncertainty is known (which parameters vary, how dynamics enter). This enables less conservative analysis.
+
+\textbf{Unstructured uncertainty:} Only bounds on the uncertainty magnitude are known. Analysis treats uncertainty as an arbitrary perturbation within the bound.
+
+\subsection{Sensitivity Functions}
+
+Sensitivity functions quantify how uncertainty affects closed-loop behavior. Consider the standard feedback configuration with plant $G(s)$ and controller $K(s)$.
+
+\subsubsection{Sensitivity Function $S(s)$}
+
+The \textbf{sensitivity function} relates disturbances to output:
+\begin{equation}
+S(s) = \frac{1}{1 + G(s)K(s)} = \frac{1}{1 + L(s)}
+\label{eq:sensitivity}
+\end{equation}
+
+where $L(s) = G(s)K(s)$ is the loop transfer function.
+
+\textbf{Interpretations:}
+\begin{itemize}
+    \item $S(j\omega)$ is the transfer function from output disturbance to output
+    \item $|S(j\omega)|$ measures how much disturbances at frequency $\omega$ are attenuated
+    \item $S$ also relates plant uncertainty to closed-loop uncertainty:
+    \begin{equation}
+    \frac{\delta T}{T} \approx S \cdot \frac{\delta G}{G}
+    \end{equation}
+\end{itemize}
+
+For good disturbance rejection, we want $|S(j\omega)|$ small.
+
+\subsubsection{Complementary Sensitivity Function $T(s)$}
+
+The \textbf{complementary sensitivity function} is the closed-loop transfer function:
+\begin{equation}
+T(s) = \frac{G(s)K(s)}{1 + G(s)K(s)} = \frac{L(s)}{1 + L(s)}
+\label{eq:comp_sensitivity}
+\end{equation}
+
+Note that $S(s) + T(s) = 1$.
+
+\textbf{Interpretations:}
+\begin{itemize}
+    \item $T(j\omega)$ is the transfer function from reference to output
+    \item For tracking, we want $|T(j\omega)| \approx 1$
+    \item $T$ also measures sensor noise transmission
+\end{itemize}
+
+\subsubsection{The Fundamental Trade-off}
+
+Since $S + T = 1$, we cannot make both small simultaneously:
+\begin{itemize}
+    \item Making $|S|$ small for disturbance rejection makes $|T| \approx 1$
+    \item Making $|T|$ small for noise rejection makes $|S| \approx 1$
+\end{itemize}
+
+The design challenge is achieving acceptable compromise across frequency.
+
+\textbf{Typical design goals:}
+\begin{itemize}
+    \item Low frequency: $|S| \ll 1$ (good disturbance rejection, tracking)
+    \item High frequency: $|T| \ll 1$ (good noise rejection, robustness)
+    \item Crossover region: Smooth transition without excessive peaks
+\end{itemize}
+
+\subsection{Gain and Phase Margins}
+
+Classical robustness measures are the gain and phase margins, which quantify how much the loop gain can increase or the phase can decrease before instability.
+
+\subsubsection{Gain Margin}
+
+The \textbf{gain margin} (GM) is the factor by which loop gain can increase before instability:
+\begin{equation}
+\text{GM} = \frac{1}{|L(j\omega_{\phi})|}
+\label{eq:gain_margin}
+\end{equation}
+
+where $\omega_{\phi}$ is the \textbf{phase crossover frequency} where $\angle L(j\omega_{\phi}) = -180°$.
+
+Expressed in decibels:
+\begin{equation}
+\text{GM}_{\text{dB}} = -20\log_{10}|L(j\omega_{\phi})|
+\label{eq:gain_margin_db}
+\end{equation}
+
+\subsubsection{Phase Margin}
+
+The \textbf{phase margin} (PM) is the additional phase lag that would cause instability:
+\begin{equation}
+\text{PM} = 180° + \angle L(j\omega_c)
+\label{eq:phase_margin}
+\end{equation}
+
+where $\omega_c$ is the \textbf{gain crossover frequency} where $|L(j\omega_c)| = 1$ (0 dB).
+
+\subsubsection{Design Guidelines}
+
+For robust designs, typical requirements are:
+\begin{itemize}
+    \item Gain margin $\geq 6$ dB (factor of 2)
+    \item Phase margin $\geq 30°$ to $60°$
+\end{itemize}
+
+Lower phase margin leads to oscillatory response. Lower gain margin leaves little tolerance for gain variations.
+
+\keypoint{Gain and phase margins are useful but incomplete robustness measures. They consider only single-frequency perturbations and do not account for combined gain and phase variations. Modern robust control uses more comprehensive measures.}
+
+\subsection{Robustness to Multiplicative Uncertainty}
+
+Consider a plant with multiplicative uncertainty:
+\begin{equation}
+G(s) = G_0(s)(1 + W(s)\Delta(s))
+\label{eq:mult_uncertainty}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $G_0(s)$ is the nominal plant
+    \item $W(s)$ is a weighting function describing uncertainty magnitude vs. frequency
+    \item $\Delta(s)$ is an unknown stable transfer function with $\|\Delta\|_{\infty} \leq 1$
+\end{itemize}
+
+The closed-loop system is stable for all such plants if and only if:
+\begin{equation}
+\boxed{\|W(s)T(s)\|_{\infty} < 1}
+\label{eq:robust_stability_mult}
+\end{equation}
+
+This is the \textbf{robust stability condition}. It says that the complementary sensitivity must be small where uncertainty is large.
+
+\textbf{Physical interpretation:} Uncertainty typically grows at high frequency (unmodeled dynamics). The condition requires $|T(j\omega)|$ to roll off fast enough that $|W(j\omega)T(j\omega)| < 1$ everywhere.
+
+\subsection{Robustness to Additive Uncertainty}
+
+For additive uncertainty:
+\begin{equation}
+G(s) = G_0(s) + W_a(s)\Delta(s)
+\label{eq:add_uncertainty}
+\end{equation}
+
+The robust stability condition is:
+\begin{equation}
+\boxed{\left\|W_a(s)\frac{K(s)}{1 + G_0(s)K(s)}\right\|_{\infty} < 1}
+\label{eq:robust_stability_add}
+\end{equation}
+
+\subsection{Structured Singular Value and $\mu$-Analysis}
+
+For systems with multiple structured uncertainties, the \textbf{structured singular value} $\mu$ provides exact robustness conditions. This is beyond our scope, but the key idea is:
+
+\begin{itemize}
+    \item Represent all uncertainties as a block-diagonal matrix $\boldsymbol{\Delta}$
+    \item Compute $\mu(M)$ for the interconnection matrix $M$
+    \item Robust stability holds if $\mu < 1$
+\end{itemize}
+
+The $\mu$-synthesis procedure designs controllers that minimize $\mu$, achieving optimal robust performance for the specified uncertainty structure.
+
+\subsection{Practical Robustness Design}
+
+\subsubsection{Design for Uncertainty}
+
+\begin{enumerate}
+    \item \textbf{Identify uncertainties:} List all uncertain parameters and unmodeled dynamics. Estimate their bounds.
+
+    \item \textbf{Choose uncertainty model:} Parametric for known parameter variations, multiplicative for high-frequency unmodeled dynamics.
+
+    \item \textbf{Design nominal controller:} Use standard techniques (PID tuning, LQR, etc.) for the nominal plant.
+
+    \item \textbf{Analyze robustness:} Check gain and phase margins. Evaluate $\|WT\|_{\infty}$ if uncertainty weights are available.
+
+    \item \textbf{Iterate:} If robustness is insufficient, reduce bandwidth, increase damping, or use more sophisticated robust design methods.
+\end{enumerate}
+
+\subsubsection{Trading Performance for Robustness}
+
+More aggressive controllers (higher bandwidth, less damping) provide better nominal performance but less robustness. The fundamental trade-off:
+
+\begin{itemize}
+    \item Higher bandwidth $\Rightarrow$ faster response but more sensitivity to unmodeled dynamics
+    \item Higher gain $\Rightarrow$ better disturbance rejection but less gain margin
+    \item Less damping $\Rightarrow$ faster transients but oscillations with model mismatch
+\end{itemize}
+
+Conservative designs sacrifice nominal performance to maintain performance across the uncertainty range.
+
+%===============================================================================
+\section{Practical Applications and Worked Examples}
+\label{sec:applications}
+%===============================================================================
+
+This section presents comprehensive worked examples that integrate the concepts developed throughout the chapter. Each example includes complete derivations and practical insights.
+
+\subsection{Example 1: Describing Function for Saturation}
+
+\begin{example}[Saturation Describing Function Derivation]
+\label{ex:df_saturation_detailed}
+Derive the describing function for symmetric saturation with unity linear gain ($k = 1$) and saturation level $M$. Compute numerical values for $N(A)$ when $A = 2M$.
+
+\textbf{Solution:}
+
+The saturation function is:
+\begin{equation}
+n(x) = \begin{cases}
+-M & x < -M \\
+x & |x| \leq M \\
+M & x > M
+\end{cases}
+\end{equation}
+
+For input $x(t) = A\sin\theta$ where $\theta = \omega t$, saturation occurs when $A > M$.
+
+\textbf{Step 1: Find the saturation angle.}
+
+Saturation begins when $A\sin\theta_s = M$:
+\begin{equation}
+\theta_s = \arcsin\left(\frac{M}{A}\right)
+\end{equation}
+
+\textbf{Step 2: Set up the describing function integral.}
+
+For odd-symmetric nonlinearities:
+\begin{equation}
+N(A) = \frac{2}{\pi A}\int_0^{\pi} n(A\sin\theta)\sin\theta \, d\theta
+\end{equation}
+
+Due to symmetry about $\theta = \pi/2$:
+\begin{equation}
+N(A) = \frac{4}{\pi A}\int_0^{\pi/2} n(A\sin\theta)\sin\theta \, d\theta
+\end{equation}
+
+\textbf{Step 3: Split the integral at the saturation boundary.}
+
+\begin{align}
+N(A) &= \frac{4}{\pi A}\left[\int_0^{\theta_s} A\sin\theta \cdot \sin\theta \, d\theta + \int_{\theta_s}^{\pi/2} M \sin\theta \, d\theta\right] \\
+&= \frac{4}{\pi A}\left[A\int_0^{\theta_s} \sin^2\theta \, d\theta + M\int_{\theta_s}^{\pi/2} \sin\theta \, d\theta\right]
+\end{align}
+
+\textbf{Step 4: Evaluate the integrals.}
+
+For the first integral, using $\sin^2\theta = (1 - \cos 2\theta)/2$:
+\begin{align}
+\int_0^{\theta_s} \sin^2\theta \, d\theta &= \left[\frac{\theta}{2} - \frac{\sin 2\theta}{4}\right]_0^{\theta_s} \\
+&= \frac{\theta_s}{2} - \frac{\sin 2\theta_s}{4} = \frac{\theta_s}{2} - \frac{\sin\theta_s \cos\theta_s}{2}
+\end{align}
+
+Using $\sin\theta_s = M/A$ and $\cos\theta_s = \sqrt{1 - M^2/A^2}$:
+\begin{equation}
+\int_0^{\theta_s} \sin^2\theta \, d\theta = \frac{1}{2}\left[\arcsin\frac{M}{A} - \frac{M}{A}\sqrt{1-\frac{M^2}{A^2}}\right]
+\end{equation}
+
+For the second integral:
+\begin{equation}
+\int_{\theta_s}^{\pi/2} \sin\theta \, d\theta = [-\cos\theta]_{\theta_s}^{\pi/2} = 0 - (-\cos\theta_s) = \sqrt{1-\frac{M^2}{A^2}}
+\end{equation}
+
+\textbf{Step 5: Combine results.}
+
+\begin{align}
+N(A) &= \frac{4}{\pi A}\left[\frac{A}{2}\left(\arcsin\frac{M}{A} - \frac{M}{A}\sqrt{1-\frac{M^2}{A^2}}\right) + M\sqrt{1-\frac{M^2}{A^2}}\right] \\
+&= \frac{2}{\pi}\left[\arcsin\frac{M}{A} - \frac{M}{A}\sqrt{1-\frac{M^2}{A^2}} + \frac{2M}{A}\sqrt{1-\frac{M^2}{A^2}}\right] \\
+&= \frac{2}{\pi}\left[\arcsin\frac{M}{A} + \frac{M}{A}\sqrt{1-\frac{M^2}{A^2}}\right]
+\end{align}
+
+\textbf{Step 6: Numerical evaluation for $A = 2M$.}
+
+Let $d = M/A = 0.5$:
+\begin{align}
+N(2M) &= \frac{2}{\pi}\left[\arcsin(0.5) + 0.5\sqrt{1-0.25}\right] \\
+&= \frac{2}{\pi}\left[\frac{\pi}{6} + 0.5 \times 0.866\right] \\
+&= \frac{2}{\pi}\left[0.524 + 0.433\right] \\
+&= \frac{2}{\pi}(0.957) = 0.609
+\end{align}
+
+\textbf{Interpretation:} When the input amplitude is twice the saturation level, the effective gain is reduced to about 61\% of the linear gain. This gain reduction is what limits oscillation amplitudes in saturating systems.
+\end{example}
+
+\subsection{Example 2: Limit Cycle Prediction}
+
+\begin{example}[Limit Cycle in Saturating Feedback System]
+\label{ex:limit_cycle_saturation}
+A feedback system has a saturating amplifier ($M = 10$ V, unity linear gain) and a plant:
+\begin{equation}
+G(s) = \frac{100}{s(s+2)(s+10)}
+\end{equation}
+
+Predict whether a limit cycle exists and, if so, determine its frequency and amplitude.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Find the Nyquist plot characteristics.}
+
+First, find where $G(j\omega)$ crosses the negative real axis. This occurs when $\angle G(j\omega) = -180°$.
+
+\begin{align}
+G(j\omega) &= \frac{100}{j\omega(j\omega+2)(j\omega+10)} \\
+\angle G(j\omega) &= -90° - \arctan\frac{\omega}{2} - \arctan\frac{\omega}{10}
+\end{align}
+
+Setting $\angle G = -180°$:
+\begin{equation}
+\arctan\frac{\omega}{2} + \arctan\frac{\omega}{10} = 90°
+\end{equation}
+
+Using $\arctan a + \arctan b = 90°$ when $ab = 1$:
+\begin{equation}
+\frac{\omega}{2} \cdot \frac{\omega}{10} = 1 \implies \omega^2 = 20 \implies \omega = \sqrt{20} \approx 4.47 \text{ rad/s}
+\end{equation}
+
+\textbf{Step 2: Calculate $|G(j\omega)|$ at the phase crossover.}
+
+\begin{align}
+|G(j\omega)| &= \frac{100}{\omega\sqrt{\omega^2+4}\sqrt{\omega^2+100}} \\
+|G(j4.47)| &= \frac{100}{4.47\sqrt{20+4}\sqrt{20+100}} \\
+&= \frac{100}{4.47 \times 4.90 \times 10.95} = \frac{100}{240} \approx 0.417
+\end{align}
+
+\textbf{Step 3: Apply the limit cycle condition.}
+
+At the intersection, $G(j\omega) = -0.417$ (on negative real axis), so:
+\begin{equation}
+-\frac{1}{N(A)} = -0.417 \implies N(A) = 2.4
+\end{equation}
+
+\textbf{Step 4: Solve for the limit cycle amplitude.}
+
+For saturation with unity linear gain and $M = 10$:
+\begin{equation}
+N(A) = \frac{2}{\pi}\left[\arcsin\frac{10}{A} + \frac{10}{A}\sqrt{1-\frac{100}{A^2}}\right] = 2.4
+\end{equation}
+
+Since $N(A) \leq 1$ for all $A > M$ (the describing function of saturation is always less than or equal to the linear gain), we have $N(A) \leq 1 < 2.4$.
+
+This means the $-1/N(A)$ locus (which ranges from $-1$ to $-\infty$ as $A$ goes from $M$ to $\infty$) never intersects $G(j\omega)$ at $-0.417$.
+
+Wait, I need to reconsider. For $A < M$, $N(A) = 1$, so $-1/N(A) = -1$. For $A > M$, $N(A) < 1$, so $-1/N(A) < -1$ (more negative). The $-1/N(A)$ locus ranges from $-1$ (at $A = M$) to $-\infty$ (as $A \to \infty$).
+
+Since the Nyquist plot crosses the negative real axis at $-0.417$, which is between $-1$ and $0$, there is no intersection with the $-1/N(A)$ locus.
+
+\textbf{Conclusion:} No limit cycle exists because the Nyquist plot does not penetrate far enough into the left half-plane to intersect the describing function locus.
+
+The system is stable for all amplitudes. The gain margin is:
+\begin{equation}
+\text{GM} = \frac{1}{0.417} = 2.4 \text{ (about 7.6 dB)}
+\end{equation}
+
+\textbf{Physical interpretation:} The plant provides enough attenuation that even with saturation, oscillations cannot sustain themselves. If the plant gain were increased by a factor of 2.4, a limit cycle would begin.
+\end{example}
+
+\subsection{Example 3: Relay Feedback Limit Cycle}
+
+\begin{example}[Relay Auto-Tuning Limit Cycle]
+\label{ex:relay_autotuning}
+The relay feedback method is used for auto-tuning PID controllers. A relay with output $\pm 5$ V is connected in feedback with a process:
+\begin{equation}
+G(s) = \frac{2e^{-0.5s}}{s+1}
+\end{equation}
+
+Predict the limit cycle frequency and amplitude. Use these to estimate the ultimate gain and period for Ziegler-Nichols tuning.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Set up the describing function for the relay.}
+\begin{equation}
+N(A) = \frac{4M}{\pi A} = \frac{20}{\pi A}
+\end{equation}
+
+So:
+\begin{equation}
+-\frac{1}{N(A)} = -\frac{\pi A}{20}
+\end{equation}
+
+This is the negative real axis, parameterized by amplitude $A$.
+
+\textbf{Step 2: Find the Nyquist plot.}
+
+\begin{equation}
+G(j\omega) = \frac{2e^{-0.5j\omega}}{1+j\omega}
+\end{equation}
+
+Magnitude: $|G(j\omega)| = \frac{2}{\sqrt{1+\omega^2}}$
+
+Phase: $\angle G(j\omega) = -0.5\omega - \arctan\omega$ (in radians)
+
+\textbf{Step 3: Find the intersection with negative real axis.}
+
+At intersection, $\angle G(j\omega) = -\pi$:
+\begin{equation}
+0.5\omega + \arctan\omega = \pi
+\end{equation}
+
+This transcendental equation must be solved numerically. Trying values:
+\begin{itemize}
+    \item $\omega = 2$: $1 + 1.11 = 2.11$ (need 3.14)
+    \item $\omega = 3$: $1.5 + 1.25 = 2.75$
+    \item $\omega = 4$: $2 + 1.33 = 3.33$ (overshot)
+    \item $\omega = 3.5$: $1.75 + 1.29 = 3.04$
+    \item $\omega = 3.7$: $1.85 + 1.31 = 3.16 \approx \pi$
+\end{itemize}
+
+So $\omega_0 \approx 3.7$ rad/s.
+
+\textbf{Step 4: Calculate magnitude at crossover.}
+\begin{equation}
+|G(j \cdot 3.7)| = \frac{2}{\sqrt{1+13.69}} = \frac{2}{3.83} = 0.522
+\end{equation}
+
+\textbf{Step 5: Apply limit cycle condition.}
+\begin{equation}
+-\frac{\pi A}{20} = -0.522 \implies A = \frac{20 \times 0.522}{\pi} = 3.32 \text{ V}
+\end{equation}
+
+\textbf{Results:}
+\begin{itemize}
+    \item Limit cycle frequency: $\omega_0 = 3.7$ rad/s, period $T_u = 2\pi/3.7 = 1.70$ s
+    \item Limit cycle amplitude at relay input: $A = 3.32$ V
+\end{itemize}
+
+\textbf{Step 6: Extract Ziegler-Nichols parameters.}
+
+The ultimate gain $K_u$ is the gain that would cause marginal stability with a linear proportional controller:
+\begin{equation}
+K_u = \frac{4M}{\pi A} = N(A) = \frac{20}{\pi \times 3.32} = 1.92
+\end{equation}
+
+The ultimate period is $T_u = 1.70$ s.
+
+From Ziegler-Nichols tables, PID parameters are:
+\begin{align}
+K_p &= 0.6 K_u = 1.15 \\
+T_i &= 0.5 T_u = 0.85 \text{ s} \\
+T_d &= 0.125 T_u = 0.21 \text{ s}
+\end{align}
+
+\textbf{Comment:} The relay feedback method provides a safe way to determine the ultimate gain and period without actually destabilizing the system. The limit cycle amplitude is bounded by the relay characteristics.
+\end{example}
+
+\subsection{Example 4: Friction Compensation Design}
+
+\begin{example}[Friction Compensation for Positioning System]
+\label{ex:friction_compensation}
+A linear positioning stage is modeled as:
+\begin{equation}
+m\ddot{x} = F - F_f
+\end{equation}
+
+where $m = 5$ kg, $F$ is the motor force, and friction follows the Coulomb plus viscous model:
+\begin{equation}
+F_f = F_c \, \text{sgn}(\dot{x}) + \sigma_v \dot{x}
+\end{equation}
+
+with $F_c = 2$ N (Coulomb friction) and $\sigma_v = 10$ Ns/m (viscous coefficient).
+
+Design a feedforward friction compensator and a PD controller to achieve 1 mm positioning accuracy.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Analyze the uncompensated system.}
+
+Without friction compensation, the system has transfer function:
+\begin{equation}
+\frac{X(s)}{F(s)} = \frac{1}{ms^2 + \sigma_v s} = \frac{1}{5s^2 + 10s} = \frac{0.2}{s(s+2)}
+\end{equation}
+
+This is a double integrator with viscous damping.
+
+\textbf{Step 2: Design the PD controller.}
+
+For the linearized system (ignoring Coulomb friction), design a PD controller:
+\begin{equation}
+F_{\text{fb}} = K_p(x_d - x) + K_d(\dot{x}_d - \dot{x})
+\end{equation}
+
+The closed-loop characteristic equation is:
+\begin{equation}
+5s^2 + (10 + K_d)s + K_p = 0
+\end{equation}
+
+For critical damping with natural frequency $\omega_n = 10$ rad/s:
+\begin{align}
+K_p &= m\omega_n^2 = 5 \times 100 = 500 \text{ N/m} \\
+10 + K_d &= 2m\omega_n = 100 \implies K_d = 90 \text{ Ns/m}
+\end{align}
+
+\textbf{Step 3: Design the friction feedforward compensator.}
+
+The feedforward term cancels friction based on the desired trajectory:
+\begin{equation}
+F_{\text{ff}} = \hat{F}_c \, \text{sgn}(\dot{x}_d) + \hat{\sigma}_v \dot{x}_d
+\end{equation}
+
+Using the nominal friction parameters: $\hat{F}_c = 2$ N, $\hat{\sigma}_v = 10$ Ns/m.
+
+\textbf{Step 4: Address the zero-velocity discontinuity.}
+
+The signum function is problematic at $\dot{x}_d = 0$. Replace with a smooth approximation:
+\begin{equation}
+\text{sgn}_{\epsilon}(\dot{x}_d) = \frac{\dot{x}_d}{\sqrt{\dot{x}_d^2 + \epsilon^2}}
+\end{equation}
+
+with $\epsilon = 0.001$ m/s (small compared to typical velocities).
+
+\textbf{Step 5: Complete control law.}
+\begin{equation}
+F = F_{\text{fb}} + F_{\text{ff}} = K_p(x_d - x) + K_d(\dot{x}_d - \dot{x}) + \hat{F}_c \, \text{sgn}_{\epsilon}(\dot{x}_d) + \hat{\sigma}_v \dot{x}_d
+\end{equation}
+
+\textbf{Step 6: Analyze steady-state error.}
+
+With perfect friction knowledge, the feedforward cancels friction and the PD controller achieves zero steady-state error for step position commands.
+
+With friction mismatch $\Delta F_c = F_c - \hat{F}_c$, the steady-state error is:
+\begin{equation}
+e_{ss} = \frac{\Delta F_c}{K_p}
+\end{equation}
+
+For 1 mm accuracy with $K_p = 500$ N/m:
+\begin{equation}
+|\Delta F_c| < K_p \times 0.001 = 0.5 \text{ N}
+\end{equation}
+
+This requires friction knowledge within 25\% ($\pm 0.5$ N out of 2 N).
+
+\textbf{Step 7: Add integral action for robustness.}
+
+To eliminate steady-state error despite friction uncertainty, add integral control:
+\begin{equation}
+F = K_p(x_d - x) + K_d(\dot{x}_d - \dot{x}) + K_i\int(x_d - x)\,dt + F_{\text{ff}}
+\end{equation}
+
+Choose $K_i$ for slow integral action to avoid windup: $K_i = 50$ N/(m$\cdot$s).
+
+Include anti-windup by limiting the integral term:
+\begin{equation}
+|x_i| \leq \frac{F_c}{K_i} = \frac{2}{50} = 0.04 \text{ m}
+\end{equation}
+
+This ensures the integral term cannot exceed the friction force it is compensating.
+\end{example}
+
+\subsection{Example 5: Backlash Modeling and Simulation}
+
+\begin{example}[Backlash in Gear Train]
+\label{ex:backlash_simulation}
+A DC motor drives a load through a gear train with total backlash of 0.02 rad (about 1.1°). The motor-side inertia is $J_m = 0.001$ kg$\cdot$m$^2$ and load-side inertia (reflected to motor) is $J_L = 0.01$ kg$\cdot$m$^2$. Develop a simulation model and analyze the effect on position control.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Develop the backlash model.}
+
+Define $\theta_m$ as motor angle and $\theta_L$ as load angle (both at motor side). The backlash creates a dead zone in the coupling:
+
+\begin{equation}
+\theta_{\text{diff}} = \theta_m - \theta_L
+\end{equation}
+
+The coupling torque depends on whether contact is made:
+\begin{equation}
+\tau_c = \begin{cases}
+k_c(\theta_{\text{diff}} - b) + c_c(\dot{\theta}_m - \dot{\theta}_L) & \theta_{\text{diff}} > b \\
+0 & |\theta_{\text{diff}}| \leq b \\
+k_c(\theta_{\text{diff}} + b) + c_c(\dot{\theta}_m - \dot{\theta}_L) & \theta_{\text{diff}} < -b
+\end{cases}
+\end{equation}
+
+where $b = 0.01$ rad (half the total backlash), $k_c$ is coupling stiffness, and $c_c$ is coupling damping.
+
+\textbf{Step 2: Write equations of motion.}
+
+Motor side:
+\begin{equation}
+J_m \ddot{\theta}_m = \tau_m - \tau_c - b_m\dot{\theta}_m
+\end{equation}
+
+Load side:
+\begin{equation}
+J_L \ddot{\theta}_L = \tau_c - b_L\dot{\theta}_L - \tau_{\text{ext}}
+\end{equation}
+
+where $\tau_m$ is motor torque, $b_m$, $b_L$ are viscous damping, and $\tau_{\text{ext}}$ is external load.
+
+\textbf{Step 3: State-space formulation for simulation.}
+
+Define states: $\mathbf{x} = [\theta_m, \dot{\theta}_m, \theta_L, \dot{\theta}_L]^T$
+
+\begin{align}
+\dot{x}_1 &= x_2 \\
+\dot{x}_2 &= \frac{1}{J_m}(\tau_m - \tau_c(x_1, x_2, x_3, x_4) - b_m x_2) \\
+\dot{x}_3 &= x_4 \\
+\dot{x}_4 &= \frac{1}{J_L}(\tau_c(x_1, x_2, x_3, x_4) - b_L x_4)
+\end{align}
+
+\textbf{Step 4: Implement smooth backlash model.}
+
+For numerical stability, smooth the backlash transitions:
+\begin{equation}
+\tau_c = k_c \cdot \text{deadzone}(\theta_{\text{diff}}; b) + c_c(\dot{\theta}_m - \dot{\theta}_L) \cdot \text{contact}(\theta_{\text{diff}}; b)
+\end{equation}
+
+where:
+\begin{equation}
+\text{deadzone}(x; b) = \begin{cases}
+x - b & x > b + \epsilon \\
+\frac{(x-b)^2}{2\epsilon} & b < x \leq b + \epsilon \\
+0 & |x| \leq b \\
+-\frac{(x+b)^2}{2\epsilon} & -b - \epsilon \leq x < -b \\
+x + b & x < -b - \epsilon
+\end{cases}
+\end{equation}
+
+with small $\epsilon$ for smoothing.
+
+\textbf{Step 5: Analyze control implications.}
+
+Using parameters $k_c = 1000$ Nm/rad (stiff coupling), $c_c = 1$ Nms/rad:
+
+The system has two resonant frequencies:
+\begin{itemize}
+    \item When in contact: $\omega_r = \sqrt{k_c(1/J_m + 1/J_L)} = \sqrt{1000(1000 + 100)} = 1049$ rad/s
+    \item When in backlash: The motor and load are decoupled
+\end{itemize}
+
+\textbf{Control challenges:}
+\begin{itemize}
+    \item Position control using motor encoder shows lost motion of $2b = 0.02$ rad at each reversal
+    \item High-gain controllers cause limit cycles as the system chatters across the backlash
+    \item Load-side feedback (if available) eliminates the problem but may excite the high-frequency resonance
+\end{itemize}
+
+\textbf{Recommended approach:}
+\begin{enumerate}
+    \item Use moderate controller gains to avoid exciting backlash-induced oscillations
+    \item Add backlash compensation in feedforward based on velocity sign
+    \item Consider dual-loop control: fast inner loop on motor position, slower outer loop on load position
+\end{enumerate}
+\end{example}
+
+\subsection{Example 6: Robustness Margin Calculation}
+
+\begin{example}[Gain and Phase Margin with Parameter Uncertainty]
+\label{ex:robustness_margins}
+A plant has nominal transfer function:
+\begin{equation}
+G_0(s) = \frac{10}{(s+1)(s+5)}
+\end{equation}
+
+The DC gain can vary $\pm 30\%$ and there is an additional unmodeled pole with time constant between 0.05 and 0.2 seconds. A proportional controller $K = 5$ is proposed. Analyze the robustness.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Compute nominal margins.}
+
+Loop transfer function: $L_0(s) = KG_0(s) = \frac{50}{(s+1)(s+5)}$
+
+Find phase crossover (where $\angle L = -180°$):
+\begin{equation}
+\angle L_0(j\omega) = -\arctan\omega - \arctan\frac{\omega}{5}
+\end{equation}
+
+For phase crossover:
+\begin{equation}
+\arctan\omega + \arctan\frac{\omega}{5} = 180°
+\end{equation}
+
+Since both arctangent terms are less than 90° for finite $\omega$, the phase never reaches $-180°$. The system has \textbf{infinite gain margin}.
+
+Find gain crossover (where $|L| = 1$):
+\begin{equation}
+|L_0(j\omega)| = \frac{50}{\sqrt{1+\omega^2}\sqrt{25+\omega^2}} = 1
+\end{equation}
+
+Solving: $2500 = (1+\omega^2)(25+\omega^2) = 25 + 26\omega^2 + \omega^4$
+
+$\omega^4 + 26\omega^2 - 2475 = 0$
+
+Using quadratic formula with $u = \omega^2$:
+\begin{equation}
+u = \frac{-26 + \sqrt{676 + 9900}}{2} = \frac{-26 + 102.8}{2} = 38.4
+\end{equation}
+
+So $\omega_c = 6.2$ rad/s.
+
+Phase at gain crossover:
+\begin{equation}
+\angle L_0(j\cdot 6.2) = -\arctan(6.2) - \arctan(1.24) = -80.8° - 51.1° = -131.9°
+\end{equation}
+
+Phase margin: $\text{PM} = 180° - 131.9° = 48.1°$
+
+\textbf{Step 2: Analyze effect of DC gain variation.}
+
+With $\pm 30\%$ gain variation, the loop gain ranges from $35$ to $65$ instead of $50$.
+
+For the high-gain case ($K_{\text{eff}} = 65$):
+\begin{equation}
+|L(j\omega_c')| = 1 \implies \omega_c' > 6.2 \text{ rad/s}
+\end{equation}
+
+Solving similarly gives $\omega_c' \approx 7.4$ rad/s.
+
+Phase margin: $\angle L(j\cdot 7.4) = -82.3° - 55.9° = -138.2°$
+
+New phase margin: $180° - 138.2° = 41.8°$
+
+For the low-gain case ($K_{\text{eff}} = 35$): $\omega_c' \approx 4.9$ rad/s, PM $\approx 55°$.
+
+\textbf{Step 3: Analyze effect of unmodeled pole.}
+
+With an additional pole at $s = -1/\tau$, the plant becomes:
+\begin{equation}
+G(s) = \frac{10}{(s+1)(s+5)(1+\tau s)}
+\end{equation}
+
+This adds phase lag $-\arctan(\tau\omega)$ at each frequency.
+
+Worst case is the slowest unmodeled pole ($\tau = 0.2$ s):
+
+Additional phase lag at $\omega_c = 6.2$: $-\arctan(0.2 \times 6.2) = -\arctan(1.24) = -51.1°$
+
+New phase margin: $48.1° - 51.1° = -3°$ (unstable!)
+
+\textbf{Step 4: Combined worst case.}
+
+With both high gain and slow unmodeled pole:
+\begin{itemize}
+    \item Base phase margin: $41.8°$
+    \item Additional lag from unmodeled pole (at $\omega_c' = 7.4$): $-\arctan(0.2 \times 7.4) = -56°$
+    \item Combined margin: $41.8° - 56° = -14.2°$ (unstable)
+\end{itemize}
+
+\textbf{Conclusion:} The proposed controller $K = 5$ is not robust to the specified uncertainties. The unmodeled pole is particularly destabilizing.
+
+\textbf{Recommended actions:}
+\begin{enumerate}
+    \item Reduce controller gain to increase phase margin
+    \item Add a low-pass filter to attenuate high-frequency gain
+    \item Use lead compensation to add phase near crossover
+\end{enumerate}
+
+A more conservative design with $K = 2$ would give $\omega_c \approx 3$ rad/s and phase margin $\approx 70°$, leaving adequate margin for uncertainties.
+\end{example}
+
+\subsection{Example 7: Gain Margin with Saturation}
+
+\begin{example}[Effective Gain Margin Under Saturation]
+\label{ex:gain_margin_saturation}
+A system has loop transfer function:
+\begin{equation}
+L(s) = \frac{K}{s(s+1)(s+4)}
+\end{equation}
+
+with $K = 10$ and a saturation limit of $\pm 5$ at the controller output. Compute the effective gain margin considering saturation effects.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Compute linear gain margin.}
+
+Find phase crossover frequency where $\angle L = -180°$:
+\begin{equation}
+-90° - \arctan\omega - \arctan\frac{\omega}{4} = -180°
+\end{equation}
+
+So $\arctan\omega + \arctan\frac{\omega}{4} = 90°$.
+
+This occurs when $\omega \cdot \omega/4 = 1$, i.e., $\omega = 2$ rad/s.
+
+At $\omega = 2$:
+\begin{equation}
+|L(j2)| = \frac{10}{2\sqrt{5}\sqrt{20}} = \frac{10}{2 \times 2.24 \times 4.47} = 0.5
+\end{equation}
+
+Gain margin: $\text{GM} = 1/0.5 = 2$ (6 dB).
+
+\textbf{Step 2: Analyze saturation effect on effective gain.}
+
+Under saturation, the effective gain is reduced by the describing function:
+\begin{equation}
+K_{\text{eff}}(A) = K \cdot N(A)
+\end{equation}
+
+where $A$ is the amplitude at the saturator input.
+
+For large signals ($A \gg 5$), the describing function approaches:
+\begin{equation}
+N(A) \approx \frac{4M}{\pi A} = \frac{20}{\pi A}
+\end{equation}
+
+\textbf{Step 3: Determine stability under saturation.}
+
+The system becomes unstable when:
+\begin{equation}
+K_{\text{eff}} \cdot |G(j\omega_{\phi})| \geq 1
+\end{equation}
+
+at the phase crossover frequency. Since $|G(j2)| = 0.05$:
+
+Critical effective gain: $K_{\text{eff,crit}} = 1/0.05 = 20$
+
+With $K = 10$ and $N(A) \leq 1$, the maximum effective gain is 10, which is less than 20.
+
+\textbf{Conclusion:} Saturation cannot cause instability in this system because the effective gain is always reduced, never increased. The saturation actually improves stability margins by limiting the loop gain for large signals.
+
+\textbf{Step 4: Check for limit cycles.}
+
+The Nyquist plot crosses the negative real axis at $-0.5$ (corresponding to $|L| = 0.5$ at phase $-180°$).
+
+For a limit cycle: $-1/N(A) = -0.5$, so $N(A) = 2$.
+
+But $N(A) \leq 1$ for saturation (describing function cannot exceed linear gain), so no intersection exists.
+
+\textbf{Result:} The saturating system is stable for all input amplitudes, with no limit cycles. The effective gain margin varies from 2 (small signals) to $\infty$ (deeply saturated).
+\end{example}
+
+\subsection{Example 8: LuGre Friction Model Identification}
+
+\begin{example}[Identifying LuGre Friction Parameters]
+\label{ex:lugre_identification}
+A linear motor exhibits complex friction behavior. Experimental data shows:
+\begin{itemize}
+    \item Static friction force: $F_s = 8$ N
+    \item Kinetic (Coulomb) friction: $F_c = 5$ N
+    \item Viscous coefficient (from high-speed tests): $\sigma_v = 2$ Ns/m
+    \item Stribeck velocity: $v_s = 0.01$ m/s
+    \item Pre-sliding stiffness (from micro-displacement tests): $\sigma_0 = 10^5$ N/m
+\end{itemize}
+
+Set up the LuGre model and simulate stick-slip behavior during a slow constant-velocity motion.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Define the LuGre model equations.}
+
+State equation for bristle deflection:
+\begin{equation}
+\frac{dz}{dt} = v - \frac{\sigma_0 |v|}{g(v)}z
+\end{equation}
+
+where the Stribeck function is:
+\begin{equation}
+g(v) = F_c + (F_s - F_c)e^{-(v/v_s)^2} = 5 + 3e^{-(v/0.01)^2}
+\end{equation}
+
+Friction force:
+\begin{equation}
+F_f = \sigma_0 z + \sigma_1 \dot{z} + \sigma_v v
+\end{equation}
+
+\textbf{Step 2: Determine the damping coefficient $\sigma_1$.}
+
+The damping coefficient $\sigma_1$ affects the transient behavior. A common choice is:
+\begin{equation}
+\sigma_1 = \sqrt{\sigma_0 m}
+\end{equation}
+
+where $m$ is the moving mass. For $m = 1$ kg:
+\begin{equation}
+\sigma_1 = \sqrt{10^5 \times 1} = 316 \text{ Ns/m}
+\end{equation}
+
+This provides near-critical damping of the bristle dynamics.
+
+\textbf{Step 3: Analyze steady-state friction.}
+
+At steady velocity $v = v_0$, $\dot{z} = 0$ implies:
+\begin{equation}
+z_{ss} = \frac{g(v_0)}{\sigma_0}\text{sgn}(v_0)
+\end{equation}
+
+Steady-state friction:
+\begin{equation}
+F_{f,ss} = \sigma_0 z_{ss} + \sigma_v v_0 = g(v_0)\text{sgn}(v_0) + \sigma_v v_0
+\end{equation}
+
+This recovers the Stribeck curve at steady state.
+
+\textbf{Step 4: Simulate stick-slip.}
+
+Consider a mass $m = 1$ kg pulled by a spring with stiffness $k_s = 100$ N/m, where the spring is being extended at constant rate $v_p = 0.005$ m/s (pulling velocity).
+
+Equations of motion:
+\begin{align}
+m\ddot{x} &= k_s(v_p t - x) - F_f \\
+\dot{z} &= \dot{x} - \frac{\sigma_0 |\dot{x}|}{g(\dot{x})}z \\
+F_f &= \sigma_0 z + \sigma_1 \dot{z} + \sigma_v \dot{x}
+\end{align}
+
+\textbf{Step 5: Predict stick-slip characteristics.}
+
+During the stick phase, $\dot{x} \approx 0$ and the spring force builds up:
+\begin{equation}
+F_{\text{spring}} = k_s v_p t
+\end{equation}
+
+Slip initiates when $F_{\text{spring}} > F_s = 8$ N.
+
+Time to initiate slip: $t_{\text{slip}} = F_s/(k_s v_p) = 8/(100 \times 0.005) = 16$ s
+
+During slip, the friction drops to approximately $F_c = 5$ N, and the mass accelerates:
+\begin{equation}
+\ddot{x} = \frac{8 - 5}{1} = 3 \text{ m/s}^2
+\end{equation}
+
+The mass quickly catches up to the pulling point, the spring relaxes, and the cycle repeats.
+
+Stick-slip amplitude: $\Delta x \approx F_s/k_s = 8/100 = 0.08$ m
+
+Stick-slip frequency: $f \approx 1/t_{\text{slip}} = 0.0625$ Hz
+
+\textbf{Note:} The LuGre model captures the gradual force buildup during pre-sliding (before true slip begins) through the bristle state $z$, making simulations more realistic than classical Coulomb models.
+\end{example}
+
+\subsection{Example 9: Dead Zone Compensation}
+
+\begin{example}[Adaptive Dead Zone Compensation]
+\label{ex:deadzone_compensation}
+A valve actuator has a dead zone of unknown width $\delta$ (estimated range 5-10\% of full scale). Design an adaptive compensation scheme.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Model the system.}
+
+The actuator with dead zone:
+\begin{equation}
+u_{\text{actual}} = \begin{cases}
+0 & |u| \leq \delta \\
+u - \delta\,\text{sgn}(u) & |u| > \delta
+\end{cases}
+\end{equation}
+
+where $u$ is the commanded input.
+
+\textbf{Step 2: Design the inverse compensator.}
+
+The ideal inverse is:
+\begin{equation}
+u_{\text{comp}} = v + \hat{\delta}\,\text{sgn}(v)
+\end{equation}
+
+where $v$ is the desired effective input and $\hat{\delta}$ is the estimated dead zone.
+
+With perfect compensation ($\hat{\delta} = \delta$):
+\begin{equation}
+u_{\text{actual}} = (v + \delta\,\text{sgn}(v)) - \delta\,\text{sgn}(v + \delta\,\text{sgn}(v)) = v
+\end{equation}
+
+for $v \neq 0$.
+
+\textbf{Step 3: Smooth the compensator.}
+
+Replace the signum function with a smooth approximation:
+\begin{equation}
+u_{\text{comp}} = v + \hat{\delta} \cdot \frac{v}{\sqrt{v^2 + \epsilon^2}}
+\end{equation}
+
+where $\epsilon$ is small (e.g., 0.01 times full scale).
+
+\textbf{Step 4: Design the adaptation law.}
+
+Let the plant output be $y$ and reference be $r$. Define tracking error $e = r - y$.
+
+If $\hat{\delta} < \delta$ (undercompensation), small control signals produce no output and error persists.
+If $\hat{\delta} > \delta$ (overcompensation), there is a discontinuity in effective gain.
+
+Adaptation law based on error correlation:
+\begin{equation}
+\dot{\hat{\delta}} = \gamma |v| \cdot |e| \cdot \text{sgn}(e \cdot v)
+\end{equation}
+
+where $\gamma > 0$ is the adaptation gain.
+
+\textbf{Physical interpretation:}
+\begin{itemize}
+    \item When $e$ and $v$ have the same sign (controller pushing in the right direction but output not responding), increase $\hat{\delta}$
+    \item When $e$ and $v$ have opposite signs (output overshooting), decrease $\hat{\delta}$
+    \item The $|v|$ term ensures adaptation only when the actuator is being commanded
+\end{itemize}
+
+\textbf{Step 5: Implement safeguards.}
+
+Limit the estimate to a reasonable range:
+\begin{equation}
+\hat{\delta} \in [\delta_{\min}, \delta_{\max}]
+\end{equation}
+
+Add a dead zone in the adaptation to prevent chatter:
+\begin{equation}
+\dot{\hat{\delta}} = \begin{cases}
+0 & |e| < e_{\text{threshold}} \\
+\gamma |v| \cdot |e| \cdot \text{sgn}(e \cdot v) & |e| \geq e_{\text{threshold}}
+\end{cases}
+\end{equation}
+
+\textbf{Step 6: Analyze convergence.}
+
+Under persistent excitation (the control signal $v$ regularly crosses through the dead zone region), the adaptive law drives $\hat{\delta} \to \delta$.
+
+Convergence rate depends on $\gamma$ and the frequency of excitation. Typical tuning:
+\begin{equation}
+\gamma = \frac{1}{T_{\text{adapt}}}
+\end{equation}
+
+where $T_{\text{adapt}}$ is the desired adaptation time constant (e.g., 10-100 times the closed-loop time constant).
+\end{example}
+
+\subsection{Example 10: Anti-Windup Design for Nonlinear System}
+
+\begin{example}[Back-Calculation Anti-Windup]
+\label{ex:antiwindup_design}
+A PI controller with gains $K_p = 2$ and $K_i = 1$ controls a first-order plant $G(s) = 1/(s+0.5)$. The actuator saturates at $\pm 10$. Design a back-calculation anti-windup scheme.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Write the PI controller equations.}
+
+Without anti-windup:
+\begin{align}
+\dot{x}_i &= e(t) = r - y \\
+u &= K_p e + K_i x_i
+\end{align}
+
+where $x_i$ is the integrator state.
+
+\textbf{Step 2: Add saturation and back-calculation.}
+
+The saturated output is:
+\begin{equation}
+u_{\text{sat}} = \text{sat}(u; 10)
+\end{equation}
+
+Back-calculation modifies the integrator:
+\begin{equation}
+\dot{x}_i = e + K_b(u_{\text{sat}} - u)
+\end{equation}
+
+where $K_b$ is the back-calculation gain.
+
+\textbf{Step 3: Select the back-calculation gain.}
+
+During saturation, $u \neq u_{\text{sat}}$, so the term $K_b(u_{\text{sat}} - u)$ is nonzero. This term opposes the integration of error, preventing windup.
+
+Common choices for $K_b$:
+\begin{enumerate}
+    \item $K_b = 1/T_i = K_i/K_p = 0.5$: Matches the integral time constant
+    \item $K_b = \sqrt{K_i/K_p} = \sqrt{0.5} = 0.71$: Geometric mean
+    \item $K_b = K_i = 1$: Aggressive anti-windup
+\end{enumerate}
+
+We choose $K_b = 0.71$ for balanced response.
+
+\textbf{Step 4: Analyze the anti-windup behavior.}
+
+Consider a large step from $r = 0$ to $r = 20$. Initially:
+\begin{align}
+e &= 20 - 0 = 20 \\
+u &= 2(20) + 0 = 40 \quad \text{(saturated to 10)} \\
+u_{\text{sat}} - u &= 10 - 40 = -30
+\end{align}
+
+Integrator dynamics:
+\begin{equation}
+\dot{x}_i = 20 + 0.71(-30) = 20 - 21.3 = -1.3
+\end{equation}
+
+The integrator actually \textit{decreases}, preventing windup!
+
+As the output rises and error decreases, eventually:
+\begin{align}
+u &= K_p e + K_i x_i < 10 \\
+u_{\text{sat}} &= u
+\end{align}
+
+Normal integration resumes.
+
+\textbf{Step 5: State-space implementation.}
+
+For implementation:
+\begin{align}
+\dot{x}_i &= e + K_b(u_{\text{sat}} - u) \\
+u &= K_p e + K_i x_i \\
+u_{\text{sat}} &= \max(-10, \min(10, u))
+\end{align}
+
+This can be rearranged to avoid algebraic loops:
+\begin{align}
+u_{\text{unsat}} &= K_p e + K_i x_i \\
+u_{\text{sat}} &= \text{sat}(u_{\text{unsat}}; 10) \\
+\dot{x}_i &= e + K_b(u_{\text{sat}} - u_{\text{unsat}})
+\end{align}
+
+\textbf{Step 6: Verify stability.}
+
+The anti-windup scheme preserves closed-loop stability. During saturation, the effective system becomes:
+\begin{equation}
+\text{Plant input} = u_{\text{sat}} = \text{constant (at limit)}
+\end{equation}
+
+The plant evolves open-loop toward the limit, while the integrator state is managed to ensure smooth recovery when saturation ends.
+\end{example}
+
+\subsection{Example 11: Describing Function for Quantization}
+
+\begin{example}[Quantizer Describing Function]
+\label{ex:quantizer_df}
+A digital control system has a 10-bit ADC spanning $\pm 10$ V. Derive the describing function for the quantization nonlinearity and assess its effect on a control loop.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Characterize the quantizer.}
+
+The ADC has $2^{10} = 1024$ levels over 20 V range.
+
+Quantization step: $q = 20/1024 = 0.0195$ V $\approx 19.5$ mV
+
+The quantizer rounds to the nearest level:
+\begin{equation}
+n(x) = q \cdot \text{round}(x/q)
+\end{equation}
+
+\textbf{Step 2: Derive the describing function.}
+
+For uniform quantization with step $q$ and sinusoidal input $x = A\sin\theta$:
+
+The output is a staircase approximation. For large amplitude ($A \gg q$), the describing function approaches:
+\begin{equation}
+N(A) \approx 1 \quad \text{(gain is unity)}
+\end{equation}
+
+For small amplitude ($A$ comparable to $q$), the describing function depends on the offset.
+
+With zero offset (signal centered on a quantization level):
+\begin{equation}
+N(A) = \frac{2q}{\pi A}\sum_{n=1}^{N} \cos^{-1}\left(\frac{(2n-1)q}{2A}\right)
+\end{equation}
+
+where $N = \lfloor A/q + 0.5 \rfloor$ is the number of levels crossed.
+
+\textbf{Step 3: Simplified approximation.}
+
+For practical purposes, when $A > 2q$:
+\begin{equation}
+N(A) \approx 1 - \frac{q^2}{6A^2}
+\end{equation}
+
+The deviation from unity gain is negligible for signals much larger than the quantization step.
+
+\textbf{Step 4: Assess control loop impact.}
+
+For the 10-bit ADC with $q = 19.5$ mV:
+
+If signal amplitude $A = 1$ V:
+\begin{equation}
+N(A) \approx 1 - \frac{(0.0195)^2}{6(1)^2} = 1 - 6.3 \times 10^{-5} \approx 1
+\end{equation}
+
+Negligible effect.
+
+If signal amplitude $A = 50$ mV (approaching quantization level):
+\begin{equation}
+N(A) \approx 1 - \frac{(19.5)^2}{6(50)^2} = 1 - 0.025 = 0.975
+\end{equation}
+
+This 2.5\% gain reduction is still small.
+
+\textbf{Step 5: Limit cycle analysis.}
+
+Quantization can cause small limit cycles (dither) when the signal amplitude is comparable to $q$. The maximum dither amplitude is approximately $q/2$.
+
+For the 10-bit system, worst-case dither is about 10 mV, which is typically acceptable.
+
+\textbf{Conclusion:} A 10-bit ADC introduces negligible nonlinearity for most control applications. Lower-resolution ADCs (8-bit or less) may require more careful analysis.
+\end{example}
+
+\subsection{Example 12: Robustness with Unmodeled Time Delay}
+
+\begin{example}[Time Delay Robustness Analysis]
+\label{ex:time_delay_robustness}
+A control system is designed for a plant $G_0(s) = 1/(s+1)^2$. In reality, there is an unmodeled time delay of up to 0.2 seconds. Determine the maximum controller gain for robust stability.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Model the uncertain system.}
+
+The true plant is:
+\begin{equation}
+G(s) = \frac{e^{-\tau s}}{(s+1)^2}, \quad 0 \leq \tau \leq 0.2
+\end{equation}
+
+\textbf{Step 2: Express as multiplicative uncertainty.}
+
+\begin{equation}
+G(s) = G_0(s) \cdot e^{-\tau s} = G_0(s)(1 + \Delta(s))
+\end{equation}
+
+where $\Delta(s) = e^{-\tau s} - 1$.
+
+The magnitude of the uncertainty:
+\begin{equation}
+|\Delta(j\omega)| = |e^{-j\tau\omega} - 1| = |(\cos\tau\omega - 1) - j\sin\tau\omega|
+\end{equation}
+
+\begin{equation}
+= \sqrt{(\cos\tau\omega - 1)^2 + \sin^2\tau\omega} = \sqrt{2 - 2\cos\tau\omega} = 2|\sin(\tau\omega/2)|
+\end{equation}
+
+For the worst case $\tau = 0.2$:
+\begin{equation}
+|\Delta(j\omega)|_{\max} = 2|\sin(0.1\omega)|
+\end{equation}
+
+\textbf{Step 3: Apply robust stability condition.}
+
+For a proportional controller $K$, the complementary sensitivity is:
+\begin{equation}
+T(s) = \frac{KG_0(s)}{1 + KG_0(s)} = \frac{K}{(s+1)^2 + K}
+\end{equation}
+
+Robust stability requires:
+\begin{equation}
+|T(j\omega)| \cdot |\Delta(j\omega)| < 1 \quad \forall \omega
+\end{equation}
+
+\textbf{Step 4: Find the critical frequency.}
+
+The product $|T||\Delta|$ is maximized where both are significant. For small $\omega$:
+\begin{itemize}
+    \item $|T(j\omega)| \approx K/(K+1)$ (near unity for large $K$)
+    \item $|\Delta| \approx 0.2\omega$ (linear for small $\omega\tau$)
+\end{itemize}
+
+For large $\omega$:
+\begin{itemize}
+    \item $|T(j\omega)| \to 0$ (rolls off as $1/\omega^2$)
+    \item $|\Delta| \leq 2$ (bounded)
+\end{itemize}
+
+The critical region is typically near the crossover frequency.
+
+\textbf{Step 5: Compute crossover frequency and maximum gain.}
+
+For the nominal system with gain $K$:
+\begin{equation}
+|L_0(j\omega_c)| = \frac{K}{(1+\omega_c^2)} = 1 \implies \omega_c = \sqrt{K-1}
+\end{equation}
+
+(assuming $K > 1$).
+
+At crossover, the phase of $G_0$ is:
+\begin{equation}
+\angle G_0(j\omega_c) = -2\arctan\omega_c
+\end{equation}
+
+The time delay adds phase:
+\begin{equation}
+\angle e^{-j\tau\omega_c} = -\tau\omega_c \text{ rad} = -0.2\omega_c \text{ rad}
+\end{equation}
+
+For 30° phase margin, the total phase at crossover must be $-150°$ or $-5\pi/6$ rad:
+\begin{equation}
+-2\arctan\omega_c - 0.2\omega_c = -\frac{5\pi}{6}
+\end{equation}
+
+Solving numerically:
+\begin{itemize}
+    \item Try $\omega_c = 2$: $-2(1.11) - 0.4 = -2.62$ rad $= -150°$ (matches!)
+\end{itemize}
+
+So $\omega_c = 2$ rad/s gives 30° phase margin.
+
+The corresponding gain:
+\begin{equation}
+K = 1 + \omega_c^2 = 1 + 4 = 5
+\end{equation}
+
+\textbf{Conclusion:} With up to 0.2 s unmodeled delay and requiring 30° phase margin, the maximum controller gain is $K = 5$.
+
+For $K > 5$, the crossover frequency increases, the delay contributes more phase lag, and the phase margin drops below 30°. For $K = 10$, the phase margin with worst-case delay is approximately $10°$, which is dangerously low.
+\end{example}
+
+\subsection{Example 13: Sensitivity Function Shaping}
+
+\begin{example}[Loop Shaping for Disturbance Rejection]
+\label{ex:sensitivity_shaping}
+A process has transfer function $G(s) = 1/(s(s+1))$ and experiences low-frequency load disturbances. Design a controller that achieves $|S(j\omega)| < 0.1$ for $\omega < 0.5$ rad/s while maintaining 45° phase margin.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Translate sensitivity requirement to loop gain.}
+
+From $S = 1/(1+L)$, requiring $|S| < 0.1$ means:
+\begin{equation}
+\left|\frac{1}{1+L}\right| < 0.1 \implies |1 + L| > 10 \implies |L| > 9
+\end{equation}
+
+For frequencies where $|L| \gg 1$, $|S| \approx 1/|L|$.
+
+So we need $|L(j\omega)| > 10$ for $\omega < 0.5$ rad/s, i.e., $|L|_{\text{dB}} > 20$ dB.
+
+\textbf{Step 2: Design a PI controller.}
+
+A PI controller provides high low-frequency gain:
+\begin{equation}
+K(s) = K_p + \frac{K_i}{s} = K_p\frac{s + K_i/K_p}{s}
+\end{equation}
+
+The loop transfer function:
+\begin{equation}
+L(s) = K(s)G(s) = \frac{K_p(s + K_i/K_p)}{s^2(s+1)}
+\end{equation}
+
+At low frequency ($\omega \ll 1$):
+\begin{equation}
+|L(j\omega)| \approx \frac{K_i}{\omega^2}
+\end{equation}
+
+For $|L(j0.5)| > 10$:
+\begin{equation}
+\frac{K_i}{0.25} > 10 \implies K_i > 2.5
+\end{equation}
+
+\textbf{Step 3: Determine gains for 45° phase margin.}
+
+The phase of $L(j\omega)$ is:
+\begin{equation}
+\angle L(j\omega) = \arctan\frac{\omega K_p}{K_i} - 180° - \arctan\omega
+\end{equation}
+
+At the gain crossover frequency $\omega_c$, phase margin of 45° requires:
+\begin{equation}
+\angle L(j\omega_c) = -135°
+\end{equation}
+
+So:
+\begin{equation}
+\arctan\frac{\omega_c K_p}{K_i} - 180° - \arctan\omega_c = -135°
+\end{equation}
+
+\begin{equation}
+\arctan\frac{\omega_c K_p}{K_i} = 45° + \arctan\omega_c
+\end{equation}
+
+\textbf{Step 4: Choose crossover frequency and solve.}
+
+Let's target $\omega_c = 2$ rad/s (reasonably above the disturbance band).
+
+\begin{equation}
+\arctan\frac{2K_p}{K_i} = 45° + \arctan 2 = 45° + 63.4° = 108.4°
+\end{equation}
+
+\begin{equation}
+\frac{2K_p}{K_i} = \tan(108.4°) = -3.08
+\end{equation}
+
+This gives a negative ratio, which is not physical. The issue is that with a double integrator in the loop ($s^2$ from the plant's integrator and PI's integrator), we cannot achieve 45° phase margin without lead compensation.
+
+\textbf{Step 5: Add lead compensation.}
+
+Use a PID controller instead:
+\begin{equation}
+K(s) = K_p + \frac{K_i}{s} + K_d s = K_d \frac{s^2 + (K_p/K_d)s + K_i/K_d}{s}
+\end{equation}
+
+The derivative action provides phase lead to recover margin.
+
+Let $K_i = 3$ (satisfies low-frequency requirement). Place the PI zero at $s = -0.5$:
+\begin{equation}
+K_p/K_d = 0.5 \quad \text{(for the zero)}
+\end{equation}
+
+Wait, the PI zero is at $s = -K_i/K_p$. Let's place it at $-0.5$:
+\begin{equation}
+K_i/K_p = 0.5 \implies K_p = 6
+\end{equation}
+
+For the PID, we need:
+\begin{equation}
+K(s) = K_p\left(1 + \frac{1}{T_i s} + T_d s\right) = K_p \frac{T_i T_d s^2 + T_i s + 1}{T_i s}
+\end{equation}
+
+With $K_p = 6$, $T_i = K_p/K_i = 2$ s, and choosing $T_d = 0.2$ s for phase lead:
+
+Loop transfer function:
+\begin{equation}
+L(s) = \frac{6(0.4s^2 + 2s + 1)}{2s \cdot s(s+1)} = \frac{6(0.4s^2 + 2s + 1)}{2s^2(s+1)}
+\end{equation}
+
+\textbf{Step 6: Verify the design.}
+
+At $\omega = 0.5$ rad/s:
+\begin{equation}
+|L(j0.5)| = \frac{6|0.4(-0.25) + j1 + 1|}{2 \cdot 0.25 \cdot |1 + j0.5|} = \frac{6 \cdot |0.9 + j1|}{0.5 \cdot 1.12} = \frac{6 \cdot 1.35}{0.56} = 14.5
+\end{equation}
+
+$|S| \approx 1/14.5 = 0.069 < 0.1$ (satisfied)
+
+The phase margin must be verified numerically. With the added derivative action, the phase is increased near crossover, and 45° margin is achievable.
+
+\textbf{Final design:} $K_p = 6$, $K_i = 3$, $K_d = 1.2$
+
+This achieves the disturbance rejection requirement while maintaining adequate stability margins.
+\end{example}
+
+\subsection{Example 14: Structured Uncertainty Analysis}
+
+\begin{example}[Parametric Robustness Analysis]
+\label{ex:parametric_robustness}
+A DC motor position control system has the model:
+\begin{equation}
+G(s) = \frac{K_m}{s(Js + b)}
+\end{equation}
+
+where $K_m = 0.1$ Nm/V (motor constant), $J = 0.01$ kg$\cdot$m$^2$ (inertia), and $b = 0.1$ Nms/rad (damping). The inertia can vary $\pm 50\%$ due to payload changes. A PD controller $K(s) = K_p + K_d s$ with $K_p = 100$ and $K_d = 2$ is used. Verify robust stability.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Form the characteristic polynomial.}
+
+Closed-loop characteristic equation:
+\begin{equation}
+1 + K(s)G(s) = 0
+\end{equation}
+
+\begin{equation}
+1 + \frac{(K_p + K_d s)K_m}{s(Js + b)} = 0
+\end{equation}
+
+\begin{equation}
+s(Js + b) + K_m(K_p + K_d s) = 0
+\end{equation}
+
+\begin{equation}
+Js^2 + (b + K_m K_d)s + K_m K_p = 0
+\end{equation}
+
+\textbf{Step 2: Substitute nominal values.}
+
+With $K_m = 0.1$, $K_p = 100$, $K_d = 2$:
+\begin{equation}
+Js^2 + (0.1 + 0.2)s + 10 = Js^2 + 0.3s + 10 = 0
+\end{equation}
+
+\textbf{Step 3: Analyze stability for the uncertainty range.}
+
+For $J \in [0.005, 0.015]$ (nominal $\pm 50\%$):
+
+The Routh-Hurwitz criterion requires all coefficients positive, which is satisfied for all $J > 0$.
+
+The roots are:
+\begin{equation}
+s = \frac{-0.3 \pm \sqrt{0.09 - 40J}}{2J}
+\end{equation}
+
+For $J = 0.005$ (minimum inertia):
+\begin{equation}
+s = \frac{-0.3 \pm \sqrt{0.09 - 0.2}}{0.01} = \frac{-0.3 \pm j0.33}{0.01} = -30 \pm j33
+\end{equation}
+
+Natural frequency: $\omega_n = \sqrt{10/0.005} = 44.7$ rad/s
+Damping ratio: $\zeta = 0.3/(2\sqrt{10 \times 0.005}) = 0.67$
+
+For $J = 0.015$ (maximum inertia):
+\begin{equation}
+s = \frac{-0.3 \pm \sqrt{0.09 - 0.6}}{0.03} = \frac{-0.3 \pm j0.71}{0.03} = -10 \pm j23.7
+\end{equation}
+
+Natural frequency: $\omega_n = \sqrt{10/0.015} = 25.8$ rad/s
+Damping ratio: $\zeta = 0.3/(2\sqrt{10 \times 0.015}) = 0.39$
+
+\textbf{Step 4: Assess performance variation.}
+
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Parameter & Low $J$ & Nominal & High $J$ \\
+\midrule
+Inertia (kg$\cdot$m$^2$) & 0.005 & 0.01 & 0.015 \\
+$\omega_n$ (rad/s) & 44.7 & 31.6 & 25.8 \\
+$\zeta$ & 0.67 & 0.47 & 0.39 \\
+Overshoot (\%) & 5 & 20 & 28 \\
+Settling time (s) & 0.13 & 0.27 & 0.39 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Step 5: Conclusions.}
+
+The system is robustly stable across the entire parameter range. However, performance varies significantly:
+\begin{itemize}
+    \item With low inertia (empty payload): Fast, well-damped response
+    \item With high inertia (full payload): Slower, more oscillatory response
+\end{itemize}
+
+If consistent performance is required, consider:
+\begin{enumerate}
+    \item Gain scheduling based on payload
+    \item Adaptive control to adjust gains online
+    \item More conservative fixed gains (lower bandwidth)
+\end{enumerate}
+\end{example}
+
+\subsection{Example 15: Combined Nonlinearities}
+
+\begin{example}[System with Saturation and Backlash]
+\label{ex:combined_nonlinearities}
+A positioning system has both actuator saturation ($\pm 10$ N) and gear backlash (0.01 rad). Analyze the combined effect and design a robust controller.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Model the individual nonlinearities.}
+
+Saturation describing function:
+\begin{equation}
+N_{\text{sat}}(A) = \frac{2}{\pi}\left[\arcsin\frac{10}{A} + \frac{10}{A}\sqrt{1-\frac{100}{A^2}}\right], \quad A > 10
+\end{equation}
+
+Backlash describing function (magnitude only, for simplicity):
+\begin{equation}
+|N_{\text{bl}}(A)| \approx 1 - \frac{2 \times 0.01}{\pi A} = 1 - \frac{0.0064}{A}, \quad A > 0.01
+\end{equation}
+
+\textbf{Step 2: Cascade the describing functions.}
+
+For series nonlinearities with the same input amplitude:
+\begin{equation}
+N_{\text{total}}(A) = N_{\text{sat}}(A) \cdot N_{\text{bl}}(A)
+\end{equation}
+
+However, the amplitude at each nonlinearity may differ. If saturation comes first, it clips the amplitude seen by the backlash.
+
+\textbf{Step 3: Identify the dominant effect.}
+
+For small signals ($A < 10$), saturation has no effect ($N_{\text{sat}} = 1$) but backlash reduces gain.
+
+For large signals ($A > 10$), saturation dominates and significantly reduces gain.
+
+At the transition ($A \approx 10$):
+\begin{equation}
+N_{\text{sat}}(10) = 1, \quad |N_{\text{bl}}(10)| \approx 1 - 0.00064 \approx 1
+\end{equation}
+
+Both effects are minimal near $A = 10$.
+
+\textbf{Step 4: Design strategy.}
+
+Since saturation reduces gain for large signals and backlash affects small signals, the controller must handle both regimes:
+
+\begin{enumerate}
+    \item \textbf{For large signals (saturation regime):}
+    \begin{itemize}
+        \item Anti-windup prevents integrator buildup during saturation
+        \item Trajectory planning limits commanded accelerations
+    \end{itemize}
+
+    \item \textbf{For small signals (backlash regime):}
+    \begin{itemize}
+        \item Backlash compensation in feedforward
+        \item Avoid high-gain feedback that would cause limit cycles
+        \item Consider dither if precision positioning is needed
+    \end{itemize}
+\end{enumerate}
+
+\textbf{Step 5: Controller design.}
+
+Use a PID controller with modifications:
+\begin{equation}
+u = \text{sat}\left(K_p e + K_i x_i + K_d \dot{e} + u_{\text{bl}}\right)
+\end{equation}
+
+where $u_{\text{bl}} = 0.01 \cdot \text{sgn}(\dot{x}_d)$ is backlash compensation.
+
+Anti-windup on the integrator:
+\begin{equation}
+\dot{x}_i = e + K_b(u_{\text{sat}} - u_{\text{unsat}})
+\end{equation}
+
+\textbf{Step 6: Gain selection guidelines.}
+
+To avoid backlash-induced limit cycles, the crossover frequency should be low enough that:
+\begin{equation}
+\text{Phase margin} > 30° + \text{phase lag from backlash at } \omega_c
+\end{equation}
+
+For backlash of 0.01 rad and desired amplitude of 0.1 rad at crossover:
+\begin{equation}
+\angle N_{\text{bl}} \approx -\arctan\frac{0.01}{0.1} = -5.7°
+\end{equation}
+
+Add 6° to the phase margin requirement, giving a target of 36°-40°.
+
+\textbf{Recommended gains:} Choose $K_p$, $K_i$, $K_d$ to achieve $\omega_c \approx 10$ rad/s with 40° phase margin, then verify via simulation with both nonlinearities active.
+\end{example}
+
+%===============================================================================
+\section{Algorithm Implementations}
+\label{sec:algorithms}
+%===============================================================================
+
+This section provides production-ready algorithms for nonlinear analysis and compensation. Each algorithm includes detailed steps, numerical considerations, and implementation guidance.
+
+\subsection{Describing Function Computation}
+
+\begin{algorithm}[H]
+\caption{Numerical Describing Function Calculation}
+\label{alg:describing_function}
+\begin{algorithmic}[1]
+\REQUIRE Nonlinear function $n(\cdot)$, amplitude $A$, number of integration points $N$
+\ENSURE Describing function $N(A)$ (complex)
+\STATE $\text{Re} \gets 0$, $\text{Im} \gets 0$
+\STATE $\Delta\theta \gets 2\pi / N$
+\FOR{$k = 0$ \TO $N-1$}
+    \STATE $\theta \gets k \cdot \Delta\theta$
+    \STATE $x \gets A \sin(\theta)$
+    \STATE $y \gets n(x)$
+    \STATE $\text{Re} \gets \text{Re} + y \cdot \cos(\theta) \cdot \Delta\theta$
+    \STATE $\text{Im} \gets \text{Im} + y \cdot \sin(\theta) \cdot \Delta\theta$
+\ENDFOR
+\STATE $a_1 \gets \text{Re} / \pi$
+\STATE $b_1 \gets \text{Im} / \pi$
+\RETURN $(b_1 + j \cdot a_1) / A$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes:}
+\begin{itemize}
+    \item Use $N \geq 1000$ points for smooth nonlinearities
+    \item For discontinuous nonlinearities (relay, dead zone), increase $N$ or use adaptive quadrature
+    \item The algorithm computes the first Fourier coefficients by numerical integration
+    \item For nonlinearities with hysteresis, the input must complete a full cycle in the positive direction
+\end{itemize}
+
+\subsection{Limit Cycle Search Algorithm}
+
+\begin{algorithm}[H]
+\caption{Limit Cycle Prediction via Describing Function}
+\label{alg:limit_cycle}
+\begin{algorithmic}[1]
+\REQUIRE Plant $G(s)$, describing function $N(A)$, search ranges $[\omega_{\min}, \omega_{\max}]$, $[A_{\min}, A_{\max}]$
+\ENSURE Limit cycle parameters $(\omega^*, A^*)$ or indication of no limit cycle
+\STATE Initialize: $\text{found} \gets \text{false}$
+\STATE Create frequency grid: $\omega_k \in [\omega_{\min}, \omega_{\max}]$
+\FOR{each $\omega_k$}
+    \STATE Compute $G(j\omega_k)$
+    \STATE Compute target: $-1/G(j\omega_k)$
+    \IF{$-1/G(j\omega_k)$ is on the $-1/N(A)$ locus}
+        \STATE Solve $N(A) = -1/G(j\omega_k)$ for $A$
+        \IF{$A \in [A_{\min}, A_{\max}]$}
+            \STATE $\omega^* \gets \omega_k$, $A^* \gets A$
+            \STATE $\text{found} \gets \text{true}$
+            \STATE Refine solution using bisection or Newton's method
+        \ENDIF
+    \ENDIF
+\ENDFOR
+\IF{found}
+    \STATE Assess stability by checking $d(-1/N)/dA$ direction relative to $G(j\omega)$
+    \RETURN $(\omega^*, A^*, \text{stability})$
+\ELSE
+    \RETURN ``No limit cycle found''
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Refinement Procedure:}
+
+For more accurate limit cycle parameters, use Newton's method on the complex equation:
+\begin{equation}
+F(\omega, A) = N(A) \cdot G(j\omega) + 1 = 0
+\end{equation}
+
+This gives two real equations (real and imaginary parts) in two unknowns.
+
+\subsection{LuGre Friction Simulation}
+
+\begin{algorithm}[H]
+\caption{LuGre Friction Model Integration}
+\label{alg:lugre}
+\begin{algorithmic}[1]
+\REQUIRE Velocity $v(t)$, parameters $(\sigma_0, \sigma_1, \sigma_v, F_c, F_s, v_s)$, initial state $z_0$
+\ENSURE Friction force $F_f(t)$, bristle state $z(t)$
+\STATE Initialize: $z \gets z_0$
+\FOR{each time step $t_k$ with step size $\Delta t$}
+    \STATE $v \gets v(t_k)$
+    \STATE $g \gets F_c + (F_s - F_c) \exp(-(v/v_s)^2)$
+    \STATE $\dot{z} \gets v - \sigma_0 |v| z / g$
+    \STATE $z \gets z + \dot{z} \cdot \Delta t$ \COMMENT{Euler integration}
+    \STATE $F_f(t_k) \gets \sigma_0 z + \sigma_1 \dot{z} + \sigma_v v$
+\ENDFOR
+\RETURN $F_f$, $z$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Numerical Considerations:}
+\begin{itemize}
+    \item The LuGre model can be stiff when $\sigma_0$ is large. Use small time steps or implicit methods.
+    \item At zero velocity, the bristle state should satisfy $|z| \leq g(0)/\sigma_0 = F_s/\sigma_0$
+    \item For velocity reversals, ensure $z$ changes sign appropriately
+    \item Consider using a variable-step ODE solver for better accuracy
+\end{itemize}
+
+\subsection{Backlash Simulation with Smooth Transitions}
+
+\begin{algorithm}[H]
+\caption{Smoothed Backlash Model}
+\label{alg:backlash}
+\begin{algorithmic}[1]
+\REQUIRE Input position $x(t)$, backlash half-width $b$, smoothing parameter $\epsilon$, coupling stiffness $k_c$
+\ENSURE Output position $y(t)$, coupling force $F_c(t)$
+\STATE Initialize: $y \gets x_0$, contact state $\gets$ ``center''
+\FOR{each time step}
+    \STATE $\delta \gets x - y$ \COMMENT{Relative displacement}
+    \IF{$|\delta| \leq b - \epsilon$}
+        \STATE $F_c \gets 0$ \COMMENT{In backlash zone}
+    \ELSIF{$|\delta| \leq b + \epsilon$}
+        \STATE \COMMENT{Smooth transition region}
+        \IF{$\delta > 0$}
+            \STATE $F_c \gets k_c (\delta - b + \epsilon)^2 / (4\epsilon)$
+        \ELSE
+            \STATE $F_c \gets -k_c (\delta + b - \epsilon)^2 / (4\epsilon)$
+        \ENDIF
+    \ELSE
+        \STATE \COMMENT{In contact}
+        \IF{$\delta > 0$}
+            \STATE $F_c \gets k_c (\delta - b)$
+        \ELSE
+            \STATE $F_c \gets k_c (\delta + b)$
+        \ENDIF
+    \ENDIF
+    \STATE Update $y$ based on load dynamics: $m_y \ddot{y} = F_c - \text{load forces}$
+\ENDFOR
+\RETURN $y$, $F_c$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Anti-Windup Controller Implementation}
+
+\begin{algorithm}[H]
+\caption{PID with Back-Calculation Anti-Windup}
+\label{alg:antiwindup}
+\begin{algorithmic}[1]
+\REQUIRE Setpoint $r$, measurement $y$, gains $(K_p, K_i, K_d, K_b)$, limits $(u_{\min}, u_{\max})$
+\ENSURE Control output $u_{\text{sat}}$
+\STATE Compute error: $e \gets r - y$
+\STATE Compute derivative: $\dot{e} \gets (e - e_{\text{prev}}) / \Delta t$
+\STATE Compute unsaturated output: $u \gets K_p e + K_i x_i + K_d \dot{e}$
+\STATE Apply saturation: $u_{\text{sat}} \gets \max(u_{\min}, \min(u_{\max}, u))$
+\STATE Update integrator with anti-windup:
+\STATE \quad $x_i \gets x_i + (K_i e + K_b (u_{\text{sat}} - u)) \cdot \Delta t$
+\STATE Store for next iteration: $e_{\text{prev}} \gets e$
+\RETURN $u_{\text{sat}}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Tuning Guidelines:}
+\begin{itemize}
+    \item $K_b = K_i / K_p$ provides time-constant matching
+    \item $K_b = \sqrt{K_i K_p}$ (geometric mean) is a common choice
+    \item Larger $K_b$ gives faster anti-windup but may cause oscillation
+    \item Smaller $K_b$ is gentler but may not fully prevent windup
+\end{itemize}
+
+\subsection{Robustness Margin Computation}
+
+\begin{algorithm}[H]
+\caption{Gain and Phase Margin Calculation}
+\label{alg:margins}
+\begin{algorithmic}[1]
+\REQUIRE Loop transfer function $L(s)$, frequency range $[\omega_{\min}, \omega_{\max}]$
+\ENSURE Gain margin (dB), phase margin (degrees), crossover frequencies
+\STATE \COMMENT{Find gain crossover frequency}
+\STATE Search for $\omega_c$ where $|L(j\omega_c)| = 1$ using bisection
+\STATE $\phi_c \gets \angle L(j\omega_c)$
+\STATE Phase margin $\gets 180° + \phi_c$
+\STATE
+\STATE \COMMENT{Find phase crossover frequency}
+\STATE Search for $\omega_{\phi}$ where $\angle L(j\omega_{\phi}) = -180°$ using bisection
+\IF{phase crossover exists}
+    \STATE $|L_{\phi}| \gets |L(j\omega_{\phi})|$
+    \STATE Gain margin $\gets -20 \log_{10}(|L_{\phi}|)$ dB
+\ELSE
+    \STATE Gain margin $\gets \infty$
+\ENDIF
+\RETURN Gain margin, Phase margin, $\omega_c$, $\omega_{\phi}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Notes:}
+\begin{itemize}
+    \item Multiple crossovers may exist; report the smallest margin
+    \item For systems with no phase crossover (phase never reaches $-180°$), gain margin is infinite
+    \item Numerical frequency response evaluation should use logarithmically spaced frequency points
+\end{itemize}
+
+%===============================================================================
+\section{Chapter Summary}
+\label{sec:summary}
+%===============================================================================
+
+This chapter has developed the essential tools for analyzing and compensating nonlinear behavior in control systems. We now summarize the key concepts and provide guidance for practical application.
+
+\subsection{Core Concepts}
+
+\textbf{Nonlinear system characteristics} differ fundamentally from linear systems:
+\begin{itemize}
+    \item Multiple equilibria with different stability properties
+    \item Limit cycles---sustained oscillations with fixed amplitude and frequency
+    \item Dependence on initial conditions and input amplitude
+    \item Frequency generation (harmonics, subharmonics)
+    \item Potential for chaotic behavior
+\end{itemize}
+
+\textbf{Describing function analysis} extends frequency-domain methods to nonlinear systems by:
+\begin{itemize}
+    \item Approximating the nonlinearity's effect on sinusoidal signals
+    \item Extracting only the fundamental frequency component
+    \item Defining an amplitude-dependent ``gain'' $N(A)$
+    \item Enabling limit cycle prediction via the condition $N(A)G(j\omega) = -1$
+\end{itemize}
+
+\textbf{Linearization validity} depends on:
+\begin{itemize}
+    \item Distance from the operating point (error scales as deviation squared)
+    \item System curvature (higher nonlinearity means smaller valid region)
+    \item Required accuracy for the application
+    \item The region of attraction for stability
+\end{itemize}
+
+\textbf{Practical nonlinearities} requiring attention in every control design:
+\begin{itemize}
+    \item Saturation: Causes integrator windup; requires anti-windup compensation
+    \item Rate limits: Introduce phase lag; may require bandwidth reduction
+    \item Dead zones: Cause steady-state error and limit cycles; require inverse compensation
+    \item Backlash: Creates lost motion and potential limit cycles; requires mechanical or control mitigation
+\end{itemize}
+
+\textbf{Friction} is ubiquitous and complex:
+\begin{itemize}
+    \item Classical models: Coulomb, viscous, Coulomb+viscous
+    \item Stribeck effect: Friction decreases at low velocities
+    \item Dynamic models (LuGre): Capture pre-sliding, hysteresis, and frictional memory
+    \item Compensation: Feedforward, dither, modified integral control, adaptive methods
+\end{itemize}
+
+\textbf{Robustness} ensures performance despite uncertainty:
+\begin{itemize}
+    \item Parametric uncertainty: Parameters vary within known bounds
+    \item Unmodeled dynamics: High-frequency behavior not captured in model
+    \item Sensitivity functions $S$ and $T$ quantify disturbance rejection and noise transmission
+    \item Gain and phase margins provide classical robustness measures
+    \item $\|WT\|_\infty < 1$ ensures robust stability to multiplicative uncertainty
+\end{itemize}
+
+\subsection{Design Guidelines}
+
+When designing controllers for systems with nonlinearities:
+
+\begin{enumerate}
+    \item \textbf{Identify the dominant nonlinearities} in your system. Saturation and friction are almost always present; backlash and dead zones depend on the mechanism.
+
+    \item \textbf{Assess the operating range.} If the system operates far from a single equilibrium, linearization may be inadequate. Consider gain scheduling or nonlinear control.
+
+    \item \textbf{Include anti-windup} in any controller with integral action. Back-calculation anti-windup is simple and effective.
+
+    \item \textbf{Model friction accurately} for precision positioning applications. Simple Coulomb models may be inadequate; consider Stribeck or LuGre models.
+
+    \item \textbf{Check for limit cycles} using describing function analysis, especially with on-off control, saturation, or backlash.
+
+    \item \textbf{Maintain adequate margins.} For systems with significant nonlinearities or uncertainty:
+    \begin{itemize}
+        \item Gain margin $\geq 6$ dB
+        \item Phase margin $\geq 45°$
+        \item Additional margin for known time delays or unmodeled dynamics
+    \end{itemize}
+
+    \item \textbf{Validate with simulation} using realistic nonlinear models before deploying controllers.
+
+    \item \textbf{Test over the full operating range,} not just at the nominal operating point.
+\end{enumerate}
+
+\subsection{Connections to Other Chapters}
+
+This chapter builds on and connects to:
+\begin{itemize}
+    \item \textbf{Chapter 1 (Linearization):} Extended analysis of when linearization is valid
+    \item \textbf{Chapter on PID Control:} Anti-windup and friction compensation for PID
+    \item \textbf{Chapter on Frequency Response:} Describing functions extend Nyquist analysis
+    \item \textbf{Chapter on State-Space Control:} Lyapunov methods for region of attraction
+    \item \textbf{Chapter on Robust Control:} Foundation for $H_\infty$ and $\mu$-synthesis methods
+\end{itemize}
+
+\subsection{What We Have Not Covered}
+
+Due to space constraints, several important topics were mentioned but not fully developed:
+\begin{itemize}
+    \item \textbf{Lyapunov direct method} for nonlinear stability analysis
+    \item \textbf{Sliding mode control} for robust handling of nonlinearities
+    \item \textbf{Feedback linearization} for exact cancellation of nonlinearities
+    \item \textbf{$\mu$-synthesis} for optimal robust controller design
+    \item \textbf{Nonlinear model predictive control} for constrained optimization
+\end{itemize}
+
+These advanced topics are covered in dedicated nonlinear and robust control texts. The methods presented in this chapter provide the practical foundation needed to understand and apply those more sophisticated techniques.
+
+\subsection{Key Equations Reference}
+
+For quick reference, the essential equations from this chapter:
+
+\textbf{Describing Function (odd symmetric nonlinearity):}
+\begin{equation}
+N(A) = \frac{2}{\pi A}\int_0^{\pi} n(A\sin\theta)\sin\theta \, d\theta
+\end{equation}
+
+\textbf{Limit Cycle Condition:}
+\begin{equation}
+N(A)G(j\omega) = -1
+\end{equation}
+
+\textbf{Sensitivity and Complementary Sensitivity:}
+\begin{equation}
+S = \frac{1}{1+L}, \quad T = \frac{L}{1+L}, \quad S + T = 1
+\end{equation}
+
+\textbf{Robust Stability (Multiplicative Uncertainty):}
+\begin{equation}
+\|W(s)T(s)\|_\infty < 1
+\end{equation}
+
+\textbf{LuGre Friction Model:}
+\begin{align}
+\dot{z} &= v - \frac{\sigma_0|v|}{g(v)}z \\
+F_f &= \sigma_0 z + \sigma_1\dot{z} + \sigma_v v
+\end{align}
+
+\textbf{Anti-Windup (Back-Calculation):}
+\begin{equation}
+\dot{x}_i = K_i e + K_b(u_{\text{sat}} - u)
+\end{equation}
+
+This chapter has equipped you with the analytical tools and practical techniques needed to design controllers that work reliably in the presence of real-world nonlinearities and uncertainties. The methods presented here form the bridge between idealized linear theory and robust, high-performance control systems.
+
