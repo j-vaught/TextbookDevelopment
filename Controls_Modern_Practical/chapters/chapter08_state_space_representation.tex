@@ -1,0 +1,2097 @@
+\chapter{State-Space Representation}
+\label{ch:state_space_representation}
+
+\whythismatters{
+Transfer functions have served us well for analyzing and designing single-input single-output (SISO) control systems. However, as you advance in control engineering, you will encounter systems that transfer functions cannot adequately describe: aircraft with multiple control surfaces affecting multiple outputs, robotic manipulators with coupled joint dynamics, chemical processes with interacting temperature and concentration loops. These multi-input multi-output (MIMO) systems demand a more powerful mathematical framework.
+
+State-space representation provides that framework. Instead of describing only the input-output relationship, state-space models capture the complete internal dynamics of a system through a set of first-order differential equations. This approach reveals properties that transfer functions hide---whether all system modes can be controlled, whether internal states can be estimated from measurements, and how energy flows through the system.
+
+More importantly, state-space representation is the foundation for virtually all modern control techniques: optimal control (LQR), state estimation (Kalman filtering), model predictive control (MPC), and the machine learning methods we will explore in later chapters. Mastering state-space methods transforms you from a classical control engineer limited to SISO systems into a modern control engineer capable of tackling the complex multivariable systems that define contemporary engineering challenges.
+
+By the end of this chapter, you will derive state-space models from physical systems, convert between transfer functions and state-space forms, analyze controllability and observability, transform between canonical forms, and compute state transition matrices---the essential skills for modern control design.
+}
+
+%=============================================================================
+\section{State-Space Fundamentals}
+\label{sec:state_space_fundamentals}
+%=============================================================================
+
+I want to begin our exploration of state-space methods by establishing the fundamental concepts that distinguish this approach from the transfer function methods we have studied previously. The key insight is that state-space representation captures \textit{internal} system dynamics, not just input-output behavior.
+
+\subsection{State Variables and the State Vector}
+
+\begin{definition}[State Variables]
+\textbf{State variables} are the smallest set of variables that completely characterize the dynamic behavior of a system at any time $t$. Given the state variables at time $t_0$ and the input for $t \geq t_0$, we can determine the state and output for all future time.
+\end{definition}
+
+The number of state variables required equals the number of independent energy storage elements in the system. This is a profound connection between physics and mathematics:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{System Type} & \textbf{Energy Storage Element} & \textbf{State Variable} \\
+\midrule
+Mechanical (translational) & Mass & Position, velocity \\
+Mechanical (rotational) & Inertia & Angle, angular velocity \\
+Electrical & Capacitor & Voltage across capacitor \\
+Electrical & Inductor & Current through inductor \\
+Thermal & Thermal mass & Temperature \\
+Hydraulic & Fluid capacitance & Pressure or volume \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+We collect all state variables into the \textbf{state vector}:
+\begin{equation}
+\mathbf{x}(t) = \begin{bmatrix} x_1(t) \\ x_2(t) \\ \vdots \\ x_n(t) \end{bmatrix}
+\end{equation}
+where $n$ is the \textbf{order} of the system. The state vector lives in an $n$-dimensional \textbf{state space}, and as time evolves, it traces a trajectory through this space.
+
+\begin{example}[State Variables for a Mass-Spring-Damper System]
+\label{ex:msd_state_variables}
+Consider a mass $m$ connected to a spring (stiffness $k$) and damper (coefficient $b$), with applied force $F(t)$. Newton's second law gives:
+\begin{equation}
+m\ddot{x} + b\dot{x} + kx = F
+\end{equation}
+
+This second-order equation has two energy storage elements:
+\begin{itemize}
+    \item The spring stores potential energy: $E_{\text{spring}} = \frac{1}{2}kx^2$
+    \item The mass stores kinetic energy: $E_{\text{kinetic}} = \frac{1}{2}m\dot{x}^2$
+\end{itemize}
+The damper dissipates energy but does not store it.
+
+Therefore, we need two state variables. The natural choices are:
+\begin{equation}
+x_1 = x \quad \text{(position)}, \qquad x_2 = \dot{x} \quad \text{(velocity)}
+\end{equation}
+
+The state vector is:
+\begin{equation}
+\mathbf{x} = \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} = \begin{bmatrix} \text{position} \\ \text{velocity} \end{bmatrix}
+\end{equation}
+
+Given position and velocity at any instant, plus the future force input, we can completely determine all future motion.
+\end{example}
+
+\subsection{State Equations}
+
+The \textbf{state equation} describes how the state vector evolves over time. For a general nonlinear system:
+\begin{equation}
+\dot{\mathbf{x}}(t) = \mathbf{f}(\mathbf{x}(t), \mathbf{u}(t), t)
+\end{equation}
+where $\mathbf{u}(t)$ is the input vector.
+
+For \textbf{linear time-invariant (LTI)} systems, this simplifies to:
+\begin{equation}
+\boxed{\dot{\mathbf{x}}(t) = \mathbf{A}\mathbf{x}(t) + \mathbf{B}\mathbf{u}(t)}
+\label{eq:state_equation}
+\end{equation}
+
+This is the \textbf{state equation}. Let me explain each term:
+\begin{itemize}
+    \item $\dot{\mathbf{x}}(t)$: The derivative of the state vector---how the state changes over time
+    \item $\mathbf{A}\mathbf{x}(t)$: Contribution from the current state (internal dynamics)
+    \item $\mathbf{B}\mathbf{u}(t)$: Contribution from the input (external forcing)
+\end{itemize}
+
+\begin{example}[State Equations for Mass-Spring-Damper]
+Continuing Example~\ref{ex:msd_state_variables}, let us derive the state equations.
+
+From the definition $x_1 = x$ and $x_2 = \dot{x}$:
+\begin{equation}
+\dot{x}_1 = \dot{x} = x_2
+\end{equation}
+
+From Newton's law $m\ddot{x} = F - b\dot{x} - kx$:
+\begin{equation}
+\dot{x}_2 = \ddot{x} = -\frac{k}{m}x - \frac{b}{m}\dot{x} + \frac{1}{m}F = -\frac{k}{m}x_1 - \frac{b}{m}x_2 + \frac{1}{m}F
+\end{equation}
+
+In matrix form:
+\begin{equation}
+\begin{bmatrix} \dot{x}_1 \\ \dot{x}_2 \end{bmatrix} = \begin{bmatrix} 0 & 1 \\ -\frac{k}{m} & -\frac{b}{m} \end{bmatrix} \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} + \begin{bmatrix} 0 \\ \frac{1}{m} \end{bmatrix} F
+\end{equation}
+
+Thus:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -\frac{k}{m} & -\frac{b}{m} \end{bmatrix}, \qquad \mathbf{B} = \begin{bmatrix} 0 \\ \frac{1}{m} \end{bmatrix}
+\end{equation}
+\end{example}
+
+\subsection{Output Equations}
+
+Not all state variables are directly measurable. The \textbf{output equation} relates the measured outputs to the states and inputs:
+\begin{equation}
+\boxed{\mathbf{y}(t) = \mathbf{C}\mathbf{x}(t) + \mathbf{D}\mathbf{u}(t)}
+\label{eq:output_equation}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\mathbf{y}(t) \in \mathbb{R}^p$ is the output vector ($p$ outputs)
+    \item $\mathbf{C} \in \mathbb{R}^{p \times n}$ is the output matrix
+    \item $\mathbf{D} \in \mathbb{R}^{p \times m}$ is the feedthrough (or direct transmission) matrix
+\end{itemize}
+
+\textbf{Strictly proper systems} have $\mathbf{D} = \mathbf{0}$, meaning there is no instantaneous transmission from input to output. Most physical systems are strictly proper because energy storage elements prevent instantaneous response.
+
+\subsection{Complete State-Space Representation}
+
+Combining equations~\eqref{eq:state_equation} and~\eqref{eq:output_equation}, the complete state-space representation is:
+\begin{empheq}[box=\fbox]{align}
+\dot{\mathbf{x}}(t) &= \mathbf{A}\mathbf{x}(t) + \mathbf{B}\mathbf{u}(t) \label{eq:ss_state}\\
+\mathbf{y}(t) &= \mathbf{C}\mathbf{x}(t) + \mathbf{D}\mathbf{u}(t) \label{eq:ss_output}
+\end{empheq}
+
+The four matrices $(\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D})$ completely characterize the LTI system:
+
+\begin{center}
+\begin{tabular}{ccll}
+\toprule
+\textbf{Matrix} & \textbf{Dimension} & \textbf{Name} & \textbf{Physical Meaning} \\
+\midrule
+$\mathbf{A}$ & $n \times n$ & State matrix & Internal dynamics, coupling between states \\
+$\mathbf{B}$ & $n \times m$ & Input matrix & How inputs affect state derivatives \\
+$\mathbf{C}$ & $p \times n$ & Output matrix & Which states are measured \\
+$\mathbf{D}$ & $p \times m$ & Feedthrough matrix & Direct input-to-output transmission \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+where $n$ = number of states, $m$ = number of inputs, $p$ = number of outputs.
+
+\subsection{Physical Interpretation of the System Matrices}
+
+Understanding the physical meaning of each matrix element deepens your intuition for state-space models.
+
+\subsubsection{The A Matrix: Internal Dynamics}
+
+The element $a_{ij}$ of the $\mathbf{A}$ matrix represents the influence of state $x_j$ on the rate of change of state $x_i$:
+\begin{equation}
+\dot{x}_i = a_{i1}x_1 + a_{i2}x_2 + \cdots + a_{in}x_n + \text{(input terms)}
+\end{equation}
+
+\begin{itemize}
+    \item \textbf{Diagonal elements} $a_{ii}$: Self-dynamics---how a state affects its own derivative. Negative values indicate damping or decay.
+    \item \textbf{Off-diagonal elements} $a_{ij}$ ($i \neq j$): Coupling---how state $x_j$ influences the evolution of state $x_i$.
+\end{itemize}
+
+The \textbf{eigenvalues} of $\mathbf{A}$ are the system poles, determining stability and natural response modes.
+
+\subsubsection{The B Matrix: Control Influence}
+
+The element $b_{ij}$ indicates how input $u_j$ affects the derivative of state $x_i$:
+\begin{equation}
+\dot{x}_i = \text{(state terms)} + b_{i1}u_1 + b_{i2}u_2 + \cdots + b_{im}u_m
+\end{equation}
+
+Column $j$ of $\mathbf{B}$ shows which states are directly affected by input $u_j$.
+
+\subsubsection{The C Matrix: Measurement Configuration}
+
+Row $i$ of $\mathbf{C}$ defines how the states combine to form output $y_i$:
+\begin{equation}
+y_i = c_{i1}x_1 + c_{i2}x_2 + \cdots + c_{in}x_n + \text{(feedthrough terms)}
+\end{equation}
+
+Common cases:
+\begin{itemize}
+    \item $\mathbf{C} = \begin{bmatrix} 1 & 0 \end{bmatrix}$: Only the first state is measured
+    \item $\mathbf{C} = \mathbf{I}$: All states are directly measured (full state feedback possible)
+\end{itemize}
+
+\subsection{SISO vs. MIMO Systems}
+
+The beauty of state-space representation is that it handles SISO and MIMO systems with the same mathematical framework. The only difference is matrix dimensions:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{System Type} & $\mathbf{A}$ & $\mathbf{B}$ & $\mathbf{C}$ & $\mathbf{D}$ \\
+\midrule
+SISO ($m=1$, $p=1$) & $n \times n$ & $n \times 1$ (vector) & $1 \times n$ (vector) & scalar \\
+MIMO ($m$ inputs, $p$ outputs) & $n \times n$ & $n \times m$ & $p \times n$ & $p \times m$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This unified treatment is a major advantage over transfer functions, where MIMO systems require cumbersome transfer function matrices.
+
+\subsection{Connection to Transfer Functions}
+
+For SISO systems, the transfer function can be derived from the state-space representation. Taking Laplace transforms of equations~\eqref{eq:ss_state} and~\eqref{eq:ss_output} with zero initial conditions:
+\begin{align}
+s\mathbf{X}(s) &= \mathbf{A}\mathbf{X}(s) + \mathbf{B}U(s) \\
+Y(s) &= \mathbf{C}\mathbf{X}(s) + \mathbf{D}U(s)
+\end{align}
+
+Solving for $\mathbf{X}(s)$:
+\begin{equation}
+(s\mathbf{I} - \mathbf{A})\mathbf{X}(s) = \mathbf{B}U(s) \implies \mathbf{X}(s) = (s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B}U(s)
+\end{equation}
+
+Substituting into the output equation:
+\begin{equation}
+Y(s) = \mathbf{C}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B}U(s) + \mathbf{D}U(s)
+\end{equation}
+
+Therefore, the transfer function is:
+\begin{equation}
+\boxed{G(s) = \frac{Y(s)}{U(s)} = \mathbf{C}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B} + \mathbf{D}}
+\label{eq:ss_to_tf}
+\end{equation}
+
+This fundamental relationship bridges state-space and transfer function representations.
+
+\begin{theorem}[Poles and Eigenvalues]
+The poles of the transfer function $G(s)$ are the eigenvalues of the state matrix $\mathbf{A}$.
+\end{theorem}
+
+\begin{proof}
+The transfer function is $G(s) = \mathbf{C}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B} + \mathbf{D}$. Using the formula for matrix inverse:
+\begin{equation}
+(s\mathbf{I} - \mathbf{A})^{-1} = \frac{\text{adj}(s\mathbf{I} - \mathbf{A})}{\det(s\mathbf{I} - \mathbf{A})}
+\end{equation}
+The denominator is $\det(s\mathbf{I} - \mathbf{A})$, which is the characteristic polynomial of $\mathbf{A}$. Its roots are the eigenvalues of $\mathbf{A}$, which appear as poles in $G(s)$ (unless cancelled by numerator zeros).
+\end{proof}
+
+%=============================================================================
+\section{Converting Transfer Functions to State-Space}
+\label{sec:tf_to_ss}
+%=============================================================================
+
+Given a transfer function, we often need to convert it to state-space form for modern control design. This conversion is not unique---infinitely many state-space realizations exist for any transfer function. However, several \textbf{canonical forms} provide systematic, interpretable representations.
+
+\subsection{Controllable Canonical Form}
+
+The \textbf{controllable canonical form} (also called \textit{phase-variable} or \textit{companion} form) is the most commonly used realization for control design.
+
+Consider a strictly proper transfer function:
+\begin{equation}
+G(s) = \frac{b_{n-1}s^{n-1} + b_{n-2}s^{n-2} + \cdots + b_1s + b_0}{s^n + a_{n-1}s^{n-1} + \cdots + a_1s + a_0}
+\label{eq:tf_general}
+\end{equation}
+
+The \textbf{controllable canonical form} realization is:
+\begin{equation}
+\mathbf{A}_c = \begin{bmatrix}
+0 & 1 & 0 & \cdots & 0 \\
+0 & 0 & 1 & \cdots & 0 \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+0 & 0 & 0 & \cdots & 1 \\
+-a_0 & -a_1 & -a_2 & \cdots & -a_{n-1}
+\end{bmatrix}, \quad
+\mathbf{B}_c = \begin{bmatrix} 0 \\ 0 \\ \vdots \\ 0 \\ 1 \end{bmatrix}
+\label{eq:ccf_AB}
+\end{equation}
+
+\begin{equation}
+\mathbf{C}_c = \begin{bmatrix} b_0 & b_1 & b_2 & \cdots & b_{n-1} \end{bmatrix}, \quad \mathbf{D}_c = 0
+\label{eq:ccf_CD}
+\end{equation}
+
+\textbf{Key properties of controllable canonical form:}
+\begin{enumerate}
+    \item The characteristic polynomial coefficients appear in the \textbf{last row} of $\mathbf{A}_c$ (negated).
+    \item The $\mathbf{B}_c$ matrix has a simple structure: zeros with a 1 in the last position.
+    \item The system is \textbf{always controllable} (the controllability matrix has full rank).
+    \item The $\mathbf{C}_c$ matrix contains the numerator polynomial coefficients.
+\end{enumerate}
+
+\begin{example}[Second-Order Transfer Function to CCF]
+\label{ex:tf_to_ccf_2nd}
+Convert the following transfer function to controllable canonical form:
+\begin{equation}
+G(s) = \frac{2s + 3}{s^2 + 5s + 6}
+\end{equation}
+
+\textbf{Step 1: Identify coefficients}
+
+Comparing with equation~\eqref{eq:tf_general} for $n = 2$:
+\begin{itemize}
+    \item Denominator: $s^2 + 5s + 6 \implies a_1 = 5, \, a_0 = 6$
+    \item Numerator: $2s + 3 \implies b_1 = 2, \, b_0 = 3$
+\end{itemize}
+
+\textbf{Step 2: Construct the matrices}
+
+Using equations~\eqref{eq:ccf_AB} and~\eqref{eq:ccf_CD}:
+\begin{equation}
+\mathbf{A}_c = \begin{bmatrix} 0 & 1 \\ -6 & -5 \end{bmatrix}, \quad
+\mathbf{B}_c = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mathbf{C}_c = \begin{bmatrix} 3 & 2 \end{bmatrix}, \quad
+\mathbf{D}_c = 0
+\end{equation}
+
+\textbf{Step 3: Verify the transfer function}
+
+Let us confirm this realization produces the correct transfer function using equation~\eqref{eq:ss_to_tf}.
+
+First, compute $s\mathbf{I} - \mathbf{A}_c$:
+\begin{equation}
+s\mathbf{I} - \mathbf{A}_c = \begin{bmatrix} s & -1 \\ 6 & s+5 \end{bmatrix}
+\end{equation}
+
+The determinant (characteristic polynomial):
+\begin{equation}
+\det(s\mathbf{I} - \mathbf{A}_c) = s(s+5) + 6 = s^2 + 5s + 6 \quad \checkmark
+\end{equation}
+
+The adjugate matrix:
+\begin{equation}
+\text{adj}(s\mathbf{I} - \mathbf{A}_c) = \begin{bmatrix} s+5 & 1 \\ -6 & s \end{bmatrix}
+\end{equation}
+
+The inverse:
+\begin{equation}
+(s\mathbf{I} - \mathbf{A}_c)^{-1} = \frac{1}{s^2 + 5s + 6}\begin{bmatrix} s+5 & 1 \\ -6 & s \end{bmatrix}
+\end{equation}
+
+Now compute the transfer function:
+\begin{align}
+G(s) &= \mathbf{C}_c(s\mathbf{I} - \mathbf{A}_c)^{-1}\mathbf{B}_c \\
+&= \begin{bmatrix} 3 & 2 \end{bmatrix} \cdot \frac{1}{s^2 + 5s + 6}\begin{bmatrix} s+5 & 1 \\ -6 & s \end{bmatrix} \begin{bmatrix} 0 \\ 1 \end{bmatrix} \\
+&= \begin{bmatrix} 3 & 2 \end{bmatrix} \cdot \frac{1}{s^2 + 5s + 6}\begin{bmatrix} 1 \\ s \end{bmatrix} \\
+&= \frac{3 + 2s}{s^2 + 5s + 6} = \frac{2s + 3}{s^2 + 5s + 6} \quad \checkmark
+\end{align}
+\end{example}
+
+\begin{example}[Third-Order Transfer Function to CCF]
+\label{ex:tf_to_ccf_3rd}
+Convert to controllable canonical form:
+\begin{equation}
+G(s) = \frac{4s^2 + 3s + 2}{s^3 + 6s^2 + 11s + 6}
+\end{equation}
+
+\textbf{Step 1: Identify coefficients}
+
+For $n = 3$:
+\begin{itemize}
+    \item Denominator: $a_2 = 6, \, a_1 = 11, \, a_0 = 6$
+    \item Numerator: $b_2 = 4, \, b_1 = 3, \, b_0 = 2$
+\end{itemize}
+
+\textbf{Step 2: Construct the matrices}
+\begin{equation}
+\mathbf{A}_c = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -6 & -11 & -6 \end{bmatrix}, \quad
+\mathbf{B}_c = \begin{bmatrix} 0 \\ 0 \\ 1 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathbf{C}_c = \begin{bmatrix} 2 & 3 & 4 \end{bmatrix}, \quad \mathbf{D}_c = 0
+\end{equation}
+
+\textbf{Step 3: Verify poles}
+
+The characteristic polynomial is:
+\begin{equation}
+\det(s\mathbf{I} - \mathbf{A}_c) = s^3 + 6s^2 + 11s + 6 = (s+1)(s+2)(s+3)
+\end{equation}
+
+The poles are $s = -1, -2, -3$, which are the eigenvalues of $\mathbf{A}_c$.
+\end{example}
+
+\subsection{Observable Canonical Form}
+
+The \textbf{observable canonical form} is the dual of the controllable form, designed to guarantee observability.
+
+For the same transfer function~\eqref{eq:tf_general}:
+\begin{equation}
+\mathbf{A}_o = \begin{bmatrix}
+0 & 0 & \cdots & 0 & -a_0 \\
+1 & 0 & \cdots & 0 & -a_1 \\
+0 & 1 & \cdots & 0 & -a_2 \\
+\vdots & \vdots & \ddots & \vdots & \vdots \\
+0 & 0 & \cdots & 1 & -a_{n-1}
+\end{bmatrix}, \quad
+\mathbf{B}_o = \begin{bmatrix} b_0 \\ b_1 \\ b_2 \\ \vdots \\ b_{n-1} \end{bmatrix}
+\label{eq:ocf_AB}
+\end{equation}
+
+\begin{equation}
+\mathbf{C}_o = \begin{bmatrix} 0 & 0 & \cdots & 0 & 1 \end{bmatrix}, \quad \mathbf{D}_o = 0
+\label{eq:ocf_CD}
+\end{equation}
+
+\textbf{Key properties of observable canonical form:}
+\begin{enumerate}
+    \item The characteristic polynomial coefficients appear in the \textbf{last column} of $\mathbf{A}_o$ (negated).
+    \item The $\mathbf{C}_o$ matrix has a simple structure: zeros with a 1 in the last position.
+    \item The system is \textbf{always observable} (the observability matrix has full rank).
+    \item Observable canonical form is the \textbf{transpose dual} of controllable canonical form:
+    \begin{equation}
+    \mathbf{A}_o = \mathbf{A}_c^\top, \quad \mathbf{B}_o = \mathbf{C}_c^\top, \quad \mathbf{C}_o = \mathbf{B}_c^\top
+    \end{equation}
+\end{enumerate}
+
+\begin{example}[Second-Order Transfer Function to OCF]
+For the same transfer function from Example~\ref{ex:tf_to_ccf_2nd}:
+\begin{equation}
+G(s) = \frac{2s + 3}{s^2 + 5s + 6}
+\end{equation}
+
+The observable canonical form is:
+\begin{equation}
+\mathbf{A}_o = \begin{bmatrix} 0 & -6 \\ 1 & -5 \end{bmatrix}, \quad
+\mathbf{B}_o = \begin{bmatrix} 3 \\ 2 \end{bmatrix}, \quad
+\mathbf{C}_o = \begin{bmatrix} 0 & 1 \end{bmatrix}, \quad
+\mathbf{D}_o = 0
+\end{equation}
+
+Note that $\mathbf{A}_o = \mathbf{A}_c^\top$, $\mathbf{B}_o = \mathbf{C}_c^\top$, and $\mathbf{C}_o = \mathbf{B}_c^\top$.
+\end{example}
+
+\subsection{Diagonal (Modal) Canonical Form}
+
+When the transfer function has \textbf{distinct poles}, we can obtain a \textbf{diagonal canonical form} where the system dynamics are completely decoupled.
+
+\textbf{Procedure:} Use partial fraction expansion.
+
+For distinct poles $\lambda_1, \lambda_2, \ldots, \lambda_n$:
+\begin{equation}
+G(s) = \frac{k_1}{s - \lambda_1} + \frac{k_2}{s - \lambda_2} + \cdots + \frac{k_n}{s - \lambda_n}
+\end{equation}
+
+where $k_i$ are the residues. The diagonal form is:
+\begin{equation}
+\mathbf{A}_d = \begin{bmatrix}
+\lambda_1 & 0 & \cdots & 0 \\
+0 & \lambda_2 & \cdots & 0 \\
+\vdots & \vdots & \ddots & \vdots \\
+0 & 0 & \cdots & \lambda_n
+\end{bmatrix}, \quad
+\mathbf{B}_d = \begin{bmatrix} 1 \\ 1 \\ \vdots \\ 1 \end{bmatrix}
+\label{eq:diagonal_AB}
+\end{equation}
+
+\begin{equation}
+\mathbf{C}_d = \begin{bmatrix} k_1 & k_2 & \cdots & k_n \end{bmatrix}, \quad \mathbf{D}_d = 0
+\label{eq:diagonal_CD}
+\end{equation}
+
+\textbf{Key properties of diagonal form:}
+\begin{enumerate}
+    \item States are \textbf{decoupled}---each evolves independently according to its eigenvalue.
+    \item The \textbf{eigenvalues (poles)} appear directly on the diagonal of $\mathbf{A}_d$.
+    \item Stability is immediately visible: stable if all $\text{Re}(\lambda_i) < 0$.
+    \item The matrix exponential $e^{\mathbf{A}_d t}$ is trivial to compute.
+    \item Only exists for \textbf{distinct eigenvalues} (no repeated poles).
+\end{enumerate}
+
+\begin{example}[Diagonal Form via Partial Fractions]
+\label{ex:diagonal_form}
+Convert to diagonal form:
+\begin{equation}
+G(s) = \frac{2s + 3}{s^2 + 5s + 6} = \frac{2s + 3}{(s+2)(s+3)}
+\end{equation}
+
+\textbf{Step 1: Partial fraction expansion}
+
+\begin{equation}
+G(s) = \frac{A}{s+2} + \frac{B}{s+3}
+\end{equation}
+
+Using the cover-up method:
+\begin{align}
+A &= \left.(2s + 3)\right|_{s=-2} \cdot \frac{1}{(-2+3)} = \frac{-4+3}{1} = -1 \\
+B &= \left.(2s + 3)\right|_{s=-3} \cdot \frac{1}{(-3+2)} = \frac{-6+3}{-1} = 3
+\end{align}
+
+So:
+\begin{equation}
+G(s) = \frac{-1}{s+2} + \frac{3}{s+3}
+\end{equation}
+
+\textbf{Step 2: Construct the diagonal form}
+
+Poles: $\lambda_1 = -2$, $\lambda_2 = -3$. Residues: $k_1 = -1$, $k_2 = 3$.
+\begin{equation}
+\mathbf{A}_d = \begin{bmatrix} -2 & 0 \\ 0 & -3 \end{bmatrix}, \quad
+\mathbf{B}_d = \begin{bmatrix} 1 \\ 1 \end{bmatrix}, \quad
+\mathbf{C}_d = \begin{bmatrix} -1 & 3 \end{bmatrix}, \quad
+\mathbf{D}_d = 0
+\end{equation}
+
+\textbf{Step 3: Verify}
+
+\begin{align}
+G(s) &= \mathbf{C}_d(s\mathbf{I} - \mathbf{A}_d)^{-1}\mathbf{B}_d \\
+&= \begin{bmatrix} -1 & 3 \end{bmatrix} \begin{bmatrix} \frac{1}{s+2} & 0 \\ 0 & \frac{1}{s+3} \end{bmatrix} \begin{bmatrix} 1 \\ 1 \end{bmatrix} \\
+&= \begin{bmatrix} -1 & 3 \end{bmatrix} \begin{bmatrix} \frac{1}{s+2} \\ \frac{1}{s+3} \end{bmatrix} = \frac{-1}{s+2} + \frac{3}{s+3} \quad \checkmark
+\end{align}
+\end{example}
+
+\subsection{Handling Proper (Non-Strictly-Proper) Transfer Functions}
+
+When the numerator and denominator have the same degree (proper but not strictly proper), there is direct feedthrough:
+\begin{equation}
+G(s) = \frac{b_n s^n + b_{n-1}s^{n-1} + \cdots + b_0}{s^n + a_{n-1}s^{n-1} + \cdots + a_0}
+\end{equation}
+
+\textbf{Procedure:} Perform polynomial long division to extract the constant term.
+
+\begin{example}[Proper Transfer Function with Feedthrough]
+Convert to state-space:
+\begin{equation}
+G(s) = \frac{s^2 + 4s + 3}{s^2 + 2s + 1}
+\end{equation}
+
+\textbf{Step 1: Polynomial division}
+\begin{equation}
+\frac{s^2 + 4s + 3}{s^2 + 2s + 1} = 1 + \frac{2s + 2}{s^2 + 2s + 1}
+\end{equation}
+
+\textbf{Step 2: Convert strictly proper part to CCF}
+
+For $G_{sp}(s) = \frac{2s + 2}{s^2 + 2s + 1}$:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -1 & -2 \end{bmatrix}, \quad
+\mathbf{B} = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mathbf{C} = \begin{bmatrix} 2 & 2 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Add feedthrough}
+\begin{equation}
+\mathbf{D} = 1
+\end{equation}
+
+The complete state-space representation is $(\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D})$ with $\mathbf{D} = 1$.
+\end{example}
+
+\subsection{Summary: Choosing a Canonical Form}
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+\textbf{Form} & \textbf{Guaranteed Property} & \textbf{Best For} & \textbf{Structure} \\
+\midrule
+Controllable & Controllable & State feedback design & Last row has $-a_i$ \\
+Observable & Observable & Observer design & Last column has $-a_i$ \\
+Diagonal & Decoupled modes & Modal analysis, stability & Eigenvalues on diagonal \\
+Jordan & Handles repeated poles & Non-diagonalizable systems & Block diagonal \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%=============================================================================
+\section{State Transition Matrix and Solution of State Equations}
+\label{sec:state_transition_matrix}
+%=============================================================================
+
+Having established state-space representations, we now turn to solving the state equations. The solution reveals how the system evolves from initial conditions under applied inputs.
+
+\subsection{Homogeneous Solution: The State Transition Matrix}
+
+Consider the unforced (homogeneous) state equation:
+\begin{equation}
+\dot{\mathbf{x}}(t) = \mathbf{A}\mathbf{x}(t), \quad \mathbf{x}(0) = \mathbf{x}_0
+\end{equation}
+
+For a scalar equation $\dot{x} = ax$, the solution is $x(t) = e^{at}x_0$. The matrix generalization is:
+\begin{equation}
+\boxed{\mathbf{x}(t) = e^{\mathbf{A}t}\mathbf{x}_0}
+\end{equation}
+
+where the \textbf{matrix exponential} $e^{\mathbf{A}t}$ is defined by the power series:
+\begin{equation}
+e^{\mathbf{A}t} = \mathbf{I} + \mathbf{A}t + \frac{(\mathbf{A}t)^2}{2!} + \frac{(\mathbf{A}t)^3}{3!} + \cdots = \sum_{k=0}^{\infty} \frac{(\mathbf{A}t)^k}{k!}
+\label{eq:matrix_exp_series}
+\end{equation}
+
+\begin{definition}[State Transition Matrix]
+The \textbf{state transition matrix} $\boldsymbol{\Phi}(t) = e^{\mathbf{A}t}$ describes how the state evolves from any initial condition when there is no input.
+\end{definition}
+
+\textbf{Properties of the state transition matrix:}
+\begin{enumerate}
+    \item $\boldsymbol{\Phi}(0) = \mathbf{I}$ (identity at $t=0$)
+    \item $\boldsymbol{\Phi}^{-1}(t) = \boldsymbol{\Phi}(-t) = e^{-\mathbf{A}t}$
+    \item $\boldsymbol{\Phi}(t_1 + t_2) = \boldsymbol{\Phi}(t_1)\boldsymbol{\Phi}(t_2)$
+    \item $\frac{d}{dt}\boldsymbol{\Phi}(t) = \mathbf{A}\boldsymbol{\Phi}(t) = \boldsymbol{\Phi}(t)\mathbf{A}$
+    \item $\boldsymbol{\Phi}(t) = \mathcal{L}^{-1}\{(s\mathbf{I} - \mathbf{A})^{-1}\}$
+\end{enumerate}
+
+\subsection{Complete Solution with Input}
+
+For the full state equation with input:
+\begin{equation}
+\dot{\mathbf{x}}(t) = \mathbf{A}\mathbf{x}(t) + \mathbf{B}\mathbf{u}(t), \quad \mathbf{x}(0) = \mathbf{x}_0
+\end{equation}
+
+The complete solution is:
+\begin{equation}
+\boxed{\mathbf{x}(t) = e^{\mathbf{A}t}\mathbf{x}_0 + \int_0^t e^{\mathbf{A}(t-\tau)}\mathbf{B}\mathbf{u}(\tau)\,d\tau}
+\label{eq:state_solution}
+\end{equation}
+
+This solution has two parts:
+\begin{itemize}
+    \item \textbf{Free response}: $e^{\mathbf{A}t}\mathbf{x}_0$ (due to initial conditions)
+    \item \textbf{Forced response}: $\int_0^t e^{\mathbf{A}(t-\tau)}\mathbf{B}\mathbf{u}(\tau)\,d\tau$ (due to input)
+\end{itemize}
+
+The integral is a \textbf{convolution} of the state transition matrix with the input.
+
+\subsection{Computing the Matrix Exponential}
+
+Several methods exist for computing $e^{\mathbf{A}t}$. I will present the most useful approaches.
+
+\subsubsection{Method 1: Laplace Transform}
+
+The state transition matrix can be computed as:
+\begin{equation}
+e^{\mathbf{A}t} = \mathcal{L}^{-1}\{(s\mathbf{I} - \mathbf{A})^{-1}\}
+\label{eq:exp_laplace}
+\end{equation}
+
+This method requires computing $(s\mathbf{I} - \mathbf{A})^{-1}$ and taking inverse Laplace transforms element by element.
+
+\begin{example}[Matrix Exponential via Laplace Transform]
+\label{ex:matrix_exp_laplace}
+Compute $e^{\mathbf{A}t}$ for:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 1: Compute $s\mathbf{I} - \mathbf{A}$}
+\begin{equation}
+s\mathbf{I} - \mathbf{A} = \begin{bmatrix} s & -1 \\ 2 & s+3 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2: Compute the determinant}
+\begin{equation}
+\det(s\mathbf{I} - \mathbf{A}) = s(s+3) + 2 = s^2 + 3s + 2 = (s+1)(s+2)
+\end{equation}
+
+\textbf{Step 3: Compute the inverse}
+\begin{equation}
+(s\mathbf{I} - \mathbf{A})^{-1} = \frac{1}{(s+1)(s+2)}\begin{bmatrix} s+3 & 1 \\ -2 & s \end{bmatrix}
+\end{equation}
+
+\textbf{Step 4: Partial fraction expansion for each element}
+
+For element (1,1): $\frac{s+3}{(s+1)(s+2)} = \frac{2}{s+1} - \frac{1}{s+2}$
+
+For element (1,2): $\frac{1}{(s+1)(s+2)} = \frac{1}{s+1} - \frac{1}{s+2}$
+
+For element (2,1): $\frac{-2}{(s+1)(s+2)} = \frac{-2}{s+1} + \frac{2}{s+2}$
+
+For element (2,2): $\frac{s}{(s+1)(s+2)} = \frac{-1}{s+1} + \frac{2}{s+2}$
+
+\textbf{Step 5: Inverse Laplace transform}
+\begin{equation}
+e^{\mathbf{A}t} = \begin{bmatrix} 2e^{-t} - e^{-2t} & e^{-t} - e^{-2t} \\ -2e^{-t} + 2e^{-2t} & -e^{-t} + 2e^{-2t} \end{bmatrix}
+\end{equation}
+\end{example}
+
+\subsubsection{Method 2: Eigenvalue Decomposition (Diagonalizable Case)}
+
+If $\mathbf{A}$ has $n$ linearly independent eigenvectors, we can write:
+\begin{equation}
+\mathbf{A} = \mathbf{V}\boldsymbol{\Lambda}\mathbf{V}^{-1}
+\end{equation}
+where $\boldsymbol{\Lambda} = \text{diag}(\lambda_1, \ldots, \lambda_n)$ contains the eigenvalues and $\mathbf{V}$ contains the eigenvectors as columns.
+
+Then:
+\begin{equation}
+e^{\mathbf{A}t} = \mathbf{V}e^{\boldsymbol{\Lambda}t}\mathbf{V}^{-1} = \mathbf{V}\begin{bmatrix} e^{\lambda_1 t} & & \\ & \ddots & \\ & & e^{\lambda_n t} \end{bmatrix}\mathbf{V}^{-1}
+\label{eq:exp_eigen}
+\end{equation}
+
+\begin{example}[Matrix Exponential via Eigendecomposition]
+\label{ex:matrix_exp_eigen}
+For the same matrix from Example~\ref{ex:matrix_exp_laplace}:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 1: Find eigenvalues}
+
+From Example~\ref{ex:matrix_exp_laplace}, eigenvalues are $\lambda_1 = -1$, $\lambda_2 = -2$.
+
+\textbf{Step 2: Find eigenvectors}
+
+For $\lambda_1 = -1$: $(\mathbf{A} - (-1)\mathbf{I})\mathbf{v}_1 = \mathbf{0}$
+\begin{equation}
+\begin{bmatrix} 1 & 1 \\ -2 & -2 \end{bmatrix}\mathbf{v}_1 = \mathbf{0} \implies \mathbf{v}_1 = \begin{bmatrix} 1 \\ -1 \end{bmatrix}
+\end{equation}
+
+For $\lambda_2 = -2$: $(\mathbf{A} - (-2)\mathbf{I})\mathbf{v}_2 = \mathbf{0}$
+\begin{equation}
+\begin{bmatrix} 2 & 1 \\ -2 & -1 \end{bmatrix}\mathbf{v}_2 = \mathbf{0} \implies \mathbf{v}_2 = \begin{bmatrix} 1 \\ -2 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Form $\mathbf{V}$ and $\mathbf{V}^{-1}$}
+\begin{equation}
+\mathbf{V} = \begin{bmatrix} 1 & 1 \\ -1 & -2 \end{bmatrix}, \quad
+\mathbf{V}^{-1} = \begin{bmatrix} -2 & -1 \\ 1 & 1 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 4: Compute $e^{\mathbf{A}t}$}
+\begin{align}
+e^{\mathbf{A}t} &= \mathbf{V}\begin{bmatrix} e^{-t} & 0 \\ 0 & e^{-2t} \end{bmatrix}\mathbf{V}^{-1} \\
+&= \begin{bmatrix} 1 & 1 \\ -1 & -2 \end{bmatrix}\begin{bmatrix} e^{-t} & 0 \\ 0 & e^{-2t} \end{bmatrix}\begin{bmatrix} -2 & -1 \\ 1 & 1 \end{bmatrix} \\
+&= \begin{bmatrix} e^{-t} & e^{-2t} \\ -e^{-t} & -2e^{-2t} \end{bmatrix}\begin{bmatrix} -2 & -1 \\ 1 & 1 \end{bmatrix} \\
+&= \begin{bmatrix} -2e^{-t} + e^{-2t} & -e^{-t} + e^{-2t} \\ 2e^{-t} - 2e^{-2t} & e^{-t} - 2e^{-2t} \end{bmatrix}
+\end{align}
+
+Wait, this differs in sign from Example~\ref{ex:matrix_exp_laplace}. Let me recheck. Actually, I made an error in the eigenvector calculation. Let me redo it carefully.
+
+For $\lambda_1 = -1$:
+\begin{equation}
+(\mathbf{A} + \mathbf{I})\mathbf{v}_1 = \begin{bmatrix} 1 & 1 \\ -2 & -2 \end{bmatrix}\mathbf{v}_1 = \mathbf{0}
+\end{equation}
+This gives $v_{11} + v_{12} = 0$, so $\mathbf{v}_1 = \begin{bmatrix} 1 \\ -1 \end{bmatrix}$.
+
+For $\lambda_2 = -2$:
+\begin{equation}
+(\mathbf{A} + 2\mathbf{I})\mathbf{v}_2 = \begin{bmatrix} 2 & 1 \\ -2 & -1 \end{bmatrix}\mathbf{v}_2 = \mathbf{0}
+\end{equation}
+This gives $2v_{21} + v_{22} = 0$, so $\mathbf{v}_2 = \begin{bmatrix} 1 \\ -2 \end{bmatrix}$.
+
+So:
+\begin{equation}
+\mathbf{V} = \begin{bmatrix} 1 & 1 \\ -1 & -2 \end{bmatrix}
+\end{equation}
+
+The determinant is $\det(\mathbf{V}) = -2 - (-1) = -1$, so:
+\begin{equation}
+\mathbf{V}^{-1} = \frac{1}{-1}\begin{bmatrix} -2 & -1 \\ 1 & 1 \end{bmatrix} = \begin{bmatrix} 2 & 1 \\ -1 & -1 \end{bmatrix}
+\end{equation}
+
+Now:
+\begin{align}
+e^{\mathbf{A}t} &= \begin{bmatrix} 1 & 1 \\ -1 & -2 \end{bmatrix}\begin{bmatrix} e^{-t} & 0 \\ 0 & e^{-2t} \end{bmatrix}\begin{bmatrix} 2 & 1 \\ -1 & -1 \end{bmatrix} \\
+&= \begin{bmatrix} e^{-t} & e^{-2t} \\ -e^{-t} & -2e^{-2t} \end{bmatrix}\begin{bmatrix} 2 & 1 \\ -1 & -1 \end{bmatrix} \\
+&= \begin{bmatrix} 2e^{-t} - e^{-2t} & e^{-t} - e^{-2t} \\ -2e^{-t} + 2e^{-2t} & -e^{-t} + 2e^{-2t} \end{bmatrix}
+\end{align}
+
+This matches Example~\ref{ex:matrix_exp_laplace}.
+\end{example}
+
+\subsubsection{Method 3: Diagonal Form (Simplest)}
+
+If the system is already in diagonal form with $\mathbf{A} = \text{diag}(\lambda_1, \ldots, \lambda_n)$:
+\begin{equation}
+e^{\mathbf{A}t} = \text{diag}(e^{\lambda_1 t}, e^{\lambda_2 t}, \ldots, e^{\lambda_n t})
+\end{equation}
+
+This is why diagonal canonical form is valuable for analysis---the matrix exponential is trivial to compute.
+
+\subsection{Step Response via State-Space}
+
+Let us compute the step response using the state-space solution.
+
+\begin{example}[Step Response of Second-Order System]
+\label{ex:step_response_ss}
+For the controllable canonical form from Example~\ref{ex:tf_to_ccf_2nd}:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -6 & -5 \end{bmatrix}, \quad
+\mathbf{B} = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mathbf{C} = \begin{bmatrix} 3 & 2 \end{bmatrix}, \quad
+\mathbf{D} = 0
+\end{equation}
+
+With unit step input $u(t) = 1$ and zero initial conditions $\mathbf{x}_0 = \mathbf{0}$.
+
+\textbf{Step 1: Compute the forced response}
+
+From equation~\eqref{eq:state_solution}:
+\begin{equation}
+\mathbf{x}(t) = \int_0^t e^{\mathbf{A}(t-\tau)}\mathbf{B}\,d\tau = \int_0^t e^{\mathbf{A}\sigma}\mathbf{B}\,d\sigma
+\end{equation}
+where I substituted $\sigma = t - \tau$.
+
+We found that the eigenvalues are $\lambda_1 = -2$, $\lambda_2 = -3$. Using the diagonal form from Example~\ref{ex:diagonal_form}:
+\begin{equation}
+\mathbf{A}_d = \begin{bmatrix} -2 & 0 \\ 0 & -3 \end{bmatrix}, \quad e^{\mathbf{A}_d t} = \begin{bmatrix} e^{-2t} & 0 \\ 0 & e^{-3t} \end{bmatrix}
+\end{equation}
+
+The state in diagonal coordinates:
+\begin{equation}
+\mathbf{z}(t) = \int_0^t \begin{bmatrix} e^{-2\sigma} & 0 \\ 0 & e^{-3\sigma} \end{bmatrix}\begin{bmatrix} 1 \\ 1 \end{bmatrix}d\sigma = \begin{bmatrix} \frac{1 - e^{-2t}}{2} \\ \frac{1 - e^{-3t}}{3} \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2: Compute the output}
+\begin{align}
+y(t) &= \mathbf{C}_d\mathbf{z}(t) = \begin{bmatrix} -1 & 3 \end{bmatrix}\begin{bmatrix} \frac{1 - e^{-2t}}{2} \\ \frac{1 - e^{-3t}}{3} \end{bmatrix} \\
+&= -\frac{1 - e^{-2t}}{2} + \frac{3(1 - e^{-3t})}{3} \\
+&= -\frac{1}{2} + \frac{e^{-2t}}{2} + 1 - e^{-3t} \\
+&= \frac{1}{2} + \frac{1}{2}e^{-2t} - e^{-3t}
+\end{align}
+
+\textbf{Verification:} The steady-state value is $y(\infty) = \frac{1}{2}$, which equals $G(0) = \frac{3}{6} = \frac{1}{2}$. $\checkmark$
+\end{example}
+
+%=============================================================================
+\section{Controllability}
+\label{sec:controllability}
+%=============================================================================
+
+Controllability is one of the most fundamental concepts in modern control theory. It answers a critical question: \textit{Can we steer the system from any initial state to any desired final state using the available inputs?}
+
+\subsection{Definition of Controllability}
+
+\begin{definition}[Controllability]
+A linear time-invariant system $(\mathbf{A}, \mathbf{B})$ is \textbf{controllable} if, for any initial state $\mathbf{x}_0$ and any desired final state $\mathbf{x}_f$, there exists an input $\mathbf{u}(t)$ over a finite time interval $[0, t_f]$ that drives the system from $\mathbf{x}_0$ to $\mathbf{x}_f$.
+\end{definition}
+
+Controllability is a property of the pair $(\mathbf{A}, \mathbf{B})$---it depends on the system dynamics and how inputs enter the system. The output matrices $\mathbf{C}$ and $\mathbf{D}$ do not affect controllability.
+
+\subsection{The Controllability Matrix}
+
+The key to testing controllability is the \textbf{controllability matrix}:
+\begin{equation}
+\boxed{\mathcal{C} = \begin{bmatrix} \mathbf{B} & \mathbf{A}\mathbf{B} & \mathbf{A}^2\mathbf{B} & \cdots & \mathbf{A}^{n-1}\mathbf{B} \end{bmatrix}}
+\label{eq:controllability_matrix}
+\end{equation}
+
+For a system with $n$ states and $m$ inputs, $\mathcal{C}$ is an $n \times nm$ matrix.
+
+\begin{theorem}[Controllability Rank Test]
+\label{thm:controllability_rank}
+The system $(\mathbf{A}, \mathbf{B})$ is controllable if and only if:
+\begin{equation}
+\text{rank}(\mathcal{C}) = n
+\end{equation}
+\end{theorem}
+
+\textbf{Physical interpretation:}
+\begin{itemize}
+    \item $\mathbf{B}$: States directly reachable from input in one time step
+    \item $\mathbf{A}\mathbf{B}$: States reachable after the dynamics propagate the input effect once
+    \item $\mathbf{A}^2\mathbf{B}$: States reachable after two propagation steps
+    \item $\mathbf{A}^{n-1}\mathbf{B}$: States reachable after $n-1$ propagation steps
+\end{itemize}
+
+If rank$(\mathcal{C}) = n$, every state direction can be reached through some combination of these influences.
+
+\begin{example}[Controllability Test for Mass-Spring-Damper]
+\label{ex:controllability_msd}
+Test controllability of the mass-spring-damper system with $m = 1$, $k = 4$, $b = 2$:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -4 & -2 \end{bmatrix}, \quad \mathbf{B} = \begin{bmatrix} 0 \\ 1 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 1: Compute $\mathbf{A}\mathbf{B}$}
+\begin{equation}
+\mathbf{A}\mathbf{B} = \begin{bmatrix} 0 & 1 \\ -4 & -2 \end{bmatrix}\begin{bmatrix} 0 \\ 1 \end{bmatrix} = \begin{bmatrix} 1 \\ -2 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2: Form the controllability matrix}
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} \mathbf{B} & \mathbf{A}\mathbf{B} \end{bmatrix} = \begin{bmatrix} 0 & 1 \\ 1 & -2 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Check rank}
+\begin{equation}
+\det(\mathcal{C}) = 0 \cdot (-2) - 1 \cdot 1 = -1 \neq 0
+\end{equation}
+
+Since $\det(\mathcal{C}) \neq 0$, rank$(\mathcal{C}) = 2 = n$. The system is \textbf{controllable}.
+
+\textbf{Physical interpretation:} Even though the force input does not directly affect position (only velocity), the coupling through the dynamics allows us to control both position and velocity.
+\end{example}
+
+\begin{example}[Uncontrollable System]
+\label{ex:uncontrollable}
+Consider:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix}, \quad \mathbf{B} = \begin{bmatrix} 1 \\ 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 1: Compute $\mathbf{A}\mathbf{B}$}
+\begin{equation}
+\mathbf{A}\mathbf{B} = \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix}\begin{bmatrix} 1 \\ 0 \end{bmatrix} = \begin{bmatrix} -1 \\ 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2: Form the controllability matrix}
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} 1 & -1 \\ 0 & 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Check rank}
+
+The second row is all zeros, so rank$(\mathcal{C}) = 1 < 2$. The system is \textbf{not controllable}.
+
+\textbf{Physical interpretation:} The input only affects $x_1$. Since $\mathbf{A}$ is diagonal, there is no coupling, so the input can never influence $x_2$. State $x_2$ evolves according to $\dot{x}_2 = -2x_2$ regardless of the input.
+\end{example}
+
+\subsection{The Controllability Gramian}
+
+An alternative approach to analyzing controllability uses the \textbf{controllability Gramian}.
+
+\begin{definition}[Controllability Gramian]
+For a stable system ($\mathbf{A}$ has all eigenvalues with negative real parts), the controllability Gramian is:
+\begin{equation}
+\mathbf{W}_c = \int_0^\infty e^{\mathbf{A}t}\mathbf{B}\mathbf{B}^\top e^{\mathbf{A}^\top t}\,dt
+\label{eq:controllability_gramian}
+\end{equation}
+\end{definition}
+
+The Gramian satisfies the \textbf{Lyapunov equation}:
+\begin{equation}
+\mathbf{A}\mathbf{W}_c + \mathbf{W}_c\mathbf{A}^\top + \mathbf{B}\mathbf{B}^\top = \mathbf{0}
+\label{eq:lyapunov_controllability}
+\end{equation}
+
+\begin{theorem}[Controllability via Gramian]
+A stable system $(\mathbf{A}, \mathbf{B})$ is controllable if and only if $\mathbf{W}_c$ is positive definite (i.e., $\mathbf{W}_c > 0$).
+\end{theorem}
+
+The Gramian approach is computationally advantageous for large systems because solving the Lyapunov equation~\eqref{eq:lyapunov_controllability} is efficient ($O(n^3)$ operations) compared to computing and checking the rank of $\mathcal{C}$.
+
+\textbf{Physical interpretation of the Gramian:} The eigenvalues of $\mathbf{W}_c$ indicate how \textit{easy} it is to control different state directions. Large eigenvalues correspond to directions that are easy to control; small eigenvalues correspond to directions that require large control effort.
+
+\subsection{Controllability of Canonical Forms}
+
+The controllability of canonical forms follows directly from their structure:
+
+\begin{theorem}[Controllability of CCF]
+The controllable canonical form $(\mathbf{A}_c, \mathbf{B}_c)$ is always controllable. The controllability matrix has determinant $\pm 1$.
+\end{theorem}
+
+\begin{proof}
+For a second-order CCF:
+\begin{equation}
+\mathbf{A}_c = \begin{bmatrix} 0 & 1 \\ -a_0 & -a_1 \end{bmatrix}, \quad \mathbf{B}_c = \begin{bmatrix} 0 \\ 1 \end{bmatrix}
+\end{equation}
+
+The controllability matrix is:
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} 0 & 1 \\ 1 & -a_1 \end{bmatrix}
+\end{equation}
+
+We have $\det(\mathcal{C}) = -1 \neq 0$, so rank$(\mathcal{C}) = 2$. This generalizes to arbitrary order.
+\end{proof}
+
+\textbf{Warning:} Observable canonical form is \textit{not} guaranteed to be controllable, and diagonal form may or may not be controllable depending on the $\mathbf{B}$ matrix structure.
+
+%=============================================================================
+\section{Observability}
+\label{sec:observability}
+%=============================================================================
+
+Observability is the dual concept to controllability. It answers: \textit{Can we determine the internal state of the system from measurements of the output?}
+
+\subsection{Definition of Observability}
+
+\begin{definition}[Observability]
+A linear time-invariant system $(\mathbf{A}, \mathbf{C})$ is \textbf{observable} if the initial state $\mathbf{x}_0$ can be uniquely determined from knowledge of the input $\mathbf{u}(t)$ and output $\mathbf{y}(t)$ over a finite time interval $[0, t_f]$.
+\end{definition}
+
+Observability is a property of the pair $(\mathbf{A}, \mathbf{C})$---it depends on the system dynamics and what is measured. The input matrices $\mathbf{B}$ and $\mathbf{D}$ do not affect observability.
+
+\subsection{The Observability Matrix}
+
+\begin{equation}
+\boxed{\mathcal{O} = \begin{bmatrix} \mathbf{C} \\ \mathbf{C}\mathbf{A} \\ \mathbf{C}\mathbf{A}^2 \\ \vdots \\ \mathbf{C}\mathbf{A}^{n-1} \end{bmatrix}}
+\label{eq:observability_matrix}
+\end{equation}
+
+For a system with $n$ states and $p$ outputs, $\mathcal{O}$ is a $pn \times n$ matrix.
+
+\begin{theorem}[Observability Rank Test]
+\label{thm:observability_rank}
+The system $(\mathbf{A}, \mathbf{C})$ is observable if and only if:
+\begin{equation}
+\text{rank}(\mathcal{O}) = n
+\end{equation}
+\end{theorem}
+
+\textbf{Physical interpretation:}
+\begin{itemize}
+    \item $\mathbf{C}$: States directly visible in the output
+    \item $\mathbf{C}\mathbf{A}$: States whose effects appear in the output after one time step
+    \item $\mathbf{C}\mathbf{A}^{n-1}$: States whose effects appear after $n-1$ time steps
+\end{itemize}
+
+If rank$(\mathcal{O}) = n$, every state can eventually be distinguished through its effect on the output.
+
+\begin{example}[Observability Test]
+\label{ex:observability_test}
+Test observability of:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -6 & -5 \end{bmatrix}, \quad \mathbf{C} = \begin{bmatrix} 1 & 0 \end{bmatrix}
+\end{equation}
+
+This represents a system where only position is measured (not velocity).
+
+\textbf{Step 1: Compute $\mathbf{C}\mathbf{A}$}
+\begin{equation}
+\mathbf{C}\mathbf{A} = \begin{bmatrix} 1 & 0 \end{bmatrix}\begin{bmatrix} 0 & 1 \\ -6 & -5 \end{bmatrix} = \begin{bmatrix} 0 & 1 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2: Form the observability matrix}
+\begin{equation}
+\mathcal{O} = \begin{bmatrix} \mathbf{C} \\ \mathbf{C}\mathbf{A} \end{bmatrix} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Check rank}
+
+$\mathcal{O}$ is the identity matrix, so rank$(\mathcal{O}) = 2 = n$. The system is \textbf{observable}.
+
+\textbf{Physical interpretation:} Although we only measure position directly, velocity affects how position changes. By observing position over time, we can infer velocity.
+\end{example}
+
+\begin{example}[Unobservable System]
+\label{ex:unobservable}
+Consider:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix}, \quad \mathbf{C} = \begin{bmatrix} 1 & 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 1: Compute $\mathbf{C}\mathbf{A}$}
+\begin{equation}
+\mathbf{C}\mathbf{A} = \begin{bmatrix} 1 & 0 \end{bmatrix}\begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix} = \begin{bmatrix} -1 & 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2: Form the observability matrix}
+\begin{equation}
+\mathcal{O} = \begin{bmatrix} 1 & 0 \\ -1 & 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Check rank}
+
+The second column is all zeros, so rank$(\mathcal{O}) = 1 < 2$. The system is \textbf{not observable}.
+
+\textbf{Physical interpretation:} We only measure $x_1$. Since $\mathbf{A}$ is diagonal (no coupling), $x_2$ has no effect on $x_1$ or the output. We cannot determine $x_2$ from measurements of $y = x_1$.
+\end{example}
+
+\subsection{The Observability Gramian}
+
+\begin{definition}[Observability Gramian]
+For a stable system, the observability Gramian is:
+\begin{equation}
+\mathbf{W}_o = \int_0^\infty e^{\mathbf{A}^\top t}\mathbf{C}^\top\mathbf{C} e^{\mathbf{A}t}\,dt
+\label{eq:observability_gramian}
+\end{equation}
+\end{definition}
+
+The Gramian satisfies:
+\begin{equation}
+\mathbf{A}^\top\mathbf{W}_o + \mathbf{W}_o\mathbf{A} + \mathbf{C}^\top\mathbf{C} = \mathbf{0}
+\label{eq:lyapunov_observability}
+\end{equation}
+
+\begin{theorem}[Observability via Gramian]
+A stable system $(\mathbf{A}, \mathbf{C})$ is observable if and only if $\mathbf{W}_o > 0$ (positive definite).
+\end{theorem}
+
+\textbf{Physical interpretation:} The eigenvalues of $\mathbf{W}_o$ indicate how \textit{easy} it is to observe different state directions. Large eigenvalues correspond to states that strongly affect the output; small eigenvalues correspond to states that are difficult to observe.
+
+\subsection{Duality Between Controllability and Observability}
+
+There is a beautiful duality between controllability and observability:
+
+\begin{theorem}[Duality]
+\label{thm:duality}
+The system $(\mathbf{A}, \mathbf{B})$ is controllable if and only if the dual system $(\mathbf{A}^\top, \mathbf{B}^\top)$ is observable.
+
+Equivalently, $(\mathbf{A}, \mathbf{C})$ is observable if and only if $(\mathbf{A}^\top, \mathbf{C}^\top)$ is controllable.
+\end{theorem}
+
+This duality means:
+\begin{itemize}
+    \item Every theorem about controllability has a corresponding theorem about observability
+    \item The controllability matrix of $(\mathbf{A}, \mathbf{B})$ equals the transpose of the observability matrix of $(\mathbf{A}^\top, \mathbf{B}^\top)$
+    \item Observer design for $(\mathbf{A}, \mathbf{C})$ is mathematically equivalent to controller design for $(\mathbf{A}^\top, \mathbf{C}^\top)$
+\end{itemize}
+
+\textbf{This is why observable canonical form is the transpose of controllable canonical form.}
+
+\subsection{Minimal Realization}
+
+\begin{definition}[Minimal Realization]
+A state-space realization $(\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D})$ is \textbf{minimal} if it has the smallest possible number of states among all realizations of the same transfer function.
+\end{definition}
+
+\begin{theorem}[Minimal Realization Criterion]
+A realization is minimal if and only if it is both controllable and observable.
+\end{theorem}
+
+\textbf{Implications:}
+\begin{itemize}
+    \item A minimal realization has $n$ states, where $n$ equals the degree of the denominator of the transfer function (with no pole-zero cancellations)
+    \item Non-minimal realizations have \textbf{hidden modes}---uncontrollable or unobservable states that do not appear in the transfer function
+    \item Converting a transfer function to CCF or OCF produces a minimal realization (assuming no pole-zero cancellations in the original transfer function)
+\end{itemize}
+
+\begin{example}[Non-Minimal Realization]
+\label{ex:non_minimal}
+Consider:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix}, \quad \mathbf{B} = \begin{bmatrix} 1 \\ 0 \end{bmatrix}, \quad \mathbf{C} = \begin{bmatrix} 1 & 0 \end{bmatrix}, \quad \mathbf{D} = 0
+\end{equation}
+
+From Examples~\ref{ex:uncontrollable} and~\ref{ex:unobservable}, this system is neither controllable nor observable.
+
+The transfer function is:
+\begin{equation}
+G(s) = \mathbf{C}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B} = \begin{bmatrix} 1 & 0 \end{bmatrix}\begin{bmatrix} \frac{1}{s+1} & 0 \\ 0 & \frac{1}{s+2} \end{bmatrix}\begin{bmatrix} 1 \\ 0 \end{bmatrix} = \frac{1}{s+1}
+\end{equation}
+
+The pole at $s = -2$ does not appear in the transfer function! This is a \textbf{hidden mode}---the state $x_2$ evolves according to $\dot{x}_2 = -2x_2$ but cannot be controlled or observed.
+
+A minimal realization is simply:
+\begin{equation}
+A_{\min} = -1, \quad B_{\min} = 1, \quad C_{\min} = 1, \quad D_{\min} = 0
+\end{equation}
+This first-order system has the same transfer function but no hidden modes.
+\end{example}
+
+%=============================================================================
+\section{Canonical Forms}
+\label{sec:canonical_forms}
+%=============================================================================
+
+We have already introduced controllable, observable, and diagonal canonical forms in Section~\ref{sec:tf_to_ss}. Here, I provide a comprehensive treatment including the Jordan canonical form for systems with repeated eigenvalues.
+
+\subsection{Summary of Canonical Forms}
+
+The following table summarizes the key canonical forms:
+
+\begin{center}
+\begin{tabular}{p{2.5cm}p{4cm}p{4cm}p{3cm}}
+\toprule
+\textbf{Form} & \textbf{A Matrix Structure} & \textbf{Key Feature} & \textbf{Best Application} \\
+\midrule
+Controllable & Companion (last row has $-a_i$) & Always controllable & State feedback design \\
+Observable & Companion (last col has $-a_i$) & Always observable & Observer design \\
+Diagonal & Diagonal (eigenvalues) & Decoupled modes & Modal analysis \\
+Jordan & Block diagonal & Handles repeated poles & General analysis \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Jordan Canonical Form}
+
+When the system matrix $\mathbf{A}$ has \textbf{repeated eigenvalues}, it may not be diagonalizable. In this case, we use the \textbf{Jordan canonical form}.
+
+\begin{definition}[Jordan Block]
+A Jordan block $\mathbf{J}_k(\lambda)$ of size $k$ associated with eigenvalue $\lambda$ is:
+\begin{equation}
+\mathbf{J}_k(\lambda) = \begin{bmatrix}
+\lambda & 1 & 0 & \cdots & 0 \\
+0 & \lambda & 1 & \cdots & 0 \\
+\vdots & & \ddots & \ddots & \vdots \\
+0 & 0 & \cdots & \lambda & 1 \\
+0 & 0 & \cdots & 0 & \lambda
+\end{bmatrix}_{k \times k}
+\end{equation}
+\end{definition}
+
+The Jordan canonical form of $\mathbf{A}$ is a block diagonal matrix:
+\begin{equation}
+\mathbf{J} = \begin{bmatrix}
+\mathbf{J}_{k_1}(\lambda_1) & & \\
+& \mathbf{J}_{k_2}(\lambda_2) & \\
+& & \ddots
+\end{bmatrix}
+\end{equation}
+
+\begin{example}[Jordan Form with Repeated Eigenvalue]
+\label{ex:jordan_form}
+Consider a system with double pole at $s = -2$:
+\begin{equation}
+G(s) = \frac{1}{(s+2)^2}
+\end{equation}
+
+The Jordan form realization is:
+\begin{equation}
+\mathbf{A}_J = \begin{bmatrix} -2 & 1 \\ 0 & -2 \end{bmatrix}, \quad
+\mathbf{B}_J = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mathbf{C}_J = \begin{bmatrix} 1 & 0 \end{bmatrix}, \quad
+\mathbf{D}_J = 0
+\end{equation}
+
+The ``1'' above the diagonal in $\mathbf{A}_J$ couples the two states---this is essential because with a repeated eigenvalue, we cannot have fully decoupled dynamics.
+
+\textbf{Matrix exponential for Jordan blocks:}
+\begin{equation}
+e^{\mathbf{J}_2(\lambda)t} = e^{\lambda t}\begin{bmatrix} 1 & t \\ 0 & 1 \end{bmatrix}
+\end{equation}
+
+For our example:
+\begin{equation}
+e^{\mathbf{A}_J t} = e^{-2t}\begin{bmatrix} 1 & t \\ 0 & 1 \end{bmatrix}
+\end{equation}
+
+Note the polynomial term $t$ multiplying the exponential---this is characteristic of repeated poles.
+\end{example}
+
+\subsection{Relationship Between Canonical Forms}
+
+All canonical forms represent the \textit{same} input-output behavior (same transfer function). They differ only in:
+\begin{itemize}
+    \item How states are defined (different coordinate systems)
+    \item Which structural property is emphasized (controllability, observability, modal decomposition)
+    \item Numerical conditioning for computation
+\end{itemize}
+
+Any two minimal realizations of the same transfer function are related by a similarity transformation.
+
+%=============================================================================
+\section{Similarity Transformations}
+\label{sec:similarity_transformations}
+%=============================================================================
+
+Similarity transformations are the mathematical tool for converting between different state-space realizations. They represent a change of coordinates in state space.
+
+\subsection{Definition and Properties}
+
+\begin{definition}[Similarity Transformation]
+Given a state-space system $(\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D})$ and an invertible matrix $\mathbf{T} \in \mathbb{R}^{n \times n}$, the \textbf{similarity transformation} $\bar{\mathbf{x}} = \mathbf{T}\mathbf{x}$ produces a new realization:
+\begin{align}
+\bar{\mathbf{A}} &= \mathbf{T}\mathbf{A}\mathbf{T}^{-1} \\
+\bar{\mathbf{B}} &= \mathbf{T}\mathbf{B} \\
+\bar{\mathbf{C}} &= \mathbf{C}\mathbf{T}^{-1} \\
+\bar{\mathbf{D}} &= \mathbf{D}
+\end{align}
+\end{definition}
+
+\begin{theorem}[Invariants Under Similarity Transformation]
+The following properties are preserved under similarity transformations:
+\begin{enumerate}
+    \item \textbf{Transfer function:} $\bar{G}(s) = G(s)$
+    \item \textbf{Eigenvalues:} $\sigma(\bar{\mathbf{A}}) = \sigma(\mathbf{A})$ (same poles)
+    \item \textbf{Controllability:} rank$(\bar{\mathcal{C}})$ = rank$(\mathcal{C})$
+    \item \textbf{Observability:} rank$(\bar{\mathcal{O}})$ = rank$(\mathcal{O})$
+    \item \textbf{Characteristic polynomial:} $\det(s\mathbf{I} - \bar{\mathbf{A}}) = \det(s\mathbf{I} - \mathbf{A})$
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}[Proof of transfer function invariance]
+\begin{align}
+\bar{G}(s) &= \bar{\mathbf{C}}(s\mathbf{I} - \bar{\mathbf{A}})^{-1}\bar{\mathbf{B}} + \bar{\mathbf{D}} \\
+&= \mathbf{C}\mathbf{T}^{-1}(s\mathbf{I} - \mathbf{T}\mathbf{A}\mathbf{T}^{-1})^{-1}\mathbf{T}\mathbf{B} + \mathbf{D} \\
+&= \mathbf{C}\mathbf{T}^{-1}[\mathbf{T}(s\mathbf{I} - \mathbf{A})\mathbf{T}^{-1}]^{-1}\mathbf{T}\mathbf{B} + \mathbf{D} \\
+&= \mathbf{C}\mathbf{T}^{-1}\mathbf{T}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{T}^{-1}\mathbf{T}\mathbf{B} + \mathbf{D} \\
+&= \mathbf{C}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B} + \mathbf{D} = G(s)
+\end{align}
+\end{proof}
+
+\subsection{Finding the Transformation Matrix}
+
+Given two realizations $(\mathbf{A}_1, \mathbf{B}_1, \mathbf{C}_1)$ and $(\mathbf{A}_2, \mathbf{B}_2, \mathbf{C}_2)$ of the same transfer function, we want to find $\mathbf{T}$ such that:
+\begin{equation}
+\mathbf{A}_2 = \mathbf{T}\mathbf{A}_1\mathbf{T}^{-1}, \quad \mathbf{B}_2 = \mathbf{T}\mathbf{B}_1, \quad \mathbf{C}_2 = \mathbf{C}_1\mathbf{T}^{-1}
+\end{equation}
+
+\subsubsection{Method 1: Using Controllability Matrices}
+
+If both realizations are controllable:
+\begin{equation}
+\mathbf{T} = \mathcal{C}_2 \mathcal{C}_1^{-1}
+\label{eq:T_controllability}
+\end{equation}
+where $\mathcal{C}_1$ and $\mathcal{C}_2$ are the controllability matrices.
+
+\subsubsection{Method 2: Using Observability Matrices}
+
+If both realizations are observable:
+\begin{equation}
+\mathbf{T} = \mathcal{O}_1^{-1}\mathcal{O}_2
+\label{eq:T_observability}
+\end{equation}
+where $\mathcal{O}_1$ and $\mathcal{O}_2$ are the observability matrices.
+
+\subsubsection{Method 3: Eigendecomposition (for Diagonal Form)}
+
+To transform to diagonal form:
+\begin{equation}
+\mathbf{T} = \mathbf{V}^{-1}
+\end{equation}
+where $\mathbf{V}$ is the eigenvector matrix of $\mathbf{A}$ (columns are eigenvectors).
+
+\begin{example}[Transformation from CCF to Diagonal Form]
+\label{ex:ccf_to_diagonal}
+Transform the controllable canonical form:
+\begin{equation}
+\mathbf{A}_c = \begin{bmatrix} 0 & 1 \\ -6 & -5 \end{bmatrix}, \quad \mathbf{B}_c = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad \mathbf{C}_c = \begin{bmatrix} 3 & 2 \end{bmatrix}
+\end{equation}
+to diagonal form.
+
+\textbf{Step 1: Find eigenvalues of $\mathbf{A}_c$}
+\begin{equation}
+\det(\lambda\mathbf{I} - \mathbf{A}_c) = \lambda^2 + 5\lambda + 6 = (\lambda + 2)(\lambda + 3) = 0
+\end{equation}
+Eigenvalues: $\lambda_1 = -2$, $\lambda_2 = -3$.
+
+\textbf{Step 2: Find eigenvectors}
+
+For $\lambda_1 = -2$:
+\begin{equation}
+(\mathbf{A}_c + 2\mathbf{I})\mathbf{v}_1 = \begin{bmatrix} 2 & 1 \\ -6 & -3 \end{bmatrix}\mathbf{v}_1 = \mathbf{0} \implies \mathbf{v}_1 = \begin{bmatrix} 1 \\ -2 \end{bmatrix}
+\end{equation}
+
+For $\lambda_2 = -3$:
+\begin{equation}
+(\mathbf{A}_c + 3\mathbf{I})\mathbf{v}_2 = \begin{bmatrix} 3 & 1 \\ -6 & -2 \end{bmatrix}\mathbf{v}_2 = \mathbf{0} \implies \mathbf{v}_2 = \begin{bmatrix} 1 \\ -3 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Form transformation matrix}
+\begin{equation}
+\mathbf{V} = \begin{bmatrix} 1 & 1 \\ -2 & -3 \end{bmatrix}, \quad \mathbf{T} = \mathbf{V}^{-1} = \begin{bmatrix} 3 & 1 \\ -2 & -1 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 4: Transform the system}
+\begin{align}
+\mathbf{A}_d &= \mathbf{T}\mathbf{A}_c\mathbf{T}^{-1} = \begin{bmatrix} -2 & 0 \\ 0 & -3 \end{bmatrix} \\
+\mathbf{B}_d &= \mathbf{T}\mathbf{B}_c = \begin{bmatrix} 3 & 1 \\ -2 & -1 \end{bmatrix}\begin{bmatrix} 0 \\ 1 \end{bmatrix} = \begin{bmatrix} 1 \\ -1 \end{bmatrix} \\
+\mathbf{C}_d &= \mathbf{C}_c\mathbf{T}^{-1} = \begin{bmatrix} 3 & 2 \end{bmatrix}\begin{bmatrix} 1 & 1 \\ -2 & -3 \end{bmatrix} = \begin{bmatrix} -1 & -3 \end{bmatrix}
+\end{align}
+
+\textbf{Verification:} The diagonal form has eigenvalues $-2$ and $-3$ on the diagonal, matching the poles. The transfer function is:
+\begin{align}
+G(s) &= \mathbf{C}_d(s\mathbf{I} - \mathbf{A}_d)^{-1}\mathbf{B}_d \\
+&= \begin{bmatrix} -1 & -3 \end{bmatrix}\begin{bmatrix} \frac{1}{s+2} & 0 \\ 0 & \frac{1}{s+3} \end{bmatrix}\begin{bmatrix} 1 \\ -1 \end{bmatrix} \\
+&= \frac{-1}{s+2} + \frac{3}{s+3} = \frac{2s+3}{(s+2)(s+3)} \quad \checkmark
+\end{align}
+\end{example}
+
+\subsection{Transformation to Controllable Canonical Form}
+
+A particularly useful transformation converts any controllable realization to controllable canonical form.
+
+\begin{theorem}[Transformation to CCF]
+\label{thm:transform_to_ccf}
+Let $(\mathbf{A}, \mathbf{B})$ be controllable with controllability matrix $\mathcal{C}$. The transformation to controllable canonical form is:
+\begin{equation}
+\mathbf{T} = \mathcal{C}_c \mathcal{C}^{-1}
+\end{equation}
+where $\mathcal{C}_c$ is the controllability matrix of the CCF.
+
+Alternatively, define:
+\begin{equation}
+\mathbf{T} = \begin{bmatrix} \mathbf{q}^\top \\ \mathbf{q}^\top\mathbf{A} \\ \vdots \\ \mathbf{q}^\top\mathbf{A}^{n-1} \end{bmatrix}
+\end{equation}
+where $\mathbf{q}^\top$ is the last row of $\mathcal{C}^{-1}$.
+\end{theorem}
+
+%=============================================================================
+\section{Practical Applications and Worked Examples}
+\label{sec:practical_applications}
+%=============================================================================
+
+Now I will present comprehensive worked examples that integrate the concepts from this chapter. These examples progress from fundamental conversions to realistic engineering systems.
+
+\subsection{Example: Deriving State-Space from a Physical System}
+
+\begin{example}[DC Motor State-Space Model]
+\label{ex:dc_motor}
+Derive the state-space model for a DC motor with:
+\begin{itemize}
+    \item Armature resistance $R_a$, inductance $L_a$
+    \item Motor torque constant $K_t$, back-EMF constant $K_e$
+    \item Rotor inertia $J$, viscous friction $b$
+    \item Input: armature voltage $v_a(t)$
+    \item Outputs: angular velocity $\omega(t)$ and armature current $i_a(t)$
+\end{itemize}
+
+\textbf{Step 1: Write the governing equations}
+
+\textit{Electrical subsystem:}
+\begin{equation}
+L_a \frac{di_a}{dt} = v_a - R_a i_a - K_e \omega
+\label{eq:dc_motor_elec}
+\end{equation}
+
+\textit{Mechanical subsystem:}
+\begin{equation}
+J\frac{d\omega}{dt} = K_t i_a - b\omega
+\label{eq:dc_motor_mech}
+\end{equation}
+
+\textbf{Step 2: Define state variables}
+
+Energy storage elements:
+\begin{itemize}
+    \item Inductor $L_a$: stores magnetic energy $\frac{1}{2}L_a i_a^2$ $\Rightarrow$ state $x_1 = i_a$
+    \item Inertia $J$: stores kinetic energy $\frac{1}{2}J\omega^2$ $\Rightarrow$ state $x_2 = \omega$
+\end{itemize}
+
+\textbf{Step 3: Write state equations}
+
+From equation~\eqref{eq:dc_motor_elec}:
+\begin{equation}
+\dot{x}_1 = \frac{di_a}{dt} = -\frac{R_a}{L_a}i_a - \frac{K_e}{L_a}\omega + \frac{1}{L_a}v_a = -\frac{R_a}{L_a}x_1 - \frac{K_e}{L_a}x_2 + \frac{1}{L_a}v_a
+\end{equation}
+
+From equation~\eqref{eq:dc_motor_mech}:
+\begin{equation}
+\dot{x}_2 = \frac{d\omega}{dt} = \frac{K_t}{J}i_a - \frac{b}{J}\omega = \frac{K_t}{J}x_1 - \frac{b}{J}x_2
+\end{equation}
+
+\textbf{Step 4: Assemble the state-space model}
+\begin{equation}
+\begin{bmatrix} \dot{x}_1 \\ \dot{x}_2 \end{bmatrix} = \begin{bmatrix} -\frac{R_a}{L_a} & -\frac{K_e}{L_a} \\ \frac{K_t}{J} & -\frac{b}{J} \end{bmatrix} \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} + \begin{bmatrix} \frac{1}{L_a} \\ 0 \end{bmatrix} v_a
+\end{equation}
+
+With both outputs measured:
+\begin{equation}
+\begin{bmatrix} y_1 \\ y_2 \end{bmatrix} = \begin{bmatrix} i_a \\ \omega \end{bmatrix} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} \begin{bmatrix} x_1 \\ x_2 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 5: Numerical example}
+
+Let $R_a = 1\,\Omega$, $L_a = 0.5$\,H, $K_t = K_e = 0.1$\,V$\cdot$s/rad, $J = 0.01$\,kg$\cdot$m$^2$, $b = 0.1$\,N$\cdot$m$\cdot$s/rad:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -2 & -0.2 \\ 10 & -10 \end{bmatrix}, \quad \mathbf{B} = \begin{bmatrix} 2 \\ 0 \end{bmatrix}, \quad \mathbf{C} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}, \quad \mathbf{D} = \begin{bmatrix} 0 \\ 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 6: Check controllability and observability}
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} 2 & -4 \\ 0 & 20 \end{bmatrix}, \quad \det(\mathcal{C}) = 40 \neq 0 \quad \Rightarrow \text{Controllable}
+\end{equation}
+\begin{equation}
+\mathcal{O} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \\ -2 & -0.2 \\ 10 & -10 \end{bmatrix}, \quad \text{rank}(\mathcal{O}) = 2 \quad \Rightarrow \text{Observable}
+\end{equation}
+
+The DC motor is both controllable and observable---a minimal realization.
+\end{example}
+
+\subsection{Example: Transfer Function to Controllable Canonical Form}
+
+\begin{example}[Third-Order System to CCF]
+\label{ex:third_order_ccf}
+Convert to controllable canonical form:
+\begin{equation}
+G(s) = \frac{2s^2 + 5s + 3}{s^3 + 4s^2 + 5s + 2}
+\end{equation}
+
+\textbf{Step 1: Verify the transfer function is strictly proper}
+
+Numerator degree = 2, denominator degree = 3. Strictly proper. $\checkmark$
+
+\textbf{Step 2: Extract coefficients}
+
+Denominator: $s^3 + 4s^2 + 5s + 2$ $\Rightarrow$ $a_2 = 4$, $a_1 = 5$, $a_0 = 2$
+
+Numerator: $2s^2 + 5s + 3$ $\Rightarrow$ $b_2 = 2$, $b_1 = 5$, $b_0 = 3$
+
+\textbf{Step 3: Write the CCF matrices}
+\begin{equation}
+\mathbf{A}_c = \begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -2 & -5 & -4 \end{bmatrix}, \quad \mathbf{B}_c = \begin{bmatrix} 0 \\ 0 \\ 1 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathbf{C}_c = \begin{bmatrix} 3 & 5 & 2 \end{bmatrix}, \quad \mathbf{D}_c = 0
+\end{equation}
+
+\textbf{Step 4: Find the poles}
+\begin{equation}
+s^3 + 4s^2 + 5s + 2 = (s+1)(s^2 + 3s + 2) = (s+1)(s+1)(s+2) = (s+1)^2(s+2)
+\end{equation}
+
+Poles: $s = -1$ (repeated), $s = -2$. The system is stable.
+
+\textbf{Step 5: Verify controllability}
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} 0 & 0 & 1 \\ 0 & 1 & -4 \\ 1 & -4 & 11 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\det(\mathcal{C}) = 0(1 \cdot 11 - (-4)(-4)) - 0 + 1(0 \cdot (-4) - 1 \cdot 0) = -1 \neq 0
+\end{equation}
+
+The system is controllable, as guaranteed by CCF.
+\end{example}
+
+\subsection{Example: Computing the State Transition Matrix}
+
+\begin{example}[State Transition Matrix for Coupled System]
+\label{ex:state_transition}
+Compute $e^{\mathbf{A}t}$ for:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -3 & 1 \\ 0 & -2 \end{bmatrix}
+\end{equation}
+
+\textbf{Method: Laplace Transform}
+
+\textbf{Step 1: Compute $s\mathbf{I} - \mathbf{A}$}
+\begin{equation}
+s\mathbf{I} - \mathbf{A} = \begin{bmatrix} s+3 & -1 \\ 0 & s+2 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2: Compute the determinant and adjugate}
+\begin{equation}
+\det(s\mathbf{I} - \mathbf{A}) = (s+3)(s+2) - 0 = (s+3)(s+2)
+\end{equation}
+\begin{equation}
+\text{adj}(s\mathbf{I} - \mathbf{A}) = \begin{bmatrix} s+2 & 1 \\ 0 & s+3 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Compute $(s\mathbf{I} - \mathbf{A})^{-1}$}
+\begin{equation}
+(s\mathbf{I} - \mathbf{A})^{-1} = \frac{1}{(s+3)(s+2)}\begin{bmatrix} s+2 & 1 \\ 0 & s+3 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 4: Partial fractions for each element}
+
+Element (1,1): $\frac{s+2}{(s+3)(s+2)} = \frac{1}{s+3}$
+
+Element (1,2): $\frac{1}{(s+3)(s+2)} = \frac{1}{s+2} - \frac{1}{s+3}$
+
+Element (2,1): $0$
+
+Element (2,2): $\frac{s+3}{(s+3)(s+2)} = \frac{1}{s+2}$
+
+\textbf{Step 5: Inverse Laplace transform}
+\begin{equation}
+e^{\mathbf{A}t} = \begin{bmatrix} e^{-3t} & e^{-2t} - e^{-3t} \\ 0 & e^{-2t} \end{bmatrix}
+\end{equation}
+
+\textbf{Verification:} Check that $e^{\mathbf{A} \cdot 0} = \mathbf{I}$:
+\begin{equation}
+e^{\mathbf{A} \cdot 0} = \begin{bmatrix} 1 & 1-1 \\ 0 & 1 \end{bmatrix} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} = \mathbf{I} \quad \checkmark
+\end{equation}
+\end{example}
+
+\subsection{Example: Controllability Analysis}
+
+\begin{example}[Controllability of Coupled Tanks]
+\label{ex:coupled_tanks_controllability}
+Two tanks are connected by a pipe. Tank 1 has cross-sectional area $A_1$ and is fed by pump 1. Tank 2 has area $A_2$ and is fed by pump 2. The connecting pipe has resistance $R_{12}$. Tank 2 drains through resistance $R_2$.
+
+The state-space model (from fluid mass balance) is:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -\frac{1}{A_1 R_{12}} & \frac{1}{A_1 R_{12}} \\ \frac{1}{A_2 R_{12}} & -\frac{1}{A_2 R_{12}} - \frac{1}{A_2 R_2} \end{bmatrix}, \quad \mathbf{B} = \begin{bmatrix} \frac{1}{A_1} & 0 \\ 0 & \frac{1}{A_2} \end{bmatrix}
+\end{equation}
+
+where states $x_1, x_2$ are tank levels and inputs $u_1, u_2$ are pump flow rates.
+
+\textbf{Numerical values:} $A_1 = A_2 = 1$\,m$^2$, $R_{12} = 2$\,s/m$^2$, $R_2 = 1$\,s/m$^2$:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -0.5 & 0.5 \\ 0.5 & -1.5 \end{bmatrix}, \quad \mathbf{B} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
+\end{equation}
+
+\textbf{Controllability test:}
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} \mathbf{B} & \mathbf{A}\mathbf{B} \end{bmatrix} = \begin{bmatrix} 1 & 0 & -0.5 & 0.5 \\ 0 & 1 & 0.5 & -1.5 \end{bmatrix}
+\end{equation}
+
+Since $\mathbf{B} = \mathbf{I}_{2 \times 2}$ and has rank 2, the controllability matrix has rank 2. The system is \textbf{controllable}.
+
+\textbf{Physical interpretation:} Each pump can directly control its respective tank level. The coupling through $R_{12}$ allows each pump to also influence the other tank indirectly.
+
+\textbf{What if only pump 1 exists?}
+\begin{equation}
+\mathbf{B}' = \begin{bmatrix} 1 \\ 0 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathcal{C}' = \begin{bmatrix} 1 & -0.5 \\ 0 & 0.5 \end{bmatrix}, \quad \det(\mathcal{C}') = 0.5 \neq 0
+\end{equation}
+
+Still controllable! The coupling through the connecting pipe allows pump 1 to indirectly control tank 2.
+\end{example}
+
+\subsection{Example: Observability Analysis}
+
+\begin{example}[Observability with Different Sensor Configurations]
+\label{ex:observability_sensors}
+Consider the mass-spring-damper system:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -4 & -2 \end{bmatrix}, \quad \mathbf{B} = \begin{bmatrix} 0 \\ 1 \end{bmatrix}
+\end{equation}
+
+Analyze observability for different sensor configurations.
+
+\textbf{Case 1: Position sensor only}
+\begin{equation}
+\mathbf{C}_1 = \begin{bmatrix} 1 & 0 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathcal{O}_1 = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}, \quad \det(\mathcal{O}_1) = 1 \neq 0 \quad \Rightarrow \text{Observable}
+\end{equation}
+
+\textbf{Case 2: Velocity sensor only}
+\begin{equation}
+\mathbf{C}_2 = \begin{bmatrix} 0 & 1 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathbf{C}_2\mathbf{A} = \begin{bmatrix} 0 & 1 \end{bmatrix}\begin{bmatrix} 0 & 1 \\ -4 & -2 \end{bmatrix} = \begin{bmatrix} -4 & -2 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathcal{O}_2 = \begin{bmatrix} 0 & 1 \\ -4 & -2 \end{bmatrix}, \quad \det(\mathcal{O}_2) = 0 - (-4) = 4 \neq 0 \quad \Rightarrow \text{Observable}
+\end{equation}
+
+\textbf{Case 3: Acceleration sensor only}
+
+Acceleration is $\ddot{x} = -4x - 2\dot{x} + u = -4x_1 - 2x_2 + u$.
+
+For observability analysis with $u$ known, the effective output is:
+\begin{equation}
+y = \ddot{x} - u = -4x_1 - 2x_2 \quad \Rightarrow \quad \mathbf{C}_3 = \begin{bmatrix} -4 & -2 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathbf{C}_3\mathbf{A} = \begin{bmatrix} -4 & -2 \end{bmatrix}\begin{bmatrix} 0 & 1 \\ -4 & -2 \end{bmatrix} = \begin{bmatrix} 8 & 0 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathcal{O}_3 = \begin{bmatrix} -4 & -2 \\ 8 & 0 \end{bmatrix}, \quad \det(\mathcal{O}_3) = 0 - (-16) = 16 \neq 0 \quad \Rightarrow \text{Observable}
+\end{equation}
+
+\textbf{Conclusion:} For this coupled system, \textit{any single} measurement (position, velocity, or acceleration) is sufficient for observability because the dynamics couple all states. This is a consequence of the off-diagonal coupling in $\mathbf{A}$.
+\end{example}
+
+\subsection{Example: Transformation Between Canonical Forms}
+
+\begin{example}[CCF to OCF Transformation]
+\label{ex:ccf_to_ocf}
+Transform from controllable canonical form to observable canonical form for:
+\begin{equation}
+G(s) = \frac{2s + 3}{s^2 + 5s + 6}
+\end{equation}
+
+\textbf{CCF:}
+\begin{equation}
+\mathbf{A}_c = \begin{bmatrix} 0 & 1 \\ -6 & -5 \end{bmatrix}, \quad \mathbf{B}_c = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad \mathbf{C}_c = \begin{bmatrix} 3 & 2 \end{bmatrix}
+\end{equation}
+
+\textbf{OCF:}
+\begin{equation}
+\mathbf{A}_o = \begin{bmatrix} 0 & -6 \\ 1 & -5 \end{bmatrix}, \quad \mathbf{B}_o = \begin{bmatrix} 3 \\ 2 \end{bmatrix}, \quad \mathbf{C}_o = \begin{bmatrix} 0 & 1 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 1: Compute controllability matrices}
+\begin{equation}
+\mathcal{C}_c = \begin{bmatrix} 0 & 1 \\ 1 & -5 \end{bmatrix}, \quad \mathcal{C}_o = \begin{bmatrix} 3 & -12 \\ 2 & -7 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2: Compute $\mathcal{C}_c^{-1}$}
+\begin{equation}
+\det(\mathcal{C}_c) = -1, \quad \mathcal{C}_c^{-1} = \begin{bmatrix} 5 & 1 \\ 1 & 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3: Find the transformation matrix}
+\begin{equation}
+\mathbf{T} = \mathcal{C}_o \mathcal{C}_c^{-1} = \begin{bmatrix} 3 & -12 \\ 2 & -7 \end{bmatrix}\begin{bmatrix} 5 & 1 \\ 1 & 0 \end{bmatrix} = \begin{bmatrix} 3 & 3 \\ 3 & 2 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 4: Verify}
+\begin{equation}
+\mathbf{T}\mathbf{A}_c\mathbf{T}^{-1} = \begin{bmatrix} 3 & 3 \\ 3 & 2 \end{bmatrix}\begin{bmatrix} 0 & 1 \\ -6 & -5 \end{bmatrix}\begin{bmatrix} -\frac{2}{3} & 1 \\ 1 & -1 \end{bmatrix}
+\end{equation}
+
+Let me compute $\mathbf{T}^{-1}$:
+\begin{equation}
+\det(\mathbf{T}) = 6 - 9 = -3, \quad \mathbf{T}^{-1} = -\frac{1}{3}\begin{bmatrix} 2 & -3 \\ -3 & 3 \end{bmatrix} = \begin{bmatrix} -\frac{2}{3} & 1 \\ 1 & -1 \end{bmatrix}
+\end{equation}
+
+Continuing:
+\begin{equation}
+\mathbf{T}\mathbf{A}_c = \begin{bmatrix} 3 & 3 \\ 3 & 2 \end{bmatrix}\begin{bmatrix} 0 & 1 \\ -6 & -5 \end{bmatrix} = \begin{bmatrix} -18 & -12 \\ -12 & -7 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathbf{T}\mathbf{A}_c\mathbf{T}^{-1} = \begin{bmatrix} -18 & -12 \\ -12 & -7 \end{bmatrix}\begin{bmatrix} -\frac{2}{3} & 1 \\ 1 & -1 \end{bmatrix} = \begin{bmatrix} 0 & -6 \\ 1 & -5 \end{bmatrix} = \mathbf{A}_o \quad \checkmark
+\end{equation}
+\end{example}
+
+\subsection{Example: MIMO State-Space Representation}
+
+\begin{example}[Two-Input Two-Output Thermal System]
+\label{ex:mimo_thermal}
+A two-zone building has temperatures $T_1$ and $T_2$, with heaters providing heat inputs $Q_1$ and $Q_2$. The zones are thermally coupled.
+
+\textbf{Energy balance:}
+\begin{align}
+C_1\dot{T}_1 &= Q_1 - \frac{T_1 - T_{\text{amb}}}{R_1} - \frac{T_1 - T_2}{R_{12}} \\
+C_2\dot{T}_2 &= Q_2 - \frac{T_2 - T_{\text{amb}}}{R_2} - \frac{T_2 - T_1}{R_{12}}
+\end{align}
+
+Using deviation variables $x_i = T_i - T_{\text{amb}}$ and simplifying:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -\frac{1}{C_1}\left(\frac{1}{R_1} + \frac{1}{R_{12}}\right) & \frac{1}{C_1 R_{12}} \\ \frac{1}{C_2 R_{12}} & -\frac{1}{C_2}\left(\frac{1}{R_2} + \frac{1}{R_{12}}\right) \end{bmatrix}
+\end{equation}
+\begin{equation}
+\mathbf{B} = \begin{bmatrix} \frac{1}{C_1} & 0 \\ 0 & \frac{1}{C_2} \end{bmatrix}, \quad \mathbf{C} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}, \quad \mathbf{D} = \begin{bmatrix} 0 & 0 \\ 0 & 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Numerical values:} $C_1 = C_2 = 1000$\,J/K, $R_1 = R_2 = 0.01$\,K/W, $R_{12} = 0.05$\,K/W:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -0.12 & 0.02 \\ 0.02 & -0.12 \end{bmatrix}, \quad \mathbf{B} = \begin{bmatrix} 0.001 & 0 \\ 0 & 0.001 \end{bmatrix}
+\end{equation}
+
+\textbf{Transfer function matrix:}
+\begin{equation}
+\mathbf{G}(s) = \mathbf{C}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B}
+\end{equation}
+
+Let me compute $(s\mathbf{I} - \mathbf{A})^{-1}$:
+\begin{equation}
+s\mathbf{I} - \mathbf{A} = \begin{bmatrix} s + 0.12 & -0.02 \\ -0.02 & s + 0.12 \end{bmatrix}
+\end{equation}
+\begin{equation}
+\det(s\mathbf{I} - \mathbf{A}) = (s + 0.12)^2 - 0.0004 = s^2 + 0.24s + 0.014 = (s + 0.1)(s + 0.14)
+\end{equation}
+
+The poles are $s = -0.1$ and $s = -0.14$, corresponding to time constants of 10 s and 7.14 s.
+
+\textbf{Interpretation of the transfer function matrix:}
+\begin{equation}
+\mathbf{G}(s) = \begin{bmatrix} G_{11}(s) & G_{12}(s) \\ G_{21}(s) & G_{22}(s) \end{bmatrix}
+\end{equation}
+
+\begin{itemize}
+    \item $G_{11}(s)$, $G_{22}(s)$: Direct channels (heater to its own zone)
+    \item $G_{12}(s)$, $G_{21}(s)$: Cross-coupling (heater affecting the other zone)
+\end{itemize}
+
+Due to symmetry, $G_{11} = G_{22}$ and $G_{12} = G_{21}$.
+\end{example}
+
+\subsection{Example: Modal Analysis Using State-Space}
+
+\begin{example}[Modal Decomposition of a Vibrating System]
+\label{ex:modal_analysis}
+A two-degree-of-freedom mechanical system has:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \\ -3 & 1 & -0.4 & 0.1 \\ 1 & -2 & 0.1 & -0.3 \end{bmatrix}
+\end{equation}
+
+This represents two coupled masses with states $[x_1, x_2, \dot{x}_1, \dot{x}_2]^\top$.
+
+\textbf{Step 1: Find eigenvalues}
+
+The characteristic polynomial is:
+\begin{equation}
+\det(s\mathbf{I} - \mathbf{A}) = s^4 + 0.7s^3 + 4.97s^2 + 1.4s + 5 = 0
+\end{equation}
+
+Eigenvalues (computed numerically):
+\begin{align}
+\lambda_{1,2} &= -0.175 \pm 1.38j \quad \text{(Mode 1: lower frequency)} \\
+\lambda_{3,4} &= -0.175 \pm 2.05j \quad \text{(Mode 2: higher frequency)}
+\end{align}
+
+\textbf{Step 2: Interpret the modes}
+
+\textit{Mode 1} ($\omega_1 \approx 1.38$ rad/s): Lower frequency oscillation. From eigenvector analysis, both masses move in phase (in the same direction).
+
+\textit{Mode 2} ($\omega_2 \approx 2.05$ rad/s): Higher frequency oscillation. The masses move in opposite directions (out of phase).
+
+\textbf{Step 3: Damping ratios}
+
+For both modes, the real part is $-0.175$ and the imaginary parts are $\pm\omega_d$.
+
+Mode 1: $\zeta_1 = \frac{0.175}{\sqrt{0.175^2 + 1.38^2}} \approx 0.126$
+
+Mode 2: $\zeta_2 = \frac{0.175}{\sqrt{0.175^2 + 2.05^2}} \approx 0.085$
+
+Both modes are lightly damped, with the higher-frequency mode being less damped.
+
+\textbf{Modal state-space form:}
+
+By transforming to modal coordinates using the eigenvector matrix, we can decouple the system into independent second-order oscillators, making analysis and control design more intuitive.
+\end{example}
+
+%=============================================================================
+\section{Algorithm Implementations}
+\label{sec:algorithms}
+%=============================================================================
+
+This section provides production-ready algorithms for the key computations covered in this chapter. Each algorithm includes complexity analysis and implementation guidance.
+
+\subsection{Transfer Function to Controllable Canonical Form}
+
+\begin{algorithm}[H]
+\caption{Transfer Function to Controllable Canonical Form}
+\label{alg:tf_to_ccf}
+\begin{algorithmic}[1]
+\REQUIRE Numerator coefficients $[b_0, b_1, \ldots, b_{n-1}]$, denominator coefficients $[a_0, a_1, \ldots, a_{n-1}]$ (monic: $a_n = 1$)
+\ENSURE State-space matrices $\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}$
+\STATE $n \gets$ length of denominator $- 1$ \COMMENT{System order}
+\STATE Initialize $\mathbf{A}$ as $n \times n$ zero matrix
+\STATE Initialize $\mathbf{B}$ as $n \times 1$ zero vector
+\STATE
+\COMMENT{Build companion matrix structure}
+\FOR{$i = 1$ \TO $n-1$}
+    \STATE $\mathbf{A}[i, i+1] \gets 1$ \COMMENT{Superdiagonal ones}
+\ENDFOR
+\FOR{$j = 1$ \TO $n$}
+    \STATE $\mathbf{A}[n, j] \gets -a_{j-1}$ \COMMENT{Last row: negated denominator coefficients}
+\ENDFOR
+\STATE
+\STATE $\mathbf{B}[n] \gets 1$ \COMMENT{Input enters last state}
+\STATE $\mathbf{C} \gets [b_0, b_1, \ldots, b_{n-1}]$ \COMMENT{Numerator coefficients}
+\STATE $\mathbf{D} \gets 0$
+\STATE
+\RETURN $\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational complexity:} $\mathcal{O}(n)$ operations.
+
+\textbf{Implementation notes:}
+\begin{itemize}
+    \item Ensure the denominator is monic (leading coefficient = 1)
+    \item For proper (not strictly proper) transfer functions, first perform polynomial long division to extract $\mathbf{D}$
+    \item Verify by computing the transfer function from the resulting state-space model
+\end{itemize}
+
+\subsection{Controllability Matrix and Test}
+
+\begin{algorithm}[H]
+\caption{Controllability Matrix Computation and Test}
+\label{alg:controllability}
+\begin{algorithmic}[1]
+\REQUIRE State matrix $\mathbf{A} \in \mathbb{R}^{n \times n}$, input matrix $\mathbf{B} \in \mathbb{R}^{n \times m}$
+\ENSURE Controllability matrix $\mathcal{C}$, boolean controllability flag
+\STATE $n \gets$ number of rows in $\mathbf{A}$
+\STATE $m \gets$ number of columns in $\mathbf{B}$
+\STATE Initialize $\mathcal{C}$ as $n \times (nm)$ matrix
+\STATE
+\STATE $\mathcal{C}[:, 1:m] \gets \mathbf{B}$ \COMMENT{First block is $\mathbf{B}$}
+\STATE $\mathbf{A}^k\mathbf{B} \gets \mathbf{B}$
+\FOR{$k = 1$ \TO $n-1$}
+    \STATE $\mathbf{A}^k\mathbf{B} \gets \mathbf{A} \cdot \mathbf{A}^{k-1}\mathbf{B}$ \COMMENT{Compute $\mathbf{A}^k\mathbf{B}$}
+    \STATE $\mathcal{C}[:, km+1:(k+1)m] \gets \mathbf{A}^k\mathbf{B}$
+\ENDFOR
+\STATE
+\STATE $r \gets \text{rank}(\mathcal{C})$ \COMMENT{Numerical rank computation}
+\STATE \textbf{controllable} $\gets (r = n)$
+\STATE
+\RETURN $\mathcal{C}$, \textbf{controllable}
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational complexity:} $\mathcal{O}(n^3)$ for the matrix multiplications and rank computation.
+
+\textbf{Numerical considerations:}
+\begin{itemize}
+    \item Use SVD for robust rank computation: count singular values above a threshold
+    \item Typical threshold: $\max(\sigma_i) \cdot n \cdot \epsilon_{\text{machine}}$
+    \item For large systems, the controllability Gramian approach is more numerically stable
+\end{itemize}
+
+\subsection{State Transition Matrix via Series Expansion}
+
+\begin{algorithm}[H]
+\caption{Matrix Exponential via Taylor Series}
+\label{alg:matrix_exp_series}
+\begin{algorithmic}[1]
+\REQUIRE State matrix $\mathbf{A} \in \mathbb{R}^{n \times n}$, time $t$, tolerance $\epsilon$
+\ENSURE State transition matrix $e^{\mathbf{A}t}$
+\STATE $\mathbf{\Phi} \gets \mathbf{I}_n$ \COMMENT{Initialize to identity}
+\STATE $\mathbf{Term} \gets \mathbf{I}_n$ \COMMENT{Current term in series}
+\STATE $k \gets 0$
+\REPEAT
+    \STATE $k \gets k + 1$
+    \STATE $\mathbf{Term} \gets \mathbf{Term} \cdot \mathbf{A}t / k$ \COMMENT{$(\mathbf{A}t)^k / k!$}
+    \STATE $\mathbf{\Phi} \gets \mathbf{\Phi} + \mathbf{Term}$
+\UNTIL{$\|\mathbf{Term}\|_F < \epsilon$}
+\STATE
+\RETURN $\mathbf{\Phi}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Warning:} This naive implementation can suffer from numerical issues for large $\|At\|$. Use scaling and squaring methods (as in MATLAB's \texttt{expm}) for production code.
+
+\subsection{State Transition Matrix via Eigendecomposition}
+
+\begin{algorithm}[H]
+\caption{Matrix Exponential via Eigendecomposition}
+\label{alg:matrix_exp_eigen}
+\begin{algorithmic}[1]
+\REQUIRE State matrix $\mathbf{A} \in \mathbb{R}^{n \times n}$, time $t$
+\ENSURE State transition matrix $e^{\mathbf{A}t}$
+\STATE Compute eigendecomposition: $\mathbf{A} = \mathbf{V}\boldsymbol{\Lambda}\mathbf{V}^{-1}$
+\STATE \COMMENT{$\boldsymbol{\Lambda} = \text{diag}(\lambda_1, \ldots, \lambda_n)$, $\mathbf{V}$ has eigenvectors as columns}
+\IF{$\mathbf{A}$ is not diagonalizable}
+    \STATE Use Jordan decomposition or scaling-squaring method instead
+\ENDIF
+\STATE
+\STATE Compute diagonal exponential: $e^{\boldsymbol{\Lambda}t} = \text{diag}(e^{\lambda_1 t}, \ldots, e^{\lambda_n t})$
+\STATE $\mathbf{\Phi} \gets \mathbf{V} \cdot e^{\boldsymbol{\Lambda}t} \cdot \mathbf{V}^{-1}$
+\STATE
+\RETURN $\mathbf{\Phi}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational complexity:} $\mathcal{O}(n^3)$ for eigendecomposition.
+
+\textbf{Limitations:}
+\begin{itemize}
+    \item Requires distinct eigenvalues (or use Jordan form for repeated eigenvalues)
+    \item Eigenvector computation can be numerically sensitive
+    \item For complex eigenvalues, the result will be real but computation involves complex arithmetic
+\end{itemize}
+
+\subsection{Similarity Transformation}
+
+\begin{algorithm}[H]
+\caption{Apply Similarity Transformation}
+\label{alg:similarity}
+\begin{algorithmic}[1]
+\REQUIRE Original system $(\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D})$, invertible transformation $\mathbf{T}$
+\ENSURE Transformed system $(\bar{\mathbf{A}}, \bar{\mathbf{B}}, \bar{\mathbf{C}}, \bar{\mathbf{D}})$
+\STATE Verify $\det(\mathbf{T}) \neq 0$ \COMMENT{Check invertibility}
+\STATE Compute $\mathbf{T}^{-1}$
+\STATE
+\STATE $\bar{\mathbf{A}} \gets \mathbf{T} \cdot \mathbf{A} \cdot \mathbf{T}^{-1}$
+\STATE $\bar{\mathbf{B}} \gets \mathbf{T} \cdot \mathbf{B}$
+\STATE $\bar{\mathbf{C}} \gets \mathbf{C} \cdot \mathbf{T}^{-1}$
+\STATE $\bar{\mathbf{D}} \gets \mathbf{D}$ \COMMENT{Unchanged}
+\STATE
+\RETURN $(\bar{\mathbf{A}}, \bar{\mathbf{B}}, \bar{\mathbf{C}}, \bar{\mathbf{D}})$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Verification:} After transformation, verify that eigenvalues of $\bar{\mathbf{A}}$ match those of $\mathbf{A}$.
+
+\subsection{State-Space to Transfer Function}
+
+\begin{algorithm}[H]
+\caption{State-Space to Transfer Function (SISO)}
+\label{alg:ss_to_tf}
+\begin{algorithmic}[1]
+\REQUIRE State-space matrices $\mathbf{A} \in \mathbb{R}^{n \times n}$, $\mathbf{B} \in \mathbb{R}^{n \times 1}$, $\mathbf{C} \in \mathbb{R}^{1 \times n}$, $\mathbf{D}$ (scalar)
+\ENSURE Numerator polynomial $\mathbf{num}$, denominator polynomial $\mathbf{den}$
+\STATE
+\COMMENT{Compute characteristic polynomial (denominator)}
+\STATE $\mathbf{den} \gets \text{poly}(\mathbf{A})$ \COMMENT{Coefficients of $\det(s\mathbf{I} - \mathbf{A})$}
+\STATE
+\COMMENT{Compute numerator via adjugate formula}
+\STATE Form $(s\mathbf{I} - \mathbf{A})$ symbolically
+\STATE Compute $\text{adj}(s\mathbf{I} - \mathbf{A})$ \COMMENT{Cofactor matrix transpose}
+\STATE $\mathbf{num}(s) \gets \mathbf{C} \cdot \text{adj}(s\mathbf{I} - \mathbf{A}) \cdot \mathbf{B} + \mathbf{D} \cdot \det(s\mathbf{I} - \mathbf{A})$
+\STATE Extract polynomial coefficients of $\mathbf{num}(s)$
+\STATE
+\RETURN $\mathbf{num}$, $\mathbf{den}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Practical note:} For numerical computation, use the formula:
+\begin{equation}
+G(s) = \frac{\det\begin{bmatrix} s\mathbf{I} - \mathbf{A} & \mathbf{B} \\ -\mathbf{C} & \mathbf{D} \end{bmatrix}}{\det(s\mathbf{I} - \mathbf{A})}
+\end{equation}
+
+%=============================================================================
+\section{Chapter Summary}
+\label{sec:chapter_summary}
+%=============================================================================
+
+This chapter introduced state-space representation, the foundation for modern control theory. Here are the key concepts and their significance.
+
+\subsection{Key Concepts}
+
+\textbf{State-Space Fundamentals:}
+\begin{itemize}
+    \item The state vector $\mathbf{x}(t)$ captures all information needed to predict future system behavior
+    \item State-space form: $\dot{\mathbf{x}} = \mathbf{A}\mathbf{x} + \mathbf{B}\mathbf{u}$, $\mathbf{y} = \mathbf{C}\mathbf{x} + \mathbf{D}\mathbf{u}$
+    \item The $\mathbf{A}$ matrix determines internal dynamics; its eigenvalues are the system poles
+    \item Transfer function: $G(s) = \mathbf{C}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B} + \mathbf{D}$
+\end{itemize}
+
+\textbf{Canonical Forms:}
+\begin{itemize}
+    \item \textit{Controllable canonical form:} Characteristic polynomial in last row of $\mathbf{A}$; guarantees controllability
+    \item \textit{Observable canonical form:} Characteristic polynomial in last column of $\mathbf{A}$; guarantees observability
+    \item \textit{Diagonal form:} Decoupled modes with eigenvalues on diagonal; requires distinct poles
+    \item \textit{Jordan form:} Handles repeated eigenvalues with Jordan blocks
+\end{itemize}
+
+\textbf{State Transition Matrix:}
+\begin{itemize}
+    \item $\boldsymbol{\Phi}(t) = e^{\mathbf{A}t}$ describes free response evolution
+    \item Complete solution: $\mathbf{x}(t) = e^{\mathbf{A}t}\mathbf{x}_0 + \int_0^t e^{\mathbf{A}(t-\tau)}\mathbf{B}\mathbf{u}(\tau)\,d\tau$
+    \item Computation methods: Laplace transform, eigendecomposition, series expansion
+\end{itemize}
+
+\textbf{Controllability:}
+\begin{itemize}
+    \item A system is controllable if any state can be reached from any initial state using inputs
+    \item Test: rank$(\mathcal{C}) = n$ where $\mathcal{C} = [\mathbf{B} \; \mathbf{AB} \; \cdots \; \mathbf{A}^{n-1}\mathbf{B}]$
+    \item Physical meaning: Can the input influence all system modes?
+    \item The controllability Gramian $\mathbf{W}_c$ provides quantitative controllability measures
+\end{itemize}
+
+\textbf{Observability:}
+\begin{itemize}
+    \item A system is observable if the initial state can be determined from output measurements
+    \item Test: rank$(\mathcal{O}) = n$ where $\mathcal{O} = [\mathbf{C}^\top \; \mathbf{A}^\top\mathbf{C}^\top \; \cdots \; (\mathbf{A}^\top)^{n-1}\mathbf{C}^\top]^\top$
+    \item Physical meaning: Do all system modes affect the measurements?
+    \item Duality: Observability of $(\mathbf{A}, \mathbf{C})$ $\Leftrightarrow$ controllability of $(\mathbf{A}^\top, \mathbf{C}^\top)$
+\end{itemize}
+
+\textbf{Similarity Transformations:}
+\begin{itemize}
+    \item New coordinates: $\bar{\mathbf{x}} = \mathbf{T}\mathbf{x}$ yields $\bar{\mathbf{A}} = \mathbf{T}\mathbf{A}\mathbf{T}^{-1}$, $\bar{\mathbf{B}} = \mathbf{T}\mathbf{B}$, $\bar{\mathbf{C}} = \mathbf{C}\mathbf{T}^{-1}$
+    \item Preserves: transfer function, eigenvalues, controllability, observability
+    \item Used to convert between canonical forms
+\end{itemize}
+
+\textbf{Minimal Realization:}
+\begin{itemize}
+    \item A realization is minimal if it is both controllable and observable
+    \item Minimal realizations have the fewest states possible for a given transfer function
+    \item Non-minimal realizations have hidden modes (pole-zero cancellations in transfer function)
+\end{itemize}
+
+\subsection{Design Guidelines}
+
+\begin{enumerate}
+    \item \textbf{Choose canonical form based on application:}
+    \begin{itemize}
+        \item State feedback design $\rightarrow$ controllable canonical form
+        \item Observer design $\rightarrow$ observable canonical form
+        \item Modal analysis $\rightarrow$ diagonal form
+    \end{itemize}
+
+    \item \textbf{Always verify controllability and observability:}
+    \begin{itemize}
+        \item Uncontrollable modes cannot be stabilized by feedback
+        \item Unobservable modes cannot be estimated from measurements
+        \item Both must hold for observer-based control
+    \end{itemize}
+
+    \item \textbf{Use physical state variables when possible:}
+    \begin{itemize}
+        \item Provides physical intuition
+        \item Facilitates debugging and validation
+        \item Convert to canonical form only when needed for design
+    \end{itemize}
+
+    \item \textbf{For numerical computation:}
+    \begin{itemize}
+        \item Use Gramians rather than rank tests for large systems
+        \item Employ balanced realizations for numerical stability
+        \item Verify transformations by checking eigenvalue preservation
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Preview of Coming Topics}
+
+State-space representation enables the modern control methods we will study in subsequent chapters:
+
+\begin{itemize}
+    \item \textbf{Chapter 11 (Observer Design):} Design state estimators that reconstruct unmeasured states from output measurements---requires observability
+
+    \item \textbf{Chapter 12 (MIMO Control):} State-space naturally handles multiple inputs and outputs, enabling decoupling and multivariable controller design
+
+    \item \textbf{Chapter 14 (Optimal Control):} Linear Quadratic Regulator (LQR) minimizes a cost function using full state feedback---requires controllability
+
+    \item \textbf{Part V (ML-Based Control):} Machine learning methods for control operate on state representations, building on the foundations established here
+\end{itemize}
+
+\subsection{Key Equations Summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{ll}
+\toprule
+\textbf{Concept} & \textbf{Equation} \\
+\midrule
+State-space model & $\dot{\mathbf{x}} = \mathbf{A}\mathbf{x} + \mathbf{B}\mathbf{u}$, \; $\mathbf{y} = \mathbf{C}\mathbf{x} + \mathbf{D}\mathbf{u}$ \\
+Transfer function & $G(s) = \mathbf{C}(s\mathbf{I} - \mathbf{A})^{-1}\mathbf{B} + \mathbf{D}$ \\
+State transition matrix & $\boldsymbol{\Phi}(t) = e^{\mathbf{A}t} = \mathcal{L}^{-1}\{(s\mathbf{I} - \mathbf{A})^{-1}\}$ \\
+Complete solution & $\mathbf{x}(t) = e^{\mathbf{A}t}\mathbf{x}_0 + \int_0^t e^{\mathbf{A}(t-\tau)}\mathbf{B}\mathbf{u}(\tau)\,d\tau$ \\
+Controllability matrix & $\mathcal{C} = [\mathbf{B} \; \mathbf{AB} \; \mathbf{A}^2\mathbf{B} \; \cdots \; \mathbf{A}^{n-1}\mathbf{B}]$ \\
+Controllability test & System controllable $\Leftrightarrow$ rank$(\mathcal{C}) = n$ \\
+Observability matrix & $\mathcal{O} = [\mathbf{C}^\top \; \mathbf{A}^\top\mathbf{C}^\top \; \cdots \; (\mathbf{A}^\top)^{n-1}\mathbf{C}^\top]^\top$ \\
+Observability test & System observable $\Leftrightarrow$ rank$(\mathcal{O}) = n$ \\
+Similarity transformation & $\bar{\mathbf{A}} = \mathbf{T}\mathbf{A}\mathbf{T}^{-1}$, $\bar{\mathbf{B}} = \mathbf{T}\mathbf{B}$, $\bar{\mathbf{C}} = \mathbf{C}\mathbf{T}^{-1}$ \\
+Controllability Gramian & $\mathbf{A}\mathbf{W}_c + \mathbf{W}_c\mathbf{A}^\top + \mathbf{B}\mathbf{B}^\top = \mathbf{0}$ \\
+Observability Gramian & $\mathbf{A}^\top\mathbf{W}_o + \mathbf{W}_o\mathbf{A} + \mathbf{C}^\top\mathbf{C} = \mathbf{0}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
