@@ -1,0 +1,2870 @@
+\chapter{Sensors and Measurement Limitations}
+\label{ch:sensors}
+
+\whythismatters{
+Every control system relies on measurements to close the feedback loop. Your carefully designed controller, your elegant state-space model, your precisely tuned gains---all of it is worthless if your sensor measurements are corrupted by noise, delayed by dynamics, or biased by drift. In my years of working with industrial systems, I have seen more control failures caused by sensor problems than by any other single factor. A robot arm that oscillates uncontrollably because encoder noise corrupts velocity estimates. A temperature controller that never reaches setpoint because thermocouple dynamics are slower than the process. A drone that drifts off course because gyroscope bias accumulates into heading error.
+
+This chapter teaches you to think about sensors as dynamic systems with their own transfer functions, noise characteristics, and error sources. You will learn to model sensor behavior mathematically, design appropriate signal conditioning, and implement algorithms that extract clean measurements from noisy signals. Most importantly, you will develop the engineering judgment to select sensors that match your control requirements and to recognize when sensor limitations---not controller design---are the bottleneck in your system performance.
+}
+
+\section{Sensor Fundamentals}
+\label{sec:sensor_fundamentals}
+
+Before we can design controllers that work with real sensors, we need a systematic framework for characterizing sensor behavior. Every sensor has both static characteristics (how it responds to constant inputs) and dynamic characteristics (how it responds to changing inputs). Understanding both is essential for control system design.
+
+\subsection{The Measurement Chain}
+
+In any control system, the path from physical quantity to usable measurement involves multiple stages:
+
+\begin{enumerate}
+    \item \textbf{Physical phenomenon}: The actual quantity we want to measure (position, temperature, force, etc.)
+    \item \textbf{Sensing element}: Converts the physical quantity to another form (displacement to resistance, temperature to voltage, etc.)
+    \item \textbf{Signal conditioning}: Amplifies, filters, and processes the raw sensor signal
+    \item \textbf{Analog-to-digital conversion}: Samples and quantizes the analog signal
+    \item \textbf{Digital processing}: Applies software filtering, calibration corrections, and unit conversions
+    \item \textbf{Control algorithm}: Uses the processed measurement for feedback
+\end{enumerate}
+
+Each stage can introduce errors, delays, and noise. A complete sensor model must account for all of them.
+
+\subsection{Static Characteristics}
+
+Static characteristics describe how a sensor responds to constant (or very slowly changing) inputs. These are the specifications you typically find on datasheets.
+
+\subsubsection{Sensitivity}
+
+\textbf{Sensitivity} is the ratio of output change to input change:
+\begin{equation}
+S = \frac{\Delta y}{\Delta x} = \frac{dy}{dx}
+\label{eq:sensitivity}
+\end{equation}
+
+where $y$ is the sensor output and $x$ is the measurand (the physical quantity being measured). For a linear sensor, sensitivity is constant across the measurement range. For example, a potentiometer with $10\text{ k}\Omega$ total resistance over $270°$ rotation has sensitivity:
+\begin{equation}
+S = \frac{10{,}000\text{ }\Omega}{270°} = 37.04\text{ }\Omega/\text{degree}
+\end{equation}
+
+For a linear sensor, the output is simply:
+\begin{equation}
+y = S \cdot x + y_0
+\label{eq:linear_sensor}
+\end{equation}
+
+where $y_0$ is the zero offset. In practice, we often work with voltage outputs, so sensitivity might be expressed as $\text{mV}/°\text{C}$ for a temperature sensor or $\text{mV}/\text{g}$ for an accelerometer.
+
+\keypoint{Higher sensitivity is not always better. A highly sensitive sensor may saturate at smaller input ranges and often has higher noise in absolute terms. Match sensitivity to your measurement range and resolution requirements.}
+
+\subsubsection{Resolution}
+
+\textbf{Resolution} is the smallest change in input that produces a detectable change in output. It represents the fundamental limit on measurement precision.
+
+For analog sensors, resolution is often limited by noise. If the noise standard deviation is $\sigma_n$, then changes smaller than approximately $2\sigma_n$ to $3\sigma_n$ cannot be reliably detected.
+
+For digital sensors and systems with analog-to-digital converters (ADCs), resolution is determined by quantization:
+\begin{equation}
+\text{Resolution} = \frac{\text{Full Scale Range}}{2^n}
+\label{eq:adc_resolution}
+\end{equation}
+
+where $n$ is the number of bits. A 12-bit ADC measuring $0$ to $10\text{ V}$ has resolution:
+\begin{equation}
+\text{Resolution} = \frac{10\text{ V}}{2^{12}} = \frac{10\text{ V}}{4096} = 2.44\text{ mV}
+\end{equation}
+
+For encoders, resolution is typically expressed as counts per revolution (CPR) or pulses per revolution (PPR). A 1000-line encoder with quadrature decoding provides:
+\begin{equation}
+\text{Resolution} = \frac{360°}{4 \times 1000} = 0.09°/\text{count}
+\end{equation}
+
+The factor of 4 comes from quadrature decoding, which detects all four edges of the two-channel encoder signal.
+
+\subsubsection{Linearity}
+
+\textbf{Linearity} (or more precisely, nonlinearity) measures the deviation from ideal straight-line behavior. For an ideal linear sensor:
+\begin{equation}
+y_{\text{ideal}} = S \cdot x + y_0
+\end{equation}
+
+The actual output deviates from this:
+\begin{equation}
+y_{\text{actual}} = y_{\text{ideal}} + \epsilon_{\text{NL}}(x)
+\label{eq:nonlinearity}
+\end{equation}
+
+where $\epsilon_{\text{NL}}(x)$ is the nonlinearity error, which varies with input $x$.
+
+Nonlinearity is typically specified as a percentage of full scale (FS):
+\begin{equation}
+\text{Nonlinearity} = \frac{\max|\epsilon_{\text{NL}}(x)|}{\text{Full Scale Output}} \times 100\%
+\label{eq:nonlinearity_spec}
+\end{equation}
+
+Several methods exist for defining the ``ideal'' straight line:
+\begin{itemize}
+    \item \textbf{Terminal-based linearity}: Line connecting zero and full-scale points
+    \item \textbf{Best-fit straight line (BFSL)}: Line minimizing sum of squared errors (most common)
+    \item \textbf{Independent linearity}: Best-fit line with both slope and intercept as free parameters
+\end{itemize}
+
+The BFSL method typically gives the smallest nonlinearity specification for the same sensor, which is why manufacturers prefer it. When comparing sensors, ensure you are comparing the same linearity definition.
+
+\begin{example}[Potentiometer Nonlinearity Analysis]
+\label{ex:pot_nonlinearity}
+
+A rotary potentiometer is used as a position sensor. The datasheet specifies $\pm 0.5\%$ independent linearity. The potentiometer has $10\text{ k}\Omega$ total resistance over $300°$ of rotation.
+
+\textbf{Question}: What is the maximum position error due to nonlinearity?
+
+\textbf{Solution}: The nonlinearity specification means the resistance (and hence the voltage output in a voltage divider configuration) can deviate by up to $\pm 0.5\%$ of full scale from the ideal linear relationship.
+
+Full scale corresponds to $300°$ of rotation. The maximum position error is:
+\begin{equation}
+\epsilon_{\text{max}} = 0.005 \times 300° = \pm 1.5°
+\end{equation}
+
+This error is \textit{systematic}---it depends on position and will be the same each time we measure at a given angle. If we need better accuracy, we have two options:
+\begin{enumerate}
+    \item Use a more linear potentiometer (conductive plastic rather than wirewound)
+    \item Calibrate the potentiometer with a multi-point calibration table
+\end{enumerate}
+
+For control purposes, the systematic nature of nonlinearity errors is actually favorable---we can characterize and compensate for them, unlike random noise.
+\end{example}
+
+\subsubsection{Range and Span}
+
+The \textbf{range} of a sensor specifies the minimum and maximum values it can measure. The \textbf{span} is the difference between these limits:
+\begin{equation}
+\text{Span} = x_{\text{max}} - x_{\text{min}}
+\label{eq:span}
+\end{equation}
+
+For example, a pressure sensor with range $0$ to $100\text{ psi}$ has a span of $100\text{ psi}$. A temperature sensor with range $-40°\text{C}$ to $+125°\text{C}$ has a span of $165°\text{C}$.
+
+\warningbox{Operating a sensor beyond its specified range can cause permanent damage, temporary saturation, or grossly inaccurate readings. Always verify your expected measurement range falls within sensor specifications with adequate margin.}
+
+\subsubsection{Accuracy, Precision, and Repeatability}
+
+These three terms are often confused but have distinct meanings:
+
+\textbf{Accuracy} is the closeness of a measurement to the true value. It reflects systematic errors (bias).
+
+\textbf{Precision} is the closeness of repeated measurements to each other. It reflects random errors (noise).
+
+\textbf{Repeatability} is the variation in measurements when the same quantity is measured multiple times under identical conditions.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[scale=0.8]
+        % High accuracy, high precision
+        \begin{scope}[shift={(0,0)}]
+            \draw[thick] (0,0) circle (1.5);
+            \draw[thick] (0,0) circle (1.0);
+            \draw[thick] (0,0) circle (0.5);
+            \fill[UofSCGarnet] (0.05,0.08) circle (0.08);
+            \fill[UofSCGarnet] (-0.03,0.02) circle (0.08);
+            \fill[UofSCGarnet] (0.08,-0.05) circle (0.08);
+            \fill[UofSCGarnet] (-0.06,-0.04) circle (0.08);
+            \fill[UofSCGarnet] (0.02,0.1) circle (0.08);
+            \node[below] at (0,-1.8) {High Accuracy};
+            \node[below] at (0,-2.3) {High Precision};
+        \end{scope}
+        % High accuracy, low precision
+        \begin{scope}[shift={(4.5,0)}]
+            \draw[thick] (0,0) circle (1.5);
+            \draw[thick] (0,0) circle (1.0);
+            \draw[thick] (0,0) circle (0.5);
+            \fill[UofSCAtlantic] (0.4,0.5) circle (0.08);
+            \fill[UofSCAtlantic] (-0.5,0.3) circle (0.08);
+            \fill[UofSCAtlantic] (0.3,-0.6) circle (0.08);
+            \fill[UofSCAtlantic] (-0.4,-0.3) circle (0.08);
+            \fill[UofSCAtlantic] (0.1,0.4) circle (0.08);
+            \node[below] at (0,-1.8) {High Accuracy};
+            \node[below] at (0,-2.3) {Low Precision};
+        \end{scope}
+        % Low accuracy, high precision
+        \begin{scope}[shift={(9,0)}]
+            \draw[thick] (0,0) circle (1.5);
+            \draw[thick] (0,0) circle (1.0);
+            \draw[thick] (0,0) circle (0.5);
+            \fill[UofSCHorseshoe] (0.9,0.85) circle (0.08);
+            \fill[UofSCHorseshoe] (0.95,0.78) circle (0.08);
+            \fill[UofSCHorseshoe] (0.85,0.92) circle (0.08);
+            \fill[UofSCHorseshoe] (0.92,0.88) circle (0.08);
+            \fill[UofSCHorseshoe] (0.88,0.82) circle (0.08);
+            \node[below] at (0,-1.8) {Low Accuracy};
+            \node[below] at (0,-2.3) {High Precision};
+        \end{scope}
+        % Low accuracy, low precision
+        \begin{scope}[shift={(13.5,0)}]
+            \draw[thick] (0,0) circle (1.5);
+            \draw[thick] (0,0) circle (1.0);
+            \draw[thick] (0,0) circle (0.5);
+            \fill[UofSCRose] (0.8,0.9) circle (0.08);
+            \fill[UofSCRose] (-0.6,1.1) circle (0.08);
+            \fill[UofSCRose] (1.2,-0.3) circle (0.08);
+            \fill[UofSCRose] (-0.9,-0.8) circle (0.08);
+            \fill[UofSCRose] (0.3,1.2) circle (0.08);
+            \node[below] at (0,-1.8) {Low Accuracy};
+            \node[below] at (0,-2.3) {Low Precision};
+        \end{scope}
+    \end{tikzpicture}
+    \caption{Visual representation of accuracy and precision. The target center represents the true value. High precision means measurements cluster tightly; high accuracy means they cluster around the true value.}
+    \label{fig:accuracy_precision}
+\end{figure}
+
+The key insight for control engineers: \textit{low accuracy with high precision can often be corrected through calibration}, but \textit{low precision cannot be calibrated away}---it requires filtering or averaging, which introduces delays.
+
+Mathematically, if we take $N$ measurements $y_i$ of a true value $x_{\text{true}}$:
+\begin{align}
+\text{Bias (affects accuracy)} &= \bar{y} - x_{\text{true}} = \frac{1}{N}\sum_{i=1}^{N} y_i - x_{\text{true}} \label{eq:bias}\\
+\text{Standard deviation (affects precision)} &= \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}(y_i - \bar{y})^2} \label{eq:std_dev}
+\end{align}
+
+\subsection{Dynamic Characteristics}
+
+Static characteristics tell us about steady-state behavior. But in control systems, we care deeply about transient response---how quickly and accurately does the sensor track changing inputs?
+
+\subsubsection{Why Sensor Dynamics Matter for Control}
+
+Consider a temperature control system. Your process has a time constant of $\tau_p = 60\text{ s}$. If your temperature sensor has a time constant of $\tau_s = 30\text{ s}$, the sensor is almost as slow as the process! The measured temperature lags the actual temperature significantly. Your controller sees outdated information and responds inappropriately.
+
+As a rule of thumb: \textbf{sensor dynamics should be at least 5--10 times faster than the fastest dynamics you need to control}. If your closed-loop bandwidth target is $\omega_{cl}$, your sensor bandwidth should satisfy:
+\begin{equation}
+\omega_{\text{sensor}} \geq 5\omega_{cl} \quad \text{to} \quad 10\omega_{cl}
+\label{eq:bandwidth_rule}
+\end{equation}
+
+This ensures the sensor introduces minimal phase lag and amplitude attenuation at the frequencies of interest.
+
+\subsubsection{Sensor Transfer Functions}
+
+We model sensor dynamics using transfer functions, just like any other dynamic system. The sensor transfer function $G_s(s)$ relates the measured output $Y(s)$ to the true input $X(s)$:
+\begin{equation}
+Y(s) = G_s(s) \cdot X(s)
+\label{eq:sensor_tf}
+\end{equation}
+
+An ideal sensor would have $G_s(s) = K$ (constant gain, no dynamics). Real sensors have frequency-dependent behavior.
+
+\section{Sensor Dynamics}
+\label{sec:sensor_dynamics}
+
+Most sensors can be adequately modeled as first-order or second-order systems. Understanding these canonical forms allows us to characterize sensor behavior with just a few parameters.
+
+\subsection{First-Order Sensor Dynamics}
+
+Many sensors exhibit first-order behavior, including thermocouples, RTDs, thermistors, and some pressure sensors. The transfer function is:
+\begin{equation}
+G_s(s) = \frac{K}{\tau s + 1}
+\label{eq:first_order_sensor}
+\end{equation}
+
+where $K$ is the static sensitivity (DC gain) and $\tau$ is the time constant.
+
+\subsubsection{Time Constant}
+
+The time constant $\tau$ characterizes the speed of response. For a step input:
+\begin{itemize}
+    \item At $t = \tau$: Output reaches $63.2\%$ of final value
+    \item At $t = 2\tau$: Output reaches $86.5\%$ of final value
+    \item At $t = 3\tau$: Output reaches $95.0\%$ of final value
+    \item At $t = 4\tau$: Output reaches $98.2\%$ of final value
+    \item At $t = 5\tau$: Output reaches $99.3\%$ of final value
+\end{itemize}
+
+We often say the sensor ``settles'' after $4\tau$ to $5\tau$, meaning it has reached within $2\%$ to $1\%$ of its final value.
+
+\subsubsection{Step Response}
+
+For a unit step input $x(t) = u(t)$, the first-order sensor output is:
+\begin{equation}
+y(t) = K\left(1 - e^{-t/\tau}\right)
+\label{eq:first_order_step}
+\end{equation}
+
+The initial slope is:
+\begin{equation}
+\left.\frac{dy}{dt}\right|_{t=0} = \frac{K}{\tau}
+\label{eq:initial_slope}
+\end{equation}
+
+This provides a method for experimentally determining $\tau$: draw a tangent line at $t=0$; it intersects the final value line at $t = \tau$.
+
+\subsubsection{Frequency Response}
+
+The frequency response of the first-order sensor is:
+\begin{equation}
+G_s(j\omega) = \frac{K}{1 + j\omega\tau}
+\label{eq:first_order_freq}
+\end{equation}
+
+The magnitude and phase are:
+\begin{align}
+|G_s(j\omega)| &= \frac{K}{\sqrt{1 + (\omega\tau)^2}} \label{eq:first_order_mag}\\
+\angle G_s(j\omega) &= -\arctan(\omega\tau) \label{eq:first_order_phase}
+\end{align}
+
+At the \textbf{cutoff frequency} (also called the $-3\text{ dB}$ frequency or bandwidth):
+\begin{equation}
+\omega_c = \frac{1}{\tau} \quad \text{or} \quad f_c = \frac{1}{2\pi\tau}
+\label{eq:cutoff_freq}
+\end{equation}
+
+At this frequency:
+\begin{itemize}
+    \item Magnitude drops to $K/\sqrt{2} \approx 0.707K$ (down $3\text{ dB}$)
+    \item Phase lag is $-45°$
+\end{itemize}
+
+\keypoint{The bandwidth of a first-order sensor is inversely proportional to its time constant: $\omega_c = 1/\tau$. Faster sensors (smaller $\tau$) have higher bandwidth.}
+
+\begin{example}[Thermocouple Dynamic Response]
+\label{ex:thermocouple_dynamics}
+
+A Type K thermocouple with a $1\text{ mm}$ diameter bead is immersed in a fluid with high convective heat transfer coefficient. The thermocouple has a time constant of $\tau = 0.5\text{ s}$ in this environment.
+
+\textbf{Part (a)}: What is the bandwidth of this thermocouple?
+\begin{equation}
+f_c = \frac{1}{2\pi\tau} = \frac{1}{2\pi(0.5)} = 0.318\text{ Hz}
+\end{equation}
+
+\textbf{Part (b)}: The fluid temperature oscillates sinusoidally at $0.1\text{ Hz}$ with amplitude $10°\text{C}$. What amplitude does the thermocouple measure?
+
+At $f = 0.1\text{ Hz}$:
+\begin{equation}
+\omega = 2\pi(0.1) = 0.628\text{ rad/s}
+\end{equation}
+\begin{equation}
+|G_s(j\omega)| = \frac{1}{\sqrt{1 + (0.628 \times 0.5)^2}} = \frac{1}{\sqrt{1.099}} = 0.954
+\end{equation}
+
+The measured amplitude is $0.954 \times 10°\text{C} = 9.54°\text{C}$.
+
+\textbf{Part (c)}: What is the phase lag at this frequency?
+\begin{equation}
+\phi = -\arctan(0.628 \times 0.5) = -\arctan(0.314) = -17.4°
+\end{equation}
+
+At $0.1\text{ Hz}$, the period is $10\text{ s}$. A phase lag of $-17.4°$ corresponds to a time delay of:
+\begin{equation}
+\Delta t = \frac{17.4°}{360°} \times 10\text{ s} = 0.48\text{ s}
+\end{equation}
+
+The thermocouple reading lags the true temperature by about half a second.
+
+\textbf{Part (d)}: At what frequency would the amplitude attenuation reach $10\%$ (measured amplitude = $90\%$ of true)?
+
+We need $|G_s| = 0.9$:
+\begin{equation}
+\frac{1}{\sqrt{1 + (\omega\tau)^2}} = 0.9
+\end{equation}
+\begin{equation}
+1 + (\omega\tau)^2 = \frac{1}{0.81} = 1.235
+\end{equation}
+\begin{equation}
+\omega\tau = 0.484 \implies \omega = \frac{0.484}{0.5} = 0.968\text{ rad/s}
+\end{equation}
+\begin{equation}
+f = \frac{0.968}{2\pi} = 0.154\text{ Hz}
+\end{equation}
+
+For temperature oscillations faster than about $0.15\text{ Hz}$, this thermocouple attenuates the signal by more than $10\%$.
+\end{example}
+
+\subsection{Second-Order Sensor Dynamics}
+
+Some sensors, particularly mechanical sensors like accelerometers and pressure transducers, exhibit second-order dynamics due to mass-spring-damper behavior:
+\begin{equation}
+G_s(s) = \frac{K\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\label{eq:second_order_sensor}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $K$ is the static sensitivity (DC gain)
+    \item $\omega_n$ is the natural frequency (rad/s)
+    \item $\zeta$ is the damping ratio (dimensionless)
+\end{itemize}
+
+\subsubsection{Damping Ratio and Response Character}
+
+The damping ratio $\zeta$ determines the character of the response:
+\begin{itemize}
+    \item $\zeta < 1$: Underdamped---oscillatory response with overshoot
+    \item $\zeta = 1$: Critically damped---fastest non-oscillatory response
+    \item $\zeta > 1$: Overdamped---sluggish response, no overshoot
+\end{itemize}
+
+Most sensors are designed to be slightly underdamped ($\zeta \approx 0.6$ to $0.8$) for good bandwidth without excessive ringing.
+
+\subsubsection{Resonance and Useful Bandwidth}
+
+For underdamped sensors ($\zeta < 1/\sqrt{2} \approx 0.707$), there is a resonant peak in the frequency response at:
+\begin{equation}
+\omega_r = \omega_n\sqrt{1 - 2\zeta^2}
+\label{eq:resonant_freq}
+\end{equation}
+
+The peak magnitude (resonant amplification) is:
+\begin{equation}
+M_r = \frac{1}{2\zeta\sqrt{1-\zeta^2}}
+\label{eq:resonant_peak}
+\end{equation}
+
+For $\zeta = 0.1$, this gives $M_r \approx 5$ (a $14\text{ dB}$ peak)---the sensor amplifies inputs near resonance by a factor of 5!
+
+The \textbf{useful bandwidth} of a second-order sensor is typically limited to a fraction of the natural frequency to avoid resonance effects:
+\begin{equation}
+\text{Useful bandwidth} \approx \frac{\omega_n}{3} \quad \text{to} \quad \frac{\omega_n}{5}
+\label{eq:useful_bandwidth}
+\end{equation}
+
+This is why accelerometer datasheets specify a useful frequency range that is much lower than the resonant frequency.
+
+\subsubsection{Quality Factor}
+
+The quality factor $Q$ is an alternative way to express damping:
+\begin{equation}
+Q = \frac{1}{2\zeta}
+\label{eq:quality_factor}
+\end{equation}
+
+High-Q sensors have low damping and sharp resonance peaks. MEMS accelerometers and gyroscopes often have $Q > 100$, meaning $\zeta < 0.005$. This creates challenges for wideband measurements.
+
+\begin{example}[Accelerometer Frequency Response]
+\label{ex:accelerometer_freq}
+
+A MEMS accelerometer has natural frequency $f_n = 5\text{ kHz}$ and damping ratio $\zeta = 0.7$. The sensitivity is $100\text{ mV/g}$.
+
+\textbf{Part (a)}: What is the useful measurement bandwidth?
+
+Using the conservative estimate:
+\begin{equation}
+f_{\text{useful}} \approx \frac{f_n}{5} = \frac{5000}{5} = 1000\text{ Hz}
+\end{equation}
+
+\textbf{Part (b)}: Is there a resonant peak?
+
+Since $\zeta = 0.7 < 0.707$, technically there is a resonant peak. The resonant frequency is:
+\begin{equation}
+f_r = f_n\sqrt{1 - 2(0.7)^2} = 5000\sqrt{1 - 0.98} = 5000\sqrt{0.02} = 707\text{ Hz}
+\end{equation}
+
+Wait---this gives a resonant frequency \textit{below} the natural frequency, which seems wrong. Let me recalculate. For $\zeta = 0.7$:
+\begin{equation}
+1 - 2\zeta^2 = 1 - 2(0.49) = 1 - 0.98 = 0.02
+\end{equation}
+
+So $\omega_r = \omega_n\sqrt{0.02} = 0.14\omega_n$. This is actually correct---the peak of the frequency response occurs at a frequency lower than $\omega_n$ for this damping ratio.
+
+The peak magnitude is:
+\begin{equation}
+M_r = \frac{1}{2(0.7)\sqrt{1-(0.7)^2}} = \frac{1}{1.4 \times 0.714} = 1.0
+\end{equation}
+
+For $\zeta = 0.7$, the ``peak'' is essentially unity---there is negligible resonant amplification. This is why $\zeta \approx 0.7$ is often targeted in sensor design: it provides good bandwidth without resonance problems.
+
+\textbf{Part (c)}: What is the phase lag at $100\text{ Hz}$?
+
+At $\omega = 2\pi(100) = 628\text{ rad/s}$ and $\omega_n = 2\pi(5000) = 31{,}416\text{ rad/s}$:
+\begin{equation}
+r = \frac{\omega}{\omega_n} = \frac{628}{31416} = 0.02
+\end{equation}
+
+The phase is:
+\begin{equation}
+\phi = -\arctan\left(\frac{2\zeta r}{1 - r^2}\right) = -\arctan\left(\frac{2(0.7)(0.02)}{1 - 0.0004}\right) = -\arctan(0.028) = -1.6°
+\end{equation}
+
+At $100\text{ Hz}$, the accelerometer introduces negligible phase lag because we are well below the natural frequency.
+\end{example}
+
+\subsection{Phase Lag and Its Impact on Control}
+
+Phase lag is often more problematic than amplitude attenuation for control systems. Here is why: in a feedback loop, phase lag reduces the phase margin, potentially causing instability.
+
+Consider a first-order sensor with time constant $\tau$ in the feedback path of a control loop. At any frequency $\omega$, the sensor introduces phase lag:
+\begin{equation}
+\phi_{\text{sensor}}(\omega) = -\arctan(\omega\tau)
+\label{eq:sensor_phase_lag}
+\end{equation}
+
+If your original loop had phase margin $\phi_m$ at crossover frequency $\omega_c$, the effective phase margin with the sensor becomes:
+\begin{equation}
+\phi_{m,\text{effective}} = \phi_m - |\phi_{\text{sensor}}(\omega_c)|
+\label{eq:effective_phase_margin}
+\end{equation}
+
+A sensor with $\omega\tau = 1$ at the crossover frequency adds $45°$ of phase lag---potentially catastrophic if your original phase margin was only $50°$ or $60°$.
+
+\keypoint{When selecting sensors for control applications, check the phase lag at your target crossover frequency, not just the bandwidth. A sensor with ``adequate'' bandwidth might still introduce unacceptable phase lag.}
+
+\subsection{Sensor Time Constant Identification}
+
+To design effective controllers and filters, we need to know our sensor's time constant. Here are practical methods for identification.
+
+\subsubsection{Step Response Method}
+
+Apply a step change in the measured quantity and record the sensor output.
+
+\textbf{Method 1: 63.2\% Point}
+
+Find the time at which the output reaches $63.2\%$ of its final value. This time equals $\tau$.
+
+\textbf{Method 2: Tangent Line}
+
+Draw a tangent to the response curve at $t = 0$. The tangent intersects the final value line at time $t = \tau$.
+
+\textbf{Method 3: Two-Point Method}
+
+For a first-order system, using any two points $(t_1, y_1)$ and $(t_2, y_2)$ during the transient:
+\begin{equation}
+\tau = \frac{t_2 - t_1}{\ln\left(\frac{y_{\infty} - y_1}{y_{\infty} - y_2}\right)}
+\label{eq:two_point_tau}
+\end{equation}
+
+where $y_{\infty}$ is the final steady-state value.
+
+\begin{example}[Identifying Thermocouple Time Constant]
+\label{ex:identify_tau}
+
+A thermocouple is plunged from room temperature ($25°\text{C}$) into boiling water ($100°\text{C}$). The recorded response shows:
+\begin{itemize}
+    \item At $t = 1\text{ s}$: Temperature reading is $55°\text{C}$
+    \item At $t = 2\text{ s}$: Temperature reading is $75°\text{C}$
+\end{itemize}
+
+Using the two-point method with $y_{\infty} = 100°\text{C}$:
+\begin{equation}
+\tau = \frac{2 - 1}{\ln\left(\frac{100 - 55}{100 - 75}\right)} = \frac{1}{\ln\left(\frac{45}{25}\right)} = \frac{1}{\ln(1.8)} = \frac{1}{0.588} = 1.70\text{ s}
+\end{equation}
+
+We can verify: at $t = \tau = 1.70\text{ s}$, the reading should be:
+\begin{equation}
+T = 25 + (100-25)(1 - e^{-1.70/1.70}) = 25 + 75(1 - e^{-1}) = 25 + 75(0.632) = 72.4°\text{C}
+\end{equation}
+
+This is consistent with the measured data (between $55°\text{C}$ at $1\text{ s}$ and $75°\text{C}$ at $2\text{ s}$).
+\end{example}
+
+\subsubsection{Frequency Response Method}
+
+Apply a sinusoidal input at various frequencies and measure the amplitude ratio and phase shift.
+
+For a first-order sensor, at the frequency where the phase lag equals $-45°$, we have:
+\begin{equation}
+\omega_{-45°} = \frac{1}{\tau} \implies \tau = \frac{1}{\omega_{-45°}}
+\label{eq:freq_tau}
+\end{equation}
+
+Alternatively, at the $-3\text{ dB}$ frequency (where amplitude ratio drops to $0.707$):
+\begin{equation}
+\tau = \frac{1}{\omega_{-3\text{dB}}}
+\end{equation}
+
+The frequency response method is more accurate than step response because it is less sensitive to noise and initial conditions.
+
+\section{Noise in Measurements}
+\label{sec:noise}
+
+Every measurement contains noise---unwanted random variations that corrupt the signal. Understanding noise sources and characteristics is essential for designing filters and estimators that extract useful information from sensor signals.
+
+\subsection{Types of Noise}
+
+\subsubsection{Thermal Noise (Johnson-Nyquist Noise)}
+
+Thermal noise arises from random thermal motion of charge carriers in any resistive element. It is present in all electronic components at temperatures above absolute zero.
+
+The root-mean-square (RMS) voltage noise across a resistor is:
+\begin{equation}
+V_n = \sqrt{4k_B T R \Delta f}
+\label{eq:thermal_noise}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $k_B = 1.38 \times 10^{-23}\text{ J/K}$ is Boltzmann's constant
+    \item $T$ is absolute temperature (K)
+    \item $R$ is resistance ($\Omega$)
+    \item $\Delta f$ is measurement bandwidth (Hz)
+\end{itemize}
+
+Thermal noise has a \textbf{white} spectrum---equal power at all frequencies---and Gaussian amplitude distribution.
+
+\begin{example}[Thermal Noise in a Strain Gauge Bridge]
+\label{ex:thermal_noise}
+
+A strain gauge Wheatstone bridge has four $350\text{ }\Omega$ resistors. The measurement bandwidth is $1\text{ kHz}$, and operation is at room temperature ($T = 300\text{ K}$).
+
+The equivalent noise resistance of a balanced bridge is approximately $R_{eq} = R$ (one arm contributes). The thermal noise voltage is:
+\begin{equation}
+V_n = \sqrt{4 \times 1.38 \times 10^{-23} \times 300 \times 350 \times 1000} = \sqrt{5.8 \times 10^{-15}} = 76\text{ nV}
+\end{equation}
+
+If the bridge excitation is $5\text{ V}$ and the gauge factor is $2$, a $1\text{ }\mu\epsilon$ strain produces:
+\begin{equation}
+\Delta V = V_{exc} \times GF \times \epsilon = 5 \times 2 \times 10^{-6} = 10\text{ }\mu\text{V}
+\end{equation}
+
+The signal-to-noise ratio (SNR) for $1\text{ }\mu\epsilon$ measurement is:
+\begin{equation}
+\text{SNR} = \frac{10 \times 10^{-6}}{76 \times 10^{-9}} = 132 \quad (\approx 42\text{ dB})
+\end{equation}
+
+This is adequate for most applications, but measuring $0.01\text{ }\mu\epsilon$ would give only $\text{SNR} = 1.3$ ($2\text{ dB}$)---essentially buried in noise.
+\end{example}
+
+\subsubsection{Shot Noise}
+
+Shot noise occurs in devices where current flows as discrete charge carriers (electrons or holes). It is prominent in photodiodes, transistors, and other semiconductor devices.
+
+The shot noise current is:
+\begin{equation}
+I_n = \sqrt{2qI_{DC}\Delta f}
+\label{eq:shot_noise}
+\end{equation}
+
+where $q = 1.6 \times 10^{-19}\text{ C}$ is the electron charge and $I_{DC}$ is the DC current.
+
+Like thermal noise, shot noise is white (flat spectrum) and Gaussian.
+
+\subsubsection{Flicker Noise (1/f Noise)}
+
+Flicker noise, also called $1/f$ noise or pink noise, has power spectral density proportional to $1/f$:
+\begin{equation}
+S(f) = \frac{K}{f^{\alpha}}
+\label{eq:flicker_noise}
+\end{equation}
+
+where $\alpha \approx 1$ (typically $0.8$ to $1.2$).
+
+Flicker noise dominates at low frequencies and is particularly problematic for:
+\begin{itemize}
+    \item DC and low-frequency measurements
+    \item Long-term stability
+    \item Bias drift in inertial sensors
+\end{itemize}
+
+The ``corner frequency'' where flicker noise equals white noise is an important sensor specification, typically ranging from $0.1\text{ Hz}$ to $100\text{ Hz}$ depending on sensor technology.
+
+\subsubsection{Quantization Noise}
+
+When an analog signal is digitized by an ADC, the continuous values are mapped to discrete levels. This introduces \textbf{quantization error}---the difference between the actual analog value and its quantized representation.
+
+For a uniform quantizer with step size $\Delta$, the quantization error $e_q$ is uniformly distributed over $[-\Delta/2, +\Delta/2]$. The RMS quantization noise is:
+\begin{equation}
+\sigma_q = \frac{\Delta}{\sqrt{12}} \approx 0.289\Delta
+\label{eq:quantization_noise}
+\end{equation}
+
+For an $n$-bit ADC with full-scale range FSR:
+\begin{equation}
+\Delta = \frac{\text{FSR}}{2^n}
+\label{eq:lsb}
+\end{equation}
+
+The signal-to-quantization-noise ratio (SQNR) for a full-scale sinusoidal input is:
+\begin{equation}
+\text{SQNR} = 6.02n + 1.76\text{ dB}
+\label{eq:sqnr}
+\end{equation}
+
+This shows that each additional bit of resolution adds approximately $6\text{ dB}$ of dynamic range.
+
+\begin{example}[Selecting ADC Resolution]
+\label{ex:adc_resolution}
+
+An accelerometer has a measurement range of $\pm 2\text{ g}$ and noise density of $100\text{ }\mu\text{g}/\sqrt{\text{Hz}}$. The measurement bandwidth is $100\text{ Hz}$.
+
+\textbf{Step 1}: Calculate the RMS noise of the accelerometer:
+\begin{equation}
+\sigma_{\text{acc}} = 100 \times 10^{-6} \times \sqrt{100} = 1\text{ mg}
+\end{equation}
+
+\textbf{Step 2}: Choose ADC resolution such that quantization noise is much smaller than sensor noise (typically $<1/4$).
+
+Required quantization step:
+\begin{equation}
+\Delta \leq \frac{\sigma_{\text{acc}}}{4} = 0.25\text{ mg}
+\end{equation}
+
+\textbf{Step 3}: Determine required bits:
+\begin{equation}
+2^n \geq \frac{4000\text{ mg}}{0.25\text{ mg}} = 16{,}000
+\end{equation}
+\begin{equation}
+n \geq \log_2(16000) = 13.97
+\end{equation}
+
+A \textbf{14-bit ADC} is required. Using a 12-bit ADC would result in quantization step:
+\begin{equation}
+\Delta_{12} = \frac{4000}{4096} = 0.98\text{ mg}
+\end{equation}
+
+This is comparable to the sensor noise, so quantization would degrade the measurement.
+
+Using a 16-bit ADC gives:
+\begin{equation}
+\Delta_{16} = \frac{4000}{65536} = 0.061\text{ mg}
+\end{equation}
+
+This is well below the sensor noise floor, so additional bits beyond 16 provide no benefit---the accelerometer noise dominates.
+\end{example}
+
+\subsubsection{Electromagnetic Interference (EMI)}
+
+EMI is noise coupled into sensor signals from external electromagnetic sources:
+\begin{itemize}
+    \item \textbf{Power line interference}: $50\text{ Hz}$ or $60\text{ Hz}$ and harmonics
+    \item \textbf{Switching noise}: From power supplies, motor drives, PWM controllers
+    \item \textbf{Radio frequency interference}: From wireless communications, radar
+    \item \textbf{Electrostatic coupling}: Through capacitance between cables and noise sources
+    \item \textbf{Magnetic coupling}: Through mutual inductance in loops
+\end{itemize}
+
+EMI is typically not random---it has specific frequencies related to the interference source. This makes it amenable to notch filtering or synchronous detection.
+
+\subsection{Noise Characterization}
+
+\subsubsection{Power Spectral Density}
+
+The \textbf{power spectral density} (PSD) $S(f)$ describes how noise power is distributed across frequencies. Units are typically $\text{V}^2/\text{Hz}$ or $(\text{units})^2/\text{Hz}$.
+
+The total noise variance in a bandwidth from $f_1$ to $f_2$ is:
+\begin{equation}
+\sigma^2 = \int_{f_1}^{f_2} S(f) \, df
+\label{eq:noise_variance}
+\end{equation}
+
+For white noise with constant PSD $S_0$:
+\begin{equation}
+\sigma^2 = S_0 \cdot (f_2 - f_1) = S_0 \cdot \Delta f
+\end{equation}
+
+\subsubsection{Noise Density}
+
+Sensor datasheets often specify \textbf{noise density}, which is the square root of PSD:
+\begin{equation}
+\text{Noise density} = \sqrt{S(f)}
+\label{eq:noise_density}
+\end{equation}
+
+Units are typically $\text{V}/\sqrt{\text{Hz}}$, $\mu\text{g}/\sqrt{\text{Hz}}$ for accelerometers, or $°/\text{s}/\sqrt{\text{Hz}}$ for gyroscopes.
+
+To find RMS noise over a measurement bandwidth $B$, multiply noise density by $\sqrt{B}$:
+\begin{equation}
+\sigma = (\text{noise density}) \times \sqrt{B}
+\label{eq:rms_from_density}
+\end{equation}
+
+\subsubsection{Allan Variance}
+
+For characterizing gyroscope and accelerometer noise, the \textbf{Allan variance} method is standard. It separates different noise types by their time-domain behavior.
+
+Given a time series of $N$ measurements $y_k$ at intervals $\tau_0$, the Allan variance at averaging time $\tau = m\tau_0$ is:
+\begin{equation}
+\sigma^2_A(\tau) = \frac{1}{2(M-1)} \sum_{k=1}^{M-1} \left(\bar{y}_{k+1} - \bar{y}_k\right)^2
+\label{eq:allan_variance}
+\end{equation}
+
+where $\bar{y}_k$ is the average of $m$ consecutive samples starting at sample $k$, and $M$ is the number of such averages.
+
+A log-log plot of $\sigma_A(\tau)$ versus $\tau$ reveals different noise processes:
+\begin{itemize}
+    \item Slope of $-1/2$: White noise (angle random walk for gyros)
+    \item Slope of $0$ (flat): Flicker noise (bias instability)
+    \item Slope of $+1/2$: Random walk (rate random walk for gyros)
+\end{itemize}
+
+Key parameters extracted from Allan variance:
+\begin{itemize}
+    \item \textbf{Angle Random Walk (ARW)}: Read from $\sigma_A$ at $\tau = 1\text{ s}$ on the $-1/2$ slope line. Units: $°/\sqrt{\text{hr}}$
+    \item \textbf{Bias Instability}: The minimum value of $\sigma_A(\tau)$. Units: $°/\text{hr}$
+    \item \textbf{Rate Random Walk}: Extracted from the $+1/2$ slope region. Units: $°/\text{hr}^{3/2}$
+\end{itemize}
+
+\subsection{Signal Conditioning}
+
+Signal conditioning processes the raw sensor signal to improve quality before digitization.
+
+\subsubsection{Amplification}
+
+Low-level signals (millivolts or microvolts) must be amplified to match the ADC input range. Key considerations:
+\begin{itemize}
+    \item \textbf{Gain}: Choose gain to use full ADC range without saturation
+    \item \textbf{Input impedance}: High impedance avoids loading the sensor
+    \item \textbf{Common-mode rejection}: Rejects interference present on both signal lines
+    \item \textbf{Noise}: Amplifier adds its own noise; use low-noise amplifiers for weak signals
+\end{itemize}
+
+\subsubsection{Analog Filtering}
+
+Analog filters before the ADC serve multiple purposes:
+\begin{itemize}
+    \item Remove high-frequency noise
+    \item Prevent aliasing (anti-aliasing filter)
+    \item Reject specific interference frequencies (notch filter)
+\end{itemize}
+
+The most important is the \textbf{anti-aliasing filter}, discussed in Section~\ref{sec:antialiasing}.
+
+\subsubsection{Shielding and Grounding}
+
+Proper shielding and grounding are often more effective than electronic filtering for EMI rejection:
+\begin{itemize}
+    \item Use shielded cables with shield grounded at one end
+    \item Keep signal cables away from power cables
+    \item Use twisted pair for differential signals
+    \item Implement star grounding topology
+    \item Filter power supply lines
+\end{itemize}
+
+\section{Bias, Drift, and Calibration}
+\label{sec:bias_drift_calibration}
+
+Unlike random noise, systematic errors (bias) and slow variations (drift) can often be characterized and corrected through calibration.
+
+\subsection{Systematic vs. Random Errors}
+
+\textbf{Systematic errors} are consistent, repeatable deviations from the true value:
+\begin{itemize}
+    \item Constant bias (offset)
+    \item Gain errors (sensitivity errors)
+    \item Nonlinearity
+    \item Hysteresis
+\end{itemize}
+
+These can be measured and compensated through calibration.
+
+\textbf{Random errors} are unpredictable variations:
+\begin{itemize}
+    \item Thermal noise
+    \item Shot noise
+    \item Environmental disturbances
+\end{itemize}
+
+These cannot be calibrated out but can be reduced through filtering or averaging.
+
+\subsection{Types of Drift}
+
+\subsubsection{Temperature Drift}
+
+Temperature affects sensor output through multiple mechanisms:
+\begin{itemize}
+    \item \textbf{Zero drift}: The offset changes with temperature
+    \item \textbf{Sensitivity drift}: The gain changes with temperature
+    \item \textbf{Mechanical effects}: Thermal expansion changes geometry
+\end{itemize}
+
+Temperature drift is typically specified as:
+\begin{align}
+\text{Zero drift} &: \pm X\text{ \% FS}/°\text{C} \quad \text{or} \quad \pm Y\text{ units}/°\text{C} \\
+\text{Sensitivity drift} &: \pm X\text{ \%}/°\text{C} \quad \text{or} \quad \pm Y\text{ ppm}/°\text{C}
+\end{align}
+
+For a sensor with $\pm 0.01\text{ \% FS}/°\text{C}$ zero drift over a $50°\text{C}$ temperature range:
+\begin{equation}
+\text{Maximum zero error} = 0.01\% \times 50 = 0.5\text{ \% FS}
+\end{equation}
+
+\subsubsection{Aging Drift}
+
+All sensors experience gradual changes in characteristics over their lifetime due to:
+\begin{itemize}
+    \item Material fatigue and creep
+    \item Chemical changes (oxidation, contamination)
+    \item Electronic component aging
+    \item Mechanical wear
+\end{itemize}
+
+Aging drift is typically specified as $\text{\% change}/\text{year}$ and decreases over time as components ``burn in.''
+
+\subsubsection{Turn-On Drift}
+
+Many sensors require a warm-up period after power-on before specifications are valid. This is due to:
+\begin{itemize}
+    \item Internal temperature stabilization
+    \item Electronic circuit settling
+    \item Mechanical stress relaxation
+\end{itemize}
+
+Gyroscopes are notorious for turn-on drift---some navigation-grade units require 30 minutes or more to stabilize.
+
+\subsection{Bias in Inertial Sensors}
+
+Gyroscopes and accelerometers have particularly problematic bias errors because integration amplifies them over time.
+
+\subsubsection{Gyroscope Bias}
+
+A gyroscope bias $b_g$ (in $°/\text{s}$) causes angle error that grows linearly with time:
+\begin{equation}
+\theta_{\text{error}}(t) = b_g \cdot t
+\label{eq:gyro_bias_error}
+\end{equation}
+
+A bias of just $0.1°/\text{s}$ ($360°/\text{hr}$) accumulates to:
+\begin{itemize}
+    \item $6°$ error after 1 minute
+    \item $36°$ error after 6 minutes
+    \item $360°$ error (full rotation) after 1 hour
+\end{itemize}
+
+This is why gyroscope bias stability is the critical specification for navigation systems.
+
+\subsubsection{Accelerometer Bias}
+
+An accelerometer bias $b_a$ (in g or m/s$^2$) causes velocity error that grows linearly and position error that grows quadratically:
+\begin{align}
+v_{\text{error}}(t) &= b_a \cdot t \label{eq:accel_bias_velocity}\\
+x_{\text{error}}(t) &= \frac{1}{2} b_a \cdot t^2 \label{eq:accel_bias_position}
+\end{align}
+
+A bias of $1\text{ mg}$ ($0.0098\text{ m/s}^2$) causes:
+\begin{itemize}
+    \item $0.59\text{ m/s}$ velocity error after 1 minute
+    \item $17.6\text{ m}$ position error after 1 minute
+    \item $3.5\text{ m/s}$ velocity error after 6 minutes
+    \item $635\text{ m}$ position error after 6 minutes
+\end{itemize}
+
+This quadratic growth makes pure accelerometer-based navigation impractical---GPS or other aiding is essential.
+
+\subsection{Calibration Techniques}
+
+\subsubsection{One-Point Calibration (Zero Adjustment)}
+
+The simplest calibration corrects only the zero offset:
+\begin{equation}
+y_{\text{corrected}} = y_{\text{measured}} - y_{\text{zero}}
+\label{eq:one_point_cal}
+\end{equation}
+
+where $y_{\text{zero}}$ is the sensor output at known zero input.
+
+\textbf{Procedure}:
+\begin{enumerate}
+    \item Apply known zero input (e.g., zero pressure, stationary condition)
+    \item Record sensor output $y_{\text{zero}}$
+    \item Subtract $y_{\text{zero}}$ from all subsequent measurements
+\end{enumerate}
+
+One-point calibration is fast and can be automated but does not correct gain errors or nonlinearity.
+
+\subsubsection{Two-Point Calibration (Zero and Span)}
+
+Two-point calibration corrects both offset and gain:
+\begin{equation}
+y_{\text{corrected}} = \frac{y_{\text{measured}} - y_{\text{low}}}{y_{\text{high}} - y_{\text{low}}} \times (x_{\text{high}} - x_{\text{low}}) + x_{\text{low}}
+\label{eq:two_point_cal}
+\end{equation}
+
+\textbf{Procedure}:
+\begin{enumerate}
+    \item Apply known low input $x_{\text{low}}$ (typically zero or minimum range)
+    \item Record sensor output $y_{\text{low}}$
+    \item Apply known high input $x_{\text{high}}$ (typically near full scale)
+    \item Record sensor output $y_{\text{high}}$
+    \item Use equation~\eqref{eq:two_point_cal} to correct measurements
+\end{enumerate}
+
+Two-point calibration assumes linear behavior between calibration points.
+
+\subsubsection{Multi-Point Calibration}
+
+For sensors with significant nonlinearity, multi-point calibration uses three or more reference points to create a calibration curve.
+
+\textbf{Lookup table method}:
+\begin{enumerate}
+    \item Apply $n$ known inputs $x_1, x_2, \ldots, x_n$ across the measurement range
+    \item Record corresponding outputs $y_1, y_2, \ldots, y_n$
+    \item Store as lookup table
+    \item For measurements, interpolate between nearest table entries
+\end{enumerate}
+
+\textbf{Polynomial fit method}:
+\begin{enumerate}
+    \item Collect calibration data $(x_i, y_i)$ at multiple points
+    \item Fit polynomial: $x = a_0 + a_1 y + a_2 y^2 + \cdots + a_m y^m$
+    \item Store coefficients $a_0, a_1, \ldots, a_m$
+    \item Apply polynomial to convert measured output to calibrated input
+\end{enumerate}
+
+A cubic polynomial ($m = 3$) typically suffices for most sensors with moderate nonlinearity.
+
+\begin{example}[Thermocouple Polynomial Calibration]
+\label{ex:thermocouple_cal}
+
+Type K thermocouple voltage-to-temperature conversion uses a high-order polynomial. For the range $0°\text{C}$ to $500°\text{C}$, a simplified $5^{\text{th}}$-order polynomial is:
+\begin{equation}
+T = c_0 + c_1 V + c_2 V^2 + c_3 V^3 + c_4 V^4 + c_5 V^5
+\end{equation}
+
+where $V$ is in millivolts and $T$ is in degrees Celsius. Typical coefficients are:
+\begin{align*}
+c_0 &= 0.000 \\
+c_1 &= 25.08 \\
+c_2 &= -0.0641 \\
+c_3 &= 2.25 \times 10^{-3} \\
+c_4 &= -2.71 \times 10^{-5} \\
+c_5 &= 1.14 \times 10^{-7}
+\end{align*}
+
+For a measured voltage of $V = 10.0\text{ mV}$:
+\begin{align*}
+T &= 0 + 25.08(10) - 0.0641(100) + 2.25 \times 10^{-3}(1000) \\
+  &\quad - 2.71 \times 10^{-5}(10000) + 1.14 \times 10^{-7}(100000) \\
+&= 250.8 - 6.41 + 2.25 - 0.271 + 0.0114 \\
+&= 246.4°\text{C}
+\end{align*}
+
+The linear approximation ($T = 25.08V$) would give $250.8°\text{C}$---an error of $4.4°\text{C}$.
+\end{example}
+
+\subsection{In-Situ Calibration}
+
+\textbf{In-situ calibration} is performed with the sensor installed in its operating environment. This is valuable because:
+\begin{itemize}
+    \item Captures installation effects (mounting stress, thermal contact)
+    \item Accounts for real operating conditions
+    \item Avoids errors from sensor removal/reinstallation
+    \item Enables periodic recalibration without system downtime
+\end{itemize}
+
+Common in-situ calibration methods:
+\begin{itemize}
+    \item \textbf{Zero adjustment}: Expose to known zero condition (vent pressure sensor, hold gyro stationary)
+    \item \textbf{Reference comparison}: Install reference sensor alongside process sensor
+    \item \textbf{Known input}: Apply traceable reference (calibrated weights, precision voltage)
+    \item \textbf{Model-based}: Compare sensor to physics model during normal operation
+\end{itemize}
+
+\subsection{Drift Compensation}
+
+\subsubsection{Temperature Compensation}
+
+If the temperature dependence is characterized, real-time compensation is possible:
+\begin{equation}
+y_{\text{compensated}} = y_{\text{measured}} - f(T)
+\label{eq:temp_compensation}
+\end{equation}
+
+where $f(T)$ is the calibrated temperature dependence (polynomial or lookup table) and $T$ is measured by a co-located temperature sensor.
+
+Temperature compensation can reduce drift by $50\%$ to $80\%$ compared to uncompensated sensors.
+
+\subsubsection{Real-Time Bias Estimation}
+
+For sensors like gyroscopes where bias drifts slowly, real-time estimation is possible using:
+\begin{itemize}
+    \item \textbf{Zero-velocity updates (ZUPT)}: When system is known to be stationary, sensor output equals bias
+    \item \textbf{Sensor fusion}: Combine with complementary sensor (e.g., accelerometer gravity vector for gyro bias)
+    \item \textbf{Kalman filtering}: Estimate bias as state variable along with measured quantity
+\end{itemize}
+
+These techniques are covered in detail in later chapters on state estimation.
+
+\section{Common Sensor Types}
+\label{sec:sensor_types}
+
+We now survey sensors commonly encountered in control systems, emphasizing characteristics relevant to feedback control design.
+
+\subsection{Position Sensors}
+
+\subsubsection{Optical Encoders}
+
+Optical encoders are the workhorse of precision position measurement in servo systems.
+
+\textbf{Principle}: A code disk with alternating opaque and transparent segments rotates between an LED and photodetector. The resulting pulse train is counted to determine position.
+
+\textbf{Types}:
+\begin{itemize}
+    \item \textbf{Incremental encoders}: Generate pulses proportional to rotation; require homing to establish absolute position
+    \item \textbf{Absolute encoders}: Output unique code for each position; maintain position through power cycles
+\end{itemize}
+
+\textbf{Quadrature encoding}: Two channels (A and B) with $90°$ phase offset enable:
+\begin{itemize}
+    \item Direction detection (which channel leads)
+    \item 4$\times$ resolution improvement (count all edges)
+\end{itemize}
+
+\textbf{Key specifications}:
+\begin{itemize}
+    \item \textbf{Resolution}: Lines per revolution (LPR) or counts per revolution (CPR = $4 \times$ LPR for quadrature)
+    \item \textbf{Maximum speed}: Limited by electronics bandwidth; $\text{max RPM} = 60 \times f_{\text{max}} / \text{CPR}$
+    \item \textbf{Accuracy}: Typically $\pm 1/4$ to $\pm 1$ count
+\end{itemize}
+
+\textbf{Velocity estimation}: Encoders provide position directly but velocity must be computed:
+\begin{equation}
+\hat{v}[k] = \frac{\theta[k] - \theta[k-1]}{T_s}
+\label{eq:encoder_velocity}
+\end{equation}
+
+where $T_s$ is the sample period. This finite-difference estimate amplifies high-frequency noise.
+
+\warningbox{Differentiating encoder position to estimate velocity amplifies quantization noise. At low speeds, the discrete nature of encoder counts causes severe velocity noise. Consider higher-resolution encoders, lower sample rates, or velocity observers.}
+
+\subsubsection{Potentiometers}
+
+Potentiometers provide absolute position measurement using a variable resistor.
+
+\textbf{Types}:
+\begin{itemize}
+    \item \textbf{Wirewound}: Higher precision, limited resolution (individual turns visible), mechanical wear
+    \item \textbf{Conductive plastic}: Better linearity, infinite resolution, longer life, lower noise
+    \item \textbf{Cermet}: Good temperature stability, moderate precision
+\end{itemize}
+
+\textbf{Key specifications}:
+\begin{itemize}
+    \item \textbf{Linearity}: $\pm 0.1\%$ to $\pm 5\%$ depending on quality
+    \item \textbf{Resolution}: Infinite for conductive plastic; approximately $0.1\%$ for wirewound
+    \item \textbf{Electrical travel}: Useful rotation range (typically $<360°$ for rotary, limited stroke for linear)
+    \item \textbf{Life}: Number of cycles before wear affects performance (millions for plastic, less for wirewound)
+\end{itemize}
+
+\textbf{Loading error}: When potentiometer output is measured with finite-impedance load, the voltage divider is affected:
+\begin{equation}
+V_{\text{out}} = V_{\text{in}} \cdot \frac{xR_{\text{pot}} \parallel R_{\text{load}}}{(1-x)R_{\text{pot}} + xR_{\text{pot}} \parallel R_{\text{load}}}
+\label{eq:pot_loading}
+\end{equation}
+
+where $x$ is the wiper position ($0$ to $1$). This creates nonlinearity unless $R_{\text{load}} \gg R_{\text{pot}}$ (typically $>10\times$).
+
+\subsubsection{Linear Variable Differential Transformers (LVDTs)}
+
+LVDTs provide high-precision linear position measurement without contact.
+
+\textbf{Principle}: A movable ferromagnetic core varies the magnetic coupling between a primary coil and two secondary coils. The differential output voltage is proportional to core displacement from center.
+
+\textbf{Characteristics}:
+\begin{itemize}
+    \item \textbf{Resolution}: Essentially infinite (limited only by electronics noise)
+    \item \textbf{Linearity}: $\pm 0.1\%$ to $\pm 0.5\%$ typical
+    \item \textbf{Repeatability}: Excellent ($<0.001\%$)
+    \item \textbf{Life}: No mechanical contact means no wear
+    \item \textbf{Excitation}: AC (typically $1$ to $10\text{ kHz}$) required
+\end{itemize}
+
+\textbf{Dynamic response}: The LVDT transducer itself has very fast response (limited only by core mass). The practical bandwidth is set by the excitation frequency and demodulation filtering---typically limited to $1/10$ of the excitation frequency.
+
+\subsection{Velocity Sensors}
+
+\subsubsection{Tachometers}
+
+DC tachometers generate voltage proportional to rotational speed.
+
+\textbf{Principle}: A permanent magnet DC motor run as a generator produces back-EMF proportional to speed:
+\begin{equation}
+V_{\text{tach}} = K_t \cdot \omega
+\label{eq:tachometer}
+\end{equation}
+
+where $K_t$ is the tachometer constant (V/rad/s or V/rpm).
+
+\textbf{Characteristics}:
+\begin{itemize}
+    \item \textbf{Direct velocity measurement}: No differentiation required
+    \item \textbf{Linearity}: $\pm 0.1\%$ to $\pm 1\%$
+    \item \textbf{Ripple}: Commutator-based units have voltage ripple at commutation frequency
+    \item \textbf{Bandwidth}: DC to several kHz (very fast response)
+\end{itemize}
+
+Tachometers have largely been replaced by encoder-based velocity estimation in modern servo systems, but remain valuable where direct velocity feedback is needed.
+
+\subsection{Inertial Sensors}
+
+\subsubsection{Accelerometers}
+
+Accelerometers measure linear acceleration (or specific force, which includes gravity).
+
+\textbf{Technologies}:
+\begin{itemize}
+    \item \textbf{Piezoelectric}: High bandwidth ($>10\text{ kHz}$), cannot measure DC, good for vibration
+    \item \textbf{Piezoresistive}: DC response, moderate bandwidth, MEMS implementation
+    \item \textbf{Capacitive MEMS}: DC response, good stability, dominant in consumer/automotive
+    \item \textbf{Servo (force balance)}: Highest accuracy, lower bandwidth, navigation grade
+\end{itemize}
+
+\textbf{Key specifications}:
+\begin{itemize}
+    \item \textbf{Range}: Full-scale measurement range ($\pm 2\text{ g}$ to $\pm 200\text{ g}$ typical)
+    \item \textbf{Sensitivity}: Output per unit acceleration (mV/g or digital counts/g)
+    \item \textbf{Noise density}: $\mu\text{g}/\sqrt{\text{Hz}}$ ($10$ to $1000$ $\mu\text{g}/\sqrt{\text{Hz}}$ for MEMS)
+    \item \textbf{Bias}: Offset error (mg to $\mu$g depending on grade)
+    \item \textbf{Bias stability}: How bias varies over time and temperature
+    \item \textbf{Bandwidth}: $-3\text{ dB}$ frequency (often settable via digital filter)
+\end{itemize}
+
+\textbf{Gravity and tilt}: A stationary accelerometer measures gravity ($1\text{ g}$). This allows tilt sensing:
+\begin{equation}
+\theta = \arcsin\left(\frac{a_x}{g}\right)
+\label{eq:tilt_from_accel}
+\end{equation}
+
+where $a_x$ is the measured acceleration along the sensitive axis and $g = 9.81\text{ m/s}^2$.
+
+\warningbox{Accelerometers cannot distinguish between gravitational acceleration and inertial acceleration. A tilted stationary accelerometer and a horizontal accelerating accelerometer produce the same output. This is a fundamental limitation exploited in sensor fusion algorithms.}
+
+\subsubsection{Gyroscopes}
+
+Gyroscopes measure angular velocity.
+
+\textbf{Technologies}:
+\begin{itemize}
+    \item \textbf{Mechanical (spinning mass)}: Traditional, very accurate, large, expensive
+    \item \textbf{Ring laser gyro (RLG)}: High accuracy, used in aircraft/missiles, no moving parts
+    \item \textbf{Fiber optic gyro (FOG)}: Good accuracy, smaller than RLG, used in marine/aerospace
+    \item \textbf{MEMS (vibrating structure)}: Low cost, moderate accuracy, dominant in consumer/automotive
+\end{itemize}
+
+\textbf{Key specifications}:
+\begin{itemize}
+    \item \textbf{Range}: Full-scale rate ($\pm 250$ to $\pm 2000$ °/s for MEMS)
+    \item \textbf{Sensitivity}: Output per unit rate (mV/°/s or digital counts/°/s)
+    \item \textbf{Angle random walk (ARW)}: High-frequency noise (°/$\sqrt{\text{hr}}$)
+    \item \textbf{Bias instability}: Low-frequency drift (°/hr)
+    \item \textbf{Bias}: Constant offset (°/s or °/hr)
+    \item \textbf{Bandwidth}: Typically $50$ to $500\text{ Hz}$ for MEMS
+\end{itemize}
+
+\textbf{Drift accumulation}: Because gyroscope output must be integrated to obtain angle, bias causes linear error growth (see Section~\ref{sec:bias_drift_calibration}).
+
+\subsection{Force and Torque Sensors}
+
+\subsubsection{Strain Gauges}
+
+Strain gauges measure mechanical strain through resistance change.
+
+\textbf{Principle}: When a conductive element is strained, its resistance changes:
+\begin{equation}
+\frac{\Delta R}{R} = GF \cdot \epsilon
+\label{eq:strain_gauge}
+\end{equation}
+
+where $GF$ is the gauge factor (typically $2$ for metallic gauges, $50-200$ for semiconductor) and $\epsilon$ is strain.
+
+\textbf{Wheatstone bridge configuration}: Strain gauges are typically used in Wheatstone bridge circuits for:
+\begin{itemize}
+    \item Signal amplification
+    \item Temperature compensation
+    \item Improved sensitivity
+\end{itemize}
+
+A quarter-bridge (one active gauge) has output:
+\begin{equation}
+\frac{V_{\text{out}}}{V_{\text{exc}}} = \frac{GF \cdot \epsilon}{4}
+\label{eq:quarter_bridge}
+\end{equation}
+
+A full bridge (four active gauges, two in tension, two in compression) provides $4\times$ the sensitivity and excellent temperature compensation.
+
+\subsubsection{Load Cells}
+
+Load cells are strain gauge-based force transducers in a carefully designed mechanical structure.
+
+\textbf{Types}:
+\begin{itemize}
+    \item \textbf{Beam type}: Simple cantilever or dual-beam design
+    \item \textbf{S-type}: S-shaped element for tension/compression
+    \item \textbf{Pancake}: Low profile for compression
+    \item \textbf{Button}: Small footprint, compression only
+\end{itemize}
+
+\textbf{Key specifications}:
+\begin{itemize}
+    \item \textbf{Capacity}: Maximum rated load
+    \item \textbf{Sensitivity}: Output at full load (typically $2\text{ mV/V}$ of excitation)
+    \item \textbf{Nonlinearity}: $\pm 0.02\%$ to $\pm 0.1\%$ FS
+    \item \textbf{Repeatability}: $\pm 0.01\%$ to $\pm 0.03\%$ FS
+    \item \textbf{Creep}: Long-term drift under constant load
+\end{itemize}
+
+\textbf{Dynamics}: Load cell natural frequency depends on capacity and stiffness. Useful bandwidth is typically $1/5$ to $1/10$ of natural frequency.
+
+\subsection{Temperature Sensors}
+
+\subsubsection{Thermocouples}
+
+Thermocouples generate voltage from the Seebeck effect at the junction of dissimilar metals.
+
+\textbf{Common types}:
+\begin{itemize}
+    \item \textbf{Type K} (Chromel-Alumel): $-200°\text{C}$ to $+1250°\text{C}$, most common
+    \item \textbf{Type J} (Iron-Constantan): $-40°\text{C}$ to $+750°\text{C}$, reducing atmospheres
+    \item \textbf{Type T} (Copper-Constantan): $-200°\text{C}$ to $+350°\text{C}$, cryogenic
+    \item \textbf{Type E} (Chromel-Constantan): $-200°\text{C}$ to $+900°\text{C}$, highest sensitivity
+\end{itemize}
+
+\textbf{Cold junction compensation}: Thermocouples measure temperature \textit{difference} between hot junction and cold (reference) junction. The cold junction temperature must be measured separately and compensated.
+
+\textbf{Dynamics}: Thermocouple response is first-order, limited by thermal mass. Time constants range from $<1\text{ s}$ (exposed junction) to $>60\text{ s}$ (heavy sheath in low-flow conditions).
+
+\begin{example}[Thermocouple Time Constant Estimation]
+\label{ex:thermocouple_time_constant}
+
+The time constant of a spherical thermocouple bead can be estimated from:
+\begin{equation}
+\tau = \frac{\rho c_p d}{6h}
+\label{eq:tc_time_constant}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\rho$ = density of junction material (kg/m$^3$)
+    \item $c_p$ = specific heat capacity (J/kg·K)
+    \item $d$ = bead diameter (m)
+    \item $h$ = convective heat transfer coefficient (W/m$^2$·K)
+\end{itemize}
+
+For a Type K thermocouple with $d = 1\text{ mm}$, $\rho = 8500\text{ kg/m}^3$, $c_p = 450\text{ J/kg·K}$:
+
+In still air ($h \approx 10\text{ W/m}^2\text{·K}$):
+\begin{equation}
+\tau = \frac{8500 \times 450 \times 0.001}{6 \times 10} = 63.75\text{ s}
+\end{equation}
+
+In forced air flow ($h \approx 100\text{ W/m}^2\text{·K}$):
+\begin{equation}
+\tau = \frac{8500 \times 450 \times 0.001}{6 \times 100} = 6.38\text{ s}
+\end{equation}
+
+In water ($h \approx 1000\text{ W/m}^2\text{·K}$):
+\begin{equation}
+\tau = \frac{8500 \times 450 \times 0.001}{6 \times 1000} = 0.64\text{ s}
+\end{equation}
+
+The same thermocouple can have time constants differing by a factor of 100 depending on the medium and flow conditions!
+\end{example}
+
+\subsubsection{Resistance Temperature Detectors (RTDs)}
+
+RTDs use the temperature dependence of metal resistance.
+
+\textbf{Principle}: Metal resistance increases approximately linearly with temperature:
+\begin{equation}
+R(T) = R_0[1 + \alpha(T - T_0)]
+\label{eq:rtd}
+\end{equation}
+
+where $R_0$ is resistance at reference temperature $T_0$ (typically $100\Omega$ at $0°\text{C}$ for Pt100) and $\alpha$ is the temperature coefficient ($0.00385/°\text{C}$ for platinum).
+
+\textbf{Characteristics}:
+\begin{itemize}
+    \item Higher accuracy than thermocouples
+    \item Better long-term stability
+    \item Requires excitation current
+    \item Self-heating must be considered
+    \item Larger sensing element, slower response
+\end{itemize}
+
+\subsubsection{Thermistors}
+
+Thermistors are semiconductor devices with large temperature coefficient.
+
+\textbf{Types}:
+\begin{itemize}
+    \item \textbf{NTC (Negative Temperature Coefficient)}: Resistance decreases with temperature; most common
+    \item \textbf{PTC (Positive Temperature Coefficient)}: Resistance increases sharply above threshold
+\end{itemize}
+
+\textbf{NTC resistance relationship}:
+\begin{equation}
+R(T) = R_{25} \exp\left[\beta\left(\frac{1}{T} - \frac{1}{T_{25}}\right)\right]
+\label{eq:thermistor}
+\end{equation}
+
+where $R_{25}$ is resistance at $25°\text{C}$, $T$ and $T_{25}$ are in Kelvin, and $\beta$ is the material constant (typically $3000$ to $5000\text{ K}$).
+
+\textbf{Characteristics}:
+\begin{itemize}
+    \item Very high sensitivity (10$\times$ to 100$\times$ RTD)
+    \item Highly nonlinear (linearization required)
+    \item Limited temperature range (typically $-50°\text{C}$ to $+150°\text{C}$)
+    \item Small size, fast response
+    \item Less stable than RTD
+\end{itemize}
+
+\section{Sensor Fusion Basics}
+\label{sec:sensor_fusion}
+
+When a single sensor cannot meet performance requirements, combining multiple sensors can provide superior measurements. This is \textbf{sensor fusion}---the systematic combination of data from multiple sensors to achieve better performance than any individual sensor.
+
+\subsection{Why Sensor Fusion?}
+
+Different sensors have complementary characteristics:
+\begin{itemize}
+    \item \textbf{Accelerometers}: Accurate for slow motions, noisy for fast motions, measure gravity (provides absolute reference)
+    \item \textbf{Gyroscopes}: Accurate for fast motions, drift in bias over time, no absolute reference
+    \item \textbf{GPS}: Accurate absolute position, low update rate, dropouts in urban/indoor environments
+    \item \textbf{Magnetometers}: Provide absolute heading reference, susceptible to local magnetic disturbances
+\end{itemize}
+
+By combining sensors with complementary strengths, we can compensate for individual weaknesses.
+
+\subsection{The Complementary Filter}
+
+The simplest and most intuitive sensor fusion approach is the \textbf{complementary filter}. It combines two measurements of the same quantity, one accurate at low frequencies and one accurate at high frequencies.
+
+\subsubsection{Basic Principle}
+
+Consider measuring orientation angle $\theta$. We have:
+\begin{itemize}
+    \item \textbf{Accelerometer}: Provides absolute angle from gravity, but corrupted by high-frequency noise and motion-induced acceleration
+    \item \textbf{Gyroscope}: Provides angular velocity that we integrate to get angle, accurate for fast changes, but drifts due to bias
+\end{itemize}
+
+The complementary filter combines them:
+\begin{equation}
+\hat{\theta} = \alpha \cdot \theta_{\text{acc}} + (1-\alpha) \cdot \left(\hat{\theta}_{\text{prev}} + \omega_{\text{gyro}} \cdot \Delta t\right)
+\label{eq:complementary_discrete}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\hat{\theta}$ is the fused angle estimate
+    \item $\theta_{\text{acc}}$ is the angle from accelerometer
+    \item $\omega_{\text{gyro}}$ is the gyroscope angular velocity
+    \item $\alpha$ is the filter coefficient ($0 < \alpha < 1$, typically $0.02$ to $0.1$)
+    \item $\Delta t$ is the sample period
+\end{itemize}
+
+The filter coefficient $\alpha$ determines the cutoff frequency:
+\begin{equation}
+\tau = \frac{(1-\alpha) \Delta t}{\alpha} \quad \Rightarrow \quad f_c = \frac{1}{2\pi\tau}
+\label{eq:complementary_tau}
+\end{equation}
+
+\subsubsection{Transfer Function Interpretation}
+
+The complementary filter has a beautiful frequency-domain interpretation. In continuous time:
+\begin{equation}
+\hat{\Theta}(s) = H_{\text{LP}}(s) \cdot \Theta_{\text{acc}}(s) + H_{\text{HP}}(s) \cdot \Theta_{\text{gyro}}(s)
+\label{eq:complementary_tf}
+\end{equation}
+
+where:
+\begin{align}
+H_{\text{LP}}(s) &= \frac{1}{\tau s + 1} \quad \text{(low-pass filter)} \label{eq:lp_filter}\\
+H_{\text{HP}}(s) &= \frac{\tau s}{\tau s + 1} \quad \text{(high-pass filter)} \label{eq:hp_filter}
+\end{align}
+
+These filters are \textbf{complementary}: $H_{\text{LP}}(s) + H_{\text{HP}}(s) = 1$ for all frequencies.
+
+This means:
+\begin{itemize}
+    \item At low frequencies: $H_{\text{LP}} \approx 1$, $H_{\text{HP}} \approx 0$ --- output follows accelerometer
+    \item At high frequencies: $H_{\text{LP}} \approx 0$, $H_{\text{HP}} \approx 1$ --- output follows integrated gyroscope
+    \item At all frequencies: total gain is unity (no distortion of true signal)
+\end{itemize}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=12cm, height=6cm,
+            xlabel={Frequency (rad/s)},
+            ylabel={Magnitude},
+            xmode=log,
+            ymin=0, ymax=1.2,
+            xmin=0.01, xmax=100,
+            grid=both,
+            legend pos=east,
+            legend style={font=\small}
+        ]
+        \addplot[UofSCGarnet, thick, domain=0.01:100, samples=100] {1/sqrt(1+(x)^2)};
+        \addlegendentry{Low-pass $H_{\text{LP}}$}
+        \addplot[UofSCAtlantic, thick, domain=0.01:100, samples=100] {x/sqrt(1+(x)^2)};
+        \addlegendentry{High-pass $H_{\text{HP}}$}
+        \addplot[UofSCHorseshoe, thick, dashed, domain=0.01:100] {1};
+        \addlegendentry{Sum = 1}
+        \draw[thick, dotted] (axis cs:1,0) -- (axis cs:1,1.2);
+        \node at (axis cs:1,1.1) [anchor=south] {$\omega_c = 1/\tau$};
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Complementary filter frequency response (with $\tau = 1\text{ s}$). The low-pass and high-pass components sum to unity at all frequencies, preserving the true signal while filtering sensor-specific errors.}
+    \label{fig:complementary_filter}
+\end{figure}
+
+\subsubsection{Choosing the Time Constant}
+
+The complementary filter time constant $\tau$ should be chosen based on sensor characteristics:
+\begin{itemize}
+    \item \textbf{Too small} ($\tau < 0.1\text{ s}$): Gyroscope drift dominates; angle slowly drifts away
+    \item \textbf{Too large} ($\tau > 10\text{ s}$): Accelerometer noise and motion artifacts pass through; estimate is jittery
+\end{itemize}
+
+A typical choice is $\tau = 0.5$ to $2\text{ s}$ for human-scale motion applications.
+
+\begin{example}[Complementary Filter for Tilt Estimation]
+\label{ex:complementary_filter}
+
+A quadrotor uses a MEMS IMU to estimate roll angle. The accelerometer has noise standard deviation $\sigma_a = 0.01\text{ g}$ (corresponding to approximately $0.6°$ tilt noise). The gyroscope has bias instability of $10°/\text{hr}$ ($0.003°/\text{s}$).
+
+\textbf{Accelerometer-only tilt noise}:
+\begin{equation}
+\sigma_{\theta,\text{acc}} \approx \arctan\left(\frac{\sigma_a}{1\text{ g}}\right) \approx \sigma_a \text{ rad} = 0.01 \text{ rad} = 0.57°
+\end{equation}
+
+\textbf{Gyroscope-only drift after time $t$}:
+\begin{equation}
+\theta_{\text{drift}}(t) = b_g \cdot t = 0.003 \cdot t \text{ degrees}
+\end{equation}
+
+After $t = 200\text{ s}$, gyro drift reaches $0.6°$, equal to accelerometer noise.
+
+\textbf{Optimal time constant}: The complementary filter time constant should be chosen where gyro drift equals accelerometer noise:
+\begin{equation}
+\tau_{\text{optimal}} \approx \frac{\sigma_{\theta,\text{acc}}}{b_g} = \frac{0.57°}{0.003°/\text{s}} = 190\text{ s}
+\end{equation}
+
+This is unusually long because the gyroscope has very low drift. In practice, vibration and transient accelerations make the accelerometer less reliable than its noise specification suggests, so $\tau = 1$ to $5\text{ s}$ is often used.
+
+\textbf{Implementation at $100\text{ Hz}$ ($\Delta t = 0.01\text{ s}$) with $\tau = 2\text{ s}$}:
+\begin{equation}
+\alpha = \frac{\Delta t}{\tau + \Delta t} = \frac{0.01}{2 + 0.01} = 0.00498 \approx 0.005
+\end{equation}
+
+Each iteration:
+\begin{equation}
+\hat{\theta}[k] = 0.005 \cdot \theta_{\text{acc}}[k] + 0.995 \cdot \left(\hat{\theta}[k-1] + \omega_{\text{gyro}}[k] \cdot 0.01\right)
+\end{equation}
+\end{example}
+
+\subsection{Limitations of Complementary Filtering}
+
+The complementary filter is simple and effective but has limitations:
+\begin{itemize}
+    \item \textbf{Fixed time constant}: Cannot adapt to changing conditions
+    \item \textbf{No uncertainty quantification}: Does not provide confidence bounds
+    \item \textbf{Two sensors only}: Does not easily extend to multiple sensors
+    \item \textbf{Linear assumption}: Assumes linear combination is appropriate
+\end{itemize}
+
+For more sophisticated applications, the \textbf{Kalman filter} (covered in Chapter~\ref{ch:state_estimation}) provides optimal fusion with uncertainty quantification.
+
+\section{Anti-Aliasing and Sampling Considerations}
+\label{sec:antialiasing}
+
+Digital control systems sample continuous sensor signals at discrete time intervals. If not done properly, this sampling process introduces errors that cannot be corrected by subsequent processing.
+
+\subsection{The Nyquist-Shannon Sampling Theorem}
+
+The foundational result for digital signal processing is the \textbf{Nyquist-Shannon sampling theorem}:
+
+\begin{theorem}[Nyquist-Shannon]
+A continuous signal can be perfectly reconstructed from its samples if the sampling frequency is greater than twice the highest frequency component of the signal:
+\begin{equation}
+f_s > 2 f_{\max}
+\label{eq:nyquist}
+\end{equation}
+\end{theorem}
+
+The critical frequency $f_N = f_s/2$ is called the \textbf{Nyquist frequency}.
+
+\subsection{Aliasing}
+
+When a signal contains frequency components above the Nyquist frequency, those components ``fold back'' into the frequency range below Nyquist. This is \textbf{aliasing}.
+
+If a sinusoid at frequency $f > f_N$ is sampled at rate $f_s$, it appears as a sinusoid at frequency:
+\begin{equation}
+f_{\text{alias}} = |f - n \cdot f_s|
+\label{eq:alias_freq}
+\end{equation}
+
+where $n$ is chosen such that $f_{\text{alias}} < f_N$.
+
+\begin{example}[Aliasing in Motor Control]
+\label{ex:aliasing_motor}
+
+A motor controller samples encoder position at $f_s = 1\text{ kHz}$ (Nyquist frequency = $500\text{ Hz}$). The motor has a resonance at $f_r = 800\text{ Hz}$ that causes small position oscillations.
+
+The resonance frequency $800\text{ Hz}$ exceeds the Nyquist frequency. It aliases to:
+\begin{equation}
+f_{\text{alias}} = |800 - 1000| = 200\text{ Hz}
+\end{equation}
+
+The controller sees an apparent $200\text{ Hz}$ disturbance! If the controller bandwidth extends to $200\text{ Hz}$, it may try to correct this ``disturbance,'' potentially exciting the actual $800\text{ Hz}$ resonance and causing instability.
+
+\textbf{Solution}: Either increase sample rate above $1600\text{ Hz}$ or add an anti-aliasing filter with cutoff below $500\text{ Hz}$.
+\end{example}
+
+\warningbox{Aliasing cannot be corrected after sampling. Once a signal is aliased, the original frequency information is irretrievably lost. The only solution is to prevent aliasing before sampling using analog anti-aliasing filters.}
+
+\subsection{Anti-Aliasing Filters}
+
+An \textbf{anti-aliasing filter} is a low-pass filter that removes frequency components above the Nyquist frequency before sampling.
+
+\subsubsection{Requirements}
+
+The anti-aliasing filter should:
+\begin{enumerate}
+    \item Pass frequencies of interest with minimal distortion
+    \item Strongly attenuate frequencies above Nyquist
+    \item Have acceptable phase response (for control applications)
+\end{enumerate}
+
+In practice, filters cannot have infinitely sharp cutoffs. The transition band between passband and stopband requires margin:
+\begin{equation}
+f_c \leq f_N - f_{\text{transition}}
+\label{eq:filter_cutoff}
+\end{equation}
+
+where $f_c$ is the filter cutoff and $f_{\text{transition}}$ is the transition bandwidth.
+
+\subsubsection{Filter Order Selection}
+
+Higher-order filters have sharper cutoffs but introduce more phase lag. Common choices:
+
+\textbf{First-order (RC) filter}:
+\begin{equation}
+H(s) = \frac{1}{\tau s + 1}
+\label{eq:first_order_aa}
+\end{equation}
+\begin{itemize}
+    \item Simple, single pole
+    \item $-20\text{ dB/decade}$ rolloff
+    \item $-45°$ phase at cutoff, $-90°$ maximum
+    \item Often adequate for control applications
+\end{itemize}
+
+\textbf{Second-order Butterworth}:
+\begin{equation}
+H(s) = \frac{\omega_c^2}{s^2 + \sqrt{2}\omega_c s + \omega_c^2}
+\label{eq:butterworth_aa}
+\end{equation}
+\begin{itemize}
+    \item Maximally flat passband
+    \item $-40\text{ dB/decade}$ rolloff
+    \item Moderate phase distortion
+    \item Good general-purpose choice
+\end{itemize}
+
+\textbf{Fourth-order Bessel}:
+\begin{itemize}
+    \item Linear phase (constant group delay) in passband
+    \item $-80\text{ dB/decade}$ rolloff
+    \item Best for preserving signal shape
+    \item More complex implementation
+\end{itemize}
+
+\subsubsection{Design Guidelines}
+
+For control systems, we recommend:
+\begin{enumerate}
+    \item Set filter cutoff at $f_c = f_s/10$ to $f_s/5$ (conservative: $10\times$ oversampling; aggressive: $5\times$)
+    \item Use second-order Butterworth for good balance of attenuation and phase
+    \item Verify phase lag at control crossover frequency is acceptable
+    \item If sensor bandwidth is already below Nyquist, the sensor acts as its own anti-aliasing filter
+\end{enumerate}
+
+\begin{example}[Anti-Aliasing Filter Design]
+\label{ex:aa_filter}
+
+A pressure sensor is sampled at $f_s = 100\text{ Hz}$ for a process control application. The control bandwidth is $1\text{ Hz}$.
+
+\textbf{Step 1}: Nyquist frequency is $f_N = 50\text{ Hz}$.
+
+\textbf{Step 2}: Using $10\times$ oversampling guideline, set filter cutoff:
+\begin{equation}
+f_c = \frac{f_s}{10} = 10\text{ Hz}
+\end{equation}
+
+\textbf{Step 3}: Choose second-order Butterworth filter:
+\begin{equation}
+H(s) = \frac{(2\pi \times 10)^2}{s^2 + \sqrt{2}(2\pi \times 10)s + (2\pi \times 10)^2}
+\end{equation}
+
+\textbf{Step 4}: Verify attenuation at Nyquist:
+\begin{equation}
+|H(j2\pi \times 50)| = \frac{10^2}{\sqrt{(10^2 - 50^2)^2 + 2 \cdot 10^2 \cdot 50^2}} = \frac{100}{2510} = 0.04 = -28\text{ dB}
+\end{equation}
+
+This provides $28\text{ dB}$ attenuation of signals at Nyquist---a factor of $25$ reduction.
+
+\textbf{Step 5}: Check phase lag at control bandwidth ($1\text{ Hz}$):
+
+For second-order Butterworth at $f/f_c = 0.1$:
+\begin{equation}
+\phi = -\arctan\left(\frac{\sqrt{2} \cdot 0.1}{1 - 0.01}\right) \approx -\arctan(0.143) = -8.1°
+\end{equation}
+
+This is acceptable phase lag at the control frequency.
+\end{example}
+
+\subsection{Sampling Rate Selection for Control}
+
+The basic Nyquist criterion ($f_s > 2f_{\max}$) is insufficient for control applications. Control systems require much higher sampling rates.
+
+\subsubsection{Rule of Thumb}
+
+For sampled-data control systems:
+\begin{equation}
+f_s \geq 10 \omega_{\text{BW}} \quad \text{to} \quad 20 \omega_{\text{BW}}
+\label{eq:control_sampling}
+\end{equation}
+
+where $\omega_{\text{BW}}$ is the closed-loop bandwidth in rad/s.
+
+\textbf{Why so much higher than Nyquist?}
+\begin{itemize}
+    \item Nyquist allows perfect reconstruction of \textit{bandlimited signals}
+    \item Control systems must respond to \textit{transients} (steps, disturbances) which are not bandlimited
+    \item Discrete-time controllers introduce computational delay (one sample period)
+    \item Higher sampling provides better disturbance rejection
+\end{itemize}
+
+\subsubsection{Sample-and-Hold Effects}
+
+Even with perfect anti-aliasing, the sample-and-hold operation introduces:
+\begin{itemize}
+    \item \textbf{Half-sample delay}: Average $T_s/2$ delay in signal representation
+    \item \textbf{Zero-order hold phase}: $-\omega T_s/2$ radians at frequency $\omega$
+\end{itemize}
+
+At crossover frequency $\omega_c$, this contributes phase lag:
+\begin{equation}
+\phi_{\text{ZOH}}(\omega_c) = -\frac{\omega_c T_s}{2} \text{ radians}
+\label{eq:zoh_phase}
+\end{equation}
+
+For $10\times$ oversampling relative to crossover ($\omega_c T_s = 0.1 \cdot 2\pi$):
+\begin{equation}
+\phi_{\text{ZOH}} = -\frac{0.628}{2} = -0.314\text{ rad} = -18°
+\end{equation}
+
+This is significant! It must be accounted for in phase margin calculations.
+
+\section{Practical Applications: Worked Examples}
+\label{sec:sensor_examples}
+
+This section presents detailed, fully worked examples covering common sensor applications in control systems.
+
+\subsection{Example: Encoder Resolution and Velocity Estimation}
+\label{ex:encoder_velocity}
+
+\begin{example}[Encoder Selection for Servo System]
+
+A DC servo motor positioning system requires:
+\begin{itemize}
+    \item Position accuracy: $\pm 0.1°$
+    \item Velocity feedback bandwidth: $100\text{ Hz}$
+    \item Maximum speed: $3000\text{ RPM}$
+    \item Control loop rate: $1\text{ kHz}$
+\end{itemize}
+
+\textbf{Part A: Encoder Resolution Selection}
+
+For $\pm 0.1°$ accuracy, the encoder resolution should be at least $4\times$ finer:
+\begin{equation}
+\text{Resolution required} \leq \frac{0.1°}{4} = 0.025°/\text{count}
+\end{equation}
+
+Counts per revolution:
+\begin{equation}
+\text{CPR} \geq \frac{360°}{0.025°} = 14{,}400\text{ counts/rev}
+\end{equation}
+
+With quadrature decoding ($4\times$), we need:
+\begin{equation}
+\text{Lines per revolution (LPR)} \geq \frac{14{,}400}{4} = 3{,}600\text{ lines}
+\end{equation}
+
+\textbf{Selection}: A $4096$-line encoder with quadrature decoding provides $16{,}384\text{ CPR}$ and resolution:
+\begin{equation}
+\text{Resolution} = \frac{360°}{16{,}384} = 0.022°/\text{count} \quad \checkmark
+\end{equation}
+
+\textbf{Part B: Maximum Count Rate Check}
+
+At $3000\text{ RPM}$:
+\begin{equation}
+\text{Count rate} = 3000\text{ RPM} \times \frac{16{,}384\text{ counts}}{1\text{ rev}} \times \frac{1\text{ min}}{60\text{ s}} = 819{,}200\text{ counts/s}
+\end{equation}
+
+This is well within typical encoder interface capabilities ($>10\text{ MHz}$). $\checkmark$
+
+\textbf{Part C: Velocity Estimation Noise Analysis}
+
+Using backward difference velocity estimation at $1\text{ kHz}$:
+\begin{equation}
+\hat{\omega}[k] = \frac{\theta[k] - \theta[k-1]}{T_s} = \frac{\Delta\theta}{0.001\text{ s}}
+\end{equation}
+
+The minimum detectable velocity change is one count per sample:
+\begin{equation}
+\Delta\omega_{\min} = \frac{0.022°}{0.001\text{ s}} = 22°/\text{s} = 3.67\text{ RPM}
+\end{equation}
+
+At low speeds, velocity estimates will be quantized in $3.67\text{ RPM}$ steps---this is the ``velocity resolution.''
+
+\textbf{Part D: Velocity Noise at High Speed}
+
+At $3000\text{ RPM} = 18{,}000°/\text{s}$, the count change per sample is:
+\begin{equation}
+\text{Counts per sample} = \frac{18{,}000°/\text{s} \times 0.001\text{ s}}{0.022°/\text{count}} = 818\text{ counts}
+\end{equation}
+
+The quantization noise relative to signal:
+\begin{equation}
+\text{SNR} = 20\log_{10}(818) = 58\text{ dB}
+\end{equation}
+
+At high speed, velocity estimation is excellent. The problem is at low speeds.
+
+\textbf{Part E: Velocity Estimation at Low Speed}
+
+At $10\text{ RPM} = 60°/\text{s}$:
+\begin{equation}
+\text{Counts per sample} = \frac{60 \times 0.001}{0.022} = 2.7\text{ counts}
+\end{equation}
+
+The velocity estimate alternates between $2$ counts ($44°/\text{s}$) and $3$ counts ($66°/\text{s}$), representing $\pm 18\%$ fluctuation around the true $60°/\text{s}$.
+
+\textbf{Solutions for low-speed velocity noise}:
+\begin{enumerate}
+    \item \textbf{Lower velocity loop rate}: Sample at $100\text{ Hz}$, getting $27$ counts per sample
+    \item \textbf{Moving average filter}: Average several velocity estimates
+    \item \textbf{Variable rate}: Count time between edges rather than edges per time
+    \item \textbf{Velocity observer}: Use model-based state estimation
+\end{enumerate}
+\end{example}
+
+\subsection{Example: Accelerometer Noise Filtering}
+\label{ex:accel_filter}
+
+\begin{example}[Low-Pass Filtering for MEMS Accelerometer]
+
+A MEMS accelerometer measures vibration for machine health monitoring. Specifications:
+\begin{itemize}
+    \item Noise density: $150\text{ }\mu\text{g}/\sqrt{\text{Hz}}$
+    \item Measurement bandwidth required: $0.5$ to $100\text{ Hz}$
+    \item ADC: 16-bit, $\pm 2\text{ g}$ range, $1\text{ kHz}$ sample rate
+    \item Target RMS noise: $<1\text{ mg}$
+\end{itemize}
+
+\textbf{Part A: Unfiltered Noise Analysis}
+
+With $1\text{ kHz}$ sampling and no anti-aliasing filter, the effective bandwidth is $500\text{ Hz}$:
+\begin{equation}
+\sigma_{\text{unfiltered}} = 150 \times 10^{-6} \times \sqrt{500} = 3.35\text{ mg}
+\end{equation}
+
+This exceeds the $1\text{ mg}$ target by factor of $3.35$.
+
+\textbf{Part B: Required Filter Bandwidth}
+
+To achieve $1\text{ mg}$ noise:
+\begin{equation}
+1 \times 10^{-3} = 150 \times 10^{-6} \times \sqrt{B}
+\end{equation}
+\begin{equation}
+B = \left(\frac{1 \times 10^{-3}}{150 \times 10^{-6}}\right)^2 = 44.4\text{ Hz}
+\end{equation}
+
+A filter with $\approx 44\text{ Hz}$ bandwidth is needed. But wait---we need $100\text{ Hz}$ measurement bandwidth!
+
+\textbf{Part C: Reconciling Requirements}
+
+The conflict: we need $100\text{ Hz}$ bandwidth for signals but only $44\text{ Hz}$ bandwidth for noise.
+
+The resolution: signals of interest have larger amplitude than the noise floor. Let's check the SNR for a typical vibration level.
+
+A machine vibration of $0.1\text{ g}$ at $50\text{ Hz}$ with $44\text{ Hz}$ filter bandwidth:
+\begin{equation}
+\text{SNR} = \frac{100\text{ mg}}{1\text{ mg}} = 100 = 40\text{ dB}
+\end{equation}
+
+This is excellent SNR. The question becomes: what is the minimum detectable vibration level?
+
+\textbf{Part D: Filter Design}
+
+We need to pass signals up to $100\text{ Hz}$ while the anti-aliasing filter handles frequencies approaching $500\text{ Hz}$.
+
+Design a $100\text{ Hz}$ second-order Butterworth analog filter for anti-aliasing, then apply digital averaging to further reduce noise.
+
+\textbf{Analog anti-aliasing filter} (cutoff $f_c = 100\text{ Hz}$):
+\begin{equation}
+H(s) = \frac{(2\pi \times 100)^2}{s^2 + \sqrt{2}(2\pi \times 100)s + (2\pi \times 100)^2}
+\end{equation}
+
+Noise after $100\text{ Hz}$ analog filter:
+\begin{equation}
+\sigma_{\text{analog}} = 150 \times 10^{-6} \times \sqrt{100} = 1.5\text{ mg}
+\end{equation}
+
+\textbf{Digital averaging filter}: Average $4$ samples (effective sample rate reduction from $1\text{ kHz}$ to $250\text{ Hz}$):
+\begin{equation}
+\sigma_{\text{averaged}} = \frac{1.5}{\sqrt{4}} = 0.75\text{ mg} \quad \checkmark
+\end{equation}
+
+This meets the $<1\text{ mg}$ requirement.
+
+\textbf{Part E: Implementation Summary}
+
+\begin{enumerate}
+    \item Second-order Butterworth analog filter, $f_c = 100\text{ Hz}$
+    \item ADC sampling at $1\text{ kHz}$
+    \item Digital $4$-sample moving average
+    \item Effective output rate: $250\text{ Hz}$ (still $>2 \times 100\text{ Hz}$ for Nyquist)
+    \item Final noise: $0.75\text{ mg}$ RMS
+\end{enumerate}
+\end{example}
+
+\subsection{Example: Thermocouple Dynamics and Compensation}
+\label{ex:thermocouple_compensation}
+
+\begin{example}[Dynamic Compensation for Slow Thermocouple]
+
+A Type K thermocouple measures exhaust gas temperature in an engine. The process requires tracking temperature transients with time constant $\tau_p = 2\text{ s}$. The thermocouple, protected by a heavy sheath for durability, has time constant $\tau_s = 8\text{ s}$.
+
+\textbf{Problem}: The sensor is $4\times$ slower than the process! Uncompensated measurements will lag significantly.
+
+\textbf{Part A: Uncompensated Response}
+
+If exhaust temperature changes as a step from $400°\text{C}$ to $500°\text{C}$:
+
+True temperature: $T_{\text{true}}(t) = 400 + 100(1 - e^{-t/2})$
+
+Measured temperature: Convolution of true temperature with sensor dynamics:
+\begin{equation}
+T_{\text{meas}}(t) = 400 + 100\left(1 - \frac{\tau_s e^{-t/\tau_p} - \tau_p e^{-t/\tau_s}}{\tau_s - \tau_p}\right)
+\end{equation}
+
+At $t = 2\text{ s}$ (one process time constant):
+\begin{itemize}
+    \item True temperature: $400 + 100(1 - e^{-1}) = 463°\text{C}$
+    \item Measured temperature: $\approx 422°\text{C}$ (from numerical evaluation)
+    \item Error: $41°\text{C}$ ($41\%$ of step size)
+\end{itemize}
+
+\textbf{Part B: Lead Compensator Design}
+
+We can partially compensate for sensor dynamics using a lead compensator:
+\begin{equation}
+G_{\text{comp}}(s) = \frac{\tau_s s + 1}{\tau_c s + 1}
+\label{eq:lead_comp}
+\end{equation}
+
+where $\tau_c < \tau_s$ is a faster time constant.
+
+If we set $\tau_c = \tau_p = 2\text{ s}$ (match to process), the compensated measurement has effective time constant $\tau_c = 2\text{ s}$ instead of $\tau_s = 8\text{ s}$.
+
+The compensation transfer function:
+\begin{equation}
+G_{\text{comp}}(s) = \frac{8s + 1}{2s + 1}
+\end{equation}
+
+\textbf{Part C: Noise Amplification Warning}
+
+The lead compensator amplifies high-frequency noise. The high-frequency gain is:
+\begin{equation}
+|G_{\text{comp}}(j\omega)|_{\omega \to \infty} = \frac{\tau_s}{\tau_c} = \frac{8}{2} = 4
+\end{equation}
+
+Noise is amplified by a factor of $4$! This is the fundamental trade-off: faster response requires accepting more noise.
+
+\textbf{Part D: Practical Implementation}
+
+Implement as a digital filter at $10\text{ Hz}$ sample rate ($T_s = 0.1\text{ s}$).
+
+Using Tustin (bilinear) transformation with $s = \frac{2}{T_s}\frac{z-1}{z+1}$:
+\begin{equation}
+G_{\text{comp}}(z) = \frac{8 \cdot \frac{2}{0.1}\frac{z-1}{z+1} + 1}{2 \cdot \frac{2}{0.1}\frac{z-1}{z+1} + 1} = \frac{160(z-1) + (z+1)}{40(z-1) + (z+1)} = \frac{161z - 159}{41z - 39}
+\end{equation}
+
+Difference equation:
+\begin{equation}
+y[k] = \frac{39}{41}y[k-1] + \frac{161}{41}x[k] - \frac{159}{41}x[k-1]
+\end{equation}
+
+Or simplified:
+\begin{equation}
+y[k] = 0.951 \cdot y[k-1] + 3.927 \cdot x[k] - 3.878 \cdot x[k-1]
+\end{equation}
+
+\textbf{Part E: Verification}
+
+Apply to a step input of $100°\text{C}$:
+\begin{itemize}
+    \item Without compensation: Reaches $63.2\%$ ($63.2°\text{C}$) at $t = 8\text{ s}$
+    \item With compensation: Reaches $63.2\%$ at $t \approx 2\text{ s}$
+\end{itemize}
+
+The compensated measurement tracks the true temperature much more closely, at the cost of increased noise.
+\end{example}
+
+\subsection{Example: Potentiometer Linearity Analysis}
+\label{ex:pot_linearity}
+
+\begin{example}[Multi-Point Calibration for Nonlinear Potentiometer]
+
+A rotary potentiometer position sensor has the following calibration data (position in degrees, output in volts from $0$--$5\text{ V}$ supply):
+
+\begin{center}
+\begin{tabular}{cc|cc}
+\toprule
+Position (°) & Output (V) & Position (°) & Output (V) \\
+\midrule
+0 & 0.02 & 180 & 2.98 \\
+30 & 0.51 & 210 & 3.55 \\
+60 & 1.05 & 240 & 4.07 \\
+90 & 1.55 & 270 & 4.52 \\
+120 & 2.02 & 300 & 4.92 \\
+150 & 2.52 & & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Part A: Ideal Linear Relationship}
+
+For $300°$ range with $5\text{ V}$ output:
+\begin{equation}
+V_{\text{ideal}} = \frac{5\text{ V}}{300°} \times \theta = 0.01667 \times \theta\text{ V}
+\end{equation}
+
+\textbf{Part B: Linear Fit Analysis}
+
+Using least-squares linear regression on the data:
+\begin{equation}
+V = a_0 + a_1 \theta
+\end{equation}
+
+Computing (or using calculator/software):
+\begin{align}
+a_0 &= 0.017\text{ V} \\
+a_1 &= 0.01639\text{ V/°}
+\end{align}
+
+\textbf{Part C: Nonlinearity Error}
+
+Calculate error at each calibration point:
+
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$\theta$ (°) & $V_{\text{meas}}$ & $V_{\text{fit}}$ & Error (V) & Error (\% FS) \\
+\midrule
+0 & 0.02 & 0.017 & +0.003 & +0.06 \\
+30 & 0.51 & 0.509 & +0.001 & +0.02 \\
+60 & 1.05 & 1.000 & +0.050 & +1.00 \\
+90 & 1.55 & 1.492 & +0.058 & +1.16 \\
+120 & 2.02 & 1.984 & +0.036 & +0.72 \\
+150 & 2.52 & 2.476 & +0.044 & +0.88 \\
+180 & 2.98 & 2.967 & +0.013 & +0.26 \\
+210 & 3.55 & 3.459 & +0.091 & +1.82 \\
+240 & 4.07 & 3.951 & +0.119 & +2.38 \\
+270 & 4.52 & 4.442 & +0.078 & +1.56 \\
+300 & 4.92 & 4.934 & $-0.014$ & $-0.28$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Maximum nonlinearity error: $\pm 2.38\%$ FS at $240°$.
+
+\textbf{Part D: Polynomial Calibration}
+
+Fit a quadratic: $\theta = b_0 + b_1 V + b_2 V^2$
+
+Using the data points:
+\begin{align}
+b_0 &= -0.573° \\
+b_1 &= 58.74°/\text{V} \\
+b_2 &= 1.273°/\text{V}^2
+\end{align}
+
+\textbf{Part E: Improved Accuracy with Polynomial}
+
+Using quadratic calibration, residual errors drop to $< 0.5\%$ FS.
+
+For a measured voltage of $V = 2.5\text{ V}$:
+\begin{align}
+\theta &= -0.573 + 58.74(2.5) + 1.273(2.5)^2 \\
+&= -0.573 + 146.85 + 7.96 \\
+&= 154.2°
+\end{align}
+
+Compare to linear calibration:
+\begin{equation}
+\theta_{\text{linear}} = \frac{2.5 - 0.017}{0.01639} = 151.5°
+\end{equation}
+
+Difference: $2.7°$, which is significant for precision applications.
+\end{example}
+
+\subsection{Example: Gyroscope Bias Estimation}
+\label{ex:gyro_bias}
+
+\begin{example}[Real-Time Gyroscope Bias Estimation]
+
+A MEMS gyroscope is used for attitude estimation in a ground robot. The gyroscope has:
+\begin{itemize}
+    \item Noise density: $0.01°/\text{s}/\sqrt{\text{Hz}}$
+    \item Initial bias: Unknown, specified $<\pm 3°/\text{s}$
+    \item Bias drift: $5°/\text{hr}$
+    \item Sample rate: $100\text{ Hz}$
+\end{itemize}
+
+The robot has periodic stationary phases when it can recalibrate.
+
+\textbf{Part A: Bias Error Impact}
+
+If the bias is $1°/\text{s}$ and uncorrected, heading error after $60\text{ s}$ of driving:
+\begin{equation}
+\psi_{\text{error}} = 1°/\text{s} \times 60\text{ s} = 60°
+\end{equation}
+
+This is unacceptable for navigation!
+
+\textbf{Part B: Stationary Bias Estimation}
+
+When stationary, the gyroscope output equals the bias plus noise:
+\begin{equation}
+\omega_{\text{meas}} = b + n(t)
+\end{equation}
+
+where $n(t)$ is zero-mean noise with standard deviation:
+\begin{equation}
+\sigma_n = 0.01 \times \sqrt{100/2} = 0.071°/\text{s}
+\end{equation}
+
+(The $\sqrt{100/2}$ accounts for the Nyquist bandwidth at $100\text{ Hz}$ sample rate.)
+
+Averaging $N$ stationary samples:
+\begin{equation}
+\hat{b} = \frac{1}{N}\sum_{k=1}^{N} \omega_{\text{meas}}[k]
+\end{equation}
+
+The estimation uncertainty is:
+\begin{equation}
+\sigma_{\hat{b}} = \frac{\sigma_n}{\sqrt{N}} = \frac{0.071}{\sqrt{N}}°/\text{s}
+\end{equation}
+
+For $N = 500$ samples ($5\text{ s}$ at $100\text{ Hz}$):
+\begin{equation}
+\sigma_{\hat{b}} = \frac{0.071}{\sqrt{500}} = 0.0032°/\text{s}
+\end{equation}
+
+After $5$ seconds of stationary data, bias is known to $\pm 0.01°/\text{s}$ ($3\sigma$).
+
+\textbf{Part C: Online Bias Tracking}
+
+Between stationary phases, bias drifts at $5°/\text{hr} = 0.00139°/\text{s}$ per second.
+
+After $\Delta t$ seconds since last calibration:
+\begin{equation}
+\sigma_b(\Delta t) = \sqrt{\sigma_{\hat{b}}^2 + (0.00139 \cdot \Delta t)^2}
+\end{equation}
+
+At $\Delta t = 300\text{ s}$ ($5$ minutes):
+\begin{equation}
+\sigma_b = \sqrt{0.0032^2 + (0.00139 \times 300)^2} = \sqrt{0.00001 + 0.174} \approx 0.42°/\text{s}
+\end{equation}
+
+The bias uncertainty has grown significantly---recalibration is needed.
+
+\textbf{Part D: Heading Error Budget}
+
+During $300\text{ s}$ of operation with initial bias uncertainty of $0.0032°/\text{s}$:
+
+The heading error grows as:
+\begin{equation}
+\psi_{\text{error}}(t) = \int_0^t b(\tau) d\tau
+\end{equation}
+
+For a random walk bias process, the RMS heading error is approximately:
+\begin{equation}
+\sigma_\psi(t) = \sigma_{\hat{b}} \cdot t + \frac{1}{2} \times \text{drift rate} \times t^2
+\end{equation}
+
+More precisely, using Allan variance parameters, but the simple estimate gives:
+\begin{equation}
+\sigma_\psi(300) \approx 0.0032 \times 300 + 0.5 \times 0.00139 \times 300 = 0.96 + 0.21 = 1.17°
+\end{equation}
+
+After $5$ minutes, heading uncertainty is approximately $\pm 3.5°$ ($3\sigma$).
+
+\textbf{Part E: Calibration Schedule}
+
+To maintain heading error below $5°$ ($3\sigma$), recalibrate when:
+\begin{equation}
+3\sigma_\psi(t) < 5° \implies t < \frac{5}{3 \times 0.0032} \approx 520\text{ s}
+\end{equation}
+
+Recalibrate every $8$ minutes or less.
+\end{example}
+
+\subsection{Example: Strain Gauge Bridge Circuit}
+\label{ex:strain_gauge}
+
+\begin{example}[Wheatstone Bridge Design for Force Measurement]
+
+A cantilever beam load cell uses strain gauges to measure force. Design requirements:
+\begin{itemize}
+    \item Force range: $0$ to $100\text{ N}$
+    \item Resolution: $0.1\text{ N}$
+    \item Beam material: Aluminum, $E = 70\text{ GPa}$
+    \item Strain gauges: $350\text{ }\Omega$, gauge factor $GF = 2.1$
+    \item Bridge excitation: $5\text{ V}$
+    \item ADC: 12-bit, $0$ to $5\text{ V}$ range
+\end{itemize}
+
+\textbf{Part A: Strain Calculation}
+
+The beam is designed so that $100\text{ N}$ produces maximum strain $\epsilon_{\max} = 1000\text{ }\mu\epsilon$ (well within elastic limit).
+
+Strain at any force $F$:
+\begin{equation}
+\epsilon = \frac{F}{100\text{ N}} \times 1000\text{ }\mu\epsilon = 10F\text{ }\mu\epsilon/\text{N}
+\end{equation}
+
+\textbf{Part B: Quarter Bridge Configuration}
+
+Single active gauge in quarter bridge:
+\begin{equation}
+\frac{V_{\text{out}}}{V_{\text{exc}}} = \frac{GF \cdot \epsilon}{4} = \frac{2.1 \times \epsilon}{4}
+\end{equation}
+
+At full scale ($\epsilon = 1000\text{ }\mu\epsilon$):
+\begin{equation}
+V_{\text{out,FS}} = 5 \times \frac{2.1 \times 0.001}{4} = 2.625\text{ mV}
+\end{equation}
+
+This is only $0.05\%$ of the $5\text{ V}$ ADC range---far too small!
+
+\textbf{Part C: Full Bridge Configuration}
+
+With four active gauges (two in tension, two in compression):
+\begin{equation}
+\frac{V_{\text{out}}}{V_{\text{exc}}} = GF \cdot \epsilon
+\end{equation}
+
+At full scale:
+\begin{equation}
+V_{\text{out,FS}} = 5 \times 2.1 \times 0.001 = 10.5\text{ mV}
+\end{equation}
+
+Still only $0.2\%$ of ADC range.
+
+\textbf{Part D: Instrumentation Amplifier}
+
+We need amplification. Target: use $80\%$ of ADC range at full scale.
+\begin{equation}
+V_{\text{target}} = 0.8 \times 5\text{ V} = 4\text{ V}
+\end{equation}
+
+Required gain:
+\begin{equation}
+G = \frac{4\text{ V}}{10.5\text{ mV}} = 381
+\end{equation}
+
+Use instrumentation amplifier with $G = 400$ (standard value).
+
+Amplified full-scale output:
+\begin{equation}
+V_{\text{amp,FS}} = 10.5\text{ mV} \times 400 = 4.2\text{ V}
+\end{equation}
+
+\textbf{Part E: Resolution Check}
+
+ADC resolution:
+\begin{equation}
+\Delta V_{\text{ADC}} = \frac{5\text{ V}}{4096} = 1.22\text{ mV}
+\end{equation}
+
+Force per ADC count:
+\begin{equation}
+\Delta F = \frac{100\text{ N}}{4.2\text{ V}/1.22\text{ mV}} = \frac{100}{3443} = 0.029\text{ N}
+\end{equation}
+
+This exceeds the $0.1\text{ N}$ resolution requirement by factor of $3.4$. $\checkmark$
+
+\textbf{Part F: Temperature Compensation}
+
+The full bridge with matched gauges provides first-order temperature compensation:
+\begin{itemize}
+    \item All four resistors change equally with temperature
+    \item Bridge remains balanced
+    \item Only strain-induced imbalance produces output
+\end{itemize}
+
+However, the gauge factor $GF$ varies with temperature (typically $-0.01\%/°\text{C}$).
+
+Over $50°\text{C}$ temperature range:
+\begin{equation}
+\text{Span error} = 0.01\% \times 50 = 0.5\%
+\end{equation}
+
+For $0.1\%$ accuracy, additional software temperature compensation is needed.
+\end{example}
+
+\subsection{Example: Anti-Aliasing Filter Design}
+\label{ex:aa_design}
+
+\begin{example}[Complete Anti-Aliasing System Design]
+
+A vibration monitoring system for a rotating machine requires:
+\begin{itemize}
+    \item Measurement bandwidth: DC to $500\text{ Hz}$
+    \item Machine speed: $3000\text{ RPM}$ ($50\text{ Hz}$ fundamental)
+    \item Harmonics of interest: up to $10^{\text{th}}$ ($500\text{ Hz}$)
+    \item Aliased frequency rejection: $>40\text{ dB}$
+    \item Phase distortion: $<5°$ up to $500\text{ Hz}$
+\end{itemize}
+
+\textbf{Part A: Sample Rate Selection}
+
+Nyquist minimum: $f_s > 2 \times 500 = 1000\text{ Hz}$
+
+For $40\text{ dB}$ rejection and reasonable filter order, use $5\times$ oversampling:
+\begin{equation}
+f_s = 5 \times 500 = 2500\text{ Hz}
+\end{equation}
+
+Nyquist frequency: $f_N = 1250\text{ Hz}$
+
+\textbf{Part B: Filter Specification}
+
+Passband: $0$ to $500\text{ Hz}$ (ripple $<0.5\text{ dB}$)
+Stopband: $>1250\text{ Hz}$ (attenuation $>40\text{ dB}$)
+Transition band: $500$ to $1250\text{ Hz}$
+
+\textbf{Part C: Filter Order Estimation}
+
+For a Butterworth filter, the order needed for given specifications:
+\begin{equation}
+n \geq \frac{\log(10^{A_s/10} - 1) - \log(10^{A_p/10} - 1)}{2\log(f_s/f_p)}
+\end{equation}
+
+where $A_s = 40\text{ dB}$, $A_p = 0.5\text{ dB}$, $f_s = 1250\text{ Hz}$, $f_p = 500\text{ Hz}$:
+\begin{equation}
+n \geq \frac{\log(9999) - \log(0.122)}{2\log(2.5)} = \frac{4 - (-0.91)}{0.8} = 6.1
+\end{equation}
+
+Use $n = 7$ order Butterworth (or 8 for standard even order).
+
+\textbf{Part D: Phase Check}
+
+A 7th-order Butterworth at $f = 500\text{ Hz}$ (normalized $\omega/\omega_c = 1$) has phase:
+\begin{equation}
+\phi(f_c) \approx -n \times 45° = -315°
+\end{equation}
+
+This is too much phase shift! We need a filter with better phase characteristics.
+
+\textbf{Part E: Alternative: Bessel Filter}
+
+7th-order Bessel filter has approximately linear phase in passband.
+
+At $f = 500\text{ Hz}$ with $f_c = 800\text{ Hz}$ (adjusted for Bessel characteristics):
+\begin{equation}
+\phi \approx -\frac{n \times \pi/2 \times f}{f_c} = -\frac{7 \times 90° \times 500}{800} = -394°
+\end{equation}
+
+Still significant, but the linear phase means all frequencies are delayed equally (constant group delay), preserving signal shape.
+
+Group delay:
+\begin{equation}
+\tau_g = \frac{n}{2\pi f_c} = \frac{7}{2\pi \times 800} = 1.4\text{ ms}
+\end{equation}
+
+All frequencies are delayed by $1.4\text{ ms}$---no distortion, just latency.
+
+\textbf{Part F: Final Design}
+
+\begin{enumerate}
+    \item Sample rate: $2500\text{ Hz}$
+    \item Anti-aliasing filter: 8th-order Bessel, $f_c = 750\text{ Hz}$
+    \item Attenuation at Nyquist ($1250\text{ Hz}$): $\approx 45\text{ dB}$
+    \item Group delay: $1.7\text{ ms}$
+    \item Phase at $500\text{ Hz}$: Linear with frequency
+\end{enumerate}
+
+Implement as cascaded second-order sections (biquads) for numerical stability.
+\end{example}
+
+\subsection{Example: Sensor Time Constant Identification from Step Response}
+\label{ex:time_const_id}
+
+\begin{example}[System Identification of Temperature Sensor Dynamics]
+
+A temperature sensor is characterized using step response testing. The sensor is moved from $25°\text{C}$ ambient to $100°\text{C}$ water bath. Data is recorded at $10\text{ Hz}$:
+
+\begin{center}
+\begin{tabular}{cc|cc}
+\toprule
+Time (s) & Temp (°C) & Time (s) & Temp (°C) \\
+\midrule
+0.0 & 25.0 & 3.0 & 87.2 \\
+0.5 & 38.4 & 3.5 & 91.0 \\
+1.0 & 49.7 & 4.0 & 93.8 \\
+1.5 & 59.0 & 5.0 & 97.0 \\
+2.0 & 66.8 & 6.0 & 98.6 \\
+2.5 & 73.2 & 8.0 & 99.6 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Part A: First-Order Model Assumption}
+
+Assume first-order dynamics:
+\begin{equation}
+T(t) = T_{\infty} + (T_0 - T_{\infty})e^{-t/\tau}
+\end{equation}
+
+With $T_0 = 25°\text{C}$ and $T_{\infty} = 100°\text{C}$:
+\begin{equation}
+T(t) = 100 - 75e^{-t/\tau}
+\end{equation}
+
+\textbf{Part B: Graphical Estimation (63.2\% Method)}
+
+At $t = \tau$: $T(\tau) = 100 - 75e^{-1} = 100 - 27.6 = 72.4°\text{C}$
+
+From data, $T = 72.4°\text{C}$ occurs between $t = 2.0\text{ s}$ (66.8°C) and $t = 2.5\text{ s}$ (73.2°C).
+
+Linear interpolation:
+\begin{equation}
+\tau \approx 2.0 + \frac{72.4 - 66.8}{73.2 - 66.8} \times 0.5 = 2.0 + 0.44 = 2.44\text{ s}
+\end{equation}
+
+\textbf{Part C: Least-Squares Estimation}
+
+Rewrite model in linear form:
+\begin{equation}
+\ln(T_{\infty} - T) = \ln(T_{\infty} - T_0) - \frac{t}{\tau}
+\end{equation}
+
+Define $y = \ln(100 - T)$ and $x = t$:
+\begin{equation}
+y = \ln(75) - \frac{x}{\tau} = 4.317 - \frac{x}{\tau}
+\end{equation}
+
+Compute for each data point and perform linear regression:
+
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+$t$ (s) & $100 - T$ & $y = \ln(100-T)$ \\
+\midrule
+0.0 & 75.0 & 4.317 \\
+0.5 & 61.6 & 4.121 \\
+1.0 & 50.3 & 3.918 \\
+1.5 & 41.0 & 3.714 \\
+2.0 & 33.2 & 3.502 \\
+2.5 & 26.8 & 3.288 \\
+3.0 & 12.8 & 2.549 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Wait---the last point seems anomalous. Let me recalculate: $100 - 87.2 = 12.8$. Yes, that's correct.
+
+Linear regression of $y$ vs $t$ (using first 6 points for cleaner fit):
+\begin{equation}
+\text{slope} = -\frac{1}{\tau} \approx -0.412
+\end{equation}
+\begin{equation}
+\tau = \frac{1}{0.412} = 2.43\text{ s}
+\end{equation}
+
+\textbf{Part D: Model Validation}
+
+Using $\tau = 2.43\text{ s}$, predict temperatures:
+
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+$t$ (s) & Measured & Predicted & Error \\
+\midrule
+0.5 & 38.4 & 38.2 & +0.2 \\
+1.0 & 49.7 & 49.9 & $-0.2$ \\
+2.0 & 66.8 & 67.5 & $-0.7$ \\
+3.0 & 87.2 & 79.8 & +7.4 \\
+4.0 & 93.8 & 88.1 & +5.7 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The errors at longer times suggest the system is not purely first-order---possibly second-order or the water bath temperature was not exactly $100°\text{C}$.
+
+\textbf{Part E: Refined Model}
+
+Try second-order model or adjust $T_{\infty}$. Using $T_{\infty} = 99°\text{C}$ and two-time-constant model:
+\begin{equation}
+T(t) = 99 - Ae^{-t/\tau_1} - Be^{-t/\tau_2}
+\end{equation}
+
+This requires nonlinear curve fitting, beyond the scope of this example, but demonstrates that sensor dynamics may be more complex than first-order.
+
+For control design purposes, $\tau = 2.4\text{ s}$ provides a useful first-order approximation.
+\end{example}
+
+\section{Algorithm Implementations}
+\label{sec:algorithms}
+
+This section provides practical algorithms for sensor signal processing. All algorithms are presented in pseudocode that can be readily implemented in C, Python, MATLAB, or other languages.
+
+\subsection{Moving Average Filter}
+
+The moving average filter is the simplest low-pass filter, computing the average of the most recent $N$ samples.
+
+\begin{algorithm}[htbp]
+\caption{Moving Average Filter}
+\label{alg:moving_average}
+\begin{algorithmic}
+\REQUIRE Sample buffer $x[]$ of size $N$, new sample $x_{\text{new}}$
+\ENSURE Filtered output $y$
+\STATE $\triangleright$ Initialize: buffer filled with zeros, index $= 0$, sum $= 0$
+\STATE sum $\leftarrow$ sum $-$ $x[$index$]$ \COMMENT{Remove oldest sample from sum}
+\STATE $x[$index$]$ $\leftarrow$ $x_{\text{new}}$ \COMMENT{Store new sample}
+\STATE sum $\leftarrow$ sum $+$ $x_{\text{new}}$ \COMMENT{Add new sample to sum}
+\STATE index $\leftarrow$ (index $+ 1$) mod $N$ \COMMENT{Circular buffer increment}
+\STATE $y$ $\leftarrow$ sum $/$ $N$ \COMMENT{Compute average}
+\RETURN $y$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Characteristics}:
+\begin{itemize}
+    \item Cutoff frequency: $f_c \approx 0.44 f_s / N$
+    \item Phase lag: $(N-1)/2$ samples at all frequencies
+    \item Nulls at $f_s/N$ and multiples (excellent for removing periodic interference)
+    \item Computational cost: $O(1)$ per sample (using running sum)
+\end{itemize}
+
+\begin{example}[Moving Average for $60\text{ Hz}$ Rejection]
+\label{ex:ma_60hz}
+
+To reject $60\text{ Hz}$ power line interference with sample rate $f_s = 1200\text{ Hz}$:
+\begin{equation}
+N = \frac{f_s}{60} = 20\text{ samples}
+\end{equation}
+
+A $20$-sample moving average has nulls at $60\text{ Hz}$, $120\text{ Hz}$, $180\text{ Hz}$, etc.---exactly the power line harmonics!
+
+The cutoff frequency is approximately:
+\begin{equation}
+f_c \approx \frac{0.44 \times 1200}{20} = 26.4\text{ Hz}
+\end{equation}
+\end{example}
+
+\subsection{Exponential Moving Average (First-Order IIR Filter)}
+
+The exponential moving average (EMA) implements a first-order low-pass filter with single coefficient.
+
+\begin{algorithm}[htbp]
+\caption{Exponential Moving Average Filter}
+\label{alg:ema}
+\begin{algorithmic}
+\REQUIRE Previous output $y_{\text{prev}}$, new sample $x$, filter coefficient $\alpha$
+\ENSURE Filtered output $y$
+\STATE $y$ $\leftarrow$ $\alpha \cdot x + (1 - \alpha) \cdot y_{\text{prev}}$
+\RETURN $y$
+\end{algorithmic}
+\end{algorithm}
+
+The filter coefficient $\alpha$ relates to the time constant and cutoff frequency:
+\begin{align}
+\alpha &= \frac{T_s}{\tau + T_s} = \frac{T_s}{T_s + 1/(2\pi f_c)} \label{eq:ema_alpha}\\
+\tau &= T_s \left(\frac{1-\alpha}{\alpha}\right) \label{eq:ema_tau}\\
+f_c &= \frac{\alpha}{2\pi T_s (1-\alpha)} \label{eq:ema_fc}
+\end{align}
+
+\textbf{Characteristics}:
+\begin{itemize}
+    \item Equivalent to analog first-order low-pass filter
+    \item $-20\text{ dB/decade}$ rolloff
+    \item Single parameter ($\alpha$) to tune
+    \item Minimal memory (one previous value)
+    \item Computational cost: $O(1)$ per sample
+\end{itemize}
+
+\begin{example}[EMA Design for Accelerometer]
+\label{ex:ema_accel}
+
+Design an EMA filter with $f_c = 10\text{ Hz}$ cutoff for an accelerometer sampled at $100\text{ Hz}$:
+\begin{equation}
+\alpha = \frac{2\pi f_c T_s}{1 + 2\pi f_c T_s} = \frac{2\pi \times 10 \times 0.01}{1 + 2\pi \times 10 \times 0.01} = \frac{0.628}{1.628} = 0.386
+\end{equation}
+
+Implementation:
+\begin{equation}
+y[k] = 0.386 \cdot x[k] + 0.614 \cdot y[k-1]
+\end{equation}
+\end{example}
+
+\subsection{Complementary Filter Implementation}
+
+\begin{algorithm}[htbp]
+\caption{Complementary Filter for Tilt Estimation}
+\label{alg:complementary}
+\begin{algorithmic}
+\REQUIRE Accelerometer readings $(a_x, a_y, a_z)$, gyroscope rate $\omega$
+\REQUIRE Previous angle estimate $\hat{\theta}_{\text{prev}}$, sample period $T_s$, time constant $\tau$
+\ENSURE Fused angle estimate $\hat{\theta}$
+\STATE $\triangleright$ Calculate filter coefficient
+\STATE $\alpha$ $\leftarrow$ $T_s / (\tau + T_s)$
+\STATE $\triangleright$ Calculate angle from accelerometer
+\STATE $\theta_{\text{acc}}$ $\leftarrow$ atan2$(a_x, \sqrt{a_y^2 + a_z^2})$ \COMMENT{Roll from gravity}
+\STATE $\triangleright$ Integrate gyroscope
+\STATE $\theta_{\text{gyro}}$ $\leftarrow$ $\hat{\theta}_{\text{prev}} + \omega \cdot T_s$
+\STATE $\triangleright$ Fuse measurements
+\STATE $\hat{\theta}$ $\leftarrow$ $\alpha \cdot \theta_{\text{acc}} + (1 - \alpha) \cdot \theta_{\text{gyro}}$
+\RETURN $\hat{\theta}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation notes}:
+\begin{itemize}
+    \item Use atan2 to handle all quadrants correctly
+    \item Watch for gyroscope angle wraparound at $\pm 180°$
+    \item Typical $\tau$: $0.5$ to $2\text{ s}$ for human-scale motion
+    \item Extend to 3D using quaternions or rotation matrices for large angles
+\end{itemize}
+
+\subsection{Bias Estimation with Stationary Detection}
+
+\begin{algorithm}[htbp]
+\caption{Gyroscope Bias Estimation with Zero-Velocity Update}
+\label{alg:bias_estimation}
+\begin{algorithmic}
+\REQUIRE Gyroscope reading $\omega$, accelerometer magnitude $|a|$
+\REQUIRE Current bias estimate $\hat{b}$, estimation gain $K_b$
+\REQUIRE Stationary threshold $\epsilon_a$, gravity $g$
+\ENSURE Updated bias estimate $\hat{b}$, stationary flag
+\STATE $\triangleright$ Detect stationary condition
+\IF{$||a| - g| < \epsilon_a$}
+    \STATE stationary $\leftarrow$ true
+    \STATE $\triangleright$ Update bias estimate (low-pass filter)
+    \STATE $\hat{b}$ $\leftarrow$ $\hat{b} + K_b \cdot (\omega - \hat{b})$
+\ELSE
+    \STATE stationary $\leftarrow$ false
+\ENDIF
+\RETURN $\hat{b}$, stationary
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Parameters}:
+\begin{itemize}
+    \item $\epsilon_a$: Typically $0.05g$ to $0.1g$ for MEMS accelerometers
+    \item $K_b$: Typically $0.001$ to $0.01$ (slow adaptation to avoid noise)
+    \item Can add gyroscope variance check for robustness
+\end{itemize}
+
+\subsection{Median Filter for Outlier Rejection}
+
+The median filter is effective for removing impulsive noise (outliers, spikes).
+
+\begin{algorithm}[htbp]
+\caption{Median Filter}
+\label{alg:median}
+\begin{algorithmic}
+\REQUIRE Sample buffer $x[]$ of size $N$ (odd), new sample $x_{\text{new}}$
+\ENSURE Filtered output $y$
+\STATE $\triangleright$ Shift buffer and insert new sample
+\FOR{$i = 0$ to $N-2$}
+    \STATE $x[i]$ $\leftarrow$ $x[i+1]$
+\ENDFOR
+\STATE $x[N-1]$ $\leftarrow$ $x_{\text{new}}$
+\STATE $\triangleright$ Create sorted copy
+\STATE temp $\leftarrow$ copy of $x$
+\STATE sort(temp)
+\STATE $\triangleright$ Return middle value
+\STATE $y$ $\leftarrow$ temp$[(N-1)/2]$
+\RETURN $y$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Characteristics}:
+\begin{itemize}
+    \item Excellent for impulsive noise rejection
+    \item Preserves edges (unlike linear filters)
+    \item Does not blur step changes
+    \item Computational cost: $O(N \log N)$ for sorting (can be optimized to $O(N)$)
+    \item Typical $N$: 3, 5, or 7
+\end{itemize}
+
+\subsection{Second-Order (Biquad) Filter}
+
+The biquad filter implements any second-order IIR transfer function and is the building block for higher-order filters.
+
+\begin{algorithm}[htbp]
+\caption{Biquad (Second-Order IIR) Filter}
+\label{alg:biquad}
+\begin{algorithmic}
+\REQUIRE New sample $x$, coefficients $(b_0, b_1, b_2, a_1, a_2)$
+\REQUIRE State variables $(x_1, x_2, y_1, y_2)$ \COMMENT{Previous samples}
+\ENSURE Filtered output $y$
+\STATE $\triangleright$ Compute output (Direct Form I)
+\STATE $y$ $\leftarrow$ $b_0 \cdot x + b_1 \cdot x_1 + b_2 \cdot x_2 - a_1 \cdot y_1 - a_2 \cdot y_2$
+\STATE $\triangleright$ Update state
+\STATE $x_2$ $\leftarrow$ $x_1$
+\STATE $x_1$ $\leftarrow$ $x$
+\STATE $y_2$ $\leftarrow$ $y_1$
+\STATE $y_1$ $\leftarrow$ $y$
+\RETURN $y$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Transfer function}:
+\begin{equation}
+H(z) = \frac{b_0 + b_1 z^{-1} + b_2 z^{-2}}{1 + a_1 z^{-1} + a_2 z^{-2}}
+\label{eq:biquad_tf}
+\end{equation}
+
+\textbf{Design formulas for second-order Butterworth low-pass}:
+
+Given cutoff frequency $f_c$ and sample rate $f_s$:
+\begin{align}
+\omega_0 &= 2\pi f_c / f_s \\
+K &= \tan(\omega_0 / 2) \\
+\text{norm} &= 1 / (1 + \sqrt{2} K + K^2) \\
+b_0 &= K^2 \cdot \text{norm} \\
+b_1 &= 2 b_0 \\
+b_2 &= b_0 \\
+a_1 &= 2(K^2 - 1) \cdot \text{norm} \\
+a_2 &= (1 - \sqrt{2} K + K^2) \cdot \text{norm}
+\end{align}
+
+\subsection{Derivative with Filtering}
+
+Differentiation amplifies high-frequency noise. Always filter before or after differentiation.
+
+\begin{algorithm}[htbp]
+\caption{Filtered Derivative (Velocity from Position)}
+\label{alg:filtered_derivative}
+\begin{algorithmic}
+\REQUIRE Current position $x$, previous position $x_{\text{prev}}$, previous velocity $v_{\text{prev}}$
+\REQUIRE Sample period $T_s$, filter coefficient $\alpha$
+\ENSURE Filtered velocity estimate $\hat{v}$
+\STATE $\triangleright$ Raw derivative
+\STATE $v_{\text{raw}}$ $\leftarrow$ $(x - x_{\text{prev}}) / T_s$
+\STATE $\triangleright$ Low-pass filter the derivative
+\STATE $\hat{v}$ $\leftarrow$ $\alpha \cdot v_{\text{raw}} + (1 - \alpha) \cdot v_{\text{prev}}$
+\STATE $\triangleright$ Update state
+\STATE $x_{\text{prev}}$ $\leftarrow$ $x$
+\STATE $v_{\text{prev}}$ $\leftarrow$ $\hat{v}$
+\RETURN $\hat{v}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Alternative: Filtered derivative (continuous-time equivalent)}:
+\begin{equation}
+H(s) = \frac{s}{\tau_f s + 1}
+\label{eq:filtered_derivative}
+\end{equation}
+
+This acts as a derivative at low frequencies and a first-order low-pass at high frequencies.
+
+Discrete implementation (Tustin transform):
+\begin{align}
+a &= \frac{2\tau_f}{T_s} \\
+\hat{v}[k] &= \frac{2}{T_s(1 + a)}(x[k] - x[k-1]) + \frac{a-1}{a+1}\hat{v}[k-1]
+\end{align}
+
+\section{Chapter Summary}
+\label{sec:chapter_summary}
+
+This chapter has provided a comprehensive treatment of sensors and measurement limitations for control system design. The key concepts and practical insights are summarized below.
+
+\subsection{Key Concepts}
+
+\textbf{Static Characteristics}:
+\begin{itemize}
+    \item \textbf{Sensitivity}: Output change per unit input change; match to measurement range
+    \item \textbf{Resolution}: Smallest detectable change; limited by noise or quantization
+    \item \textbf{Linearity}: Deviation from ideal straight-line behavior; compensate with calibration
+    \item \textbf{Accuracy vs. Precision}: Accuracy reflects systematic error (calibrate); precision reflects random error (filter)
+\end{itemize}
+
+\textbf{Dynamic Characteristics}:
+\begin{itemize}
+    \item \textbf{Time constant}: First-order sensors settle to $63.2\%$ in one time constant
+    \item \textbf{Bandwidth}: Frequency at which response drops $3\text{ dB}$; sensor bandwidth should exceed $5$--$10\times$ control bandwidth
+    \item \textbf{Phase lag}: Often more critical than amplitude attenuation for stability
+    \item \textbf{Resonance}: Second-order sensors have usable bandwidth limited to $1/3$--$1/5$ of natural frequency
+\end{itemize}
+
+\textbf{Noise Sources}:
+\begin{itemize}
+    \item \textbf{Thermal noise}: White spectrum, fundamental limit, $\propto \sqrt{T R \Delta f}$
+    \item \textbf{Quantization noise}: From ADC, $\sigma_q = \Delta/\sqrt{12}$
+    \item \textbf{Flicker ($1/f$) noise}: Dominates at low frequencies, causes drift
+    \item \textbf{EMI}: Power line, switching noise; mitigate with shielding and filtering
+\end{itemize}
+
+\textbf{Bias and Drift}:
+\begin{itemize}
+    \item \textbf{Systematic errors}: Can be calibrated; include offset, gain, and nonlinearity
+    \item \textbf{Temperature drift}: Often dominant; compensate with temperature sensor
+    \item \textbf{Aging drift}: Long-term; requires periodic recalibration
+    \item \textbf{Gyroscope bias}: Causes linear heading error growth; critical for navigation
+    \item \textbf{Accelerometer bias}: Causes quadratic position error growth
+\end{itemize}
+
+\textbf{Calibration}:
+\begin{itemize}
+    \item \textbf{One-point}: Corrects offset only
+    \item \textbf{Two-point}: Corrects offset and gain
+    \item \textbf{Multi-point}: Corrects nonlinearity with polynomial or lookup table
+    \item \textbf{In-situ}: Performed in operating environment; captures installation effects
+\end{itemize}
+
+\textbf{Sensor Fusion}:
+\begin{itemize}
+    \item Combine sensors with complementary characteristics
+    \item \textbf{Complementary filter}: Simple, effective; low-pass one sensor, high-pass another
+    \item Filters are complementary: $H_{\text{LP}} + H_{\text{HP}} = 1$
+    \item Time constant balances gyro drift against accelerometer noise
+\end{itemize}
+
+\textbf{Sampling and Anti-Aliasing}:
+\begin{itemize}
+    \item \textbf{Nyquist criterion}: $f_s > 2 f_{\max}$
+    \item \textbf{Control systems}: Require $f_s \geq 10$--$20 \times$ closed-loop bandwidth
+    \item \textbf{Anti-aliasing}: Analog low-pass before ADC; cannot fix aliasing after sampling
+    \item \textbf{Zero-order hold}: Adds $T_s/2$ average delay
+\end{itemize}
+
+\subsection{Design Rules of Thumb}
+
+\begin{enumerate}
+    \item \textbf{Sensor bandwidth}: $\geq 5\times$ fastest dynamics to control
+    \item \textbf{ADC resolution}: Quantization noise should be $<1/4$ sensor noise
+    \item \textbf{Sample rate}: $\geq 10\times$ closed-loop bandwidth
+    \item \textbf{Anti-aliasing cutoff}: $\leq f_s/5$ for adequate attenuation
+    \item \textbf{Encoder velocity}: Use higher resolution or lower rate at low speeds
+    \item \textbf{Temperature compensation}: Reduces drift by $50$--$80\%$
+    \item \textbf{Calibration interval}: Before drift exceeds accuracy requirement
+    \item \textbf{Complementary filter $\tau$}: Balance gyro drift time against accelerometer settling
+\end{enumerate}
+
+\subsection{Common Pitfalls}
+
+\begin{enumerate}
+    \item \textbf{Ignoring sensor dynamics}: Fast controller with slow sensor causes instability
+    \item \textbf{Undersampling}: Aliasing corrupts measurements irreversibly
+    \item \textbf{Differentiating noisy signals}: Amplifies high-frequency noise; always filter
+    \item \textbf{Trusting datasheets}: Real-world parameters differ; measure experimentally
+    \item \textbf{Neglecting bias drift}: Small bias $\times$ long time $=$ large error
+    \item \textbf{Over-filtering}: Adds phase lag that degrades control performance
+    \item \textbf{Ignoring quantization at low signal}: Encoder velocity noise at low speed
+    \item \textbf{Inadequate shielding}: EMI can dominate electronic noise
+\end{enumerate}
+
+\subsection{Looking Ahead}
+
+This chapter has focused on understanding and characterizing sensor behavior. In subsequent chapters, we will build on these foundations:
+
+\begin{itemize}
+    \item \textbf{Chapter~\ref{ch:stability_analysis}}: How sensor dynamics affect closed-loop stability margins
+    \item \textbf{Chapter~\ref{ch:discrete_control}}: Discrete-time controller design accounting for sampling effects
+    \item \textbf{Chapter~\ref{ch:state_estimation}}: Kalman filtering for optimal sensor fusion with uncertainty quantification
+    \item \textbf{Chapter~\ref{ch:mimo_modeling}}: Multi-sensor systems and redundancy management
+\end{itemize}
+
+The key message of this chapter is that \textbf{sensors are not ideal}. Every sensor has dynamics, noise, bias, and limitations. Successful control system design requires understanding these imperfections and designing around them---whether through sensor selection, signal conditioning, filtering, calibration, or sensor fusion. The elegant mathematics of control theory meets the messy reality of physical measurements, and bridging this gap is where practical engineering expertise makes the difference.
+
