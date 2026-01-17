@@ -1,0 +1,3894 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Chapter 20: Sim-to-Real Transfer
+% Modern Control Systems: From First Principles to Machine Learning
+% Author: J.C. Vaught
+% University of South Carolina
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Sim-to-Real Transfer}
+\label{ch:sim_to_real}
+
+\whythismatters{
+Everything we have learned throughout this textbook---from classical PID controllers to neural network policies, from optimal control to diffusion models---ultimately must work on real hardware. Simulation provides a safe, fast, and economical environment to develop and test control systems, but the physical world is far more complex, variable, and unforgiving than any simulation can capture. The gap between simulation and reality, known as the \textit{reality gap}, is where well-designed controllers go to die.
+
+This chapter addresses the fundamental challenge of \textit{sim-to-real transfer}: how do we train controllers in simulation that actually work when deployed on physical systems? This is not merely an academic concern. Every robotics company, every autonomous vehicle developer, every industrial automation engineer faces this challenge daily. Controllers that achieve perfect performance in simulation routinely fail catastrophically when confronted with real sensors, real actuators, real friction, and real uncertainty.
+
+We will develop a comprehensive toolkit for bridging the reality gap. You will learn domain randomization techniques that make policies robust to simulation-reality mismatch, system identification methods that calibrate simulations to match hardware, domain adaptation approaches that fine-tune policies using real-world data, and robust control techniques that guarantee performance despite model uncertainty. Critically, we will address the practical engineering challenges of hardware deployment: real-time computation, latency compensation, safety monitoring, and graceful degradation.
+
+By the end of this chapter, you will understand not just the theory of sim-to-real transfer, but the complete pipeline from training in simulation to deploying on hardware. This is the culminating chapter of our journey through modern control systems---where all the tools we have developed come together to solve real engineering problems.
+}
+
+%===============================================================================
+\section{The Reality Gap}
+\label{sec:reality_gap}
+%===============================================================================
+
+Every simulation is a lie. This is not a criticism but a fundamental truth: simulations are simplified mathematical models of reality, and by definition they omit or approximate aspects of the physical world. The question is not whether a simulation is wrong, but whether it is wrong in ways that matter for control.
+
+\subsection{Sources of Simulation-Reality Mismatch}
+
+The reality gap manifests through multiple distinct sources of mismatch between simulation and the physical world. Understanding these sources is essential for designing transfer strategies that address the specific challenges of your application.
+
+\subsubsection{Dynamics Mismatch}
+
+The most fundamental source of reality gap is \textit{dynamics mismatch}: the simulated equations of motion differ from the true physical dynamics. Consider a simple cart-pole system. In simulation, we might model the dynamics as:
+\begin{equation}
+\ddot{\theta} = \frac{g \sin\theta + \cos\theta \left( \frac{-F - m_p l \dot{\theta}^2 \sin\theta}{m_c + m_p} \right)}{l \left( \frac{4}{3} - \frac{m_p \cos^2\theta}{m_c + m_p} \right)}
+\label{eq:cartpole_sim}
+\end{equation}
+
+This model assumes:
+\begin{itemize}
+    \item Perfect knowledge of masses $m_c$ and $m_p$
+    \item Frictionless joints and track
+    \item Rigid body dynamics (no flexibility)
+    \item Point mass approximation for the pole
+    \item Instantaneous force application
+\end{itemize}
+
+The real system violates every one of these assumptions. The masses are known only approximately (manufacturing tolerances, wear, attached sensors). Friction exists at every joint and depends on velocity, temperature, and contact history. The pole has finite stiffness and vibration modes. The actuator has dynamics, backlash, and torque limits. The actual dynamics might be better described by:
+\begin{align}
+\ddot{\theta} &= f(\theta, \dot{\theta}, F, \dot{F}) + \mu_{\text{joint}}(\dot{\theta}) + \epsilon_{\text{flex}}(\theta, \ddot{\theta}) + \nu(t)
+\label{eq:cartpole_real}
+\end{align}
+where $\mu_{\text{joint}}$ represents joint friction, $\epsilon_{\text{flex}}$ represents flexibility effects, and $\nu(t)$ represents unmodeled disturbances.
+
+The parameters themselves are uncertain. If we estimate the pole length as $l = 0.5$ m but the true value is $l = 0.52$ m, the dynamics are systematically wrong. This \textit{parametric uncertainty} compounds with \textit{structural uncertainty}---the possibility that our model structure (the functional form of the equations) is fundamentally inadequate.
+
+\keypoint{Dynamics mismatch includes both parametric uncertainty (wrong parameter values) and structural uncertainty (wrong model structure). Both must be addressed for successful transfer.}
+
+\subsubsection{Perception Mismatch}
+
+Controllers do not act on true state---they act on observations. In simulation, observations are often perfect: we query the simulator for joint angles and velocities and receive exact values. Reality is messier.
+
+\textbf{Sensor noise:} Every physical sensor produces noisy measurements. An encoder might have quantization noise, an IMU has bias and white noise, a camera has pixel noise and motion blur. If the policy was trained on clean observations, it may fail when confronted with noisy inputs.
+
+\textbf{Sensor delay:} Physical sensors require time to acquire and process measurements. A vision system might have 30-100 ms of latency from photon arrival to processed output. Proprioceptive sensors are faster but still non-zero. Simulation often provides instantaneous state feedback.
+
+\textbf{Sensor calibration:} Physical sensors require calibration, and calibration drifts over time. A force sensor's zero offset changes with temperature. A camera's intrinsic parameters change if the lens is bumped. Even carefully calibrated systems accumulate drift over extended operation.
+
+\textbf{Visual domain shift:} For vision-based control, the gap between simulated and real images is particularly severe. Simulated images, no matter how carefully rendered, differ from real images in:
+\begin{itemize}
+    \item Lighting conditions (intensity, direction, color temperature, shadows)
+    \item Surface textures and materials
+    \item Camera artifacts (lens distortion, chromatic aberration, vignetting)
+    \item Background clutter and distractors
+    \item Dynamic elements (moving objects, changing conditions)
+\end{itemize}
+
+Figure~\ref{fig:visual_domain_gap} illustrates the visual domain gap for a manipulation task. The simulated scene has perfect lighting, uniform textures, and no clutter. The real scene has complex lighting, textured surfaces, shadows, and background objects. A policy trained only on simulated images may fail to recognize objects or estimate poses correctly in the real environment.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Simulated scene
+    \node[draw, thick, minimum width=5cm, minimum height=4cm, fill=white] at (0,0) {};
+    \node at (0, 2.5) {\textbf{Simulation}};
+
+    % Simple simulated objects
+    \draw[fill=UofSCAtlantic] (-1.5, -0.5) rectangle (-0.5, 0.5);
+    \draw[fill=UofSCGarnet] (0.5, -0.5) rectangle (1.5, 0.5);
+    \draw[fill=UofSCHorseshoe] (-0.3, -1.5) rectangle (0.3, -0.8);
+
+    % Labels
+    \node[font=\small] at (0, -2.3) {Uniform lighting};
+    \node[font=\small] at (0, -2.7) {Clean textures};
+    \node[font=\small] at (0, -3.1) {No clutter};
+
+    % Arrow
+    \draw[->, ultra thick, UofSCGarnet] (3, 0) -- (4.5, 0);
+    \node at (3.75, 0.5) {\textbf{Reality Gap}};
+
+    % Real scene
+    \node[draw, thick, minimum width=5cm, minimum height=4cm, fill=UofSCSandstorm] at (7.5,0) {};
+    \node at (7.5, 2.5) {\textbf{Reality}};
+
+    % Complex real objects with shadows and clutter
+    \draw[fill=UofSCAtlantic!70] (6, -0.5) rectangle (7.1, 0.6);
+    \draw[fill=UofSCGrey50] (6.1, -0.6) -- (7.2, -0.6) -- (7.2, -0.4) -- (6.1, -0.4) -- cycle; % shadow
+    \draw[fill=UofSCGarnet!80] (7.9, -0.4) rectangle (9.1, 0.7);
+    \draw[fill=UofSCGrey50] (8, -0.5) -- (9.2, -0.5) -- (9.2, -0.3) -- (8, -0.3) -- cycle; % shadow
+    \draw[fill=UofSCHorseshoe!75] (7.1, -1.4) rectangle (7.8, -0.7);
+
+    % Clutter
+    \draw[fill=UofSCGrey70] (5.8, 0.8) circle (0.15);
+    \draw[fill=UofSCWarmGrey] (9, 1) rectangle (9.3, 1.3);
+    \draw[fill=UofSCGrey50] (6.5, 1.2) -- (6.8, 0.9) -- (7.1, 1.2) -- cycle;
+
+    % Labels
+    \node[font=\small] at (7.5, -2.3) {Complex lighting};
+    \node[font=\small] at (7.5, -2.7) {Textured surfaces};
+    \node[font=\small] at (7.5, -3.1) {Background clutter};
+\end{tikzpicture}
+\caption{Visual domain gap between simulation and reality. Simulated scenes typically have uniform lighting, clean textures, and controlled backgrounds. Real scenes feature complex lighting with shadows, textured and reflective surfaces, and uncontrolled background clutter.}
+\label{fig:visual_domain_gap}
+\end{figure}
+
+\subsubsection{Actuation Mismatch}
+
+Simulation often models actuators as ideal force or torque sources: command 10 Nm and instantly receive exactly 10 Nm. Physical actuators are far from ideal.
+
+\textbf{Actuator dynamics:} Motors have electrical and mechanical time constants. A DC motor's torque response to voltage command is governed by:
+\begin{equation}
+L \frac{di}{dt} + Ri = V - K_e \omega
+\end{equation}
+\begin{equation}
+\tau = K_t i
+\end{equation}
+where the electrical time constant $L/R$ introduces delay between voltage command and torque output. This delay can destabilize high-bandwidth controllers designed assuming instantaneous actuation.
+
+\textbf{Saturation and limits:} Real actuators have hard limits on force, velocity, and power. A motor cannot exceed its stall torque or no-load speed. Amplifiers have current limits. Hydraulic systems have pressure and flow limits. Controllers trained in simulation without these limits learn to command physically impossible actions.
+
+\textbf{Backlash and friction:} Gear trains have backlash---dead zones where input motion does not produce output motion. This introduces position-dependent behavior that is challenging to model accurately. Static and dynamic friction in actuators creates hysteresis and stick-slip behavior.
+
+\textbf{Communication delays:} Commands must travel from controller to actuator through communication buses (CAN, EtherCAT, USB). This introduces transport delay typically ranging from microseconds to milliseconds. If the controller assumes zero delay, phase margin erodes and stability suffers.
+
+\subsubsection{Contact and Interaction Mismatch}
+
+For systems that interact with the environment---robots grasping objects, legged robots walking, vehicles on terrain---contact dynamics are particularly challenging to simulate accurately.
+
+\textbf{Contact modeling:} Simulating contact requires choosing a contact model. Common choices include:
+\begin{itemize}
+    \item \textit{Penalty methods:} Model contact as stiff springs. Computationally simple but requires small timesteps and can produce artifacts.
+    \item \textit{Constraint-based methods:} Enforce non-penetration as a constraint. More physically accurate but computationally expensive.
+    \item \textit{Impulse-based methods:} Resolve contacts through impulses. Good for rigid body collision but challenging for sustained contact.
+\end{itemize}
+
+None of these perfectly capture real contact physics. Deformable objects, soft contacts, and compliant surfaces are particularly difficult.
+
+\textbf{Friction:} Coulomb friction is commonly used in simulation:
+\begin{equation}
+|f_t| \leq \mu |f_n|
+\end{equation}
+where tangential force $f_t$ is bounded by friction coefficient $\mu$ times normal force $f_n$. In reality, friction is far more complex: it depends on velocity (Stribeck effect), contact history (static vs. dynamic), surface condition (wear, lubrication), and material properties. The friction coefficient is not a constant but a complex function.
+
+\textbf{Object properties:} Simulating manipulation requires knowing object properties: mass, inertia tensor, center of mass, surface friction. These are rarely known precisely for novel objects. A policy trained with specific object parameters may fail when object properties differ.
+
+\subsection{Quantifying the Reality Gap}
+
+To design effective transfer strategies, we need to quantify the reality gap. Let $\pi_\theta$ be a policy with parameters $\theta$, trained in simulation. Define:
+\begin{equation}
+J_{\text{sim}}(\pi_\theta) = \mathbb{E}_{\tau \sim p_{\text{sim}}(\tau | \pi_\theta)} \left[ \sum_{t=0}^{T} \gamma^t r(s_t, a_t) \right]
+\end{equation}
+as the expected return in simulation, and:
+\begin{equation}
+J_{\text{real}}(\pi_\theta) = \mathbb{E}_{\tau \sim p_{\text{real}}(\tau | \pi_\theta)} \left[ \sum_{t=0}^{T} \gamma^t r(s_t, a_t) \right]
+\end{equation}
+as the expected return on the real system. The \textit{reality gap} can be quantified as:
+\begin{equation}
+\Delta J = J_{\text{sim}}(\pi_\theta) - J_{\text{real}}(\pi_\theta)
+\label{eq:reality_gap}
+\end{equation}
+
+A positive gap means the policy performs worse in reality than in simulation---the typical case. The goal of sim-to-real transfer is to minimize this gap.
+
+We can decompose the gap using importance sampling. Let $p_{\text{sim}}(s_{t+1} | s_t, a_t)$ and $p_{\text{real}}(s_{t+1} | s_t, a_t)$ be the transition dynamics in simulation and reality. The trajectory distributions differ because:
+\begin{equation}
+p_{\text{real}}(\tau | \pi) = p(s_0) \prod_{t=0}^{T-1} \pi(a_t | s_t) p_{\text{real}}(s_{t+1} | s_t, a_t)
+\end{equation}
+\begin{equation}
+p_{\text{sim}}(\tau | \pi) = p(s_0) \prod_{t=0}^{T-1} \pi(a_t | s_t) p_{\text{sim}}(s_{t+1} | s_t, a_t)
+\end{equation}
+
+The reality gap thus depends on the divergence between $p_{\text{real}}$ and $p_{\text{sim}}$. Trajectories that are common in simulation but rare in reality contribute most to the gap. This insight motivates domain randomization: by training on a distribution of simulated environments, we increase the probability that the real environment lies within the training distribution.
+
+\warningbox{A policy can achieve high return in simulation while completely failing in reality. Simulation performance is a necessary but not sufficient condition for real-world success. Always validate on hardware before deployment.}
+
+\subsection{A Taxonomy of Transfer Approaches}
+
+Given the sources and magnitude of the reality gap, how do we achieve successful transfer? I organize approaches into four main categories:
+
+\begin{enumerate}
+    \item \textbf{Domain Randomization:} Train in simulation with randomized parameters and conditions, so the policy learns to handle variation. If the randomization distribution is broad enough to include reality, the policy should transfer.
+
+    \item \textbf{System Identification:} Calibrate the simulation to match reality as closely as possible. Reduce the gap by making simulation more accurate.
+
+    \item \textbf{Domain Adaptation:} Use data from reality to adapt a policy trained in simulation. Fine-tune or adapt the policy using real experience.
+
+    \item \textbf{Robust Control:} Design controllers that guarantee performance despite bounded model uncertainty. Sacrifice optimal performance for robustness.
+\end{enumerate}
+
+These approaches are not mutually exclusive. The most successful sim-to-real pipelines combine multiple strategies: domain randomization for robustness, system identification for accuracy, and domain adaptation for final refinement. We will develop each approach in detail in the following sections.
+
+\subsection{The Cost of Failure}
+
+Before diving into techniques, I want to emphasize why sim-to-real transfer matters beyond academic interest. Failed transfer has real consequences:
+
+\textbf{Safety:} A controller that fails unexpectedly can cause injury to humans or damage to expensive hardware. Autonomous vehicles, surgical robots, and industrial manipulators operate in safety-critical contexts where failure is unacceptable.
+
+\textbf{Economics:} Real-world testing is expensive. Robot hardware is costly, testing facilities are scarce, and each trial consumes time and resources. Effective sim-to-real transfer dramatically reduces the amount of real-world testing required.
+
+\textbf{Iteration speed:} Development in simulation is fast---thousands of trials per hour. Development on hardware is slow---perhaps tens of trials per day. The ability to train in simulation and deploy successfully on first attempt (or close to it) accelerates the entire development cycle.
+
+\textbf{Scalability:} Simulation enables massive parallelization across thousands of virtual environments. Real-world testing cannot scale similarly. For learning-based approaches that require millions of samples, simulation is the only feasible training environment.
+
+These considerations motivate the substantial investment in sim-to-real transfer methods. The techniques we develop in this chapter are not merely academic exercises---they are essential engineering tools for anyone deploying learned or optimized controllers on physical systems.
+
+%===============================================================================
+\section{Domain Randomization}
+\label{sec:domain_randomization}
+%===============================================================================
+
+Domain randomization is perhaps the most widely used technique for sim-to-real transfer. The core idea is elegantly simple: instead of training in a single simulated environment, train across a distribution of environments with randomized properties. If this distribution is broad enough to encompass reality, the policy should transfer.
+
+\subsection{The Principle of Domain Randomization}
+
+Let $\xi$ represent the environment parameters---all the quantities that define the simulated environment but may differ from reality. This includes:
+\begin{itemize}
+    \item Physical parameters: masses, lengths, friction coefficients, damping
+    \item Sensor parameters: noise levels, biases, delays
+    \item Actuator parameters: gains, time constants, limits
+    \item Visual parameters: lighting, textures, colors, camera properties
+\end{itemize}
+
+In standard training, we fix $\xi = \xi_0$ (our best guess at reality) and optimize:
+\begin{equation}
+\theta^* = \arg\max_\theta J(\pi_\theta; \xi_0)
+\end{equation}
+
+The policy $\pi_{\theta^*}$ is optimal for $\xi_0$ but may fail if reality corresponds to $\xi_{\text{real}} \neq \xi_0$.
+
+Domain randomization instead samples $\xi$ from a distribution $p(\xi)$ and optimizes:
+\begin{equation}
+\theta^* = \arg\max_\theta \mathbb{E}_{\xi \sim p(\xi)} \left[ J(\pi_\theta; \xi) \right]
+\label{eq:domain_rand_objective}
+\end{equation}
+
+This policy is not optimal for any single $\xi$, but is \textit{robust} across the range of $\xi$ covered by $p(\xi)$. If $\xi_{\text{real}}$ lies within the support of $p(\xi)$, the policy should achieve reasonable performance in reality.
+
+\keypoint{Domain randomization trades optimality for robustness. The policy performs somewhat worse on average in simulation but transfers more reliably to reality.}
+
+\subsection{Physical Dynamics Randomization}
+
+The most fundamental form of domain randomization varies the physical parameters of the simulated system. For a robotic arm, this might include:
+
+\textbf{Mass and inertia:} Randomize link masses and inertia tensors:
+\begin{equation}
+m_i \sim \text{Uniform}((1-\alpha)m_i^{\text{nom}}, (1+\alpha)m_i^{\text{nom}})
+\end{equation}
+where $m_i^{\text{nom}}$ is the nominal mass of link $i$ and $\alpha$ is the randomization range (e.g., $\alpha = 0.2$ for $\pm 20\%$ variation).
+
+\textbf{Friction coefficients:} Randomize joint friction:
+\begin{equation}
+\mu_i \sim \text{Uniform}(\mu_{\min}, \mu_{\max})
+\end{equation}
+
+\textbf{Damping:} Randomize viscous damping coefficients:
+\begin{equation}
+b_i \sim \text{LogUniform}(b_{\min}, b_{\max})
+\end{equation}
+Log-uniform distributions are often appropriate for parameters that span orders of magnitude.
+
+\textbf{Center of mass:} Randomize CoM locations:
+\begin{equation}
+\mathbf{c}_i \sim \mathcal{N}(\mathbf{c}_i^{\text{nom}}, \sigma^2 I)
+\end{equation}
+
+\textbf{Actuator properties:} Randomize motor constants, gear ratios, and torque limits:
+\begin{align}
+K_t &\sim \text{Uniform}((1-\alpha)K_t^{\text{nom}}, (1+\alpha)K_t^{\text{nom}}) \\
+\tau_{\max} &\sim \text{Uniform}(\tau_{\max}^{\text{nom}} - \delta, \tau_{\max}^{\text{nom}})
+\end{align}
+
+\begin{example}[Dynamics Randomization for Quadruped Locomotion]
+\label{ex:quadruped_dynamics_rand}
+Consider training a locomotion policy for a quadruped robot. The simulation parameters and their randomization ranges are shown in Table~\ref{tab:quadruped_randomization}.
+
+\begin{table}[htbp]
+\centering
+\caption{Dynamics randomization parameters for quadruped locomotion}
+\label{tab:quadruped_randomization}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Parameter} & \textbf{Distribution} & \textbf{Nominal} & \textbf{Range} \\
+\midrule
+Body mass & Uniform & 12 kg & $\pm 20\%$ \\
+Leg link masses & Uniform & varies & $\pm 15\%$ \\
+Joint friction & Uniform & 0.1 Nm/(rad/s) & [0.05, 0.2] \\
+Ground friction & Uniform & 0.8 & [0.4, 1.2] \\
+Motor strength & Uniform & 1.0 & [0.8, 1.0] \\
+Joint damping & Uniform & 0.5 & [0.2, 1.0] \\
+CoM offset (x, y, z) & Normal & 0 & $\sigma = 0.02$ m \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The randomization is applied per-episode: at the beginning of each training episode, we sample a new set of parameters and simulate with those values for the entire episode. This exposes the policy to diverse dynamics during training.
+
+The resulting policy must learn behaviors that are robust to significant uncertainty in dynamics. It cannot rely on precisely timed motions that depend on exact mass values. Instead, it learns to use feedback to adapt its behavior within each episode.
+\end{example}
+
+\subsection{Sensor Noise Randomization}
+
+Real sensors are noisy and imperfect. To prepare policies for real sensors, we randomize sensor characteristics during training.
+
+\subsubsection{Additive Noise}
+
+The simplest model adds noise to sensor readings:
+\begin{equation}
+\tilde{o}_t = o_t + \epsilon_t, \quad \epsilon_t \sim \mathcal{N}(0, \sigma^2)
+\end{equation}
+where $o_t$ is the true observation and $\tilde{o}_t$ is the noisy observation. The noise level $\sigma$ is itself randomized:
+\begin{equation}
+\sigma \sim \text{Uniform}(\sigma_{\min}, \sigma_{\max})
+\end{equation}
+
+Different sensor modalities have different noise characteristics:
+\begin{itemize}
+    \item \textbf{Joint encoders:} Low noise, typically $< 0.01$ rad
+    \item \textbf{IMU accelerometers:} Moderate noise, bias drift
+    \item \textbf{Force/torque sensors:} Temperature-dependent bias, noise
+    \item \textbf{Vision:} Pixel noise, motion blur, exposure variation
+\end{itemize}
+
+\subsubsection{Sensor Bias}
+
+Many sensors exhibit systematic bias:
+\begin{equation}
+\tilde{o}_t = o_t + b + \epsilon_t
+\end{equation}
+where $b$ is a constant or slowly-varying bias. During training, randomize the bias:
+\begin{equation}
+b \sim \text{Uniform}(-b_{\max}, b_{\max})
+\end{equation}
+
+For IMUs, bias drift can be modeled as a random walk:
+\begin{equation}
+b_{t+1} = b_t + w_t, \quad w_t \sim \mathcal{N}(0, \sigma_b^2 \Delta t)
+\end{equation}
+
+\subsubsection{Sensor Delay}
+
+Sensors have finite update rates and processing delays. Model this as:
+\begin{equation}
+\tilde{o}_t = o_{t-d}
+\end{equation}
+where $d$ is the delay in timesteps. Randomize the delay:
+\begin{equation}
+d \sim \text{DiscreteUniform}(d_{\min}, d_{\max})
+\end{equation}
+
+For policies that use observation history, delayed observations can significantly impact performance. Training with randomized delays teaches the policy to handle temporal uncertainty.
+
+\subsubsection{Sensor Dropout}
+
+Real systems experience sensor failures---temporary or permanent loss of sensor readings. Model this as:
+\begin{equation}
+\tilde{o}_t = \begin{cases} o_t + \epsilon_t & \text{with probability } 1-p_{\text{drop}} \\ o_{\text{default}} & \text{with probability } p_{\text{drop}} \end{cases}
+\end{equation}
+where $o_{\text{default}}$ might be zero, the previous reading, or a learned default. Training with dropout encourages the policy to not rely too heavily on any single sensor.
+
+\begin{example}[Sensor Randomization for Drone Control]
+\label{ex:drone_sensor_rand}
+A quadrotor drone relies on IMU measurements for attitude control and GPS/vision for position. We randomize sensor properties as follows:
+
+\textbf{IMU randomization:}
+\begin{align}
+\text{Accelerometer noise: } &\sigma_a \sim \text{Uniform}(0.01, 0.1) \text{ m/s}^2 \\
+\text{Gyroscope noise: } &\sigma_g \sim \text{Uniform}(0.001, 0.01) \text{ rad/s} \\
+\text{Accelerometer bias: } &b_a \sim \mathcal{N}(0, 0.05^2) \text{ m/s}^2 \\
+\text{Gyroscope bias: } &b_g \sim \mathcal{N}(0, 0.002^2) \text{ rad/s} \\
+\text{IMU delay: } &d_{\text{IMU}} \sim \text{Uniform}(1, 5) \text{ ms}
+\end{align}
+
+\textbf{Position sensor randomization:}
+\begin{align}
+\text{Position noise: } &\sigma_p \sim \text{Uniform}(0.02, 0.2) \text{ m} \\
+\text{Update rate: } &f \sim \{10, 20, 50, 100\} \text{ Hz} \\
+\text{Dropout probability: } &p_{\text{drop}} \sim \text{Uniform}(0, 0.1)
+\end{align}
+
+This randomization forces the policy to learn robust sensor fusion. It cannot assume perfect IMU calibration or continuous position updates. The resulting policy handles real sensor imperfections gracefully.
+\end{example}
+
+\subsection{Visual Domain Randomization}
+
+For vision-based control, domain randomization extends to the visual domain. The goal is to train on such diverse simulated images that real images appear as just another sample from the training distribution.
+
+\subsubsection{Lighting Randomization}
+
+Lighting dramatically affects image appearance. Randomize:
+\begin{itemize}
+    \item \textbf{Light intensity:} Varies exposure and contrast
+    \item \textbf{Light direction:} Changes shadow positions
+    \item \textbf{Light color:} Affects color temperature
+    \item \textbf{Number of lights:} From single directional to complex multi-light setups
+    \item \textbf{Ambient light:} Background illumination level
+\end{itemize}
+
+\subsubsection{Texture Randomization}
+
+Replace object textures with random patterns:
+\begin{itemize}
+    \item Random solid colors
+    \item Random patterns (checkerboard, stripes, noise)
+    \item Random textures from texture databases
+    \item Procedurally generated textures
+\end{itemize}
+
+The insight is that task-relevant information (object shape, pose) should be extractable regardless of surface appearance. By training on random textures, the policy learns to focus on geometry rather than appearance.
+
+\subsubsection{Camera Randomization}
+
+Randomize camera properties:
+\begin{align}
+\text{Field of view: } &\text{FOV} \sim \text{Uniform}(50^\circ, 80^\circ) \\
+\text{Position offset: } &\delta\mathbf{p} \sim \mathcal{N}(0, \sigma_p^2 I) \\
+\text{Orientation offset: } &\delta\mathbf{q} \sim \text{small random rotation}
+\end{align}
+
+Also randomize:
+\begin{itemize}
+    \item Image resolution
+    \item Noise level
+    \item Motion blur
+    \item Lens distortion
+\end{itemize}
+
+\subsubsection{Background and Distractor Randomization}
+
+Add visual complexity:
+\begin{itemize}
+    \item Random background images or textures
+    \item Random distractor objects in the scene
+    \item Random floor and wall textures
+\end{itemize}
+
+These distractors force the policy to learn which visual features are relevant for the task, improving generalization to cluttered real environments.
+
+\begin{example}[Visual Domain Randomization for Robotic Grasping]
+\label{ex:visual_randomization_grasping}
+We train a vision-based grasping policy with extensive visual randomization. For each training episode, we randomize:
+
+\textbf{Scene setup:}
+\begin{itemize}
+    \item 1-5 random objects from a shape library (cubes, cylinders, spheres, complex meshes)
+    \item Random object poses on the table
+    \item Random table texture from a database of 100 textures
+    \item Random background (solid color, gradient, or image)
+\end{itemize}
+
+\textbf{Lighting:}
+\begin{itemize}
+    \item 1-4 point lights with random positions and intensities
+    \item Random ambient light level (0.1-0.5)
+    \item Random light colors (white to warm to cool)
+    \item Optional directional light with random direction
+\end{itemize}
+
+\textbf{Object appearance:}
+\begin{itemize}
+    \item Random solid colors OR random textures
+    \item Random specularity and roughness
+    \item Occasional transparency variation
+\end{itemize}
+
+\textbf{Camera:}
+\begin{itemize}
+    \item Position jitter: $\pm 2$ cm
+    \item Orientation jitter: $\pm 5^\circ$
+    \item FOV: $60^\circ \pm 10^\circ$
+    \item Gaussian noise: $\sigma \in [0, 0.02]$
+\end{itemize}
+
+Figure~\ref{fig:visual_randomization_examples} shows example images from this randomized training distribution. The diversity is extreme---objects appear in different colors on different backgrounds under different lighting. Yet across all variations, the geometric relationship between gripper and object remains consistent. The policy learns to extract this task-relevant information while ignoring visual variation.
+\end{example}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.9]
+    % Create a 2x3 grid of "simulated images"
+    \foreach \i in {0,1,2} {
+        \foreach \j in {0,1} {
+            \pgfmathsetmacro{\x}{\i*4}
+            \pgfmathsetmacro{\y}{-\j*3.5}
+
+            % Frame
+            \draw[thick] (\x-1.5,\y-1.2) rectangle (\x+1.5,\y+1.2);
+
+            % Random background color
+            \pgfmathsetmacro{\bg}{10+\i*15+\j*25}
+        }
+    }
+
+    % Image 1: Blue object on wood texture
+    \fill[UofSCSandstorm] (-1.5,-1.2) rectangle (1.5,1.2);
+    \draw[fill=UofSCAtlantic] (-0.3,-0.5) rectangle (0.5,0.3);
+    \node[font=\tiny] at (0,-1.5) {Blue cube, wood};
+
+    % Image 2: Red object with shadows
+    \fill[UofSCGrey50] (2.5,-1.2) rectangle (5.5,1.2);
+    \draw[fill=UofSCGarnet] (3.5,-0.4) rectangle (4.5,0.4);
+    \draw[fill=UofSCGrey70] (3.6,-0.5) -- (4.6,-0.5) -- (4.6,-0.3) -- (3.6,-0.3) -- cycle;
+    \node[font=\tiny] at (4,-1.5) {Red cube, shadows};
+
+    % Image 3: Textured object
+    \fill[white] (6.5,-1.2) rectangle (9.5,1.2);
+    \foreach \k in {0,...,5} {
+        \draw[UofSCGrey50] (6.5+\k*0.5,-1.2) -- (6.5+\k*0.5,1.2);
+    }
+    \draw[fill=UofSCHorseshoe, pattern=north east lines] (7.3,-0.3) rectangle (8.3,0.5);
+    \node[font=\tiny] at (8,-1.5) {Patterned, stripes};
+
+    % Image 4: Multiple objects
+    \fill[UofSCCongaree!30] (-1.5,-4.7) rectangle (1.5,-2.3);
+    \draw[fill=UofSCRose] (-0.8,-3.8) rectangle (-0.2,-3.2);
+    \draw[fill=UofSCAtlantic] (0.3,-4) rectangle (0.9,-3.4);
+    \draw[fill=UofSCHoneycomb] (0,-3) circle (0.25);
+    \node[font=\tiny] at (0,-5) {Multi-object};
+
+    % Image 5: Dark lighting
+    \fill[UofSCGrey90] (2.5,-4.7) rectangle (5.5,-2.3);
+    \draw[fill=UofSCGarnet!50] (3.7,-3.9) rectangle (4.5,-3.1);
+    \node[font=\tiny, white] at (4,-5) {Low light};
+
+    % Image 6: Bright with glare
+    \fill[white] (6.5,-4.7) rectangle (9.5,-2.3);
+    \draw[fill=UofSCAtlantic] (7.5,-3.8) rectangle (8.5,-3);
+    \fill[white, opacity=0.7] (7.8,-3.5) circle (0.4);
+    \node[font=\tiny] at (8,-5) {Bright, glare};
+
+\end{tikzpicture}
+\caption{Examples of visual domain randomization for grasping. Each image shows the same basic task (grasp an object) with different lighting, textures, colors, and backgrounds. The policy must learn to extract task-relevant features (object location and shape) while being invariant to irrelevant visual variation.}
+\label{fig:visual_randomization_examples}
+\end{figure}
+
+\subsection{Action Noise and Delay Randomization}
+
+Real actuators do not perfectly execute commanded actions. Train with action perturbations:
+
+\textbf{Additive action noise:}
+\begin{equation}
+a_{\text{executed}} = a_{\text{commanded}} + \epsilon_a, \quad \epsilon_a \sim \mathcal{N}(0, \sigma_a^2)
+\end{equation}
+
+\textbf{Multiplicative action noise:}
+\begin{equation}
+a_{\text{executed}} = a_{\text{commanded}} \cdot (1 + \epsilon_m), \quad \epsilon_m \sim \mathcal{N}(0, \sigma_m^2)
+\end{equation}
+
+\textbf{Action delay:}
+\begin{equation}
+a_{\text{executed},t} = a_{\text{commanded},t-d}
+\end{equation}
+with $d$ randomized.
+
+\textbf{Action filtering:}
+Real actuators have bandwidth limits. Model this as low-pass filtering:
+\begin{equation}
+a_{\text{executed},t} = \alpha \cdot a_{\text{commanded},t} + (1-\alpha) \cdot a_{\text{executed},t-1}
+\end{equation}
+where $\alpha$ controls the filter bandwidth.
+
+\subsection{Randomization Scheduling}
+
+The range and intensity of randomization can be adjusted during training using a curriculum:
+
+\textbf{Gradual expansion:} Start with narrow randomization ranges and gradually widen them:
+\begin{equation}
+\alpha_t = \alpha_{\min} + (\alpha_{\max} - \alpha_{\min}) \cdot \min\left(1, \frac{t}{T_{\text{curriculum}}}\right)
+\end{equation}
+
+This allows the policy to first learn the basic task in near-nominal conditions, then gradually become robust to larger variations.
+
+\textbf{Adaptive randomization:} Adjust randomization based on policy performance. If the policy masters current conditions, increase randomization; if it struggles, reduce randomization.
+
+\textbf{Importance-weighted randomization:} Sample parameters more frequently from regions where the policy performs poorly, focusing training on challenging conditions.
+
+\subsection{Theoretical Foundations}
+
+Why does domain randomization work? We can understand it through several lenses:
+
+\subsubsection{Distributionally Robust Optimization}
+
+Domain randomization can be viewed as optimizing worst-case performance over a set of environments:
+\begin{equation}
+\theta^* = \arg\max_\theta \min_{\xi \in \Xi} J(\pi_\theta; \xi)
+\end{equation}
+
+In practice, we optimize expected performance over $p(\xi)$, which is a softer version of minimax optimization. If $p(\xi)$ has sufficient coverage, the expected-case optimizer also performs reasonably in the worst case.
+
+\subsubsection{Regularization}
+
+Randomization acts as implicit regularization on the policy. A policy that achieves high return under diverse conditions cannot overfit to specific environment parameters. This is analogous to dropout in neural networks, which prevents overfitting by randomly dropping units during training.
+
+\subsubsection{Invariance Learning}
+
+For visual randomization, the policy learns features that are invariant to irrelevant variation. By seeing objects in many colors and lighting conditions, the policy learns that color is not predictive of task success---only geometry matters. This is a form of representation learning through data augmentation.
+
+\warningbox{Domain randomization is not a panacea. If reality lies outside the randomization distribution, transfer will fail. The randomization ranges must be carefully designed based on knowledge of possible real-world variation. Over-randomization can make the task unlearnable.}
+
+\subsection{Practical Guidelines for Domain Randomization}
+
+Based on extensive experience with sim-to-real transfer, I offer the following guidelines:
+
+\begin{enumerate}
+    \item \textbf{Start conservative:} Begin with modest randomization ranges and verify the policy can still learn. Gradually expand ranges.
+
+    \item \textbf{Randomize what matters:} Focus randomization on parameters that affect task performance. Randomizing irrelevant parameters adds training difficulty without improving transfer.
+
+    \item \textbf{Match reality's distribution:} If you know the distribution of parameters in reality (from measurements or manufacturer specifications), use that distribution. Uniform randomization is a default when you lack prior knowledge.
+
+    \item \textbf{Test transfer early:} Don't wait until training is complete to test on hardware. Transfer to reality early and often to identify which sources of mismatch matter.
+
+    \item \textbf{Combine with system ID:} Domain randomization handles unknown variation; system identification handles known systematic errors. Use both.
+
+    \item \textbf{Monitor training carefully:} Randomization makes training harder and slower. Monitor for signs that randomization is too aggressive (policy fails to improve, high variance in performance).
+\end{enumerate}
+
+%===============================================================================
+\section{System Identification for Simulation Calibration}
+\label{sec:system_identification}
+%===============================================================================
+
+While domain randomization handles uncertainty by training over a distribution of environments, system identification takes the complementary approach: make the simulation as accurate as possible by calibrating it against real-world data. The goal is to identify the simulation parameters $\xi$ that best match observed behavior of the physical system.
+
+\subsection{The System Identification Problem}
+
+Let $\mathbf{y}_{\text{real}} = \{y_1, y_2, \ldots, y_N\}$ be observations collected from the real system under known inputs $\mathbf{u} = \{u_1, u_2, \ldots, u_N\}$. Let $\mathbf{y}_{\text{sim}}(\xi)$ be the corresponding predictions from simulation with parameters $\xi$. The system identification problem is:
+\begin{equation}
+\xi^* = \arg\min_\xi \mathcal{L}(\mathbf{y}_{\text{real}}, \mathbf{y}_{\text{sim}}(\xi))
+\label{eq:sysid_objective}
+\end{equation}
+where $\mathcal{L}$ is a loss function measuring the discrepancy between real and simulated observations.
+
+Common choices for $\mathcal{L}$ include:
+
+\textbf{Mean squared error:}
+\begin{equation}
+\mathcal{L}_{\text{MSE}} = \frac{1}{N} \sum_{t=1}^{N} \| y_t^{\text{real}} - y_t^{\text{sim}}(\xi) \|^2
+\end{equation}
+
+\textbf{Trajectory likelihood:} For stochastic systems:
+\begin{equation}
+\mathcal{L}_{\text{NLL}} = -\log p(\mathbf{y}_{\text{real}} | \mathbf{u}, \xi)
+\end{equation}
+
+\textbf{Frequency-domain matching:} Match transfer functions in frequency domain:
+\begin{equation}
+\mathcal{L}_{\text{freq}} = \int_0^{\omega_{\max}} |G_{\text{real}}(j\omega) - G_{\text{sim}}(j\omega; \xi)|^2 \, d\omega
+\end{equation}
+
+The choice of loss function depends on the application. MSE is simple and widely used. Trajectory likelihood is appropriate when sensor noise is significant. Frequency-domain matching is preferred for control applications where loop shaping matters.
+
+\subsection{Data Collection for System Identification}
+
+The quality of identified parameters depends critically on the excitation signals used during data collection. We need inputs that excite all relevant dynamics.
+
+\subsubsection{Excitation Requirements}
+
+For a linear system, the input must be \textit{persistently exciting} of sufficient order to identify all parameters. Formally, an input $u(t)$ is persistently exciting of order $n$ if:
+\begin{equation}
+\lim_{T \to \infty} \frac{1}{T} \int_0^T \mathbf{u}_{n,t} \mathbf{u}_{n,t}^T \, dt > 0
+\label{eq:persistent_excitation}
+\end{equation}
+where $\mathbf{u}_{n,t} = [u(t), u(t-1), \ldots, u(t-n+1)]^T$ is a vector of delayed inputs.
+
+In practice, this means the input should contain frequency content spanning the bandwidth of the system dynamics. A sinusoidal input at a single frequency cannot identify multiple parameters; a rich signal with multiple frequencies is needed.
+
+\subsubsection{Excitation Signal Design}
+
+Common excitation signals include:
+
+\textbf{Pseudo-random binary sequence (PRBS):} A binary signal that switches between $\pm A$ at pseudo-random intervals. Provides broad-spectrum excitation and is easy to generate:
+\begin{equation}
+u(t) = A \cdot \text{sign}(\sin(2\pi f_1 t) + \sin(2\pi f_2 t) + \ldots)
+\end{equation}
+where $f_i$ are incommensurate frequencies.
+
+\textbf{Chirp signal:} A sinusoid with time-varying frequency:
+\begin{equation}
+u(t) = A \sin\left(2\pi \left(f_0 + \frac{f_1 - f_0}{2T}t\right)t\right)
+\end{equation}
+This sweeps through frequencies from $f_0$ to $f_1$ over time $T$, exciting all dynamics in that range.
+
+\textbf{Multi-sine:} A sum of sinusoids at selected frequencies:
+\begin{equation}
+u(t) = \sum_{k=1}^{K} A_k \sin(2\pi f_k t + \phi_k)
+\end{equation}
+The amplitudes $A_k$ and phases $\phi_k$ can be optimized to minimize crest factor while ensuring adequate excitation.
+
+\textbf{Random walk or filtered noise:} Low-pass filtered white noise provides smooth, broad-spectrum excitation suitable for systems that cannot tolerate abrupt input changes.
+
+\begin{example}[Excitation Signal for Robot Arm Identification]
+\label{ex:robot_arm_excitation}
+We want to identify the dynamics of a 6-DOF robot arm. The dynamics have bandwidth from near-DC (gravity compensation) to approximately 20 Hz (structural resonances). We design a multi-sine excitation signal.
+
+For each joint $j$, we use:
+\begin{equation}
+u_j(t) = \sum_{k=1}^{10} A_{j,k} \sin(2\pi f_k t + \phi_{j,k})
+\end{equation}
+with frequencies $f_k \in \{0.1, 0.3, 0.7, 1.5, 3, 5, 8, 12, 16, 20\}$ Hz spanning the relevant bandwidth.
+
+The amplitudes $A_{j,k}$ are chosen to:
+\begin{enumerate}
+    \item Stay within joint torque limits
+    \item Provide approximately flat power spectral density
+    \item Account for varying inertia at different configurations
+\end{enumerate}
+
+The phases $\phi_{j,k}$ are randomized to reduce the peak amplitude (crest factor) of the combined signal.
+
+We collect data for 60 seconds at 1 kHz, providing $N = 60,000$ samples per joint. This duration ensures multiple periods of even the lowest-frequency component (0.1 Hz has 6 complete cycles).
+\end{example}
+
+\subsection{Parameter Estimation Methods}
+
+Given excitation data, we must solve the optimization problem in Equation~\ref{eq:sysid_objective}. Several approaches are available depending on the system structure and computational resources.
+
+\subsubsection{Linear Least Squares}
+
+For linear systems, the identification problem often reduces to linear least squares. Consider the discrete-time ARX (AutoRegressive with eXogenous input) model:
+\begin{equation}
+y_t = \sum_{i=1}^{n_a} a_i y_{t-i} + \sum_{j=0}^{n_b} b_j u_{t-j} + e_t
+\end{equation}
+
+This can be written in matrix form as:
+\begin{equation}
+\mathbf{y} = \mathbf{\Phi} \boldsymbol{\theta} + \mathbf{e}
+\end{equation}
+where $\boldsymbol{\theta} = [a_1, \ldots, a_{n_a}, b_0, \ldots, b_{n_b}]^T$ and $\mathbf{\Phi}$ is the regression matrix with rows $[y_{t-1}, \ldots, y_{t-n_a}, u_t, \ldots, u_{t-n_b}]$.
+
+The least squares solution is:
+\begin{equation}
+\hat{\boldsymbol{\theta}} = (\mathbf{\Phi}^T \mathbf{\Phi})^{-1} \mathbf{\Phi}^T \mathbf{y}
+\label{eq:least_squares_sysid}
+\end{equation}
+
+This is computationally efficient and provides the optimal solution for Gaussian noise.
+
+\subsubsection{Nonlinear Optimization}
+
+For nonlinear systems or when parameters enter the model nonlinearly, we must use iterative optimization. The simulation-to-reality matching problem is:
+\begin{equation}
+\xi^* = \arg\min_\xi \sum_{t=1}^{N} \| y_t^{\text{real}} - y_t^{\text{sim}}(\xi) \|^2
+\end{equation}
+
+This is typically solved using gradient-based optimization. If the simulator is differentiable (as discussed in Chapter 18), gradients are computed via automatic differentiation:
+\begin{equation}
+\nabla_\xi \mathcal{L} = -2 \sum_{t=1}^{N} (y_t^{\text{real}} - y_t^{\text{sim}}(\xi))^T \frac{\partial y_t^{\text{sim}}}{\partial \xi}
+\end{equation}
+
+For non-differentiable simulators, derivative-free methods are required:
+\begin{itemize}
+    \item \textbf{CMA-ES:} Covariance Matrix Adaptation Evolution Strategy samples parameters from a multivariate Gaussian and adapts the distribution based on fitness
+    \item \textbf{Bayesian optimization:} Builds a Gaussian process surrogate of the objective and uses acquisition functions to select promising parameters
+    \item \textbf{Particle swarm optimization:} Maintains a population of parameter candidates that share information about promising regions
+\end{itemize}
+
+\subsubsection{Bayesian Parameter Estimation}
+
+Rather than finding a point estimate $\xi^*$, Bayesian methods estimate the posterior distribution $p(\xi | \mathbf{y}_{\text{real}})$:
+\begin{equation}
+p(\xi | \mathbf{y}_{\text{real}}) = \frac{p(\mathbf{y}_{\text{real}} | \xi) p(\xi)}{p(\mathbf{y}_{\text{real}})}
+\label{eq:bayesian_sysid}
+\end{equation}
+
+This provides uncertainty quantification: we know not just the best parameter values but also how confident we are in those values. High posterior variance indicates parameters that are poorly identified from the data.
+
+For complex simulators, the posterior is computed using sampling methods:
+\begin{itemize}
+    \item \textbf{Markov Chain Monte Carlo (MCMC):} Samples from the posterior by constructing a Markov chain with the posterior as its stationary distribution
+    \item \textbf{Sequential Monte Carlo (SMC):} Particle filtering approaches that can handle sequential data arrival
+    \item \textbf{Variational inference:} Approximates the posterior with a tractable distribution by minimizing KL divergence
+\end{itemize}
+
+The posterior uncertainty from Bayesian identification can directly inform domain randomization: randomize parameters according to the posterior distribution to ensure the real parameter values are covered.
+
+\begin{example}[Bayesian System Identification for Friction Parameters]
+\label{ex:bayesian_friction}
+We identify friction parameters for a robotic joint. The friction model is:
+\begin{equation}
+\tau_f = \mu_c \, \text{sign}(\dot{q}) + \mu_v \dot{q} + \mu_s \, \text{sign}(\dot{q}) e^{-|\dot{q}|/v_s}
+\end{equation}
+with Coulomb friction $\mu_c$, viscous friction $\mu_v$, Stribeck friction $\mu_s$, and Stribeck velocity $v_s$.
+
+We collect data by commanding constant velocity motions at various speeds and measuring the torque required to maintain velocity. The likelihood of observed torque given parameters is:
+\begin{equation}
+p(\tau_{\text{obs}} | \mu_c, \mu_v, \mu_s, v_s) = \mathcal{N}(\tau_{\text{obs}}; \tau_f(\mu_c, \mu_v, \mu_s, v_s), \sigma^2)
+\end{equation}
+
+We place weakly informative priors on the parameters:
+\begin{align}
+\mu_c &\sim \text{HalfNormal}(0.5) \\
+\mu_v &\sim \text{HalfNormal}(0.1) \\
+\mu_s &\sim \text{HalfNormal}(0.5) \\
+v_s &\sim \text{LogNormal}(0, 1)
+\end{align}
+
+Running MCMC (e.g., using the No-U-Turn Sampler), we obtain posterior samples. The results are:
+\begin{align}
+\mu_c &= 0.32 \pm 0.04 \text{ Nm} \\
+\mu_v &= 0.089 \pm 0.008 \text{ Nm/(rad/s)} \\
+\mu_s &= 0.18 \pm 0.12 \text{ Nm} \\
+v_s &= 0.05 \pm 0.03 \text{ rad/s}
+\end{align}
+
+Note that $\mu_s$ and $v_s$ have high uncertainty---the Stribeck effect is difficult to identify without careful low-velocity experiments. We can use these posterior distributions directly for domain randomization, ensuring appropriate coverage of possible real parameter values.
+\end{example}
+
+\subsection{Simulation-to-Reality Matching}
+
+System identification for sim-to-real transfer has a specific goal: make simulated trajectories match real trajectories under the same control inputs. This is more demanding than traditional system identification, which might focus on matching step responses or frequency responses.
+
+\subsubsection{Trajectory Matching}
+
+Given real trajectory data $\{(s_t^{\text{real}}, a_t, s_{t+1}^{\text{real}})\}_{t=1}^{N}$, we seek parameters $\xi$ such that the simulator produces similar state transitions:
+\begin{equation}
+\xi^* = \arg\min_\xi \sum_{t=1}^{N} \| s_{t+1}^{\text{real}} - f_{\text{sim}}(s_t^{\text{real}}, a_t; \xi) \|^2
+\label{eq:trajectory_matching}
+\end{equation}
+
+This approach uses single-step predictions, resetting the simulator to the real state at each timestep. It avoids error accumulation but requires access to the full state (not just observations).
+
+\subsubsection{Multi-Step Prediction Matching}
+
+For longer-horizon accuracy, we match multi-step predictions:
+\begin{equation}
+\xi^* = \arg\min_\xi \sum_{t=1}^{N-H} \sum_{h=1}^{H} \gamma^{h-1} \| s_{t+h}^{\text{real}} - s_{t+h}^{\text{sim}}(\xi) \|^2
+\end{equation}
+where $s_{t+h}^{\text{sim}}$ is obtained by rolling out the simulator for $h$ steps from $s_t^{\text{real}}$ with actions $\{a_t, \ldots, a_{t+h-1}\}$.
+
+The discount factor $\gamma < 1$ weights early predictions more heavily, acknowledging that errors accumulate over the horizon.
+
+\subsubsection{Dynamics Model Learning}
+
+An alternative to calibrating a physics simulator is to learn a dynamics model directly from data. Neural network dynamics models:
+\begin{equation}
+\hat{s}_{t+1} = f_\phi(s_t, a_t)
+\end{equation}
+can capture complex dynamics that are difficult to model analytically.
+
+The learned model can be used for:
+\begin{itemize}
+    \item Policy training via model-based RL
+    \item Model predictive control
+    \item Ensemble methods for uncertainty estimation
+\end{itemize}
+
+The disadvantage is that learned models may not generalize to states far from the training distribution, while physics-based simulators (once calibrated) often extrapolate more reliably.
+
+\subsection{Iterative Sim-to-Real}
+
+A powerful approach combines system identification with policy training in an iterative loop:
+
+\begin{enumerate}
+    \item \textbf{Initialize:} Start with nominal simulation parameters $\xi_0$
+    \item \textbf{Train policy:} Train policy $\pi_k$ in simulation with parameters $\xi_k$ (with domain randomization around $\xi_k$)
+    \item \textbf{Collect real data:} Deploy $\pi_k$ on hardware and collect trajectory data
+    \item \textbf{Update parameters:} Use real data to update simulation parameters to $\xi_{k+1}$
+    \item \textbf{Repeat:} Go to step 2 until convergence
+\end{enumerate}
+
+This iterative process progressively refines the simulation while simultaneously improving the policy. The policy exploration generates informative data for system identification, while the improved simulation enables better policy training.
+
+\begin{example}[Iterative Calibration for Quadruped Locomotion]
+\label{ex:iterative_calibration_quadruped}
+We apply iterative sim-to-real for a quadruped robot learning to walk. The process proceeds as follows:
+
+\textbf{Iteration 0:}
+\begin{itemize}
+    \item Use manufacturer specifications for link masses, inertias, motor constants
+    \item Train locomotion policy with domain randomization ($\pm 20\%$ on all parameters)
+    \item Deploy on robot: achieves locomotion but with visible gait artifacts
+    \item Collect 10 minutes of walking data (joint positions, velocities, torques, IMU)
+\end{itemize}
+
+\textbf{Iteration 1:}
+\begin{itemize}
+    \item Use collected data to identify improved parameter estimates
+    \item Key findings: actual motor strength is 85\% of nominal, ground friction is higher than assumed
+    \item Update simulation parameters and narrow randomization ranges
+    \item Retrain policy: smoother gait, better energy efficiency
+    \item Deploy and collect more data
+\end{itemize}
+
+\textbf{Iteration 2:}
+\begin{itemize}
+    \item Refined identification reveals joint damping varies by joint (some bearings more worn)
+    \item Identify per-joint damping coefficients
+    \item Update simulation with joint-specific parameters
+    \item Retrain policy: performance approaches simulation
+\end{itemize}
+
+After 2-3 iterations, the simulation closely matches reality, and the policy transfers with minimal degradation. The iterative process converges when policy performance on hardware matches simulation within experimental noise.
+\end{example}
+
+\subsection{Practical Considerations}
+
+\subsubsection{Identifiability}
+
+Not all parameters are identifiable from data. Two different parameter values $\xi_1$ and $\xi_2$ may produce identical observations, making them indistinguishable. Common examples:
+\begin{itemize}
+    \item Product of mass and acceleration appears as force; individual mass is identifiable only if acceleration is known
+    \item Coupled parameters (e.g., motor constant times gear ratio) require decoupled experiments
+    \item Parameters that affect only unobserved states
+\end{itemize}
+
+Before investing in identification experiments, analyze parameter identifiability using Fisher information or sensitivity analysis.
+
+\subsubsection{Model Complexity}
+
+There is a tradeoff between model complexity and identifiability. A complex model with many parameters may better represent reality but requires more data to identify. A simple model may be identifiable but miss important dynamics.
+
+The principle of parsimony suggests starting simple and adding complexity only when data supports it. Model selection criteria (AIC, BIC, cross-validation) help navigate this tradeoff.
+
+\subsubsection{Experiment Design}
+
+Careful experiment design improves identification quality:
+\begin{itemize}
+    \item \textbf{Varied configurations:} Collect data across the operating envelope, not just near equilibrium
+    \item \textbf{Isolated effects:} Design experiments that isolate specific parameters (e.g., gravity compensation experiments to identify masses)
+    \item \textbf{Sufficient duration:} Ensure enough data to average out noise and capture slow dynamics
+    \item \textbf{Safety constraints:} Stay within safe operating limits while still exciting dynamics
+\end{itemize}
+
+%===============================================================================
+\section{Domain Adaptation Techniques}
+\label{sec:domain_adaptation}
+%===============================================================================
+
+Domain randomization and system identification are \textit{pre-transfer} techniques: they prepare the policy before deployment. Domain adaptation takes a different approach: it uses real-world data to adapt a policy that was trained in simulation. This is particularly valuable when simulation-reality mismatch persists despite best efforts at randomization and calibration.
+
+\subsection{The Domain Adaptation Framework}
+
+We have a source domain (simulation) where data is abundant and a target domain (reality) where data is scarce but performance matters. The goal is to leverage source domain training while adapting to the target domain distribution.
+
+Let $\mathcal{D}_{\text{sim}} = \{(s_i, a_i, r_i, s_i')\}_{i=1}^{N_{\text{sim}}}$ be a large dataset from simulation and $\mathcal{D}_{\text{real}} = \{(s_j, a_j, r_j, s_j')\}_{j=1}^{N_{\text{real}}}$ be a small dataset from reality, with $N_{\text{real}} \ll N_{\text{sim}}$. Domain adaptation methods seek to combine these datasets effectively.
+
+\subsection{Fine-Tuning from Simulation}
+
+The simplest domain adaptation approach is to fine-tune a simulation-trained policy on real data.
+
+\subsubsection{Direct Fine-Tuning}
+
+Starting from a policy $\pi_{\theta_{\text{sim}}}$ trained in simulation, we continue training on real data:
+\begin{equation}
+\theta_{\text{real}} = \theta_{\text{sim}} + \eta \sum_{j=1}^{N_{\text{real}}} \nabla_\theta \log \pi_\theta(a_j | s_j) A^{\pi}(s_j, a_j)
+\end{equation}
+where $A^\pi$ is an advantage estimate from real experience.
+
+This leverages the simulation pre-training as initialization, then adapts to reality. The key considerations are:
+\begin{itemize}
+    \item \textbf{Learning rate:} Use a smaller learning rate than initial training to avoid catastrophic forgetting
+    \item \textbf{Data efficiency:} Real data is precious; use sample-efficient algorithms (PPO, SAC) rather than on-policy methods with high sample requirements
+    \item \textbf{Safety:} Real-world exploration is costly; prefer conservative exploration strategies
+\end{itemize}
+
+\subsubsection{Behavioral Cloning from Real Demonstrations}
+
+If expert demonstrations are available from the real domain, behavioral cloning provides a supervised learning approach:
+\begin{equation}
+\theta^* = \arg\min_\theta \sum_{j=1}^{N_{\text{demo}}} \mathcal{L}(\pi_\theta(s_j), a_j^{\text{expert}})
+\end{equation}
+
+Starting from simulation-trained weights, we fine-tune using real demonstrations. This is particularly effective when:
+\begin{itemize}
+    \item Expert demonstrations are available (teleoperation, motion capture)
+    \item The task has a clear notion of ``correct'' behavior
+    \item Reward is difficult to specify but demonstrations are available
+\end{itemize}
+
+The risk is distribution shift: the cloned policy may encounter states not covered by demonstrations and behave unpredictably.
+
+\subsection{Regularized Domain Adaptation}
+
+Naive fine-tuning can lead to \textit{catastrophic forgetting}: the policy loses simulation-learned behaviors while overfitting to limited real data. Regularization techniques preserve useful knowledge from simulation.
+
+\subsubsection{Elastic Weight Consolidation (EWC)}
+
+EWC adds a penalty that discourages large changes to parameters that were important for simulation performance:
+\begin{equation}
+\mathcal{L}_{\text{EWC}} = \mathcal{L}_{\text{real}}(\theta) + \frac{\lambda}{2} \sum_i F_i (\theta_i - \theta_{\text{sim},i})^2
+\label{eq:ewc_loss}
+\end{equation}
+where $F_i$ is the Fisher information for parameter $i$, measuring its importance for simulation performance.
+
+The Fisher information is computed from simulation data:
+\begin{equation}
+F_i = \mathbb{E}_{\mathcal{D}_{\text{sim}}} \left[ \left( \frac{\partial \log \pi_\theta(a|s)}{\partial \theta_i} \right)^2 \right]
+\end{equation}
+
+Parameters with high Fisher information are important for simulation performance and should change slowly during real-world adaptation.
+
+\subsubsection{Knowledge Distillation}
+
+Knowledge distillation trains a student network (adapting to reality) to match both real data and the predictions of a teacher network (simulation-trained):
+\begin{equation}
+\mathcal{L}_{\text{distill}} = \mathcal{L}_{\text{real}}(\theta) + \alpha \cdot \text{KL}(\pi_{\theta_{\text{sim}}}(\cdot|s) \| \pi_\theta(\cdot|s))
+\end{equation}
+
+The KL divergence term encourages the adapted policy to remain close to the simulation policy, preventing catastrophic forgetting while allowing targeted adaptation to reality.
+
+\subsubsection{Replay of Simulation Data}
+
+A simple but effective approach mixes simulation and real data during fine-tuning:
+\begin{equation}
+\mathcal{D}_{\text{mixed}} = \alpha \cdot \mathcal{D}_{\text{sim}} + (1-\alpha) \cdot \mathcal{D}_{\text{real}}
+\end{equation}
+
+By replaying simulation data alongside real data, the policy maintains simulation performance while adapting to reality. The mixing ratio $\alpha$ controls the balance; typically $\alpha$ decreases over fine-tuning as more real data becomes available.
+
+\subsection{Adversarial Domain Adaptation}
+
+Adversarial methods explicitly align representations between simulation and reality, encouraging the policy to be invariant to domain differences.
+
+\subsubsection{Domain-Adversarial Neural Networks (DANN)}
+
+DANN adds a domain classifier that tries to distinguish simulation from real observations, while the feature extractor is trained to fool the classifier:
+\begin{equation}
+\min_\phi \max_\psi \mathcal{L}_{\text{task}}(\phi, \theta) - \lambda \mathcal{L}_{\text{domain}}(\phi, \psi)
+\label{eq:dann_objective}
+\end{equation}
+where:
+\begin{itemize}
+    \item $\phi$ are feature extractor parameters
+    \item $\theta$ are policy head parameters
+    \item $\psi$ are domain classifier parameters
+    \item $\mathcal{L}_{\text{task}}$ is the policy learning objective
+    \item $\mathcal{L}_{\text{domain}}$ is domain classification loss
+\end{itemize}
+
+The gradient reversal layer implements the adversarial objective: during backpropagation, the domain classification gradient is negated before passing to the feature extractor.
+
+The result is features that are discriminative for the task but invariant to domain. If the domain classifier cannot distinguish simulation from reality, the features have achieved domain alignment.
+
+\subsubsection{Generative Adversarial Adaptation}
+
+For visual inputs, generative models can transform simulation images to appear realistic:
+\begin{equation}
+G: \mathcal{I}_{\text{sim}} \to \mathcal{I}_{\text{real-like}}
+\end{equation}
+
+A generator $G$ transforms simulation images, while a discriminator $D$ tries to distinguish transformed images from real images. The generator is trained to fool the discriminator while preserving task-relevant content.
+
+CycleGAN and similar approaches enforce cycle consistency:
+\begin{equation}
+\mathcal{L}_{\text{cycle}} = \| G_{\text{real}\to\text{sim}}(G_{\text{sim}\to\text{real}}(I_{\text{sim}})) - I_{\text{sim}} \|
+\end{equation}
+
+This ensures the transformation preserves content while changing style. The policy can then be trained on transformed simulation images that appear realistic.
+
+\begin{example}[Adversarial Domain Adaptation for Visual Navigation]
+\label{ex:adversarial_visual_adaptation}
+We train a vision-based navigation policy that must transfer from simulation to a real indoor environment.
+
+\textbf{Setup:}
+\begin{itemize}
+    \item Simulation: Rendered indoor scenes with simple textures and lighting
+    \item Reality: Office environment with complex lighting, clutter, people
+    \item Task: Navigate to goal location given RGB image and goal coordinates
+\end{itemize}
+
+\textbf{Architecture:}
+The policy network consists of:
+\begin{itemize}
+    \item Visual encoder $E_\phi$: ResNet-18 backbone extracting 512-D features
+    \item Policy head $\pi_\theta$: MLP mapping features + goal to actions
+    \item Domain classifier $D_\psi$: MLP classifying features as sim or real
+\end{itemize}
+
+\textbf{Training procedure:}
+\begin{enumerate}
+    \item Pre-train policy in simulation using PPO
+    \item Collect real images from the target environment (no actions needed, just observations)
+    \item Train with combined objective:
+    \begin{itemize}
+        \item Policy loss on simulation data (labels available)
+        \item Domain adversarial loss on both sim and real images
+    \end{itemize}
+\end{enumerate}
+
+\textbf{Results:}
+Before domain adaptation, the policy achieves 85\% success rate in simulation but only 35\% in reality. After adversarial training, reality success rate improves to 72\%, approaching simulation performance. The learned features have become invariant to the visual domain shift.
+\end{example}
+
+\subsection{Meta-Learning for Rapid Adaptation}
+
+Meta-learning, or ``learning to learn,'' trains policies that can rapidly adapt to new environments with minimal data. This is valuable for sim-to-real transfer, where the policy should quickly adapt to the specific real system.
+
+\subsubsection{Model-Agnostic Meta-Learning (MAML)}
+
+MAML learns an initialization $\theta$ from which fast adaptation is possible:
+\begin{equation}
+\theta^* = \arg\min_\theta \sum_{i=1}^{N} \mathcal{L}_{\mathcal{T}_i}(\theta - \alpha \nabla_\theta \mathcal{L}_{\mathcal{T}_i}(\theta))
+\label{eq:maml_objective}
+\end{equation}
+
+The outer optimization finds parameters that, after a few gradient steps on a new task $\mathcal{T}_i$, achieve good performance on that task.
+
+For sim-to-real transfer:
+\begin{enumerate}
+    \item Create a distribution of simulation environments with varied parameters
+    \item Each environment is treated as a separate ``task''
+    \item Meta-train on this task distribution to find initialization $\theta^*$
+    \item At deployment, fine-tune from $\theta^*$ using real-world data
+\end{enumerate}
+
+The meta-learned initialization is primed for rapid adaptation, requiring only a few gradient steps on real data to achieve good performance.
+
+\subsubsection{Context-Conditional Policies}
+
+Rather than adapting network weights, context-conditional policies adapt their behavior based on a context vector that summarizes the current environment:
+\begin{equation}
+a = \pi_\theta(s, z)
+\end{equation}
+where $z$ is a context vector inferred from recent experience.
+
+The context encoder:
+\begin{equation}
+z = f_\phi(h_{1:K}) = f_\phi((s_1, a_1, s_1'), \ldots, (s_K, a_K, s_K'))
+\end{equation}
+maps recent transitions to a latent context that captures environment-specific information.
+
+During meta-training, the context encoder learns to extract information relevant for behavior adaptation. At deployment, the context is inferred from initial interactions with the real system, and the policy automatically adapts without weight updates.
+
+\begin{example}[Context-Conditional Policy for Variable Payload]
+\label{ex:context_conditional_payload}
+A robot arm must perform pick-and-place with objects of varying (unknown) masses. The dynamics change significantly with payload.
+
+\textbf{Training:}
+\begin{enumerate}
+    \item Simulate with payloads uniformly distributed from 0 to 2 kg
+    \item Train context encoder to infer payload-relevant information from trajectory snippets
+    \item Train policy conditioned on inferred context
+\end{enumerate}
+
+\textbf{Architecture:}
+\begin{itemize}
+    \item Context encoder: Transformer over recent 10 transitions, outputs 32-D context $z$
+    \item Policy: MLP taking $[s, z]$ as input, outputs action
+\end{itemize}
+
+\textbf{Deployment:}
+When grasping a new object:
+\begin{enumerate}
+    \item Execute initial motion with nominal parameters
+    \item Collect transitions during this motion
+    \item Infer context $z$ from transitions
+    \item Continue with adapted behavior based on $z$
+\end{enumerate}
+
+The context automatically encodes information like effective inertia, allowing the policy to compensate for unknown payload without explicit mass identification.
+\end{example}
+
+\subsection{Sim-to-Real with Limited Real Data}
+
+Often we have very limited real data---perhaps a single trajectory or a few minutes of operation. Specialized techniques handle this extreme low-data regime.
+
+\subsubsection{One-Shot/Few-Shot Adaptation}
+
+With only a handful of real trajectories, full policy fine-tuning is impossible. Instead:
+\begin{itemize}
+    \item \textbf{Reward adaptation:} Adjust the reward function to match observed real-world costs
+    \item \textbf{Dynamics residual:} Learn a small correction to simulation dynamics from real data
+    \item \textbf{Action transformation:} Learn a mapping from simulation-optimal actions to real-optimal actions
+\end{itemize}
+
+\subsubsection{Dynamics Residual Learning}
+
+Learn a residual model that corrects simulation predictions:
+\begin{equation}
+\hat{s}_{t+1} = f_{\text{sim}}(s_t, a_t) + \Delta f_\phi(s_t, a_t)
+\label{eq:dynamics_residual}
+\end{equation}
+
+The residual $\Delta f_\phi$ is learned from real data to correct systematic errors in the simulation. Because the residual only needs to capture the \textit{difference} between simulation and reality (rather than the full dynamics), it can be learned from limited data.
+
+Regularization is crucial to prevent overfitting:
+\begin{equation}
+\mathcal{L} = \sum_j \| s_{j+1}^{\text{real}} - \hat{s}_{j+1} \|^2 + \lambda \| \Delta f_\phi \|^2
+\end{equation}
+
+The regularization encourages small residuals, with the simulation providing most of the prediction.
+
+\subsubsection{Action Transformation}
+
+Learn a transformation from simulation actions to real actions:
+\begin{equation}
+a_{\text{real}} = g_\phi(a_{\text{sim}}, s)
+\label{eq:action_transform}
+\end{equation}
+
+If the simulation policy is $\pi_{\text{sim}}$, the deployed policy is:
+\begin{equation}
+\pi_{\text{real}}(s) = g_\phi(\pi_{\text{sim}}(s), s)
+\end{equation}
+
+The transformation $g_\phi$ is learned from paired (simulation action, real optimal action) data. This approach is effective when the simulation policy has the right ``shape'' but needs systematic correction (e.g., actuator calibration errors).
+
+%===============================================================================
+\section{Progressive Networks and Fine-Tuning}
+\label{sec:progressive_networks}
+%===============================================================================
+
+Standard transfer learning overwrites simulation-trained weights with real-world adaptations. This risks catastrophic forgetting: useful simulation knowledge is lost as the network adapts to limited real data. Progressive networks and related architectures provide an alternative: they preserve simulation knowledge in frozen columns while adding new capacity for real-world adaptation.
+
+\subsection{Progressive Neural Networks}
+
+Progressive networks add new ``columns'' (network pathways) for each new domain while preserving previous columns:
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.9]
+    % Column 1 (Simulation) - frozen
+    \node[draw, thick, minimum width=1.5cm, minimum height=0.8cm, fill=UofSCGrey50] (sim1) at (0, 0) {$h_1^{(1)}$};
+    \node[draw, thick, minimum width=1.5cm, minimum height=0.8cm, fill=UofSCGrey50] (sim2) at (0, 1.5) {$h_2^{(1)}$};
+    \node[draw, thick, minimum width=1.5cm, minimum height=0.8cm, fill=UofSCGrey50] (sim3) at (0, 3) {$h_3^{(1)}$};
+    \node[draw, thick, minimum width=1.5cm, minimum height=0.8cm, fill=UofSCGrey50] (simout) at (0, 4.5) {$\pi^{(1)}$};
+
+    % Arrows within column 1
+    \draw[->, thick] (sim1) -- (sim2);
+    \draw[->, thick] (sim2) -- (sim3);
+    \draw[->, thick] (sim3) -- (simout);
+
+    % Column 2 (Real) - trainable
+    \node[draw, thick, minimum width=1.5cm, minimum height=0.8cm, fill=white] (real1) at (4, 0) {$h_1^{(2)}$};
+    \node[draw, thick, minimum width=1.5cm, minimum height=0.8cm, fill=white] (real2) at (4, 1.5) {$h_2^{(2)}$};
+    \node[draw, thick, minimum width=1.5cm, minimum height=0.8cm, fill=white] (real3) at (4, 3) {$h_3^{(2)}$};
+    \node[draw, thick, minimum width=1.5cm, minimum height=0.8cm, fill=white] (realout) at (4, 4.5) {$\pi^{(2)}$};
+
+    % Arrows within column 2
+    \draw[->, thick] (real1) -- (real2);
+    \draw[->, thick] (real2) -- (real3);
+    \draw[->, thick] (real3) -- (realout);
+
+    % Lateral connections
+    \draw[->, thick, UofSCGarnet] (sim1.east) -- (real2.west);
+    \draw[->, thick, UofSCGarnet] (sim2.east) -- (real3.west);
+    \draw[->, thick, UofSCGarnet] (sim3.east) -- (realout.west);
+
+    % Input
+    \node (input) at (2, -1.5) {Input $s$};
+    \draw[->, thick] (input) -- (sim1);
+    \draw[->, thick] (input) -- (real1);
+
+    % Labels
+    \node[font=\small] at (0, 5.3) {Simulation};
+    \node[font=\small] at (0, 5.7) {(frozen)};
+    \node[font=\small] at (4, 5.3) {Real};
+    \node[font=\small] at (4, 5.7) {(trainable)};
+
+    % Lateral connection label
+    \node[font=\small, UofSCGarnet] at (2, 2.5) {lateral};
+    \node[font=\small, UofSCGarnet] at (2, 2.1) {connections};
+
+\end{tikzpicture}
+\caption{Progressive network architecture for sim-to-real transfer. The simulation column (left, shaded) is frozen after pre-training. The real column (right, white) is trained on real data with lateral connections that allow it to leverage simulation features.}
+\label{fig:progressive_network}
+\end{figure}
+
+\subsubsection{Architecture}
+
+Let $h_i^{(k)}$ denote the hidden activations at layer $i$ of column $k$. For the simulation column ($k=1$):
+\begin{equation}
+h_i^{(1)} = f(W_i^{(1)} h_{i-1}^{(1)} + b_i^{(1)})
+\end{equation}
+
+For the real column ($k=2$) with lateral connections:
+\begin{equation}
+h_i^{(2)} = f\left(W_i^{(2)} h_{i-1}^{(2)} + \sum_{j<k} U_i^{(j:2)} h_{i-1}^{(j)} + b_i^{(2)}\right)
+\label{eq:progressive_layer}
+\end{equation}
+
+The matrices $U_i^{(j:k)}$ are \textit{lateral connections} that allow column $k$ to access features from all previous columns $j < k$. The simulation column weights $W^{(1)}$ are frozen; only the real column weights $W^{(2)}$, $U^{(1:2)}$, and $b^{(2)}$ are trained.
+
+\subsubsection{Advantages}
+
+Progressive networks offer several benefits for sim-to-real transfer:
+
+\begin{enumerate}
+    \item \textbf{No forgetting:} Simulation knowledge is preserved exactly in the frozen column.
+
+    \item \textbf{Selective transfer:} Lateral connections learn which simulation features are useful for reality. Irrelevant or misleading features can be ignored.
+
+    \item \textbf{Capacity for new knowledge:} The real column can learn behaviors not present in simulation.
+
+    \item \textbf{Graceful scaling:} Additional domains (e.g., different robots) can be added as new columns.
+\end{enumerate}
+
+\subsubsection{Disadvantages}
+
+The approach has drawbacks:
+
+\begin{enumerate}
+    \item \textbf{Increased parameters:} Each new domain adds a full column of parameters.
+
+    \item \textbf{Quadratic growth:} Lateral connections grow quadratically with the number of columns.
+
+    \item \textbf{Computational overhead:} All columns must be evaluated at inference time.
+
+    \item \textbf{No backward transfer:} Knowledge learned in later columns does not improve earlier ones.
+\end{enumerate}
+
+\subsection{Adapter Layers}
+
+A parameter-efficient alternative to progressive networks is to add small \textit{adapter} modules to a frozen simulation-trained network:
+
+\begin{equation}
+h_i' = h_i + A_i(h_i)
+\label{eq:adapter}
+\end{equation}
+
+where $A_i$ is a small adapter module (typically a bottleneck MLP) inserted after layer $i$.
+
+The adapter architecture is:
+\begin{equation}
+A_i(h) = W_{\text{up}} \cdot \sigma(W_{\text{down}} \cdot h)
+\end{equation}
+where $W_{\text{down}} \in \mathbb{R}^{r \times d}$ projects to a low-dimensional bottleneck of dimension $r \ll d$, and $W_{\text{up}} \in \mathbb{R}^{d \times r}$ projects back.
+
+Only the adapter parameters are trained; the main network remains frozen. This is far more parameter-efficient than progressive networks while still enabling adaptation.
+
+\begin{example}[Adapter-Based Sim-to-Real for Manipulation]
+\label{ex:adapter_manipulation}
+We train a simulation policy for block stacking using a 6-layer MLP with hidden dimension 256. Total parameters: approximately 400,000.
+
+For real-world adaptation, we add adapter layers after each hidden layer:
+\begin{itemize}
+    \item Bottleneck dimension: $r = 16$
+    \item Adapter parameters per layer: $256 \times 16 + 16 \times 256 = 8,192$
+    \item Total adapter parameters: $6 \times 8,192 = 49,152$
+\end{itemize}
+
+The adapter adds only 12\% new parameters while enabling real-world adaptation. Training the adapters requires significantly less real data than training the full network.
+
+After collecting 30 minutes of real-world interaction:
+\begin{itemize}
+    \item Full fine-tuning: Overfits, performance degrades
+    \item Adapter fine-tuning: Stable improvement, performance approaches simulation
+\end{itemize}
+\end{example}
+
+\subsection{Low-Rank Adaptation (LoRA)}
+
+Low-Rank Adaptation (LoRA) is a popular technique from language models that applies well to control policies. Instead of adding separate adapter modules, LoRA modifies the weight matrices themselves:
+
+\begin{equation}
+W' = W + \Delta W = W + BA
+\label{eq:lora}
+\end{equation}
+
+where $W \in \mathbb{R}^{m \times n}$ is the frozen pre-trained weight, and $\Delta W = BA$ is a low-rank update with $B \in \mathbb{R}^{m \times r}$ and $A \in \mathbb{R}^{r \times n}$ for rank $r \ll \min(m, n)$.
+
+Only $A$ and $B$ are trained; $W$ remains frozen. The low-rank structure dramatically reduces trainable parameters while allowing meaningful adaptation.
+
+\subsubsection{Rank Selection}
+
+The rank $r$ controls the capacity for adaptation:
+\begin{itemize}
+    \item $r = 1$: Minimal adaptation, essentially a scalar scaling
+    \item $r = 4$-$16$: Typical range, good tradeoff
+    \item $r = d$: Full-rank, equivalent to fine-tuning
+\end{itemize}
+
+Lower rank is more regularizing but may limit adaptation capability. The optimal rank depends on the magnitude of sim-to-real mismatch.
+
+\subsection{Layer-wise Fine-Tuning Strategies}
+
+Not all layers require equal adaptation. Lower layers often learn general features (edge detection, basic dynamics) that transfer well, while upper layers learn task-specific features that may need more adaptation.
+
+\subsubsection{Gradual Unfreezing}
+
+Start with all layers frozen, then progressively unfreeze from top to bottom:
+
+\begin{enumerate}
+    \item Epoch 1-10: Train only output layer
+    \item Epoch 11-20: Train output layer + last hidden layer
+    \item Epoch 21-30: Train output layer + last two hidden layers
+    \item Continue until all layers unfrozen or performance plateaus
+\end{enumerate}
+
+This allows upper layers to adapt first, providing appropriate targets for lower layers when they are unfrozen.
+
+\subsubsection{Discriminative Learning Rates}
+
+Use different learning rates for different layers:
+\begin{equation}
+\eta_i = \eta_{\text{base}} \cdot \gamma^{L-i}
+\label{eq:discriminative_lr}
+\end{equation}
+where $i$ is the layer index (1 = input, $L$ = output) and $\gamma < 1$ (typically 0.5-0.9).
+
+Lower layers receive smaller learning rates, preserving learned features while allowing upper layers to adapt more aggressively.
+
+\subsubsection{Layer-wise Importance}
+
+Compute importance scores for each layer based on sensitivity analysis:
+\begin{equation}
+I_i = \mathbb{E} \left[ \left\| \frac{\partial \mathcal{L}}{\partial W_i} \right\|_F \right]
+\end{equation}
+
+Layers with high importance for real-world performance should receive more capacity for adaptation (higher rank in LoRA, more unfreezing).
+
+\subsection{Practical Fine-Tuning Protocol}
+
+Based on extensive experience, I recommend the following protocol for sim-to-real fine-tuning:
+
+\begin{enumerate}
+    \item \textbf{Evaluate zero-shot transfer:} Before any fine-tuning, deploy the simulation policy on hardware. Measure baseline performance and identify failure modes.
+
+    \item \textbf{Collect diagnostic data:} Run the simulation policy on hardware and record observations, actions, and outcomes. Analyze where simulation and reality diverge.
+
+    \item \textbf{Choose adaptation strategy:} Based on available real data:
+    \begin{itemize}
+        \item $< 100$ transitions: Use LoRA or adapters with strong regularization
+        \item $100$-$1000$ transitions: Adapter fine-tuning or gradual unfreezing
+        \item $> 1000$ transitions: Full fine-tuning becomes feasible
+    \end{itemize}
+
+    \item \textbf{Set conservative hyperparameters:}
+    \begin{itemize}
+        \item Learning rate: 10-100x smaller than simulation training
+        \item Batch size: Match simulation or smaller
+        \item Early stopping: Monitor validation performance aggressively
+    \end{itemize}
+
+    \item \textbf{Iterate with evaluation:} Fine-tune, evaluate on hardware, collect more data, repeat. Each iteration should improve or at least maintain performance.
+\end{enumerate}
+
+\keypoint{The goal of fine-tuning is not to maximize performance on the limited real dataset, but to improve real-world deployment performance. Always validate on hardware between fine-tuning iterations.}
+
+%===============================================================================
+\section{Robust Control for Transfer}
+\label{sec:robust_control_transfer}
+%===============================================================================
+
+The previous sections focused on learning-based approaches to sim-to-real transfer. Classical robust control offers a complementary perspective: design controllers that guarantee stability and performance despite bounded model uncertainty. This approach trades optimal performance for guaranteed robustness, providing formal assurances that learning-based methods typically cannot.
+
+\subsection{Uncertainty Modeling for Robust Control}
+
+Robust control requires explicit models of uncertainty. The reality gap is represented as a set $\mathcal{P}$ of possible plants, with the true plant $P_{\text{real}} \in \mathcal{P}$. The controller must perform acceptably for all $P \in \mathcal{P}$.
+
+\subsubsection{Parametric Uncertainty}
+
+Parameters are known to lie within bounds:
+\begin{equation}
+\xi \in \Xi = \{\xi : \underline{\xi} \leq \xi \leq \overline{\xi}\}
+\end{equation}
+
+For example, mass $m \in [0.8 m_{\text{nom}}, 1.2 m_{\text{nom}}]$. The plant family is:
+\begin{equation}
+\mathcal{P} = \{P(\xi) : \xi \in \Xi\}
+\end{equation}
+
+\subsubsection{Unstructured Uncertainty}
+
+Dynamics errors are modeled as bounded perturbations:
+\begin{equation}
+P_{\text{real}}(s) = P_{\text{nom}}(s)(1 + W(s)\Delta(s))
+\label{eq:multiplicative_uncertainty}
+\end{equation}
+where $W(s)$ is a known weighting function capturing the frequency-dependent uncertainty magnitude, and $\Delta(s)$ is an unknown stable transfer function with $\|\Delta\|_\infty \leq 1$.
+
+The weighting function $W(s)$ is designed based on knowledge of where the model is uncertain:
+\begin{equation}
+W(s) = \frac{\tau s + r_0}{s/r_\infty + 1}
+\end{equation}
+with low-frequency uncertainty $r_0$ (typically 0.1-0.2 for 10-20\% error), high-frequency uncertainty $r_\infty$ (often $>1$ at high frequencies where models are poor), and crossover time constant $\tau$.
+
+\subsubsection{Additive Uncertainty}
+
+Alternatively, model uncertainty as additive:
+\begin{equation}
+P_{\text{real}}(s) = P_{\text{nom}}(s) + W_a(s)\Delta_a(s)
+\end{equation}
+
+This is appropriate when the absolute error magnitude is known better than the relative error.
+
+\subsection{Robust Stability Analysis}
+
+A controller $K$ is robustly stable for the plant family $\mathcal{P}$ if the closed-loop system is stable for all $P \in \mathcal{P}$.
+
+\subsubsection{Small Gain Theorem}
+
+For multiplicative uncertainty (Equation~\ref{eq:multiplicative_uncertainty}), robust stability is guaranteed if:
+\begin{equation}
+\|W(s)T(s)\|_\infty < 1
+\label{eq:robust_stability_condition}
+\end{equation}
+where $T(s) = \frac{P_{\text{nom}}K}{1 + P_{\text{nom}}K}$ is the complementary sensitivity function.
+
+This condition states that the loop gain must be less than 1 at all frequencies where uncertainty is large. High uncertainty at high frequencies (typical) requires the controller to roll off at high frequencies.
+
+\subsubsection{Structured Singular Value ($\mu$)}
+
+For structured uncertainty (multiple uncertain parameters), the structured singular value $\mu$ provides tighter stability bounds than the small gain theorem:
+\begin{equation}
+\mu_\Delta(M) < 1 \quad \Rightarrow \quad \text{robust stability}
+\end{equation}
+where $M$ is the system matrix and the $\mu$ computation accounts for the structure of $\Delta$.
+
+$\mu$-analysis is more complex but less conservative than small-gain for structured problems. Software tools (MATLAB Robust Control Toolbox) automate $\mu$ computation.
+
+\subsection{Robust Performance}
+
+Robust stability ensures the system does not go unstable; robust performance ensures it performs well despite uncertainty.
+
+\subsubsection{Mixed Sensitivity Design}
+
+The mixed sensitivity problem seeks a controller minimizing:
+\begin{equation}
+\min_K \left\| \begin{bmatrix} W_1 S \\ W_2 KS \\ W_3 T \end{bmatrix} \right\|_\infty
+\label{eq:mixed_sensitivity}
+\end{equation}
+where:
+\begin{itemize}
+    \item $S = (1 + PK)^{-1}$ is the sensitivity function
+    \item $W_1$ penalizes tracking error (should be small at low frequencies)
+    \item $W_2$ penalizes control effort
+    \item $W_3 = W$ enforces robust stability
+\end{itemize}
+
+This $\mathcal{H}_\infty$ synthesis problem can be solved efficiently using Riccati equations or LMI methods.
+
+\subsubsection{$\mu$-Synthesis}
+
+For simultaneous robust stability and robust performance with structured uncertainty, $\mu$-synthesis iterates between:
+\begin{enumerate}
+    \item $\mathcal{H}_\infty$ controller synthesis for scaled plant
+    \item $\mu$ upper bound computation and D-scale optimization
+\end{enumerate}
+
+This D-K iteration typically converges to near-optimal robust controllers.
+
+\subsection{Adaptive Control for Transfer}
+
+Adaptive control adjusts controller parameters online to compensate for model uncertainty. This provides an alternative to robust control: rather than designing for worst-case uncertainty, adapt to the actual plant.
+
+\subsubsection{Model Reference Adaptive Control (MRAC)}
+
+MRAC adjusts controller parameters so the closed-loop system matches a reference model:
+\begin{equation}
+\dot{x} = A_m x + B_m r
+\end{equation}
+where $A_m$, $B_m$ define the desired closed-loop behavior.
+
+For a plant with unknown parameters:
+\begin{equation}
+\dot{x} = Ax + Bu = (A^* + \Delta A)x + (B^* + \Delta B)u
+\end{equation}
+the MRAC controller is:
+\begin{equation}
+u = K_x(t) x + K_r(t) r
+\end{equation}
+with adaptation laws:
+\begin{align}
+\dot{K}_x &= -\Gamma_x e x^T P B_m \\
+\dot{K}_r &= -\Gamma_r e r^T P B_m
+\end{align}
+where $e = x - x_m$ is the tracking error and $P$ solves the Lyapunov equation $A_m^T P + PA_m = -Q$.
+
+\subsubsection{$\mathcal{L}_1$ Adaptive Control}
+
+$\mathcal{L}_1$ adaptive control separates adaptation from control, providing robustness guarantees:
+
+\begin{enumerate}
+    \item \textbf{State predictor:} Estimates plant state with adaptive parameter estimates
+    \item \textbf{Adaptation law:} Updates parameter estimates based on prediction error
+    \item \textbf{Control law:} Low-pass filtered to ensure bounded control despite fast adaptation
+\end{enumerate}
+
+The key insight is that fast adaptation can be destabilizing if directly fed to the plant. The low-pass filter limits the bandwidth of adaptive adjustments, trading adaptation speed for robustness.
+
+\begin{example}[Robust Control Design for Quadrotor with Uncertain Mass]
+\label{ex:robust_quadrotor}
+We design a robust altitude controller for a quadrotor with uncertain total mass. The nominal mass is $m_{\text{nom}} = 1.5$ kg, but payload adds up to 0.5 kg of uncertainty.
+
+\textbf{Plant model:}
+\begin{equation}
+P(s) = \frac{1}{ms^2} = \frac{1}{m_{\text{nom}}s^2} \cdot \frac{m_{\text{nom}}}{m}
+\end{equation}
+
+The multiplicative uncertainty is:
+\begin{equation}
+\frac{P_{\text{real}}}{P_{\text{nom}}} = \frac{m_{\text{nom}}}{m} \in \left[\frac{1.5}{2.0}, \frac{1.5}{1.5}\right] = [0.75, 1.0]
+\end{equation}
+
+We model this as $1 + W\Delta$ with $W = 0.25$ (constant, since the uncertainty is frequency-independent).
+
+\textbf{Controller design:}
+For robust stability, we need $|WT| < 1$, so $|T| < 4$. A PD controller:
+\begin{equation}
+K(s) = K_p + K_d s = 50 + 15s
+\end{equation}
+
+The complementary sensitivity with nominal plant is:
+\begin{equation}
+T(s) = \frac{K_p + K_d s}{m_{\text{nom}}s^2 + K_d s + K_p} = \frac{50 + 15s}{1.5s^2 + 15s + 50}
+\end{equation}
+
+Computing $\|T\|_\infty = 1.08 < 4$, so robust stability is satisfied with margin.
+
+\textbf{Verification:}
+We verify closed-loop stability for $m \in [1.5, 2.0]$ kg:
+\begin{itemize}
+    \item $m = 1.5$ kg: $\omega_n = 5.77$ rad/s, $\zeta = 0.87$ (nominal)
+    \item $m = 2.0$ kg: $\omega_n = 5.0$ rad/s, $\zeta = 0.75$ (still well-damped)
+\end{itemize}
+
+The robust controller provides guaranteed stability and acceptable performance across the entire mass range.
+\end{example}
+
+\subsection{Combining Robust Control with Learning}
+
+Robust control and learning-based methods are complementary:
+
+\subsubsection{Robust Outer Loop}
+
+Use a learned policy for high-level decisions while a robust low-level controller ensures stability:
+
+\begin{equation}
+u = K_{\text{robust}}(x, x_{\text{ref}}) \quad \text{where} \quad x_{\text{ref}} = \pi_\theta(s)
+\end{equation}
+
+The learned policy $\pi_\theta$ outputs reference trajectories; the robust controller $K_{\text{robust}}$ tracks these references. Even if the learned policy produces imperfect references, the robust controller maintains stability.
+
+\subsubsection{Learning within Robust Constraints}
+
+Constrain the learned policy to satisfy robustness conditions:
+\begin{equation}
+\pi^* = \arg\max_\pi J(\pi) \quad \text{s.t.} \quad \|W T_\pi\|_\infty < 1
+\end{equation}
+
+This ensures the learned policy, when combined with nominal control, satisfies robust stability.
+
+\subsubsection{Robust Residual Learning}
+
+Learn a residual on top of a robust baseline:
+\begin{equation}
+u = u_{\text{robust}}(x) + \alpha \cdot \Delta u_\theta(x)
+\label{eq:robust_residual}
+\end{equation}
+
+The scaling factor $\alpha \in [0, 1]$ limits the residual's magnitude. At $\alpha = 0$, we have the pure robust controller. As $\alpha$ increases, the learned residual contributes more. This allows smooth interpolation between robust baseline and learned behavior.
+
+\warningbox{Robust control provides guarantees only within the modeled uncertainty set. If reality lies outside this set, guarantees are void. Combine robust design with realistic uncertainty modeling.}
+
+%===============================================================================
+\section{Hardware Deployment Considerations}
+\label{sec:hardware_deployment}
+%===============================================================================
+
+Training a policy in simulation is only half the battle. Deploying that policy on real hardware introduces a host of practical challenges: real-time computation constraints, communication latency, sensor synchronization, safety monitoring, and graceful degradation. This section addresses these engineering realities that determine whether a theoretically sound policy actually works on a physical system.
+
+\subsection{Real-Time Computation Constraints}
+
+Physical systems operate in continuous time. Controllers must produce outputs at consistent rates matching the system's dynamics. Failing to meet timing deadlines can destabilize the system.
+
+\subsubsection{Control Loop Timing Requirements}
+
+Different systems require different control rates:
+
+\begin{table}[htbp]
+\centering
+\caption{Typical control loop frequencies for various applications}
+\label{tab:control_frequencies}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Application} & \textbf{Frequency} & \textbf{Loop Period} \\
+\midrule
+Thermal control & 0.1--1 Hz & 1--10 s \\
+Mobile robot navigation & 10--50 Hz & 20--100 ms \\
+Drone attitude control & 100--500 Hz & 2--10 ms \\
+Robot arm control & 100--1000 Hz & 1--10 ms \\
+Force control / haptics & 1000--10000 Hz & 0.1--1 ms \\
+Motor current control & 10000--50000 Hz & 20--100 $\mu$s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The control loop must complete within each period, including:
+\begin{enumerate}
+    \item Sensor reading and processing
+    \item Network communication (if applicable)
+    \item Policy inference
+    \item Command transmission to actuators
+\end{enumerate}
+
+\subsubsection{Neural Network Inference Latency}
+
+Large neural network policies may be too slow for real-time control. Consider a policy with:
+\begin{itemize}
+    \item 3 hidden layers, 256 units each
+    \item Input dimension: 100
+    \item Output dimension: 12
+\end{itemize}
+
+Approximate inference FLOPS:
+\begin{equation}
+\text{FLOPS} \approx 2 \times (100 \times 256 + 256 \times 256 + 256 \times 256 + 256 \times 12) \approx 320,000
+\end{equation}
+
+On a modern CPU at 10 GFLOPS effective throughput: $\approx 32 \mu$s per inference. This is fast enough for most robotic applications but may be marginal for high-frequency control.
+
+For larger networks (convolutional, transformer-based), inference becomes a bottleneck:
+
+\begin{table}[htbp]
+\centering
+\caption{Typical inference latencies for different architectures}
+\label{tab:inference_latency}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Architecture} & \textbf{CPU} & \textbf{GPU} & \textbf{Edge TPU} \\
+\midrule
+3-layer MLP (256 units) & 30--100 $\mu$s & 50--200 $\mu$s* & 10--50 $\mu$s \\
+ResNet-18 & 10--50 ms & 2--5 ms & 5--15 ms \\
+ViT-Small & 50--200 ms & 5--20 ms & 20--50 ms \\
+Transformer (1M params) & 5--20 ms & 1--5 ms & 5--15 ms \\
+Diffusion (100 steps) & 1--10 s & 100--500 ms & N/A \\
+\bottomrule
+\multicolumn{4}{l}{\small *GPU latency includes data transfer overhead, often dominating small networks}
+\end{tabular}
+\end{table}
+
+\subsubsection{Strategies for Fast Inference}
+
+Several techniques reduce inference latency:
+
+\textbf{Model compression:}
+\begin{itemize}
+    \item \textit{Pruning:} Remove low-magnitude weights
+    \item \textit{Quantization:} Use INT8 or INT4 instead of FP32
+    \item \textit{Knowledge distillation:} Train a smaller student to mimic a larger teacher
+\end{itemize}
+
+\textbf{Architecture optimization:}
+\begin{itemize}
+    \item Use efficient architectures (MobileNet, EfficientNet)
+    \item Reduce input resolution for vision
+    \item Use shallow networks where possible
+\end{itemize}
+
+\textbf{Hardware acceleration:}
+\begin{itemize}
+    \item GPU inference (requires careful batching for efficiency)
+    \item Edge TPUs, NPUs (optimized for quantized models)
+    \item FPGA implementation (lowest latency, highest engineering effort)
+\end{itemize}
+
+\textbf{Hierarchical control:}
+\begin{itemize}
+    \item Fast low-level controller at high frequency (PD, impedance)
+    \item Slow high-level policy at low frequency
+    \item High-level policy outputs setpoints for low-level controller
+\end{itemize}
+
+\begin{example}[Hierarchical Control for Vision-Based Manipulation]
+\label{ex:hierarchical_control}
+A vision-based manipulation policy uses a ResNet-18 encoder and transformer decoder. End-to-end inference takes 15 ms on an embedded GPU---too slow for 1 kHz robot control.
+
+\textbf{Solution: Hierarchical architecture}
+
+\textit{Low-level controller (1 kHz):}
+\begin{itemize}
+    \item Runs on real-time CPU
+    \item Impedance controller tracking Cartesian setpoints
+    \item Receives setpoints from high-level policy
+    \item Latency: $< 100 \mu$s
+\end{itemize}
+
+\textit{High-level policy (50 Hz):}
+\begin{itemize}
+    \item Runs on GPU
+    \item Processes camera images
+    \item Outputs Cartesian setpoints and stiffness parameters
+    \item Latency: 15 ms (within 20 ms deadline)
+\end{itemize}
+
+The low-level controller provides smooth, stable tracking even when high-level commands arrive at only 50 Hz. The impedance formulation provides compliance during the 20 ms between high-level updates.
+\end{example}
+
+\subsection{Communication Latency and Jitter}
+
+Real systems involve communication between sensors, controllers, and actuators. This communication introduces latency and timing variability (jitter).
+
+\subsubsection{Sources of Latency}
+
+\textbf{Sensor acquisition:}
+\begin{itemize}
+    \item Camera exposure time + readout: 5-50 ms
+    \item Image processing pipeline: 10-100 ms
+    \item Encoder/IMU: typically $< 1$ ms
+\end{itemize}
+
+\textbf{Communication bus:}
+\begin{itemize}
+    \item CAN bus: 1-5 ms round trip
+    \item EtherCAT: 0.1-1 ms round trip
+    \item USB: 1-10 ms (highly variable)
+    \item WiFi: 5-50 ms (highly variable)
+\end{itemize}
+
+\textbf{Computation:}
+\begin{itemize}
+    \item Operating system scheduling: 0-10 ms (non-RT OS)
+    \item Policy inference: varies widely (see above)
+\end{itemize}
+
+\subsubsection{Impact on Control Performance}
+
+Latency affects closed-loop stability. For a second-order system with delay $\tau$:
+\begin{equation}
+P(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2} e^{-\tau s}
+\end{equation}
+
+The phase margin reduction due to delay is approximately:
+\begin{equation}
+\Delta \phi \approx \omega_c \tau \cdot \frac{180}{\pi}
+\end{equation}
+where $\omega_c$ is the crossover frequency.
+
+For 10 ms delay and 10 rad/s crossover: $\Delta \phi \approx 5.7°$. This may seem small, but compounds with other phase losses and can push marginally stable systems into instability.
+
+\subsubsection{Latency Compensation}
+
+Several techniques compensate for known latency:
+
+\textbf{Smith predictor:} For processes with significant delay, the Smith predictor uses a model to predict the undelayed plant output:
+\begin{equation}
+C_{\text{Smith}} = \frac{C}{1 + C(P_m - P_m e^{-\hat{\tau}s})}
+\end{equation}
+where $P_m$ is the plant model and $\hat{\tau}$ is the estimated delay.
+
+\textbf{State extrapolation:} Predict the current state from delayed measurements:
+\begin{equation}
+\hat{x}(t) = f_{\text{predict}}(x(t-\tau), u(t-\tau:t))
+\end{equation}
+
+For linear systems, this is straightforward using the state transition matrix. For nonlinear systems, forward simulation or learned predictors can be used.
+
+\textbf{Action delay buffer:} Train the policy with simulated delays, and deploy with a buffer that stores and applies actions with appropriate timing.
+
+\subsubsection{Handling Jitter}
+
+Variable latency (jitter) is more challenging than constant latency. Strategies include:
+
+\begin{itemize}
+    \item \textbf{Fixed-delay buffering:} Add artificial delay to make total delay constant at the maximum observed latency
+    \item \textbf{Adaptive estimation:} Estimate current latency and adjust compensation
+    \item \textbf{Robust design:} Design for worst-case latency
+\end{itemize}
+
+\subsection{Sensor Synchronization}
+
+Multi-sensor systems require careful synchronization. If camera and IMU data are misaligned, sensor fusion produces incorrect state estimates.
+
+\subsubsection{Hardware Synchronization}
+
+The gold standard is hardware synchronization using trigger signals:
+\begin{itemize}
+    \item Master clock generates sync pulses
+    \item All sensors capture simultaneously on pulse
+    \item Timestamps are hardware-generated, not software-assigned
+\end{itemize}
+
+Many industrial systems support IEEE 1588 Precision Time Protocol (PTP) for sub-microsecond synchronization over Ethernet.
+
+\subsubsection{Software Synchronization}
+
+When hardware sync is unavailable:
+\begin{itemize}
+    \item Timestamp all messages at arrival
+    \item Interpolate/extrapolate to common timestamps
+    \item Use Kalman filters to fuse asynchronous measurements
+\end{itemize}
+
+For visual-inertial systems, this is particularly important: IMU data at 200 Hz must be interpolated to camera times at 30 Hz.
+
+\subsection{Safety Monitoring and Intervention}
+
+Deployed systems must fail safely. Safety monitoring watches for dangerous conditions and intervenes when necessary.
+
+\subsubsection{Watchdog Timers}
+
+Hardware watchdogs detect controller failures:
+\begin{equation}
+\text{If } t_{\text{last\_heartbeat}} > T_{\text{watchdog}} \text{ then } \text{EMERGENCY\_STOP}
+\end{equation}
+
+The controller must periodically ``pet'' the watchdog by sending heartbeat signals. If computation hangs or crashes, the watchdog triggers a safe shutdown.
+
+\subsubsection{Kinematic and Dynamic Limits}
+
+Monitor for violations of physical limits:
+\begin{itemize}
+    \item Joint position limits: $q_{\min} < q < q_{\max}$
+    \item Joint velocity limits: $|\dot{q}| < \dot{q}_{\max}$
+    \item Cartesian workspace limits
+    \item Force/torque limits
+    \item Self-collision detection
+\end{itemize}
+
+When limits are approached, the safety system can:
+\begin{enumerate}
+    \item Warn the controller (soft limit)
+    \item Override commanded actions (velocity limiting)
+    \item Emergency stop (hard limit)
+\end{enumerate}
+
+\subsubsection{Anomaly Detection}
+
+Learned monitors detect unusual behavior:
+\begin{equation}
+\text{If } \|s - \hat{s}\| > \epsilon \text{ then } \text{FLAG\_ANOMALY}
+\end{equation}
+
+where $\hat{s}$ is the expected state from a learned dynamics model or the simulation policy's expected trajectory.
+
+Large prediction errors indicate either model mismatch or unexpected external events---both warrant caution.
+
+\subsubsection{Fallback Controllers}
+
+When the primary (learned) controller fails or is flagged, fallback controllers take over:
+
+\begin{enumerate}
+    \item \textbf{Safe controller:} Simple, proven controller that maintains basic stability (e.g., PD to hold position)
+    \item \textbf{Graceful degradation:} Reduced-capability mode that avoids dangerous behaviors
+    \item \textbf{Emergency stop:} Controlled shutdown that minimizes damage
+\end{enumerate}
+
+The transition between controllers must be smooth to avoid discontinuities:
+\begin{equation}
+u(t) = \alpha(t) u_{\text{primary}} + (1-\alpha(t)) u_{\text{fallback}}
+\end{equation}
+where $\alpha(t)$ ramps from 1 to 0 over a transition period.
+
+\begin{example}[Safety System for Autonomous Drone]
+\label{ex:safety_drone}
+An autonomous drone uses a learned policy for aggressive flight. The safety system implements multiple layers:
+
+\textbf{Layer 1: Watchdog (hardware)}
+\begin{itemize}
+    \item Flight controller expects heartbeat every 50 ms
+    \item If missed, switches to attitude-hold mode
+    \item After 500 ms without heartbeat, initiates controlled descent
+\end{itemize}
+
+\textbf{Layer 2: Geofence (software)}
+\begin{itemize}
+    \item Defines allowed flight volume as convex polytope
+    \item If drone approaches boundary, controller receives repulsive force
+    \item If drone exits boundary, immediate return-to-home
+\end{itemize}
+
+\textbf{Layer 3: Dynamics monitoring}
+\begin{itemize}
+    \item Compares IMU data to expected dynamics
+    \item Detects motor failures, sensor faults, external disturbances
+    \item Triggers appropriate response (reconfigure, land, emergency stop)
+\end{itemize}
+
+\textbf{Layer 4: Battery monitoring}
+\begin{itemize}
+    \item Tracks remaining capacity and current draw
+    \item Estimates remaining flight time
+    \item Initiates return-to-home with safety margin
+\end{itemize}
+
+This layered approach ensures that no single failure causes a crash. Each layer provides defense against different failure modes.
+\end{example}
+
+\subsection{Deployment Infrastructure}
+
+Practical deployment requires supporting infrastructure beyond the control algorithm itself.
+
+\subsubsection{Logging and Telemetry}
+
+Comprehensive logging is essential for debugging and improvement:
+\begin{itemize}
+    \item Log all sensor readings with timestamps
+    \item Log all commanded and executed actions
+    \item Log internal policy states (if applicable)
+    \item Log safety system states and interventions
+\end{itemize}
+
+For learning-based systems, logged data enables offline analysis, identifying failure modes, and collecting data for fine-tuning.
+
+\subsubsection{Remote Monitoring}
+
+Real-time telemetry allows operators to monitor system health:
+\begin{itemize}
+    \item Key state variables (position, velocity, battery)
+    \item Safety system status
+    \item Performance metrics
+    \item Alerts and warnings
+\end{itemize}
+
+Visualization tools help operators understand system behavior and intervene when necessary.
+
+\subsubsection{Update and Rollback}
+
+Deployed systems need mechanisms to update policies and roll back if updates cause problems:
+\begin{itemize}
+    \item Version-controlled policy files
+    \item A/B testing between policy versions
+    \item Automatic rollback if performance degrades
+    \item Safe testing modes for new policies
+\end{itemize}
+
+\subsubsection{Edge Computing Considerations}
+
+Embedded systems have constraints not present in simulation:
+
+\begin{itemize}
+    \item \textbf{Memory:} Limited RAM may not fit large networks
+    \item \textbf{Storage:} Model files must fit in flash/disk
+    \item \textbf{Power:} Battery-powered systems have energy budgets
+    \item \textbf{Thermal:} Sustained computation generates heat, may require throttling
+\end{itemize}
+
+Model optimization (pruning, quantization, compilation) addresses these constraints. Profile on target hardware, not development machines.
+
+%===============================================================================
+\section{Practical Applications}
+\label{sec:practical_applications_sim2real}
+%===============================================================================
+
+This section presents comprehensive worked examples covering the full spectrum of sim-to-real transfer techniques. Each example is designed to be self-contained, with explicit numerical values and step-by-step procedures that you can apply to your own problems.
+
+\begin{example}[Complete Domain Randomization Setup for Robotic Arm]
+\label{ex:complete_domain_rand}
+We design a complete domain randomization scheme for training a reaching policy for a 7-DOF robot arm.
+
+\textbf{Problem Statement:}
+Train a policy that moves the end-effector to random target positions. The simulation uses nominal robot parameters from CAD models; the real robot has unknown parameter variations.
+
+\textbf{Step 1: Identify uncertain parameters}
+
+We categorize parameters by their impact on dynamics:
+
+\textit{High impact (randomize aggressively):}
+\begin{itemize}
+    \item Link masses: $m_i \sim \text{Uniform}(0.85 m_i^{\text{nom}}, 1.15 m_i^{\text{nom}})$
+    \item Joint friction: $\mu_i \sim \text{Uniform}(0.5\mu_i^{\text{nom}}, 2.0\mu_i^{\text{nom}})$
+    \item Motor torque constants: $K_{t,i} \sim \text{Uniform}(0.9 K_{t,i}^{\text{nom}}, 1.1 K_{t,i}^{\text{nom}})$
+\end{itemize}
+
+\textit{Medium impact:}
+\begin{itemize}
+    \item Link center of mass: $\mathbf{c}_i \sim \mathcal{N}(\mathbf{c}_i^{\text{nom}}, (0.01 L_i)^2 I_3)$ where $L_i$ is link length
+    \item Joint damping: $b_i \sim \text{Uniform}(0.5 b_i^{\text{nom}}, 1.5 b_i^{\text{nom}})$
+\end{itemize}
+
+\textit{Low impact (narrow randomization):}
+\begin{itemize}
+    \item Link lengths: $L_i \sim \mathcal{N}(L_i^{\text{nom}}, (0.001 L_i)^2)$ (manufacturing tolerance)
+    \item Gear ratios: Fixed (well-specified by manufacturer)
+\end{itemize}
+
+\textbf{Step 2: Sensor randomization}
+
+\begin{itemize}
+    \item Joint position noise: $\sigma_q \sim \text{Uniform}(0.0005, 0.002)$ rad
+    \item Joint velocity noise: $\sigma_{\dot{q}} \sim \text{Uniform}(0.001, 0.01)$ rad/s
+    \item Observation delay: $d \sim \text{DiscreteUniform}(0, 3)$ timesteps at 100 Hz = 0-30 ms
+    \item Position sensor bias: $b_q \sim \mathcal{N}(0, 0.001^2)$ rad (small encoder errors)
+\end{itemize}
+
+\textbf{Step 3: Action randomization}
+
+\begin{itemize}
+    \item Action noise: $\epsilon_a \sim \mathcal{N}(0, 0.02^2)$ (proportional to action range)
+    \item Action delay: $d_a \sim \text{DiscreteUniform}(1, 3)$ timesteps
+    \item Torque limits: $\tau_{\max} \sim \text{Uniform}(0.85 \tau_{\max}^{\text{nom}}, 1.0 \tau_{\max}^{\text{nom}})$
+\end{itemize}
+
+\textbf{Step 4: External disturbances}
+
+\begin{itemize}
+    \item External force on end-effector: $\mathbf{F}_{\text{ext}} \sim \mathcal{N}(0, 2^2)$ N, applied randomly
+    \item Gravity variation: $g \sim \text{Uniform}(9.78, 9.82)$ m/s$^2$ (altitude variation)
+\end{itemize}
+
+\textbf{Step 5: Implementation}
+
+At the start of each episode, sample all parameters:
+\begin{align*}
+\xi &= \{m_1, \ldots, m_7, \mu_1, \ldots, \mu_7, K_{t,1}, \ldots, K_{t,7}, \ldots\} \\
+\xi &\sim p(\xi) = \prod_j p(\xi_j)
+\end{align*}
+
+Configure the simulator with these parameters and train for the full episode (typically 100-500 timesteps).
+
+\textbf{Step 6: Curriculum (optional)}
+
+Start with reduced randomization and gradually increase:
+\begin{equation}
+\alpha_{\text{epoch}} = \min\left(1, \frac{\text{epoch}}{100}\right)
+\end{equation}
+
+Apply randomization ranges: $[\xi^{\text{nom}} - \alpha_{\text{epoch}} \Delta\xi, \xi^{\text{nom}} + \alpha_{\text{epoch}} \Delta\xi]$
+
+\textbf{Results:}
+After training for 10 million timesteps with this randomization:
+\begin{itemize}
+    \item Simulation success rate: 95\% (vs. 99\% without randomization)
+    \item Real robot success rate: 87\% (vs. 45\% without randomization)
+    \item Transfer gap: 8 percentage points (vs. 54 pp without randomization)
+\end{itemize}
+\end{example}
+
+\begin{example}[Calibrating Simulation Dynamics to Real Hardware]
+\label{ex:calibrating_simulation}
+We calibrate a quadrotor simulation to match the dynamics of a physical drone.
+
+\textbf{Problem Statement:}
+Our simulation uses idealized dynamics. We want to identify the true parameters of our physical quadrotor to reduce the sim-to-real gap.
+
+\textbf{Step 1: Data collection}
+
+Design excitation experiments:
+
+\textit{Experiment 1: Thrust identification}
+\begin{itemize}
+    \item Command constant motor speeds: $\omega \in \{3000, 4000, 5000, 6000, 7000\}$ RPM
+    \item Measure thrust using load cell
+    \item Record voltage, current, and RPM
+\end{itemize}
+
+\textit{Experiment 2: Drag identification}
+\begin{itemize}
+    \item Fly quadrotor at constant velocity in calm conditions
+    \item Command velocities: $v \in \{1, 2, 3, 4, 5\}$ m/s
+    \item Record steady-state attitude (tilt indicates drag)
+\end{itemize}
+
+\textit{Experiment 3: Moment of inertia identification}
+\begin{itemize}
+    \item Command oscillating roll/pitch commands
+    \item Record angular acceleration and motor commands
+    \item Use system ID to extract inertia
+\end{itemize}
+
+\textbf{Step 2: Thrust curve fitting}
+
+From Experiment 1, fit thrust model:
+\begin{equation}
+T = k_T \omega^2
+\end{equation}
+
+Data:
+\begin{center}
+\begin{tabular}{cc}
+\toprule
+$\omega$ (RPM) & $T$ (N) \\
+\midrule
+3000 & 0.45 \\
+4000 & 0.82 \\
+5000 & 1.28 \\
+6000 & 1.85 \\
+7000 & 2.52 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Least squares fit: $k_T = 5.14 \times 10^{-8}$ N/RPM$^2$
+
+Residual check: Maximum error 3.2\%, acceptable.
+
+\textbf{Step 3: Drag coefficient estimation}
+
+At steady-state forward flight, tilt angle $\theta$ satisfies:
+\begin{equation}
+mg \tan\theta = D = \frac{1}{2}\rho v^2 C_D A
+\end{equation}
+
+Measured tilt angles:
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+$v$ (m/s) & $\theta$ (deg) & $C_D A$ (m$^2$) \\
+\midrule
+1 & 2.1 & 0.0108 \\
+2 & 8.5 & 0.0112 \\
+3 & 18.7 & 0.0109 \\
+4 & 31.0 & 0.0103 \\
+5 & 43.5 & 0.0091 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Average: $C_D A = 0.0105$ m$^2$. Note decrease at high speed suggests flow regime change---use velocity-dependent model if needed.
+
+\textbf{Step 4: Inertia identification}
+
+From oscillation experiments, the roll dynamics approximately satisfy:
+\begin{equation}
+I_{xx} \ddot{\phi} = \tau_\phi
+\end{equation}
+
+Recording $\ddot{\phi}$ from gyroscope derivative (filtered) and $\tau_\phi$ from motor model:
+
+Least squares fit gives: $I_{xx} = 0.0032$ kg$\cdot$m$^2$
+
+Similarly: $I_{yy} = 0.0031$ kg$\cdot$m$^2$, $I_{zz} = 0.0055$ kg$\cdot$m$^2$
+
+\textbf{Step 5: Update simulation}
+
+Update simulator with identified parameters:
+\begin{align}
+k_T &= 5.14 \times 10^{-8} \text{ N/RPM}^2 \quad \text{(was } 4.9 \times 10^{-8}\text{)} \\
+C_D A &= 0.0105 \text{ m}^2 \quad \text{(was } 0.008\text{)} \\
+I_{xx} &= 0.0032 \text{ kg}\cdot\text{m}^2 \quad \text{(was } 0.003\text{)}
+\end{align}
+
+\textbf{Step 6: Validation}
+
+Compare simulation and reality on a validation trajectory not used for identification:
+\begin{itemize}
+    \item Before calibration: RMS position error = 0.35 m over 10 s trajectory
+    \item After calibration: RMS position error = 0.12 m
+\end{itemize}
+
+The 3x reduction in prediction error demonstrates successful calibration.
+\end{example}
+
+\begin{example}[Progressive Fine-Tuning from Simulation]
+\label{ex:progressive_finetuning}
+We apply progressive fine-tuning to adapt a manipulation policy from simulation to reality.
+
+\textbf{Problem Statement:}
+A grasping policy trained in simulation achieves 90\% success in simulation but only 60\% on the real robot. We have limited real-world data (200 grasp attempts) for adaptation.
+
+\textbf{Step 1: Analyze failure modes}
+
+From the 200 real attempts (120 successes, 80 failures), categorize failures:
+\begin{itemize}
+    \item Grasp position errors: 45\% of failures
+    \item Grip force insufficient: 30\% of failures
+    \item Collision during approach: 15\% of failures
+    \item Other/unknown: 10\% of failures
+\end{itemize}
+
+This suggests perception (position estimation) is the primary issue.
+
+\textbf{Step 2: Architecture analysis}
+
+The policy has structure:
+\begin{itemize}
+    \item Visual encoder: ResNet-18 (11M parameters)
+    \item Policy head: 3-layer MLP (50K parameters)
+\end{itemize}
+
+Given limited data, full fine-tuning of 11M parameters will overfit. We choose layer-wise adaptation.
+
+\textbf{Step 3: Progressive unfreezing schedule}
+
+\textit{Phase 1 (Epochs 1-20):} Train only policy head
+\begin{itemize}
+    \item Freeze visual encoder completely
+    \item Learning rate: $10^{-4}$
+    \item Purpose: Adapt output mapping for real actions
+\end{itemize}
+
+\textit{Phase 2 (Epochs 21-40):} Unfreeze final encoder block
+\begin{itemize}
+    \item Unfreeze ResNet layer4 (2M parameters)
+    \item Learning rate: $10^{-5}$ for encoder, $10^{-4}$ for head
+    \item Purpose: Adapt high-level visual features
+\end{itemize}
+
+\textit{Phase 3 (Epochs 41-60):} Unfreeze more encoder
+\begin{itemize}
+    \item Unfreeze ResNet layer3 (additional 1M parameters)
+    \item Learning rate: $10^{-6}$ for layer3, $10^{-5}$ for layer4, $10^{-4}$ for head
+    \item Purpose: Deeper visual adaptation if still improving
+\end{itemize}
+
+\textbf{Step 4: Training procedure}
+
+Loss function combines behavior cloning and simulation replay:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{BC}}^{\text{real}} + 0.5 \cdot \mathcal{L}_{\text{BC}}^{\text{sim}} + 0.1 \cdot \mathcal{L}_{\text{KL}}
+\end{equation}
+where:
+\begin{itemize}
+    \item $\mathcal{L}_{\text{BC}}^{\text{real}}$: Behavior cloning loss on successful real grasps
+    \item $\mathcal{L}_{\text{BC}}^{\text{sim}}$: Replay loss on simulation data (prevents forgetting)
+    \item $\mathcal{L}_{\text{KL}}$: KL divergence to original policy (regularization)
+\end{itemize}
+
+\textbf{Step 5: Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Phase} & \textbf{Real Success Rate} & \textbf{Improvement} \\
+\midrule
+Before fine-tuning & 60\% & --- \\
+After Phase 1 & 68\% & +8\% \\
+After Phase 2 & 79\% & +11\% \\
+After Phase 3 & 82\% & +3\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Phase 3 shows diminishing returns, suggesting we reached the limit of what 200 samples can teach. The visual encoder's early layers (layer1, layer2) learn generic features that transfer well and don't need adaptation.
+\end{example}
+
+\begin{example}[Real-Time Deployment on Embedded System]
+\label{ex:embedded_deployment}
+We deploy a locomotion policy on a quadruped robot with an embedded computer.
+
+\textbf{Problem Statement:}
+Deploy a neural network locomotion policy on a Jetson Orin Nano (limited GPU, 8GB RAM). The control loop must run at 500 Hz (2 ms period).
+
+\textbf{Step 1: Profile the original policy}
+
+Original architecture:
+\begin{itemize}
+    \item Input: 48-dimensional observation (joint positions, velocities, IMU)
+    \item Network: 3 hidden layers, 512 units each, with LayerNorm
+    \item Output: 12 joint position targets
+    \item Parameters: $\approx$800K
+\end{itemize}
+
+Profiling on Jetson (TensorRT FP16):
+\begin{itemize}
+    \item Inference latency: 0.8 ms average, 1.5 ms worst case
+    \item GPU utilization: 25\%
+    \item Memory: 120 MB model, 3 GB framework overhead
+\end{itemize}
+
+Worst-case 1.5 ms is marginal for 2 ms deadline---need optimization.
+
+\textbf{Step 2: Network optimization}
+
+\textit{Quantization:}
+\begin{itemize}
+    \item Convert to INT8 using TensorRT calibration
+    \item Use 1000 simulation episodes as calibration data
+    \item Verify policy performance degradation $<$ 2\%
+\end{itemize}
+
+Result: Inference drops to 0.4 ms average, 0.8 ms worst case.
+
+\textit{Architecture simplification:}
+\begin{itemize}
+    \item Knowledge distillation to smaller network: 2 layers, 256 units
+    \item Student achieves 97\% of teacher performance
+    \item Parameters reduced to 180K
+\end{itemize}
+
+\textit{LayerNorm removal:}
+\begin{itemize}
+    \item Fold LayerNorm into preceding linear layer for inference
+    \item Eliminates runtime normalization computation
+\end{itemize}
+
+Final profiling:
+\begin{itemize}
+    \item Inference latency: 0.2 ms average, 0.5 ms worst case
+    \item Ample margin for 2 ms deadline
+\end{itemize}
+
+\textbf{Step 3: System integration}
+
+\textit{Control loop structure:}
+\begin{enumerate}
+    \item Read sensors (IMU, joint encoders): 0.1 ms
+    \item Preprocess observations: 0.05 ms
+    \item Policy inference: 0.5 ms (worst case)
+    \item Safety checks: 0.1 ms
+    \item Command actuators: 0.1 ms
+    \item Total: 0.85 ms $<$ 2 ms deadline
+\end{enumerate}
+
+\textit{Real-time considerations:}
+\begin{itemize}
+    \item Pin control thread to dedicated CPU core
+    \item Set real-time priority (SCHED\_FIFO)
+    \item Disable CPU frequency scaling (lock to max)
+    \item Pre-allocate all memory, avoid dynamic allocation in loop
+\end{itemize}
+
+\textbf{Step 4: Deployment code structure}
+
+The main control loop (pseudocode):
+\begin{verbatim}
+def control_loop():
+    while running:
+        t_start = get_time()
+
+        # Read sensors
+        imu = read_imu()
+        joints = read_encoders()
+
+        # Build observation
+        obs = build_observation(imu, joints, prev_action, command)
+
+        # Policy inference
+        action = policy(obs)
+
+        # Safety limiting
+        action = safety_limit(action, joints)
+
+        # Command actuators
+        send_joint_targets(action)
+
+        # Timing
+        elapsed = get_time() - t_start
+        if elapsed > DEADLINE_WARNING:
+            log_warning(elapsed)
+        sleep_until(t_start + PERIOD)
+\end{verbatim}
+
+\textbf{Step 5: Validation}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Development PC} & \textbf{Jetson Orin} \\
+\midrule
+Walking speed & 1.2 m/s & 1.15 m/s \\
+Energy efficiency & 4.2 J/m & 4.4 J/m \\
+Deadline violations & 0\% & 0.01\% \\
+Stability & Stable & Stable \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The embedded deployment achieves near-identical performance to the development system, with negligible deadline violations (1 in 10,000 cycles, handled by safety system).
+\end{example}
+
+\begin{example}[Handling Latency in Visual Control Loop]
+\label{ex:handling_latency}
+We design a latency-aware control system for vision-based drone landing.
+
+\textbf{Problem Statement:}
+A drone must land on a moving platform using visual tracking. Camera-to-action latency is 80 ms (camera: 30 ms, processing: 40 ms, communication: 10 ms). At 2 m/s approach speed, 80 ms delay causes 16 cm prediction error.
+
+\textbf{Step 1: Measure latency}
+
+Use synchronized timestamps to measure each component:
+
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Component} & \textbf{Latency (ms)} \\
+\midrule
+Camera exposure + readout & 20 \\
+Image transfer (USB) & 8 \\
+Neural network inference & 35 \\
+Post-processing & 5 \\
+Command transmission (MAVLink) & 7 \\
+Actuator response & 5 \\
+\midrule
+\textbf{Total} & \textbf{80} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Step 2: State prediction model}
+
+Design predictor to estimate current platform position from delayed observation:
+\begin{equation}
+\hat{\mathbf{p}}(t) = \mathbf{p}(t - \tau) + \hat{\mathbf{v}}(t - \tau) \cdot \tau + \frac{1}{2}\hat{\mathbf{a}}(t - \tau) \cdot \tau^2
+\end{equation}
+
+Platform velocity and acceleration are estimated using a Kalman filter:
+\begin{align}
+\mathbf{x} &= [\mathbf{p}, \mathbf{v}, \mathbf{a}]^T \in \mathbb{R}^9 \\
+\mathbf{F} &= \begin{bmatrix} I & \Delta t \cdot I & \frac{1}{2}\Delta t^2 \cdot I \\ 0 & I & \Delta t \cdot I \\ 0 & 0 & I \end{bmatrix} \\
+\mathbf{H} &= \begin{bmatrix} I & 0 & 0 \end{bmatrix}
+\end{align}
+
+Kalman filter incorporates delayed measurements correctly:
+\begin{itemize}
+    \item Maintain state estimate at current time $t$
+    \item When measurement arrives from time $t - \tau$, retroactively update
+    \item Re-propagate to current time
+\end{itemize}
+
+\textbf{Step 3: Train policy with simulated latency}
+
+During simulation training, inject latency matching measured values:
+\begin{itemize}
+    \item Delay observations by 80 ms (8 timesteps at 100 Hz)
+    \item Provide observation history to policy (last 10 observations)
+    \item Policy learns to implicitly predict and compensate
+\end{itemize}
+
+\textbf{Step 4: Compare approaches}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Approach} & \textbf{Landing Error (cm)} & \textbf{Success Rate} \\
+\midrule
+No compensation & 18.5 & 72\% \\
+State prediction only & 8.2 & 89\% \\
+Trained with latency & 6.1 & 94\% \\
+Both combined & 4.8 & 97\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The combination of explicit state prediction and latency-aware training achieves the best results.
+
+\textbf{Step 5: Adaptive latency handling}
+
+Latency varies in practice. Implement adaptive scheme:
+\begin{itemize}
+    \item Measure end-to-end latency online using timestamps
+    \item Update prediction horizon $\tau$ based on recent measurements
+    \item Adjust prediction uncertainty based on latency variance
+\end{itemize}
+
+When latency spikes (e.g., during high CPU load):
+\begin{itemize}
+    \item Increase prediction uncertainty in Kalman filter
+    \item Reduce approach speed for safety
+    \item Alert operator if latency exceeds safe threshold
+\end{itemize}
+\end{example}
+
+\begin{example}[Safety Monitoring System Design]
+\label{ex:safety_monitoring}
+We design a comprehensive safety monitoring system for a mobile manipulator.
+
+\textbf{Problem Statement:}
+A mobile robot with an arm operates near humans. We need multiple layers of safety monitoring to prevent injury or damage.
+
+\textbf{Step 1: Identify hazards}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Hazard} & \textbf{Consequence} & \textbf{Detection Method} \\
+\midrule
+Collision with human & Injury & Force sensing, proximity \\
+Collision with obstacle & Damage & Force sensing, planning \\
+Loss of control & Runaway & Watchdog, bounds check \\
+Actuator failure & Unexpected motion & Current monitoring \\
+Software crash & Loss of control & Watchdog timer \\
+Communication loss & No commands & Heartbeat timeout \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Step 2: Design monitoring layers}
+
+\textit{Layer 1: Hardware safety (reaction time: $<$ 1 ms)}
+\begin{itemize}
+    \item Hardware watchdog on motor controllers
+    \item Current limits in motor drivers
+    \item Hard-coded joint limits in servo firmware
+    \item Emergency stop button (hardware interrupt)
+\end{itemize}
+
+\textit{Layer 2: Low-level software safety (reaction time: 1-10 ms)}
+\begin{itemize}
+    \item Velocity and torque limiting in real-time controller
+    \item Self-collision checking using geometric model
+    \item Power monitoring (thermal, electrical)
+    \item Communication watchdog
+\end{itemize}
+
+Implementation:
+\begin{align}
+\dot{q}_{\text{safe}} &= \text{clamp}(\dot{q}_{\text{cmd}}, -\dot{q}_{\max}, \dot{q}_{\max}) \\
+\tau_{\text{safe}} &= \text{clamp}(\tau_{\text{cmd}}, -\tau_{\max}, \tau_{\max}) \\
+\text{If } &d_{\text{self}}(q) < d_{\min} \text{ then REDUCE\_SPEED}
+\end{align}
+
+\textit{Layer 3: High-level software safety (reaction time: 10-100 ms)}
+\begin{itemize}
+    \item Workspace boundary monitoring
+    \item Human proximity detection (using depth camera)
+    \item Anomaly detection on policy behavior
+    \item Task-level sanity checks
+\end{itemize}
+
+\textbf{Step 3: Human proximity response}
+
+Define safety zones:
+
+\begin{center}
+\begin{tabular}{lcl}
+\toprule
+\textbf{Zone} & \textbf{Distance} & \textbf{Action} \\
+\midrule
+Green & $>$ 2.0 m & Normal operation \\
+Yellow & 1.0--2.0 m & Reduced speed (50\%) \\
+Orange & 0.5--1.0 m & Minimal speed (20\%), high compliance \\
+Red & $<$ 0.5 m & Stop arm, allow only retreat \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Speed scaling:
+\begin{equation}
+v_{\text{allowed}} = v_{\max} \cdot \begin{cases}
+1.0 & d > 2.0 \\
+0.5 + 0.25(d - 1.0) & 1.0 \leq d \leq 2.0 \\
+0.2 + 0.3(d - 0.5) & 0.5 \leq d < 1.0 \\
+0 & d < 0.5
+\end{cases}
+\end{equation}
+
+\textbf{Step 4: Anomaly detection}
+
+Train an autoencoder on normal operation data:
+\begin{equation}
+\mathcal{L}_{\text{recon}} = \|\mathbf{s} - \text{Dec}(\text{Enc}(\mathbf{s}))\|^2
+\end{equation}
+
+During operation, flag anomalies when reconstruction error exceeds threshold:
+\begin{equation}
+\text{If } \mathcal{L}_{\text{recon}}(\mathbf{s}_t) > \epsilon_{\text{anomaly}} \text{ then ALERT}
+\end{equation}
+
+The threshold $\epsilon_{\text{anomaly}}$ is set to 3$\sigma$ above mean training reconstruction error.
+
+\textbf{Step 5: Fallback behavior}
+
+When safety system activates:
+
+\textit{Soft stop:} Smoothly decelerate to stop
+\begin{equation}
+\dot{q}(t) = \dot{q}_0 \cdot e^{-t/\tau_{\text{stop}}}
+\end{equation}
+with $\tau_{\text{stop}} = 0.2$ s for smooth deceleration.
+
+\textit{Gravity compensation:} After stop, maintain position with gravity compensation only
+\begin{equation}
+\tau = g(q)
+\end{equation}
+
+\textit{Safe retract:} If triggered by proximity, slowly retract to safe configuration
+\begin{equation}
+q_{\text{target}} = q_{\text{home}}; \quad v_{\max} = 0.1 \text{ rad/s}
+\end{equation}
+\end{example}
+
+\begin{example}[Visual Domain Randomization for Outdoor Robot]
+\label{ex:outdoor_visual_rand}
+We train a visual navigation policy for an outdoor ground robot using extensive visual domain randomization.
+
+\textbf{Problem Statement:}
+Train a policy to navigate outdoor environments (parks, sidewalks, trails) using only onboard cameras. Outdoor lighting varies dramatically (sun angle, clouds, shadows), and we cannot capture all variations in simulation.
+
+\textbf{Step 1: Baseline simulation}
+
+Start with a photorealistic outdoor simulator (e.g., CARLA, AirSim). The baseline has:
+\begin{itemize}
+    \item 10 outdoor environments (urban, park, suburban)
+    \item Day/night cycle with fixed sun path
+    \item Clear weather only
+    \item Static objects
+\end{itemize}
+
+Baseline transfer: 70\% success in reality (30\% failure from lighting/texture mismatch).
+
+\textbf{Step 2: Lighting randomization}
+
+\textit{Sun/sky:}
+\begin{itemize}
+    \item Sun elevation: $10°$--$80°$ (avoiding extreme low angles that crash renderer)
+    \item Sun azimuth: $0°$--$360°$
+    \item Sky color: Vary blue hue and brightness
+    \item Cloud coverage: 0\%--100\%
+\end{itemize}
+
+\textit{Ambient lighting:}
+\begin{itemize}
+    \item Ambient intensity: 0.2--1.0 (relative to sun)
+    \item Ambient color: White to warm to cool
+\end{itemize}
+
+\textit{HDR exposure:}
+\begin{itemize}
+    \item Simulate camera auto-exposure
+    \item Random exposure bias: $\pm 1$ stop
+\end{itemize}
+
+\textbf{Step 3: Weather randomization}
+
+\begin{itemize}
+    \item Rain: Wet ground textures, droplets on lens
+    \item Fog: Exponential fog with random density
+    \item Snow: Ground cover, reduced contrast
+    \item Overcast: Diffuse lighting, no shadows
+\end{itemize}
+
+\textbf{Step 4: Texture randomization}
+
+\textit{Ground:}
+\begin{itemize}
+    \item Asphalt, concrete, dirt, grass, gravel textures
+    \item Random scaling and rotation
+    \item Procedural crack and stain overlays
+\end{itemize}
+
+\textit{Vegetation:}
+\begin{itemize}
+    \item Vary foliage density
+    \item Random color (green spectrum)
+    \item Seasonal variation (spring green to fall colors to bare)
+\end{itemize}
+
+\textit{Objects:}
+\begin{itemize}
+    \item Vary colors of cars, buildings, signs
+    \item Random object placement (clutter)
+\end{itemize}
+
+\textbf{Step 5: Camera randomization}
+
+\begin{itemize}
+    \item Field of view: $60°$--$90°$
+    \item Lens distortion: Random barrel/pincushion
+    \item Motion blur: 0--2 pixel blur at edges
+    \item Noise: ISO noise simulation, $\sigma \in [0, 0.02]$
+    \item Color calibration: Random white balance, saturation
+\end{itemize}
+
+\textbf{Step 6: Training with heavy augmentation}
+
+Apply image augmentations after rendering:
+\begin{itemize}
+    \item Random brightness/contrast: $\pm 20\%$
+    \item Random crop and resize
+    \item Random horizontal flip (with corresponding action flip)
+    \item Color jitter: Hue $\pm 10°$, saturation $\pm 20\%$
+    \item Random occlusion: Small random patches
+\end{itemize}
+
+\textbf{Step 7: Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Condition} & \textbf{Sim Success} & \textbf{Real Success} \\
+\midrule
+Baseline & 95\% & 70\% \\
++ Lighting rand. & 92\% & 78\% \\
++ Weather rand. & 88\% & 82\% \\
++ Texture rand. & 85\% & 86\% \\
++ Camera rand. & 82\% & 88\% \\
++ Image aug. & 80\% & 90\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Note the simulation success decreases as we add randomization (task becomes harder) while real success increases (better transfer). Final policy achieves 90\% real-world success, up from 70\% baseline.
+\end{example}
+
+\begin{example}[LoRA Fine-Tuning for Sim-to-Real]
+\label{ex:lora_finetuning}
+We apply Low-Rank Adaptation to efficiently adapt a diffusion policy for manipulation.
+
+\textbf{Problem Statement:}
+A diffusion policy for pick-and-place was trained in simulation on 1 million demonstrations. We have only 100 real-world demonstrations for adaptation. Full fine-tuning would overfit; we use LoRA for parameter-efficient transfer.
+
+\textbf{Step 1: Identify layers to adapt}
+
+The diffusion policy architecture:
+\begin{itemize}
+    \item Image encoder: ViT-Base (86M parameters)
+    \item Noise prediction network: U-Net with attention (150M parameters)
+    \item Total: 236M parameters
+\end{itemize}
+
+Analysis of zero-shot transfer failures:
+\begin{itemize}
+    \item Visual perception: Minor errors (lighting handled by DR)
+    \item Action prediction: Systematic offsets (calibration mismatch)
+\end{itemize}
+
+Focus LoRA on:
+\begin{itemize}
+    \item U-Net attention layers (action prediction)
+    \item Skip ViT (visual features transfer well)
+\end{itemize}
+
+\textbf{Step 2: LoRA configuration}
+
+For each attention weight $W \in \mathbb{R}^{d \times d}$ in the U-Net:
+\begin{equation}
+W' = W + \frac{\alpha}{r} BA
+\end{equation}
+where:
+\begin{itemize}
+    \item $r = 8$ (rank)
+    \item $\alpha = 16$ (scaling factor)
+    \item $B \in \mathbb{R}^{d \times 8}$, $A \in \mathbb{R}^{8 \times d}$
+\end{itemize}
+
+Total LoRA parameters:
+\begin{itemize}
+    \item U-Net has 24 attention layers, each with Q, K, V, O projections
+    \item 24 $\times$ 4 $\times$ 2 $\times$ 8 $\times$ 512 = 3.1M parameters
+    \item Compare to 236M total: 1.3\% of parameters
+\end{itemize}
+
+\textbf{Step 3: Training procedure}
+
+\begin{itemize}
+    \item Initialize $A$ with small random values, $B$ with zeros (initial $\Delta W = 0$)
+    \item Freeze all original weights
+    \item Train only LoRA parameters
+    \item Learning rate: $10^{-4}$
+    \item Batch size: 8
+    \item Epochs: 50 (5000 gradient steps on 100 demos)
+\end{itemize}
+
+Regularization:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{diffusion}} + 0.01 \|\Delta W\|_F^2
+\end{equation}
+
+\textbf{Step 4: Results comparison}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Params} & \textbf{Real Success} & \textbf{Training Time} \\
+\midrule
+Zero-shot & 0 & 62\% & 0 \\
+Full fine-tune & 236M & 58\%* & 4 hours \\
+Last layer only & 1.5M & 68\% & 15 min \\
+LoRA $r=4$ & 1.6M & 74\% & 20 min \\
+LoRA $r=8$ & 3.1M & 78\% & 25 min \\
+LoRA $r=16$ & 6.2M & 76\% & 30 min \\
+\bottomrule
+\multicolumn{4}{l}{\small *Full fine-tune overfits, worse than zero-shot}
+\end{tabular}
+\end{center}
+
+LoRA with $r=8$ provides the best balance: significant improvement over zero-shot without overfitting. Rank 16 shows slight degradation, suggesting too much capacity for the limited data.
+
+\textbf{Step 5: Analysis}
+
+Examine what LoRA learned by comparing $W$ and $W + \Delta W$:
+\begin{itemize}
+    \item Attention patterns shift toward gripper-object relationships
+    \item Action scale adjusts by $\approx 5\%$ (calibration correction)
+    \item Temporal smoothing increases (real robot has more inertia)
+\end{itemize}
+
+These changes are consistent with the identified sim-to-real differences.
+\end{example}
+
+\begin{example}[Iterative Domain Randomization Refinement]
+\label{ex:iterative_dr}
+We demonstrate iterative refinement of domain randomization based on real-world feedback.
+
+\textbf{Problem Statement:}
+Initial domain randomization for a biped robot is too conservative (overly broad ranges slow learning) or misses key variations. We iteratively refine based on real deployment data.
+
+\textbf{Step 1: Initial (broad) randomization}
+
+Start with conservative ranges based on rough estimates:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Parameter} & \textbf{Nominal} & \textbf{Range} \\
+\midrule
+Link masses & CAD values & $\pm 30\%$ \\
+Joint friction & 0.1 Nm/(rad/s) & $\pm 100\%$ \\
+Ground friction & 0.7 & $\pm 50\%$ \\
+Motor strength & 100\% & 70\%--100\% \\
+CoM offset & 0 & $\pm 5$ cm \\
+Observation delay & 5 ms & 0--15 ms \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Step 2: Train and deploy}
+
+Train policy with broad randomization:
+\begin{itemize}
+    \item Training time: 48 hours (ranges are wide, task is hard)
+    \item Simulation success: 75\% (compromised by extreme cases)
+\end{itemize}
+
+Deploy on real robot:
+\begin{itemize}
+    \item Real success: 60\%
+    \item Collect failure data for analysis
+\end{itemize}
+
+\textbf{Step 3: Analyze failures}
+
+Categorize real failures:
+\begin{itemize}
+    \item 50\%: Foot slip (ground friction lower than expected range)
+    \item 30\%: Torque limit hit (motor strength accurately modeled)
+    \item 15\%: Slow reactions (observation delay within range)
+    \item 5\%: Unknown
+\end{itemize}
+
+Key finding: Ground friction in our test environment is 0.3--0.5, below the randomized range $[0.35, 1.05]$.
+
+\textbf{Step 4: System identification}
+
+Conduct friction identification experiments:
+\begin{itemize}
+    \item Slide robot foot on various surfaces
+    \item Measure normal and tangential forces
+    \item Compute friction coefficients
+\end{itemize}
+
+Results:
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Surface} & \textbf{Friction Coefficient} \\
+\midrule
+Lab tile (dry) & 0.45 \\
+Lab tile (wet) & 0.25 \\
+Carpet & 0.65 \\
+Concrete (outdoor) & 0.55 \\
+Grass & 0.40 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Step 5: Refine randomization}
+
+Update ranges based on data:
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Parameter} & \textbf{Old Range} & \textbf{New Range} & \textbf{Rationale} \\
+\midrule
+Ground friction & [0.35, 1.05] & [0.2, 0.7] & Measured data \\
+Link masses & $\pm 30\%$ & $\pm 15\%$ & Overestimated \\
+Joint friction & $\pm 100\%$ & $\pm 50\%$ & Not a failure mode \\
+Observation delay & [0, 15] ms & [3, 10] ms & Measured actual \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Step 6: Retrain and validate}
+
+Retrain with refined ranges:
+\begin{itemize}
+    \item Training time: 30 hours (narrower ranges, faster convergence)
+    \item Simulation success: 88\% (improved from 75\%)
+\end{itemize}
+
+Deploy on real robot:
+\begin{itemize}
+    \item Real success: 82\% (improved from 60\%)
+    \item Failure modes now dominated by edge cases, not systematic mismatch
+\end{itemize}
+
+\textbf{Step 7: Continue iteration}
+
+Further iterations might:
+\begin{itemize}
+    \item Add surface-specific terrain (grass, gravel) not in original sim
+    \item Refine motor model based on torque measurements
+    \item Add wind disturbance randomization for outdoor
+\end{itemize}
+
+Each iteration narrows the gap between simulation and reality.
+\end{example}
+
+\begin{example}[Hybrid Classical-Learned Controller for Transfer]
+\label{ex:hybrid_controller}
+We design a hybrid controller that combines robust classical control with learned components for reliable transfer.
+
+\textbf{Problem Statement:}
+A quadrotor needs aggressive trajectory tracking. Pure classical control is conservative; pure learned control is risky. We combine them for robust aggressive flight.
+
+\textbf{Step 1: Classical baseline controller}
+
+Design a cascaded PID controller:
+
+\textit{Outer loop (position):}
+\begin{align}
+\mathbf{a}_{\text{des}} &= K_p^{\text{pos}}(\mathbf{p}_{\text{ref}} - \mathbf{p}) + K_d^{\text{pos}}(\mathbf{v}_{\text{ref}} - \mathbf{v}) + K_i^{\text{pos}} \int (\mathbf{p}_{\text{ref}} - \mathbf{p}) dt + \mathbf{a}_{\text{ff}}
+\end{align}
+
+\textit{Inner loop (attitude):}
+\begin{align}
+\boldsymbol{\tau}_{\text{des}} &= K_p^{\text{att}}(\mathbf{q}_{\text{des}}^{-1} \otimes \mathbf{q}) + K_d^{\text{att}}(\boldsymbol{\omega}_{\text{des}} - \boldsymbol{\omega})
+\end{align}
+
+This classical controller provides:
+\begin{itemize}
+    \item Guaranteed stability for moderate maneuvers
+    \item Well-understood tuning
+    \item Baseline performance: tracks trajectories up to 2 m/s, 5 m/s$^2$
+\end{itemize}
+
+\textbf{Step 2: Learned residual policy}
+
+Train a neural network residual:
+\begin{equation}
+\mathbf{a}_{\text{total}} = \mathbf{a}_{\text{classical}} + \alpha \cdot \pi_\theta(\mathbf{s})
+\end{equation}
+
+The policy $\pi_\theta$ outputs acceleration corrections. The scaling $\alpha$ limits the residual's authority.
+
+Training:
+\begin{itemize}
+    \item Reward: Trajectory tracking + energy efficiency
+    \item Constraint: Residual bounded, $\|\pi_\theta\| < a_{\max}$
+    \item Domain randomization on dynamics
+\end{itemize}
+
+\textbf{Step 3: Authority scheduling}
+
+The residual authority $\alpha$ varies based on flight regime:
+\begin{equation}
+\alpha = \begin{cases}
+0 & \text{takeoff/landing (safety critical)} \\
+0.3 & \text{normal flight} \\
+0.7 & \text{aggressive maneuvers} \\
+0 & \text{anomaly detected}
+\end{cases}
+\end{equation}
+
+During takeoff/landing, only the proven classical controller operates. During aggressive maneuvers, the learned residual contributes more.
+
+\textbf{Step 4: Anomaly-triggered fallback}
+
+Monitor residual behavior:
+\begin{equation}
+\text{anomaly} = \|\pi_\theta(\mathbf{s})\| > 2 \sigma_{\text{train}} \text{ for } > 0.5 \text{ s}
+\end{equation}
+
+If the residual requests unusually large corrections for extended time, something unexpected is happening. Reduce $\alpha$ to zero and rely on classical controller.
+
+\textbf{Step 5: Results}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Controller} & \textbf{Max Accel.} & \textbf{Tracking Error} & \textbf{Crash Rate} \\
+\midrule
+Classical only & 5 m/s$^2$ & 12 cm & 0\% \\
+Learned only & 15 m/s$^2$ & 8 cm & 3\% \\
+Hybrid ($\alpha=0.3$) & 10 m/s$^2$ & 6 cm & 0.5\% \\
+Hybrid ($\alpha=0.7$) & 15 m/s$^2$ & 5 cm & 0.8\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The hybrid controller achieves most of the learned controller's performance with much better reliability. The classical baseline prevents catastrophic failures even when the learned component misbehaves.
+\end{example}
+
+\begin{example}[System Identification using Differentiable Simulation]
+\label{ex:diff_sim_sysid}
+We use differentiable simulation (from Chapter 18) for gradient-based system identification.
+
+\textbf{Problem Statement:}
+Identify dynamics parameters of a robot arm using a differentiable physics simulator. This enables efficient gradient-based optimization compared to derivative-free methods.
+
+\textbf{Step 1: Setup differentiable simulator}
+
+Using a differentiable physics engine (e.g., Brax, Drake, Nimble), we can compute:
+\begin{equation}
+\frac{\partial \mathbf{s}_{t+1}}{\partial \xi} = \frac{\partial f(\mathbf{s}_t, \mathbf{a}_t; \xi)}{\partial \xi}
+\end{equation}
+
+The gradient of next state with respect to parameters $\xi$ enables efficient optimization.
+
+\textbf{Step 2: Collect real data}
+
+Execute chirp trajectory on real robot:
+\begin{equation}
+\tau_{\text{cmd}}(t) = A \sin(2\pi (f_0 + kt)t)
+\end{equation}
+with $f_0 = 0.5$ Hz, $k = 0.1$ Hz/s, $A = 5$ Nm, for 30 seconds.
+
+Record joint positions, velocities, and torques at 1 kHz: 30,000 samples.
+
+\textbf{Step 3: Define loss function}
+
+Match simulated and real trajectories:
+\begin{equation}
+\mathcal{L}(\xi) = \sum_{t=1}^{T} \left\| \mathbf{q}_t^{\text{real}} - \mathbf{q}_t^{\text{sim}}(\xi) \right\|^2 + \lambda \left\| \dot{\mathbf{q}}_t^{\text{real}} - \dot{\mathbf{q}}_t^{\text{sim}}(\xi) \right\|^2
+\end{equation}
+
+\textbf{Step 4: Gradient descent optimization}
+
+Initialize $\xi$ at nominal values. Iterate:
+\begin{align}
+\xi_{k+1} &= \xi_k - \eta \nabla_\xi \mathcal{L}(\xi_k)
+\end{align}
+
+The gradient $\nabla_\xi \mathcal{L}$ is computed via automatic differentiation through the simulator.
+
+Practical considerations:
+\begin{itemize}
+    \item Use mini-batches of trajectory segments (100 timesteps)
+    \item Adam optimizer with learning rate $10^{-3}$
+    \item Constrain parameters to physically reasonable ranges
+    \item Use multi-step loss, not just single-step
+\end{itemize}
+
+\textbf{Step 5: Results}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Parameter} & \textbf{Nominal} & \textbf{Identified} & \textbf{Change} \\
+\midrule
+$m_1$ (kg) & 2.5 & 2.68 & +7.2\% \\
+$m_2$ (kg) & 1.8 & 1.74 & -3.3\% \\
+$I_1$ (kg$\cdot$m$^2$) & 0.15 & 0.162 & +8.0\% \\
+$\mu_1$ (Nm/(rad/s)) & 0.1 & 0.18 & +80\% \\
+$\mu_2$ (Nm/(rad/s)) & 0.1 & 0.12 & +20\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Friction coefficients changed most significantly---these are hardest to estimate a priori.
+
+\textbf{Step 6: Validation}
+
+On held-out validation trajectory:
+\begin{itemize}
+    \item Before identification: RMS position error = 0.08 rad
+    \item After identification: RMS position error = 0.02 rad
+    \item 4x improvement in prediction accuracy
+\end{itemize}
+
+The differentiable simulation approach converges in $\approx$100 iterations (10 minutes), compared to hours for CMA-ES on this problem.
+\end{example}
+
+\begin{example}[Multi-Stage Transfer Pipeline]
+\label{ex:multistage_transfer}
+We present a complete multi-stage pipeline for transferring a dexterous manipulation policy.
+
+\textbf{Problem Statement:}
+Transfer an in-hand cube rotation policy from simulation to a real dexterous hand. This is extremely challenging due to complex contact dynamics.
+
+\textbf{Stage 1: Simulation training with aggressive randomization}
+
+Training environment:
+\begin{itemize}
+    \item 4096 parallel environments
+    \item Heavy domain randomization (see Example~\ref{ex:complete_domain_rand})
+    \item 500 million timesteps of training
+\end{itemize}
+
+Additional randomizations for dexterous manipulation:
+\begin{itemize}
+    \item Object mass: $\pm 50\%$
+    \item Object friction: 0.3--1.5
+    \item Object size: $\pm 10\%$
+    \item Joint stiffness: $\pm 20\%$
+    \item Tendon routing friction: $\pm 30\%$
+\end{itemize}
+
+Result: 85\% simulation success rate.
+
+\textbf{Stage 2: Simulation validation}
+
+Before hardware, validate in a separate high-fidelity simulator:
+\begin{itemize}
+    \item Use MuJoCo with different contact solver than training (Brax)
+    \item Test on parameter combinations not seen during training
+    \item Identify failure modes
+\end{itemize}
+
+Cross-simulator success: 78\% (indicating some overfitting to training simulator).
+
+\textbf{Stage 3: Initial hardware deployment}
+
+Deploy on real hand with safety monitoring:
+\begin{itemize}
+    \item Start with slow motion (50\% speed)
+    \item Human supervisor with e-stop
+    \item Log all sensory data
+\end{itemize}
+
+Initial hardware success: 35\% (significant reality gap).
+
+\textbf{Stage 4: Failure analysis}
+
+Analyze logged data from hardware trials:
+\begin{itemize}
+    \item Contact timing: Real contact occurs 5-10 ms earlier than predicted
+    \item Force sensing: Real forces 20\% lower than expected (sensor calibration)
+    \item Joint tracking: 3 mm systematic offset on thumb
+\end{itemize}
+
+\textbf{Stage 5: Targeted calibration}
+
+Address identified issues:
+\begin{itemize}
+    \item Recalibrate force sensors: Measure ground truth forces, fit affine correction
+    \item Update kinematic model: Measure actual joint-to-fingertip mapping
+    \item Adjust contact model: Increase simulation contact stiffness
+\end{itemize}
+
+Post-calibration hardware success: 52\% (+17\%).
+
+\textbf{Stage 6: Real-world fine-tuning}
+
+Collect 200 successful real demonstrations via:
+\begin{itemize}
+    \item Policy-assisted teleoperation
+    \item Filtering: Keep only successful rotations
+\end{itemize}
+
+Fine-tune with:
+\begin{itemize}
+    \item LoRA adapters (rank 8) on policy network
+    \item Behavioral cloning loss on real demonstrations
+    \item Replay of simulation data (0.5 mixing ratio)
+\end{itemize}
+
+Post fine-tuning success: 68\% (+16\%).
+
+\textbf{Stage 7: Iterative improvement}
+
+Additional iterations:
+\begin{itemize}
+    \item Collect failures, add to negative examples
+    \item Increase real data ratio in replay buffer
+    \item Careful curriculum: Start with large cubes, progress to small
+\end{itemize}
+
+Final success rate: 78\%.
+
+\textbf{Summary of stages:}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Stage} & \textbf{Success Rate} & \textbf{Improvement} \\
+\midrule
+Simulation & 85\% & baseline \\
+Cross-simulator & 78\% & reality check \\
+Initial hardware & 35\% & transfer baseline \\
+Post-calibration & 52\% & +17\% \\
+Post fine-tuning & 68\% & +16\% \\
+After iteration & 78\% & +10\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The multi-stage approach progressively closes the reality gap, with each stage addressing specific transfer challenges.
+\end{example}
+
+\begin{example}[Uncertainty-Aware Policy for Safe Transfer]
+\label{ex:uncertainty_aware}
+We train a policy that estimates its own uncertainty and acts conservatively when uncertain.
+
+\textbf{Problem Statement:}
+Deploy a manipulation policy that recognizes out-of-distribution situations (e.g., novel objects, unusual lighting) and requests human help rather than failing dangerously.
+
+\textbf{Step 1: Ensemble policy training}
+
+Train an ensemble of $K=5$ policies with different random seeds:
+\begin{equation}
+\{\pi_{\theta_1}, \pi_{\theta_2}, \ldots, \pi_{\theta_5}\}
+\end{equation}
+
+Each policy sees the same training data but converges to different solutions.
+
+\textbf{Step 2: Uncertainty quantification}
+
+For a given observation $\mathbf{s}$, compute action predictions from all ensemble members:
+\begin{equation}
+\{a_1, a_2, \ldots, a_5\} = \{\pi_{\theta_1}(\mathbf{s}), \ldots, \pi_{\theta_5}(\mathbf{s})\}
+\end{equation}
+
+Uncertainty metrics:
+\begin{align}
+\bar{a} &= \frac{1}{K} \sum_{k=1}^{K} a_k \quad \text{(mean action)} \\
+\sigma_a^2 &= \frac{1}{K} \sum_{k=1}^{K} (a_k - \bar{a})^2 \quad \text{(variance)}
+\end{align}
+
+High variance indicates disagreement among ensemble members---the observation is likely out-of-distribution.
+
+\textbf{Step 3: Uncertainty-based action selection}
+
+\begin{equation}
+a = \begin{cases}
+\bar{a} & \text{if } \|\sigma_a\| < \epsilon_{\text{conf}} \\
+a_{\text{safe}} & \text{if } \|\sigma_a\| \geq \epsilon_{\text{conf}}
+\end{cases}
+\end{equation}
+
+When confident, execute the mean action. When uncertain, execute a safe fallback (e.g., stop and ask for help).
+
+\textbf{Step 4: Calibrate uncertainty threshold}
+
+Use a held-out validation set with known in-distribution and out-of-distribution examples:
+\begin{itemize}
+    \item In-distribution: Training objects, normal lighting
+    \item Out-of-distribution: Novel objects, extreme lighting
+\end{itemize}
+
+Choose $\epsilon_{\text{conf}}$ to achieve:
+\begin{itemize}
+    \item True positive rate (detecting OOD) $> 90\%$
+    \item False positive rate (flagging in-dist as OOD) $< 10\%$
+\end{itemize}
+
+Typically: $\epsilon_{\text{conf}} = 2\sigma_{\text{train}}$ where $\sigma_{\text{train}}$ is the average ensemble variance on training data.
+
+\textbf{Step 5: Human-in-the-loop protocol}
+
+When uncertainty exceeds threshold:
+\begin{enumerate}
+    \item Stop current motion
+    \item Display camera image to operator
+    \item Request: ``I'm uncertain about this situation. Should I continue or do you want to take over?''
+    \item If continue: Add this case to training data for future improvement
+\end{enumerate}
+
+\textbf{Step 6: Deployment results}
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Condition} & \textbf{Success} & \textbf{Fail (damage)} & \textbf{Help request} \\
+\midrule
+In-dist, confident & 92\% & 8\% & 0\% \\
+In-dist, uncertain & 75\% & 0\% & 25\% \\
+OOD, confident & 40\% & 60\% & 0\% \\
+OOD, uncertain & 20\% & 5\% & 75\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The uncertainty-aware policy dramatically reduces failures on out-of-distribution cases by requesting help instead of failing. While this requires human oversight, it prevents damage and enables safe data collection for improvement.
+\end{example}
+
+%===============================================================================
+\section{Algorithm Implementations}
+\label{sec:algorithm_implementations_sim2real}
+%===============================================================================
+
+This section provides production-ready algorithms for the core sim-to-real techniques. Each algorithm includes complexity analysis, numerical considerations, and implementation guidance.
+
+\subsection{Domain Randomization Sampler}
+
+The domain randomization sampler generates randomized environment parameters at the start of each episode.
+
+\begin{algorithm}[H]
+\caption{Domain Randomization Parameter Sampler}
+\label{alg:domain_randomization}
+\begin{algorithmic}[1]
+\REQUIRE Parameter specification $\mathcal{S} = \{(n_i, d_i, p_i)\}$ where $n_i$ is name, $d_i$ is distribution type, $p_i$ are distribution parameters
+\REQUIRE Curriculum factor $\alpha \in [0, 1]$
+\ENSURE Randomized parameters $\xi$
+\STATE Initialize empty parameter dictionary $\xi$
+\FOR{each $(n_i, d_i, p_i)$ in $\mathcal{S}$}
+    \IF{$d_i = $ ``uniform''}
+        \STATE $\xi_{\min} \gets p_i.\text{nominal} - \alpha \cdot (p_i.\text{nominal} - p_i.\text{min})$
+        \STATE $\xi_{\max} \gets p_i.\text{nominal} + \alpha \cdot (p_i.\text{max} - p_i.\text{nominal})$
+        \STATE $\xi[n_i] \gets \text{Uniform}(\xi_{\min}, \xi_{\max})$
+    \ELSIF{$d_i = $ ``normal''}
+        \STATE $\sigma \gets \alpha \cdot p_i.\text{std}$
+        \STATE $\xi[n_i] \gets \mathcal{N}(p_i.\text{mean}, \sigma^2)$
+        \STATE $\xi[n_i] \gets \text{clip}(\xi[n_i], p_i.\text{min}, p_i.\text{max})$
+    \ELSIF{$d_i = $ ``loguniform''}
+        \STATE $\log\xi \gets \text{Uniform}(\alpha \cdot \log(p_i.\text{min}), \alpha \cdot \log(p_i.\text{max}))$
+        \STATE $\xi[n_i] \gets \exp(\log\xi)$
+    \ELSIF{$d_i = $ ``categorical''}
+        \STATE $\xi[n_i] \gets \text{RandomChoice}(p_i.\text{options})$
+    \ENDIF
+\ENDFOR
+\RETURN $\xi$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Complexity:} $\mathcal{O}(|\mathcal{S}|)$---linear in the number of parameters.
+
+\textbf{Usage:} Call at the start of each training episode:
+\begin{verbatim}
+spec = [
+    ("mass", "uniform", {"nominal": 1.0, "min": 0.8, "max": 1.2}),
+    ("friction", "loguniform", {"min": 0.1, "max": 1.0}),
+    ("motor_strength", "normal", {"mean": 1.0, "std": 0.1, "min": 0.8, "max": 1.0}),
+]
+params = sample_randomization(spec, alpha=0.5)  # 50% curriculum
+simulator.set_parameters(params)
+\end{verbatim}
+
+\subsection{System Identification via Trajectory Matching}
+
+This algorithm identifies simulation parameters by matching simulated trajectories to real observations.
+
+\begin{algorithm}[H]
+\caption{Gradient-Based System Identification}
+\label{alg:sysid_gradient}
+\begin{algorithmic}[1]
+\REQUIRE Real trajectory data $\mathcal{D} = \{(s_t, a_t, s_{t+1})\}_{t=1}^N$
+\REQUIRE Differentiable simulator $f_{\text{sim}}(s, a; \xi)$
+\REQUIRE Initial parameters $\xi_0$, learning rate $\eta$, iterations $K$
+\REQUIRE Regularization weight $\lambda$, prior parameters $\xi_{\text{prior}}$
+\ENSURE Identified parameters $\xi^*$
+\STATE $\xi \gets \xi_0$
+\FOR{$k = 1$ \TO $K$}
+    \STATE Sample minibatch $\mathcal{B} \subset \mathcal{D}$ of size $B$
+    \STATE $\mathcal{L} \gets 0$
+    \FOR{each $(s_t, a_t, s_{t+1})$ in $\mathcal{B}$}
+        \STATE $\hat{s}_{t+1} \gets f_{\text{sim}}(s_t, a_t; \xi)$
+        \STATE $\mathcal{L} \gets \mathcal{L} + \|s_{t+1} - \hat{s}_{t+1}\|^2$
+    \ENDFOR
+    \STATE $\mathcal{L} \gets \mathcal{L} / B + \lambda \|\xi - \xi_{\text{prior}}\|^2$ \COMMENT{Add regularization}
+    \STATE $\mathbf{g} \gets \nabla_\xi \mathcal{L}$ \COMMENT{Compute gradient via autodiff}
+    \STATE $\xi \gets \xi - \eta \cdot \mathbf{g}$ \COMMENT{Gradient step}
+    \STATE $\xi \gets \text{ProjectToConstraints}(\xi)$ \COMMENT{Enforce bounds}
+\ENDFOR
+\RETURN $\xi$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Complexity:} $\mathcal{O}(K \cdot B \cdot T_{\text{sim}} \cdot |\xi|)$ where $T_{\text{sim}}$ is simulation cost and $|\xi|$ is parameter dimension.
+
+\textbf{Numerical Considerations:}
+\begin{itemize}
+    \item Use Adam optimizer for adaptive learning rates
+    \item Normalize state components to similar scales before computing loss
+    \item Start with large $\lambda$ (strong prior) and reduce over iterations
+    \item Use multi-step prediction loss for longer-horizon accuracy
+\end{itemize}
+
+\subsection{Observation Delay and Noise Injection}
+
+This algorithm adds realistic sensor noise and delay during training.
+
+\begin{algorithm}[H]
+\caption{Observation Noise and Delay Injection}
+\label{alg:obs_noise_delay}
+\begin{algorithmic}[1]
+\REQUIRE True observation $o_t$
+\REQUIRE History buffer $H$ of past observations
+\REQUIRE Noise parameters: $\sigma_{\text{noise}}$, $b_{\text{bias}}$
+\REQUIRE Delay distribution parameters: $d_{\min}$, $d_{\max}$
+\ENSURE Corrupted observation $\tilde{o}_t$
+\STATE \COMMENT{Sample delay (per episode, not per step)}
+\IF{new episode}
+    \STATE $d \gets \text{DiscreteUniform}(d_{\min}, d_{\max})$
+\ENDIF
+\STATE
+\STATE \COMMENT{Add current observation to history}
+\STATE $H.\text{append}(o_t)$
+\IF{$|H| > d_{\max} + 1$}
+    \STATE $H.\text{pop\_oldest}()$
+\ENDIF
+\STATE
+\STATE \COMMENT{Get delayed observation}
+\IF{$|H| > d$}
+    \STATE $o_{\text{delayed}} \gets H[-(d+1)]$
+\ELSE
+    \STATE $o_{\text{delayed}} \gets H[0]$ \COMMENT{Not enough history, use oldest}
+\ENDIF
+\STATE
+\STATE \COMMENT{Add noise and bias}
+\STATE $\epsilon \gets \mathcal{N}(0, \sigma_{\text{noise}}^2 I)$
+\STATE $\tilde{o}_t \gets o_{\text{delayed}} + b_{\text{bias}} + \epsilon$
+\RETURN $\tilde{o}_t$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes:}
+\begin{itemize}
+    \item Bias $b_{\text{bias}}$ is sampled once per episode, not per step
+    \item Noise $\sigma_{\text{noise}}$ can be per-component for different sensor types
+    \item History buffer should use a fixed-size circular buffer for efficiency
+\end{itemize}
+
+\subsection{LoRA Adapter Implementation}
+
+Low-Rank Adaptation for parameter-efficient fine-tuning.
+
+\begin{algorithm}[H]
+\caption{LoRA Layer Forward Pass}
+\label{alg:lora_forward}
+\begin{algorithmic}[1]
+\REQUIRE Input $\mathbf{x} \in \mathbb{R}^{n}$
+\REQUIRE Frozen weight $\mathbf{W} \in \mathbb{R}^{m \times n}$
+\REQUIRE LoRA matrices $\mathbf{A} \in \mathbb{R}^{r \times n}$, $\mathbf{B} \in \mathbb{R}^{m \times r}$
+\REQUIRE Scaling factor $\alpha$, rank $r$
+\ENSURE Output $\mathbf{y} \in \mathbb{R}^{m}$
+\STATE $\mathbf{y}_{\text{base}} \gets \mathbf{W} \mathbf{x}$ \COMMENT{Original forward pass}
+\STATE $\mathbf{h} \gets \mathbf{A} \mathbf{x}$ \COMMENT{Project to low-rank, $\mathcal{O}(rn)$}
+\STATE $\Delta\mathbf{y} \gets \mathbf{B} \mathbf{h}$ \COMMENT{Project back, $\mathcal{O}(mr)$}
+\STATE $\mathbf{y} \gets \mathbf{y}_{\text{base}} + \frac{\alpha}{r} \Delta\mathbf{y}$ \COMMENT{Add scaled residual}
+\RETURN $\mathbf{y}$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{LoRA Initialization and Training}
+\label{alg:lora_init}
+\begin{algorithmic}[1]
+\REQUIRE Pre-trained model with weights $\{W_i\}$
+\REQUIRE Target layers to adapt: $\mathcal{T}$
+\REQUIRE Rank $r$, scaling $\alpha$
+\ENSURE LoRA-augmented model
+\STATE \COMMENT{Initialization}
+\FOR{each layer $i \in \mathcal{T}$}
+    \STATE $n_i, m_i \gets \text{shape}(W_i)$
+    \STATE $A_i \gets \mathcal{N}(0, \sigma^2) \in \mathbb{R}^{r \times n_i}$ \COMMENT{$\sigma = 1/\sqrt{r}$}
+    \STATE $B_i \gets \mathbf{0} \in \mathbb{R}^{m_i \times r}$ \COMMENT{Zero init for identity at start}
+    \STATE Mark $W_i$ as frozen (no gradient)
+    \STATE Mark $A_i, B_i$ as trainable
+\ENDFOR
+\STATE
+\STATE \COMMENT{Training loop}
+\FOR{each batch $(\mathbf{x}, \mathbf{y})$ from real data}
+    \STATE $\hat{\mathbf{y}} \gets \text{forward}(\mathbf{x})$ \COMMENT{Using LoRA-augmented layers}
+    \STATE $\mathcal{L} \gets \text{loss}(\hat{\mathbf{y}}, \mathbf{y})$
+    \STATE Backpropagate through $A_i, B_i$ only (frozen $W_i$ excluded)
+    \STATE Update $A_i, B_i$ with optimizer
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Complexity:}
+\begin{itemize}
+    \item Forward pass overhead: $\mathcal{O}((n + m) \cdot r)$ per layer, compared to $\mathcal{O}(nm)$ for full layer
+    \item For $r \ll \min(n, m)$, overhead is negligible
+    \item Training memory: Only store gradients for $\mathcal{O}((n + m) \cdot r)$ parameters
+\end{itemize}
+
+\subsection{Progressive Network Training}
+
+Training procedure for progressive neural networks with lateral connections.
+
+\begin{algorithm}[H]
+\caption{Progressive Network Forward Pass}
+\label{alg:progressive_forward}
+\begin{algorithmic}[1]
+\REQUIRE Input $\mathbf{x}$
+\REQUIRE Frozen simulation column: $\{W_i^{(1)}, b_i^{(1)}\}_{i=1}^{L}$
+\REQUIRE Trainable real column: $\{W_i^{(2)}, b_i^{(2)}, U_i^{(1:2)}\}_{i=1}^{L}$
+\REQUIRE Activation function $\sigma$
+\ENSURE Output from real column
+\STATE \COMMENT{Forward through simulation column (frozen)}
+\STATE $h_0^{(1)} \gets \mathbf{x}$
+\FOR{$i = 1$ \TO $L$}
+    \STATE $h_i^{(1)} \gets \sigma(W_i^{(1)} h_{i-1}^{(1)} + b_i^{(1)})$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Forward through real column with lateral connections}
+\STATE $h_0^{(2)} \gets \mathbf{x}$
+\FOR{$i = 1$ \TO $L$}
+    \STATE $z_i \gets W_i^{(2)} h_{i-1}^{(2)} + b_i^{(2)}$ \COMMENT{Main path}
+    \STATE $z_i \gets z_i + U_i^{(1:2)} h_{i-1}^{(1)}$ \COMMENT{Lateral from sim}
+    \STATE $h_i^{(2)} \gets \sigma(z_i)$
+\ENDFOR
+\RETURN $h_L^{(2)}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Training:} Only update $\{W_i^{(2)}, b_i^{(2)}, U_i^{(1:2)}\}$. The simulation column provides fixed features that the real column can selectively leverage.
+
+\subsection{Latency-Compensating State Estimator}
+
+Kalman filter with delayed measurement incorporation for latency compensation.
+
+\begin{algorithm}[H]
+\caption{Kalman Filter with Delayed Measurements}
+\label{alg:delayed_kf}
+\begin{algorithmic}[1]
+\REQUIRE State estimate $\hat{\mathbf{x}}_{t}$, covariance $\mathbf{P}_t$
+\REQUIRE Delayed measurement $\mathbf{z}_{t-d}$ with delay $d$
+\REQUIRE State history buffer $\mathcal{H} = \{(\hat{\mathbf{x}}_\tau, \mathbf{P}_\tau, \mathbf{u}_\tau)\}_{\tau=t-d}^{t}$
+\REQUIRE System matrices $\mathbf{F}$, $\mathbf{H}$, $\mathbf{Q}$, $\mathbf{R}$
+\ENSURE Updated state estimate $\hat{\mathbf{x}}_{t}^+$
+\STATE \COMMENT{Retroactive update at measurement time}
+\STATE $(\hat{\mathbf{x}}_{t-d}, \mathbf{P}_{t-d}) \gets \mathcal{H}[t-d]$
+\STATE $\mathbf{K} \gets \mathbf{P}_{t-d} \mathbf{H}^T (\mathbf{H} \mathbf{P}_{t-d} \mathbf{H}^T + \mathbf{R})^{-1}$
+\STATE $\hat{\mathbf{x}}_{t-d}^+ \gets \hat{\mathbf{x}}_{t-d} + \mathbf{K}(\mathbf{z}_{t-d} - \mathbf{H}\hat{\mathbf{x}}_{t-d})$
+\STATE $\mathbf{P}_{t-d}^+ \gets (\mathbf{I} - \mathbf{K}\mathbf{H})\mathbf{P}_{t-d}$
+\STATE
+\STATE \COMMENT{Re-propagate to current time}
+\STATE $\hat{\mathbf{x}} \gets \hat{\mathbf{x}}_{t-d}^+$
+\STATE $\mathbf{P} \gets \mathbf{P}_{t-d}^+$
+\FOR{$\tau = t-d$ \TO $t-1$}
+    \STATE $\mathbf{u}_\tau \gets \mathcal{H}[\tau].\mathbf{u}$
+    \STATE $\hat{\mathbf{x}} \gets \mathbf{F}\hat{\mathbf{x}} + \mathbf{B}\mathbf{u}_\tau$ \COMMENT{Predict}
+    \STATE $\mathbf{P} \gets \mathbf{F}\mathbf{P}\mathbf{F}^T + \mathbf{Q}$
+\ENDFOR
+\RETURN $\hat{\mathbf{x}}, \mathbf{P}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Complexity:} $\mathcal{O}(d \cdot n^3)$ where $d$ is maximum delay and $n$ is state dimension. For real-time use with long delays, consider fixed-lag smoothing approximations.
+
+\subsection{Safety Monitor with Graceful Degradation}
+
+Real-time safety monitoring with layered responses.
+
+\begin{algorithm}[H]
+\caption{Multi-Layer Safety Monitor}
+\label{alg:safety_monitor}
+\begin{algorithmic}[1]
+\REQUIRE Current state $\mathbf{s}$, proposed action $\mathbf{a}$
+\REQUIRE Safe limits: position $\mathbf{q}_{\max}$, velocity $\dot{\mathbf{q}}_{\max}$, torque $\boldsymbol{\tau}_{\max}$
+\REQUIRE Workspace bounds $\mathcal{W}$, collision model $\mathcal{C}$
+\REQUIRE Fallback controller $\pi_{\text{safe}}$
+\ENSURE Safe action $\mathbf{a}_{\text{safe}}$, safety status
+\STATE $\mathbf{a}_{\text{safe}} \gets \mathbf{a}$
+\STATE status $\gets$ NOMINAL
+\STATE
+\STATE \COMMENT{Layer 1: Joint limits}
+\FOR{each joint $i$}
+    \IF{$|q_i| > 0.95 \cdot q_{\max,i}$}
+        \STATE $\mathbf{a}_{\text{safe}}[i] \gets \text{sign}(q_{\max,i} - q_i) \cdot |\mathbf{a}_{\text{safe}}[i]|$ \COMMENT{Push away from limit}
+        \STATE status $\gets$ SOFT\_LIMIT
+    \ENDIF
+    \IF{$|q_i| > q_{\max,i}$}
+        \STATE $\mathbf{a}_{\text{safe}}[i] \gets 0$ \COMMENT{Stop this joint}
+        \STATE status $\gets$ HARD\_LIMIT
+    \ENDIF
+\ENDFOR
+\STATE
+\STATE \COMMENT{Layer 2: Velocity limiting}
+\STATE $\dot{\mathbf{q}}_{\text{pred}} \gets \text{PredictVelocity}(\mathbf{s}, \mathbf{a}_{\text{safe}})$
+\STATE scale $\gets \min(1, \dot{\mathbf{q}}_{\max} / \max(\dot{\mathbf{q}}_{\text{pred}}))$
+\STATE $\mathbf{a}_{\text{safe}} \gets \text{scale} \cdot \mathbf{a}_{\text{safe}}$
+\STATE
+\STATE \COMMENT{Layer 3: Collision avoidance}
+\STATE $d_{\text{collision}} \gets \text{MinDistance}(\mathbf{s}, \mathcal{C})$
+\IF{$d_{\text{collision}} < d_{\text{critical}}$}
+    \STATE $\mathbf{a}_{\text{safe}} \gets \pi_{\text{safe}}(\mathbf{s})$ \COMMENT{Switch to safe controller}
+    \STATE status $\gets$ COLLISION\_IMMINENT
+\ENDIF
+\STATE
+\STATE \COMMENT{Layer 4: Anomaly detection}
+\IF{$\text{IsAnomalous}(\mathbf{s}, \mathbf{a})$}
+    \STATE $\mathbf{a}_{\text{safe}} \gets \mathbf{0}$ \COMMENT{Stop}
+    \STATE status $\gets$ ANOMALY\_DETECTED
+\ENDIF
+\RETURN $\mathbf{a}_{\text{safe}}$, status
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Real-Time Considerations:}
+\begin{itemize}
+    \item Pre-compute collision geometry at initialization
+    \item Use spatial partitioning (octrees) for fast collision queries
+    \item Anomaly detection should be lightweight (threshold-based, not neural network)
+    \item All operations should be $\mathcal{O}(1)$ or $\mathcal{O}(n)$ in state dimension
+\end{itemize}
+
+\subsection{Ensemble Uncertainty Estimation}
+
+Uncertainty quantification using policy ensembles.
+
+\begin{algorithm}[H]
+\caption{Ensemble Policy with Uncertainty}
+\label{alg:ensemble_uncertainty}
+\begin{algorithmic}[1]
+\REQUIRE Observation $\mathbf{s}$
+\REQUIRE Ensemble of $K$ policies $\{\pi_{\theta_1}, \ldots, \pi_{\theta_K}\}$
+\REQUIRE Confidence threshold $\epsilon$
+\REQUIRE Fallback action $\mathbf{a}_{\text{fallback}}$
+\ENSURE Action $\mathbf{a}$, uncertainty $\sigma$, is\_confident flag
+\STATE \COMMENT{Collect ensemble predictions}
+\FOR{$k = 1$ \TO $K$}
+    \STATE $\mathbf{a}_k \gets \pi_{\theta_k}(\mathbf{s})$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Compute mean and variance}
+\STATE $\bar{\mathbf{a}} \gets \frac{1}{K} \sum_{k=1}^{K} \mathbf{a}_k$
+\STATE $\boldsymbol{\sigma}^2 \gets \frac{1}{K} \sum_{k=1}^{K} (\mathbf{a}_k - \bar{\mathbf{a}})^2$
+\STATE $\sigma \gets \sqrt{\text{mean}(\boldsymbol{\sigma}^2)}$ \COMMENT{Scalar uncertainty}
+\STATE
+\STATE \COMMENT{Action selection based on uncertainty}
+\IF{$\sigma < \epsilon$}
+    \STATE $\mathbf{a} \gets \bar{\mathbf{a}}$
+    \STATE is\_confident $\gets$ True
+\ELSE
+    \STATE $\mathbf{a} \gets \mathbf{a}_{\text{fallback}}$
+    \STATE is\_confident $\gets$ False
+    \STATE Log($\mathbf{s}$) for human review \COMMENT{OOD detection}
+\ENDIF
+\RETURN $\mathbf{a}$, $\sigma$, is\_confident
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Complexity:} $\mathcal{O}(K \cdot T_\pi)$ where $T_\pi$ is single policy inference time. For real-time use with large networks, run ensemble members in parallel on GPU.
+
+\textbf{Training:} Ensemble members are trained with different random seeds on the same data. Diversity comes from:
+\begin{itemize}
+    \item Random initialization
+    \item Random minibatch ordering
+    \item Optionally, different subsets of training data (bootstrap)
+\end{itemize}
+
+\subsection{Complete Sim-to-Real Deployment Pipeline}
+
+A comprehensive pipeline combining the above components.
+
+\begin{algorithm}[H]
+\caption{Complete Sim-to-Real Deployment Pipeline}
+\label{alg:complete_pipeline}
+\begin{algorithmic}[1]
+\REQUIRE Trained simulation policy $\pi_{\text{sim}}$
+\REQUIRE Target hardware with sensors and actuators
+\REQUIRE Calibration data collection protocol
+\REQUIRE Safety parameters and fallback controller
+\ENSURE Deployed system
+\STATE
+\STATE \textbf{Phase 1: Initial Assessment}
+\STATE Deploy $\pi_{\text{sim}}$ with conservative limits
+\STATE Collect trajectories, measure zero-shot performance
+\STATE Identify failure modes
+\STATE
+\STATE \textbf{Phase 2: System Identification}
+\STATE Execute calibration trajectories (chirp, multi-sine)
+\STATE Record sensor data at high frequency
+\STATE Run Algorithm~\ref{alg:sysid_gradient} to identify dynamics parameters
+\STATE Update simulation with identified parameters
+\STATE
+\STATE \textbf{Phase 3: Targeted Randomization}
+\STATE Based on identification uncertainty, set randomization ranges
+\STATE Retrain policy with domain randomization (Algorithm~\ref{alg:domain_randomization})
+\STATE Include observation noise/delay (Algorithm~\ref{alg:obs_noise_delay})
+\STATE
+\STATE \textbf{Phase 4: Fine-Tuning}
+\STATE Collect real demonstrations (successful trials)
+\STATE Apply LoRA fine-tuning (Algorithm~\ref{alg:lora_init})
+\STATE Validate on hardware
+\STATE
+\STATE \textbf{Phase 5: Safety Integration}
+\STATE Integrate safety monitor (Algorithm~\ref{alg:safety_monitor})
+\STATE Set up watchdog timers, emergency stop
+\STATE Configure fallback behaviors
+\STATE
+\STATE \textbf{Phase 6: Deployment}
+\STATE Deploy with ensemble uncertainty (Algorithm~\ref{alg:ensemble_uncertainty})
+\STATE Monitor performance, log all data
+\STATE Iterate: collect more data $\to$ fine-tune $\to$ redeploy
+\end{algorithmic}
+\end{algorithm}
+
+This pipeline provides a systematic approach to sim-to-real transfer. Each phase addresses specific challenges, and the iterative structure enables continuous improvement as more real-world data becomes available.
+
+%===============================================================================
+\section{Chapter Summary}
+\label{sec:chapter_summary_sim2real}
+%===============================================================================
+
+This chapter addressed the fundamental challenge of deploying controllers trained in simulation on real physical systems. The reality gap---the mismatch between simulation and reality---is the central obstacle to practical deployment of learning-based and optimization-based controllers.
+
+\subsection{Key Concepts}
+
+\textbf{The Reality Gap} arises from multiple sources:
+\begin{itemize}
+    \item \textit{Dynamics mismatch}: Parametric uncertainty (wrong values) and structural uncertainty (wrong model)
+    \item \textit{Perception mismatch}: Sensor noise, delay, calibration errors, and visual domain shift
+    \item \textit{Actuation mismatch}: Motor dynamics, saturation, backlash, and communication delays
+    \item \textit{Contact mismatch}: Friction modeling, deformable objects, complex interactions
+\end{itemize}
+
+\textbf{Domain Randomization} trains policies on diverse simulated environments, hoping reality lies within the training distribution. Key principles:
+\begin{itemize}
+    \item Randomize physical parameters (mass, friction, damping)
+    \item Randomize sensor characteristics (noise, delay, bias)
+    \item Randomize visual appearance (lighting, textures, backgrounds)
+    \item Randomize actions (noise, delay, limits)
+    \item Use curricula to balance task difficulty and robustness
+\end{itemize}
+
+\textbf{System Identification} calibrates simulation to match reality:
+\begin{itemize}
+    \item Design excitation signals with sufficient spectral content
+    \item Collect trajectory data under known inputs
+    \item Use gradient-based or Bayesian methods to fit parameters
+    \item Validate on held-out trajectories
+    \item Iterate between identification and policy training
+\end{itemize}
+
+\textbf{Domain Adaptation} uses real-world data to refine simulation-trained policies:
+\begin{itemize}
+    \item Fine-tuning with regularization prevents catastrophic forgetting
+    \item Adversarial methods align feature representations
+    \item Meta-learning enables rapid adaptation from few examples
+    \item Residual learning corrects systematic errors
+\end{itemize}
+
+\textbf{Progressive Networks and Fine-Tuning} provide architectures for transfer:
+\begin{itemize}
+    \item Progressive networks preserve simulation knowledge in frozen columns
+    \item Adapters and LoRA enable parameter-efficient adaptation
+    \item Layer-wise strategies adapt different layers at different rates
+\end{itemize}
+
+\textbf{Robust Control for Transfer} guarantees performance despite uncertainty:
+\begin{itemize}
+    \item Model uncertainty explicitly using parametric or unstructured bounds
+    \item $\mathcal{H}_\infty$ and $\mu$-synthesis provide formal robustness guarantees
+    \item Adaptive control adjusts to actual plant characteristics online
+    \item Hybrid approaches combine learned and robust controllers
+\end{itemize}
+
+\textbf{Hardware Deployment} requires engineering discipline:
+\begin{itemize}
+    \item Meet real-time deadlines through network optimization and hierarchical control
+    \item Compensate for latency using state prediction and delay-aware training
+    \item Synchronize multi-sensor systems for consistent state estimation
+    \item Implement layered safety monitoring with graceful degradation
+    \item Build infrastructure for logging, monitoring, and updates
+\end{itemize}
+
+\subsection{The Complete Pipeline}
+
+Successful sim-to-real transfer typically combines multiple techniques:
+
+\begin{enumerate}
+    \item \textbf{Pre-training}: Train in simulation with domain randomization for robustness
+    \item \textbf{Calibration}: Identify key parameters using real data to improve simulation accuracy
+    \item \textbf{Targeted randomization}: Refine randomization ranges based on identification
+    \item \textbf{Initial deployment}: Test on hardware with safety systems, collect failure data
+    \item \textbf{Adaptation}: Fine-tune using real data with parameter-efficient methods
+    \item \textbf{Iteration}: Continuously collect data, refine simulation, and improve policy
+\end{enumerate}
+
+No single technique is sufficient. Domain randomization without calibration may train on unrealistic parameter ranges. System identification without randomization leaves the policy brittle to remaining uncertainties. Hardware deployment without safety systems risks damage. The complete pipeline integrates all approaches.
+
+\subsection{Practical Wisdom}
+
+Based on the examples and analysis in this chapter, I offer these guidelines for practitioners:
+
+\begin{enumerate}
+    \item \textbf{Test on hardware early and often.} Don't wait for a ``perfect'' simulation or policy. Early hardware tests reveal gaps that simulation cannot.
+
+    \item \textbf{Instrument everything.} Comprehensive logging enables offline analysis, failure diagnosis, and data collection for fine-tuning.
+
+    \item \textbf{Design for safety from the start.} Safety systems are not afterthoughts. Build them into the architecture at every level.
+
+    \item \textbf{Expect iteration.} Sim-to-real transfer is not a one-shot process. Plan for multiple rounds of calibration, adaptation, and refinement.
+
+    \item \textbf{Combine approaches.} Use domain randomization for robustness, system ID for accuracy, and adaptation for final refinement.
+
+    \item \textbf{Know your uncertainty.} Quantify what you don't know. Use this to set randomization ranges, design robust controllers, and recognize out-of-distribution situations.
+
+    \item \textbf{Keep baselines.} Maintain fallback controllers that always work. When learned policies fail, safe baselines prevent disasters.
+
+    \item \textbf{Profile on target hardware.} Development machines are not deployment machines. Verify timing, memory, and power on the actual platform.
+\end{enumerate}
+
+\subsection{Looking Forward}
+
+This chapter concludes our journey through modern control systems. We began with first-principles modeling of physical systems and progressed through classical control, state-space methods, optimal control, and learning-based approaches. This final chapter brings everything together: the controllers we design must ultimately work on real hardware in the real world.
+
+The field of sim-to-real transfer continues to advance rapidly. Current research directions include:
+\begin{itemize}
+    \item \textit{Foundation models for robotics}: Large pre-trained models that transfer across tasks and embodiments
+    \item \textit{World models}: Learned simulators that automatically capture real-world dynamics
+    \item \textit{Automatic domain randomization}: Methods that learn optimal randomization from data
+    \item \textit{Zero-shot transfer}: Policies that work on first deployment without adaptation
+    \item \textit{Continuous learning}: Systems that improve throughout deployment lifetime
+\end{itemize}
+
+As simulation becomes more realistic and learning methods more data-efficient, the gap between simulation and reality will narrow. But the fundamental challenge will persist: no simulation can perfectly capture reality, and controllers must be designed to bridge this gap.
+
+The techniques in this chapter---domain randomization, system identification, domain adaptation, robust control, and careful hardware engineering---provide the foundation for successful deployment. Master these approaches, and you will be equipped to take controllers from simulation to reality, from theory to practice, from the laboratory to the field.
+
+\begin{center}
+\rule{0.5\textwidth}{0.5pt}
+\end{center}
+
+\textit{This concludes the main content of Modern Control Systems: From First Principles to Machine Learning. The journey from modeling physical systems to deploying learned controllers on hardware has been long, but the reward is the ability to design control systems that work in the real world. I hope this textbook has provided you with both the theoretical foundations and the practical skills needed for success in modern control engineering.}
+
