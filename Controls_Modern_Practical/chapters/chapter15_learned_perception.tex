@@ -1,0 +1,3204 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Chapter 15: CNN and Transformer Encoders for Control
+% Modern Control Systems: From First Principles to Machine Learning
+% Author: J.C. Vaught
+% University of South Carolina
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{CNN and Transformer Encoders for Control}
+\label{ch:learned_perception}
+
+\whythismatters{
+Modern control systems increasingly operate from high-dimensional sensory data---cameras, lidar, and multi-spectral sensors that classical state estimation cannot handle. A robot manipulating objects needs to understand scene geometry from pixels. An autonomous vehicle must perceive lanes, obstacles, and traffic signs from camera streams. A drone navigating indoors cannot rely on GPS and must extract position estimates from onboard vision.
+
+This chapter introduces the neural network architectures that transform raw sensory data into state representations suitable for control: Convolutional Neural Networks (CNNs) and Vision Transformers (ViTs). You will learn how these architectures extract hierarchical features from images, how the attention mechanism enables global reasoning, and how to design encoder networks that produce state estimates for downstream controllers. We bridge the gap between perception and control, showing how learned representations integrate with the control frameworks developed in earlier chapters.
+
+By mastering this material, you will be equipped to design perception systems that enable control in environments where traditional sensors fail---the frontier of modern robotics and autonomous systems.
+}
+
+%-------------------------------------------------------------------------------
+\section{Learned Perception for Control}
+\label{sec:learned_perception_motivation}
+%-------------------------------------------------------------------------------
+
+Traditional control systems assume access to the state vector $\mathbf{x}(t)$ either directly or through linear observations corrupted by Gaussian noise. The Kalman filter (Chapter 11) elegantly handles the latter case, providing optimal state estimates when the system is linear and noise is Gaussian. But what happens when the ``sensor'' is a camera producing millions of pixels per frame? When the relationship between observations and state is highly nonlinear and cannot be written in closed form?
+
+Consider a pendulum---the canonical example throughout this textbook. In Chapter 1, we assumed we could measure angle $\theta$ directly, perhaps with an encoder. But suppose instead we have only a camera image of the pendulum. The state $\theta$ is \textit{there} in the image---a human can easily identify the pendulum's angle---but extracting it requires understanding image formation, perspective projection, lighting, and background clutter. No closed-form equation relates pixels to angle.
+
+This is where learned perception enters. Neural networks can approximate the complex mapping from high-dimensional observations (images) to low-dimensional state representations (angles, positions, velocities). The key insight is that we don't need to hand-engineer this mapping; we can \textit{learn} it from data.
+
+\subsection{The Perception-Control Pipeline}
+
+In classical control, the pipeline is straightforward:
+\begin{equation}
+\text{Sensor} \rightarrow \text{State Estimator} \rightarrow \text{Controller} \rightarrow \text{Actuator}
+\end{equation}
+
+With learned perception, this becomes:
+\begin{equation}
+\text{Camera/Sensor} \rightarrow \text{Neural Encoder} \rightarrow \text{Latent State } \hat{\mathbf{z}} \rightarrow \text{Controller} \rightarrow \text{Actuator}
+\end{equation}
+
+The neural encoder replaces (or augments) the traditional state estimator. It maps high-dimensional observations $\mathbf{o} \in \mathbb{R}^{H \times W \times C}$ (an image of height $H$, width $W$, and $C$ color channels) to a latent representation $\hat{\mathbf{z}} \in \mathbb{R}^d$ where $d \ll H \times W \times C$.
+
+\keypoint{The neural encoder compresses high-dimensional sensory data into a low-dimensional latent state that captures the information relevant for control. The controller then operates on this latent state rather than raw pixels.}
+
+\subsection{Why Not Just Use Classical Computer Vision?}
+
+Before deep learning, computer vision relied on hand-crafted features: SIFT, SURF, ORB, and similar algorithms detected keypoints and computed descriptors. These approaches work well for specific tasks like image matching but struggle with the diversity of real-world scenes.
+
+For control applications, classical vision pipelines have several limitations:
+
+\begin{enumerate}
+    \item \textbf{Feature engineering requires expertise:} Designing features for each new environment is time-consuming and may not generalize.
+
+    \item \textbf{Brittleness to appearance changes:} Hand-crafted features often fail under lighting variations, occlusions, or novel viewpoints.
+
+    \item \textbf{Difficulty with abstract concepts:} Extracting semantic information (``is this surface graspable?'') is challenging without learning.
+
+    \item \textbf{No end-to-end optimization:} Classical pipelines cannot be jointly optimized with the control objective.
+\end{enumerate}
+
+Learned perception addresses these limitations. Neural networks automatically discover relevant features from data, adapt to diverse conditions, capture semantic information, and can be trained end-to-end with control objectives.
+
+\subsection{Two Dominant Architectures}
+
+Two neural network architectures dominate modern visual perception:
+
+\begin{enumerate}
+    \item \textbf{Convolutional Neural Networks (CNNs):} Exploit the spatial structure of images through local connectivity and weight sharing. CNNs build hierarchical representations, detecting edges at early layers and complex objects at deeper layers. They have been the workhorse of computer vision since 2012.
+
+    \item \textbf{Vision Transformers (ViTs):} Apply the transformer architecture (originally developed for language) to images. ViTs divide images into patches, embed them as tokens, and use self-attention to model global dependencies. Since 2020, ViTs have matched or exceeded CNN performance on many benchmarks.
+\end{enumerate}
+
+We will develop both architectures from first principles, understanding their mathematical foundations before applying them to control problems.
+
+\subsection{What Makes a Good State Representation?}
+
+Before diving into architectures, we should ask: what properties should a learned state representation have for control?
+
+\begin{enumerate}
+    \item \textbf{Task relevance:} The representation should capture information needed for the control task. For a pendulum, we need angle and angular velocity; we don't need background color.
+
+    \item \textbf{Markovian property:} Ideally, the representation satisfies the Markov property---future states depend only on the current representation, not on history. This enables standard control algorithms.
+
+    \item \textbf{Smoothness:} Small changes in physical state should produce small changes in representation. Discontinuous representations make control difficult.
+
+    \item \textbf{Disentanglement:} Different factors of variation (position, orientation, lighting) should map to different dimensions of the representation. This aids interpretability and generalization.
+
+    \item \textbf{Predictability:} A good representation supports prediction of future states and rewards---essential for model-based control.
+\end{enumerate}
+
+These desiderata guide both architecture design and training methodology, which we explore throughout this chapter.
+
+%-------------------------------------------------------------------------------
+\section{Convolutional Neural Networks}
+\label{sec:cnn_fundamentals}
+%-------------------------------------------------------------------------------
+
+Convolutional Neural Networks are the foundation of modern visual perception. Understanding CNNs deeply---not just as black boxes but as mathematical operations with clear interpretations---is essential for designing perception systems for control.
+
+\subsection{The Convolution Operation}
+
+At the heart of CNNs is the \textbf{convolution operation}, a mathematical concept from signal processing that we adapt for images.
+
+\subsubsection{One-Dimensional Convolution}
+
+Let's start with 1D convolution, which you may have encountered in signal processing. Given a discrete signal $x[n]$ and a filter (kernel) $w[k]$ of length $K$, the convolution $y = x * w$ is:
+\begin{equation}
+y[n] = (x * w)[n] = \sum_{k=0}^{K-1} w[k] \cdot x[n - k]
+\label{eq:conv1d}
+\end{equation}
+
+This operation slides the filter across the signal, computing a weighted sum at each position. The filter acts as a template detector: if the signal locally matches the filter pattern, the output is large.
+
+\begin{example}[Edge Detection in 1D]
+Consider the filter $w = [-1, 0, 1]$. Applying this to a signal:
+\begin{align}
+y[n] &= -x[n] + 0 \cdot x[n-1] + x[n-2] \\
+&= x[n-2] - x[n]
+\end{align}
+
+This computes a discrete approximation to the derivative---detecting changes (edges) in the signal. Where the signal is constant, $y[n] \approx 0$. Where the signal changes rapidly, $|y[n]|$ is large.
+\end{example}
+
+\subsubsection{Two-Dimensional Convolution for Images}
+
+Images are 2D signals, so we extend convolution accordingly. Given an image $\mathbf{X} \in \mathbb{R}^{H \times W}$ and a 2D kernel $\mathbf{W} \in \mathbb{R}^{K_H \times K_W}$, the 2D convolution produces output $\mathbf{Y}$:
+\begin{equation}
+\mathbf{Y}[i, j] = (\mathbf{X} * \mathbf{W})[i, j] = \sum_{m=0}^{K_H-1} \sum_{n=0}^{K_W-1} \mathbf{W}[m, n] \cdot \mathbf{X}[i - m, j - n]
+\label{eq:conv2d}
+\end{equation}
+
+\textbf{Technical note:} In deep learning, we typically use \textit{cross-correlation} rather than true convolution (which would flip the kernel). The distinction is irrelevant when kernels are learned, so I'll use ``convolution'' following deep learning convention.
+
+The practical implementation slides the kernel across all spatial positions of the image:
+\begin{equation}
+\mathbf{Y}[i, j] = \sum_{m=0}^{K_H-1} \sum_{n=0}^{K_W-1} \mathbf{W}[m, n] \cdot \mathbf{X}[i + m, j + n]
+\label{eq:conv2d_practical}
+\end{equation}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.6]
+    % Input image grid
+    \foreach \i in {0,...,4} {
+        \foreach \j in {0,...,4} {
+            \draw[thick] (\i, \j) rectangle (\i+1, \j+1);
+        }
+    }
+    \node at (2.5, -0.7) {Input Image $\mathbf{X}$ ($5 \times 5$)};
+
+    % Highlight receptive field
+    \fill[UofSCGarnet, opacity=0.3] (1, 2) rectangle (4, 5);
+
+    % Kernel
+    \begin{scope}[shift={(7, 2)}]
+        \foreach \i in {0,...,2} {
+            \foreach \j in {0,...,2} {
+                \draw[thick, fill=UofSCSandstorm] (\i, \j) rectangle (\i+1, \j+1);
+            }
+        }
+        \node at (1.5, -0.7) {Kernel $\mathbf{W}$ ($3 \times 3$)};
+    \end{scope}
+
+    % Output
+    \begin{scope}[shift={(13, 1.5)}]
+        \foreach \i in {0,...,2} {
+            \foreach \j in {0,...,2} {
+                \draw[thick] (\i, \j) rectangle (\i+1, \j+1);
+            }
+        }
+        \fill[UofSCAtlantic, opacity=0.3] (1, 2) rectangle (2, 3);
+        \node at (1.5, -0.7) {Output $\mathbf{Y}$ ($3 \times 3$)};
+    \end{scope}
+
+    % Arrows
+    \draw[->, thick] (5.3, 2.5) -- (6.7, 2.5);
+    \draw[->, thick] (10.3, 2.5) -- (12.7, 2.5);
+
+    \node at (6, 3) {$*$};
+    \node at (11.5, 3) {$=$};
+\end{tikzpicture}
+\caption{2D convolution operation. The kernel slides across the input image, computing a weighted sum at each position. The highlighted region in the input (receptive field) produces the highlighted output element.}
+\label{fig:conv2d_operation}
+\end{figure}
+
+\subsubsection{Output Dimensions}
+
+For an input of size $H \times W$ and kernel of size $K_H \times K_W$, the output size without padding is:
+\begin{align}
+H_{\text{out}} &= H - K_H + 1 \\
+W_{\text{out}} &= W - K_W + 1
+\end{align}
+
+Each convolution layer shrinks the spatial dimensions. To maintain dimensions, we use \textbf{padding}---adding zeros around the input border. With padding $P$ on each side:
+\begin{align}
+H_{\text{out}} &= H + 2P - K_H + 1 \\
+W_{\text{out}} &= W + 2P - K_W + 1
+\end{align}
+
+``Same'' padding ($P = \lfloor K/2 \rfloor$ for odd kernel sizes) preserves spatial dimensions.
+
+\subsubsection{Stride}
+
+The \textbf{stride} $S$ determines how many pixels the kernel moves between positions. With stride $S$:
+\begin{align}
+H_{\text{out}} &= \left\lfloor \frac{H + 2P - K_H}{S} \right\rfloor + 1 \\
+W_{\text{out}} &= \left\lfloor \frac{W + 2P - K_W}{S} \right\rfloor + 1
+\end{align}
+
+Stride $> 1$ reduces spatial dimensions, providing a form of downsampling.
+
+\subsection{Multi-Channel Convolution}
+
+Real images have multiple channels (e.g., RGB with 3 channels). Intermediate CNN layers have many more channels (64, 128, 256, etc.). We need convolution that handles multiple input and output channels.
+
+\subsubsection{Input with Multiple Channels}
+
+For input $\mathbf{X} \in \mathbb{R}^{C_{\text{in}} \times H \times W}$ with $C_{\text{in}}$ channels, a single output channel requires a 3D kernel $\mathbf{W} \in \mathbb{R}^{C_{\text{in}} \times K_H \times K_W}$:
+\begin{equation}
+\mathbf{Y}[i, j] = \sum_{c=0}^{C_{\text{in}}-1} \sum_{m=0}^{K_H-1} \sum_{n=0}^{K_W-1} \mathbf{W}[c, m, n] \cdot \mathbf{X}[c, i + m, j + n]
+\label{eq:conv_multichannel_in}
+\end{equation}
+
+The kernel has separate weights for each input channel, and we sum over all channels.
+
+\subsubsection{Multiple Output Channels}
+
+To produce $C_{\text{out}}$ output channels, we use $C_{\text{out}}$ independent 3D kernels, yielding a 4D weight tensor $\mathbf{W} \in \mathbb{R}^{C_{\text{out}} \times C_{\text{in}} \times K_H \times K_W}$:
+\begin{equation}
+\mathbf{Y}[c_{\text{out}}, i, j] = \sum_{c=0}^{C_{\text{in}}-1} \sum_{m=0}^{K_H-1} \sum_{n=0}^{K_W-1} \mathbf{W}[c_{\text{out}}, c, m, n] \cdot \mathbf{X}[c, i + m, j + n] + b[c_{\text{out}}]
+\label{eq:conv_full}
+\end{equation}
+
+where $b[c_{\text{out}}]$ is a bias term for each output channel.
+
+\keypoint{A convolutional layer with $C_{\text{in}}$ input channels, $C_{\text{out}}$ output channels, and kernel size $K \times K$ has $C_{\text{out}} \times C_{\text{in}} \times K^2 + C_{\text{out}}$ learnable parameters (weights plus biases).}
+
+\begin{example}[Parameter Count]
+Consider a convolutional layer with:
+\begin{itemize}
+    \item Input: $64$ channels
+    \item Output: $128$ channels
+    \item Kernel size: $3 \times 3$
+\end{itemize}
+
+Parameters: $128 \times 64 \times 3 \times 3 + 128 = 73,728 + 128 = 73,856$ parameters.
+
+Compare this to a fully connected layer mapping the same spatial locations: for a $32 \times 32$ spatial input, that would be $128 \times (64 \times 32 \times 32) = 8,388,608$ parameters---over 100 times more! This parameter efficiency is why CNNs work.
+\end{example}
+
+\subsection{Key Properties of Convolution}
+
+Convolution has two properties that make it ideal for image processing:
+
+\subsubsection{Translation Equivariance}
+
+If the input shifts, the output shifts by the same amount:
+\begin{equation}
+\text{If } \mathbf{X}' = \text{Shift}(\mathbf{X}, \Delta), \text{ then } \mathbf{Y}' = \text{Shift}(\mathbf{Y}, \Delta)
+\end{equation}
+
+This means a CNN doesn't need to learn separate detectors for objects at different positions---a cat detector works regardless of where the cat appears in the image.
+
+For control, translation equivariance is valuable: the perception system automatically handles objects moving through the visual field without retraining.
+
+\subsubsection{Local Connectivity}
+
+Each output element depends only on a local region of the input (the \textbf{receptive field}). This embodies the intuition that nearby pixels are more related than distant ones. Local connectivity drastically reduces parameters compared to fully connected layers.
+
+\subsection{Nonlinear Activation Functions}
+
+Stacking linear operations (convolutions) produces only linear transformations. To learn complex patterns, we interleave convolutions with nonlinear \textbf{activation functions}.
+
+\subsubsection{ReLU (Rectified Linear Unit)}
+
+The most common activation in CNNs:
+\begin{equation}
+\text{ReLU}(x) = \max(0, x) = \begin{cases} x & \text{if } x > 0 \\ 0 & \text{if } x \leq 0 \end{cases}
+\label{eq:relu}
+\end{equation}
+
+Applied element-wise to each spatial location and channel.
+
+\textbf{Properties:}
+\begin{itemize}
+    \item Computationally efficient (just thresholding)
+    \item Non-saturating for positive inputs (avoids vanishing gradients)
+    \item Induces sparsity (negative pre-activations become zero)
+\end{itemize}
+
+\subsubsection{Variants}
+
+\textbf{Leaky ReLU:} Allows small negative values to flow:
+\begin{equation}
+\text{LeakyReLU}(x) = \begin{cases} x & \text{if } x > 0 \\ \alpha x & \text{if } x \leq 0 \end{cases}
+\end{equation}
+where typically $\alpha = 0.01$.
+
+\textbf{GELU (Gaussian Error Linear Unit):} Smooth approximation used in transformers:
+\begin{equation}
+\text{GELU}(x) = x \cdot \Phi(x) \approx x \cdot \sigma(1.702x)
+\end{equation}
+where $\Phi$ is the CDF of the standard normal and $\sigma$ is the sigmoid function.
+
+\textbf{SiLU/Swish:}
+\begin{equation}
+\text{SiLU}(x) = x \cdot \sigma(x) = \frac{x}{1 + e^{-x}}
+\end{equation}
+
+For control applications, ReLU and its variants work well. The choice rarely matters significantly; consistency within an architecture is more important.
+
+\subsection{Pooling Operations}
+
+\textbf{Pooling} reduces spatial dimensions, providing:
+\begin{itemize}
+    \item \textbf{Downsampling:} Reduces computation in subsequent layers
+    \item \textbf{Translation invariance:} Small shifts don't change the output
+    \item \textbf{Increased receptive field:} Deeper layers see larger image regions
+\end{itemize}
+
+\subsubsection{Max Pooling}
+
+Takes the maximum value in each local region:
+\begin{equation}
+\mathbf{Y}[i, j] = \max_{m \in [0, K), n \in [0, K)} \mathbf{X}[i \cdot S + m, j \cdot S + n]
+\label{eq:max_pool}
+\end{equation}
+
+Common choice: $2 \times 2$ pooling with stride 2, reducing each spatial dimension by half.
+
+\textbf{Interpretation:} Max pooling asks ``is the feature present anywhere in this region?'' without caring exactly where.
+
+\subsubsection{Average Pooling}
+
+Takes the mean value:
+\begin{equation}
+\mathbf{Y}[i, j] = \frac{1}{K^2} \sum_{m=0}^{K-1} \sum_{n=0}^{K-1} \mathbf{X}[i \cdot S + m, j \cdot S + n]
+\label{eq:avg_pool}
+\end{equation}
+
+Average pooling is smoother but may blur important features.
+
+\subsubsection{Global Average Pooling}
+
+Takes the mean over the entire spatial extent:
+\begin{equation}
+\mathbf{y}[c] = \frac{1}{H \times W} \sum_{i=0}^{H-1} \sum_{j=0}^{W-1} \mathbf{X}[c, i, j]
+\label{eq:global_avg_pool}
+\end{equation}
+
+This produces a single value per channel, commonly used at the end of CNNs to produce a fixed-size vector regardless of input resolution.
+
+\warningbox{In modern CNN architectures, strided convolutions often replace pooling for downsampling. Strided convolutions are learnable, potentially preserving more information than fixed pooling operations.}
+
+\subsection{Batch Normalization}
+
+\textbf{Batch normalization} (BatchNorm) stabilizes training by normalizing layer inputs:
+\begin{equation}
+\hat{\mathbf{x}}_i = \frac{\mathbf{x}_i - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}}
+\label{eq:batchnorm_normalize}
+\end{equation}
+\begin{equation}
+\mathbf{y}_i = \gamma \hat{\mathbf{x}}_i + \beta
+\label{eq:batchnorm_scale}
+\end{equation}
+
+where $\mu_B$ and $\sigma_B^2$ are the mean and variance computed over the batch dimension, $\epsilon$ is a small constant for numerical stability, and $\gamma$, $\beta$ are learned scale and shift parameters.
+
+\textbf{During training:} Statistics computed per mini-batch.
+
+\textbf{During inference:} Running averages from training are used.
+
+\textbf{Benefits:}
+\begin{itemize}
+    \item Reduces internal covariate shift
+    \item Allows higher learning rates
+    \item Acts as a regularizer
+    \item Makes optimization landscape smoother
+\end{itemize}
+
+\textbf{For control:} BatchNorm introduces subtle dependencies on batch statistics that can affect single-sample inference. Alternatives like Layer Normalization or Group Normalization may be preferable for real-time control where batch size is 1.
+
+\subsection{Building CNN Architectures}
+
+A CNN architecture stacks convolutional blocks to build hierarchical representations.
+
+\subsubsection{Basic Convolutional Block}
+
+The canonical pattern is:
+\begin{equation}
+\text{Conv} \rightarrow \text{BatchNorm} \rightarrow \text{ReLU} \rightarrow (\text{Pool})
+\end{equation}
+
+Each block:
+\begin{enumerate}
+    \item Applies convolution to extract features
+    \item Normalizes activations for stable training
+    \item Applies nonlinearity for expressiveness
+    \item Optionally pools to reduce spatial size
+\end{enumerate}
+
+\subsubsection{VGG-Style Architecture}
+
+The VGG architecture (Simonyan \& Zisserman, 2014) exemplifies simple, effective design:
+\begin{itemize}
+    \item All convolutions use $3 \times 3$ kernels with stride 1, same padding
+    \item Spatial reduction via $2 \times 2$ max pooling with stride 2
+    \item Double the channels after each pooling (64 $\rightarrow$ 128 $\rightarrow$ 256 $\rightarrow$ 512)
+\end{itemize}
+
+\begin{equation}
+\begin{aligned}
+&\text{Conv}(3 \rightarrow 64) \rightarrow \text{Conv}(64 \rightarrow 64) \rightarrow \text{Pool} \\
+\rightarrow\; &\text{Conv}(64 \rightarrow 128) \rightarrow \text{Conv}(128 \rightarrow 128) \rightarrow \text{Pool} \\
+\rightarrow\; &\text{Conv}(128 \rightarrow 256) \rightarrow \text{...}
+\end{aligned}
+\end{equation}
+
+\subsubsection{Residual Connections (ResNet)}
+
+Deep networks suffer from degradation---adding layers can \textit{increase} training error, not from overfitting but from optimization difficulty. Residual connections (He et al., 2015) solve this:
+\begin{equation}
+\mathbf{y} = \mathcal{F}(\mathbf{x}) + \mathbf{x}
+\label{eq:residual}
+\end{equation}
+
+where $\mathcal{F}$ is a residual block (typically two convolutions). The network learns the \textit{residual} $\mathcal{F}(\mathbf{x}) = \mathbf{y} - \mathbf{x}$ rather than the full mapping.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.8]
+    % Input
+    \node[draw, thick, minimum width=2cm, minimum height=0.8cm] (input) at (0, 0) {$\mathbf{x}$};
+
+    % Conv blocks
+    \node[draw, thick, fill=UofSCSandstorm, minimum width=2cm, minimum height=0.8cm] (conv1) at (0, -1.5) {Conv-BN-ReLU};
+    \node[draw, thick, fill=UofSCSandstorm, minimum width=2cm, minimum height=0.8cm] (conv2) at (0, -3) {Conv-BN};
+
+    % Addition
+    \node[draw, thick, circle, minimum size=0.6cm] (add) at (0, -4.5) {$+$};
+
+    % Output
+    \node[draw, thick, minimum width=2cm, minimum height=0.8cm] (relu) at (0, -5.7) {ReLU};
+    \node[draw, thick, minimum width=2cm, minimum height=0.8cm] (output) at (0, -7) {$\mathbf{y}$};
+
+    % Skip connection
+    \draw[->, thick] (input) -- (conv1);
+    \draw[->, thick] (conv1) -- (conv2);
+    \draw[->, thick] (conv2) -- (add);
+    \draw[->, thick] (add) -- (relu);
+    \draw[->, thick] (relu) -- (output);
+
+    % Skip path
+    \draw[->, thick] (input.east) -- ++(1.5, 0) -- ++(0, -4.5) -- (add.east);
+
+    % Label
+    \node at (2.2, -2.25) {Identity};
+    \node at (-1.5, -2.25) {$\mathcal{F}(\mathbf{x})$};
+\end{tikzpicture}
+\caption{Residual block. The skip connection allows gradients to flow directly through the identity path, enabling training of very deep networks.}
+\label{fig:residual_block}
+\end{figure}
+
+\textbf{Why residuals help:}
+\begin{itemize}
+    \item \textbf{Gradient flow:} Skip connections provide a direct path for gradients during backpropagation
+    \item \textbf{Ease of optimization:} Learning $\mathcal{F}(\mathbf{x}) = 0$ (identity mapping) is easier than learning an arbitrary identity
+    \item \textbf{Ensemble interpretation:} ResNets can be viewed as ensembles of shallower networks
+\end{itemize}
+
+For control applications, ResNet-18 or ResNet-34 provide good tradeoffs between accuracy and computational cost.
+
+\subsection{Receptive Field Analysis}
+
+The \textbf{receptive field} of a neuron is the region of the input image that can influence its activation. Understanding receptive fields is crucial for designing encoders that capture relevant spatial context.
+
+For a network with $L$ convolutional layers, each with kernel size $K_l$ and stride $S_l$, the receptive field $R$ grows according to:
+\begin{equation}
+R_L = 1 + \sum_{l=1}^{L} (K_l - 1) \prod_{i=1}^{l-1} S_i
+\label{eq:receptive_field}
+\end{equation}
+
+\begin{example}[Receptive Field Calculation]
+Consider three $3 \times 3$ convolutional layers with stride 1, followed by $2 \times 2$ max pooling with stride 2:
+
+Layer 1 (Conv $3 \times 3$, stride 1): $R_1 = 1 + (3-1) = 3$
+
+Layer 2 (Conv $3 \times 3$, stride 1): $R_2 = 3 + (3-1) \times 1 = 5$
+
+Layer 3 (Conv $3 \times 3$, stride 1): $R_3 = 5 + (3-1) \times 1 = 7$
+
+Layer 4 (Pool $2 \times 2$, stride 2): $R_4 = 7 + (2-1) \times 1 = 8$
+
+After one such block, each feature ``sees'' an $8 \times 8$ region of the input.
+
+After four such blocks (typical for a small encoder): receptive field grows to cover a significant portion of the input image.
+\end{example}
+
+\keypoint{For control tasks, ensure the receptive field of the final encoder layer is large enough to capture the relevant spatial context---the entire object being manipulated, the full workspace, or key landmarks for localization.}
+
+%-------------------------------------------------------------------------------
+\section{Vision Transformers}
+\label{sec:vision_transformers}
+%-------------------------------------------------------------------------------
+
+While CNNs dominated computer vision for nearly a decade, the Vision Transformer (ViT) demonstrated that transformer architectures---originally developed for natural language processing---can match or exceed CNN performance on image tasks. Understanding ViTs is increasingly important as they become standard in robotics perception pipelines.
+
+\subsection{From Language to Vision: The Transformer Revolution}
+
+The transformer architecture (Vaswani et al., 2017) revolutionized natural language processing through the \textbf{self-attention mechanism}, which allows every element of a sequence to directly attend to every other element. This global connectivity contrasts with the local receptive fields of CNNs.
+
+The key insight enabling ViT (Dosovitskiy et al., 2020) was simple: treat an image as a sequence of patches, just as language is a sequence of words. Each patch becomes a ``token'' that can attend to all other patches, enabling global reasoning from the first layer.
+
+\subsection{Patch Embedding: Tokenizing Images}
+
+The first step in ViT is converting an image into a sequence of tokens.
+
+\subsubsection{Dividing the Image into Patches}
+
+Given an image $\mathbf{X} \in \mathbb{R}^{H \times W \times C}$, we divide it into a grid of non-overlapping patches of size $P \times P$:
+\begin{equation}
+N = \frac{H \times W}{P^2}
+\label{eq:num_patches}
+\end{equation}
+
+where $N$ is the number of patches. Common choices: $P = 16$ for a $224 \times 224$ image yields $N = 196$ patches.
+
+Each patch $\mathbf{x}_p \in \mathbb{R}^{P^2 \cdot C}$ is flattened into a vector. For a $16 \times 16$ RGB patch, this is a $16 \times 16 \times 3 = 768$-dimensional vector.
+
+\subsubsection{Linear Projection to Embedding Space}
+
+Flattened patches are projected to a $D$-dimensional embedding space:
+\begin{equation}
+\mathbf{z}_0^i = \mathbf{E} \mathbf{x}_p^i + \mathbf{e}_{\text{pos}}^i
+\label{eq:patch_embed}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\mathbf{E} \in \mathbb{R}^{D \times (P^2 \cdot C)}$ is a learnable projection matrix
+    \item $\mathbf{x}_p^i$ is the $i$-th flattened patch
+    \item $\mathbf{e}_{\text{pos}}^i \in \mathbb{R}^D$ is a learnable positional embedding for position $i$
+    \item $\mathbf{z}_0^i \in \mathbb{R}^D$ is the initial embedding for patch $i$
+\end{itemize}
+
+\textbf{Why positional embeddings?} Unlike CNNs where position is implicit in the spatial structure, transformers are permutation-equivariant---without positional information, they cannot distinguish patch order. Positional embeddings inject spatial structure.
+
+\subsubsection{The CLS Token}
+
+Following BERT convention, ViT prepends a special learnable ``class'' token $\mathbf{z}_0^{\text{cls}}$ to the sequence:
+\begin{equation}
+\mathbf{Z}_0 = [\mathbf{z}_0^{\text{cls}}; \mathbf{z}_0^1; \mathbf{z}_0^2; \ldots; \mathbf{z}_0^N] \in \mathbb{R}^{(N+1) \times D}
+\label{eq:cls_token}
+\end{equation}
+
+After processing through transformer layers, the CLS token aggregates information from all patches and serves as the image-level representation.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.55]
+    % Original image
+    \draw[thick, fill=UofSCSandstorm] (0, 0) rectangle (4, 4);
+    \node at (2, -0.5) {Image};
+
+    % Grid lines for patches
+    \foreach \i in {1, 2, 3} {
+        \draw[thick, UofSCGrey50] (\i, 0) -- (\i, 4);
+        \draw[thick, UofSCGrey50] (0, \i) -- (4, \i);
+    }
+
+    % Arrow
+    \draw[->, thick] (4.5, 2) -- (6, 2);
+    \node at (5.25, 2.5) {Flatten};
+
+    % Patch sequence
+    \begin{scope}[shift={(6.5, 0)}]
+        \foreach \i in {0,...,15} {
+            \pgfmathsetmacro{\x}{mod(\i, 4) * 0.6}
+            \pgfmathsetmacro{\y}{3.4 - floor(\i/4) * 0.8}
+            \draw[thick, fill=UofSCSandstorm] (\x, \y) rectangle (\x+0.5, \y+0.5);
+        }
+        \node at (1.2, -0.5) {Patches};
+    \end{scope}
+
+    % Arrow
+    \draw[->, thick] (9.5, 2) -- (11, 2);
+    \node at (10.25, 2.7) {Project};
+    \node at (10.25, 2.3) {$\mathbf{E}$};
+
+    % Embedding sequence
+    \begin{scope}[shift={(11.5, 0.5)}]
+        % CLS token
+        \draw[thick, fill=UofSCGarnet] (0, 2.5) rectangle (0.4, 3.5);
+        \node at (0.2, 2.2) {\tiny CLS};
+
+        % Patch embeddings
+        \foreach \i in {0,...,3} {
+            \draw[thick, fill=UofSCAtlantic] (0.6 + \i*0.5, 2.5) rectangle (1.0 + \i*0.5, 3.5);
+        }
+        \node at (2.1, 2.2) {...};
+        \foreach \i in {0,...,2} {
+            \draw[thick, fill=UofSCAtlantic] (2.6 + \i*0.5, 2.5) rectangle (3.0 + \i*0.5, 3.5);
+        }
+
+        \node at (2, -0.3) {Token Sequence};
+
+        % Positional embeddings
+        \draw[thick, dashed, UofSCHorseshoe] (-0.1, 1.2) rectangle (4.2, 2.0);
+        \node at (2, 1.6) {\small + Positional};
+    \end{scope}
+\end{tikzpicture}
+\caption{ViT patch embedding process. The image is divided into patches, each patch is flattened and projected to an embedding vector, and positional embeddings are added. A special CLS token is prepended for classification.}
+\label{fig:vit_patch_embedding}
+\end{figure}
+
+\subsection{The Transformer Encoder Block}
+
+After patch embedding, the token sequence passes through $L$ transformer encoder blocks. Each block consists of two sub-layers:
+
+\begin{equation}
+\mathbf{Z}'_l = \text{MSA}(\text{LN}(\mathbf{Z}_{l-1})) + \mathbf{Z}_{l-1}
+\label{eq:transformer_msa}
+\end{equation}
+\begin{equation}
+\mathbf{Z}_l = \text{MLP}(\text{LN}(\mathbf{Z}'_l)) + \mathbf{Z}'_l
+\label{eq:transformer_mlp}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\text{LN}$ is Layer Normalization
+    \item $\text{MSA}$ is Multi-Head Self-Attention (detailed in Section~\ref{sec:attention_mechanism})
+    \item $\text{MLP}$ is a two-layer feed-forward network
+    \item Residual connections add the input to each sub-layer's output
+\end{itemize}
+
+\subsubsection{Layer Normalization}
+
+Unlike BatchNorm (which normalizes across the batch), Layer Normalization normalizes across the feature dimension for each token independently:
+\begin{equation}
+\text{LN}(\mathbf{x}) = \gamma \odot \frac{\mathbf{x} - \mu}{\sqrt{\sigma^2 + \epsilon}} + \beta
+\label{eq:layer_norm}
+\end{equation}
+
+where $\mu$ and $\sigma^2$ are computed over the $D$ dimensions of each token, and $\gamma, \beta \in \mathbb{R}^D$ are learnable parameters.
+
+Layer Normalization is preferred in transformers because:
+\begin{itemize}
+    \item No dependence on batch size (works with batch size 1)
+    \item Consistent behavior during training and inference
+    \item Better suited for sequence data with variable lengths
+\end{itemize}
+
+\subsubsection{Feed-Forward Network (MLP)}
+
+The MLP applies two linear transformations with a nonlinearity:
+\begin{equation}
+\text{MLP}(\mathbf{x}) = \mathbf{W}_2 \, \sigma(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_1) + \mathbf{b}_2
+\label{eq:mlp}
+\end{equation}
+
+Typically, the hidden dimension is $4D$ (four times the embedding dimension), and $\sigma$ is GELU activation.
+
+\textbf{Role of MLP:} While attention handles token interactions, the MLP processes each token independently, adding per-token nonlinear transformations. This is analogous to the $1 \times 1$ convolutions in CNNs.
+
+\subsection{ViT Architecture Summary}
+
+Putting it together, a Vision Transformer consists of:
+
+\begin{enumerate}
+    \item \textbf{Patch Embedding:} Divide image into patches, flatten, project to $D$ dimensions, add positional embeddings, prepend CLS token
+
+    \item \textbf{Transformer Encoder:} Stack of $L$ blocks, each with:
+    \begin{itemize}
+        \item Multi-Head Self-Attention (with residual)
+        \item MLP (with residual)
+        \item Layer Normalization before each sub-layer
+    \end{itemize}
+
+    \item \textbf{Output:} The final CLS token embedding $\mathbf{z}_L^{\text{cls}}$ serves as the image representation
+\end{enumerate}
+
+\begin{table}[htbp]
+\centering
+\caption{Common ViT configurations}
+\label{tab:vit_configs}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Model} & \textbf{Layers} $L$ & \textbf{Hidden} $D$ & \textbf{Heads} & \textbf{MLP Dim} & \textbf{Params} \\
+\midrule
+ViT-Tiny & 12 & 192 & 3 & 768 & 5.7M \\
+ViT-Small & 12 & 384 & 6 & 1536 & 22M \\
+ViT-Base & 12 & 768 & 12 & 3072 & 86M \\
+ViT-Large & 24 & 1024 & 16 & 4096 & 307M \\
+ViT-Huge & 32 & 1280 & 16 & 5120 & 632M \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For control applications with real-time constraints, ViT-Tiny or ViT-Small are practical choices. Larger models offer better accuracy but may be too slow for closed-loop control.
+
+\subsection{CNNs vs. ViTs: Tradeoffs for Control}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of CNNs and ViTs for control applications}
+\label{tab:cnn_vs_vit}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Property} & \textbf{CNN} & \textbf{ViT} \\
+\midrule
+Inductive bias & Strong (locality, translation equiv.) & Weak (learns from data) \\
+Data efficiency & Better with small datasets & Needs large datasets \\
+Global reasoning & Requires many layers & From first layer \\
+Computational cost & Generally lower & Generally higher \\
+Interpretability & Feature maps are spatial & Attention maps available \\
+Real-time feasibility & Excellent & Good (with small models) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\keypoint{For robotics and control with limited training data, CNNs often outperform ViTs. When large datasets are available or when pre-trained models can be fine-tuned, ViTs offer competitive or superior performance with the added benefit of interpretable attention maps.}
+
+\subsection{Hybrid Architectures}
+
+Modern systems often combine CNN and transformer strengths:
+
+\begin{enumerate}
+    \item \textbf{CNN backbone + Transformer head:} Use CNN for early feature extraction (leveraging strong inductive biases), then apply transformer layers for global reasoning.
+
+    \item \textbf{Convolutional patch embedding:} Replace linear projection with a small CNN that embeds patches, injecting locality into ViT.
+
+    \item \textbf{Attention in CNNs:} Add self-attention layers to CNN architectures (e.g., CBAM, SE-Net) for selective feature enhancement.
+\end{enumerate}
+
+For control perception, hybrid architectures often provide the best tradeoff: CNN efficiency and data efficiency with transformer global reasoning.
+
+%-------------------------------------------------------------------------------
+\section{The Attention Mechanism Explained}
+\label{sec:attention_mechanism}
+%-------------------------------------------------------------------------------
+
+The self-attention mechanism is the core innovation enabling transformers. In this section, we derive attention from first principles, building intuition for why it works and how to interpret it.
+
+\subsection{Motivation: Dynamic, Content-Based Weighting}
+
+Consider the challenge of determining what information is relevant for a given task. In CNNs, the receptive field is fixed by architecture---a $3 \times 3$ convolution always looks at the same local neighborhood. But relevance often depends on \textit{content}: when grasping an object, we need to attend to the gripper and the object regardless of where they appear in the image.
+
+Attention provides \textbf{content-based routing}: each position can dynamically select which other positions to gather information from, based on the actual content at those positions.
+
+\subsection{Queries, Keys, and Values}
+
+The attention mechanism uses three projections of the input:
+
+\begin{itemize}
+    \item \textbf{Query (Q):} ``What am I looking for?''
+    \item \textbf{Key (K):} ``What do I contain?''
+    \item \textbf{Value (V):} ``What information do I provide?''
+\end{itemize}
+
+Given input tokens $\mathbf{X} \in \mathbb{R}^{N \times D}$ (sequence of $N$ tokens, each $D$-dimensional), we compute:
+\begin{align}
+\mathbf{Q} &= \mathbf{X} \mathbf{W}_Q, \quad \mathbf{W}_Q \in \mathbb{R}^{D \times d_k} \label{eq:query} \\
+\mathbf{K} &= \mathbf{X} \mathbf{W}_K, \quad \mathbf{W}_K \in \mathbb{R}^{D \times d_k} \label{eq:key} \\
+\mathbf{V} &= \mathbf{X} \mathbf{W}_V, \quad \mathbf{W}_V \in \mathbb{R}^{D \times d_v} \label{eq:value}
+\end{align}
+
+where $d_k$ is the key/query dimension and $d_v$ is the value dimension.
+
+\subsection{Scaled Dot-Product Attention}
+
+The attention computation proceeds in three steps:
+
+\subsubsection{Step 1: Compute Attention Scores}
+
+For each query, compute its similarity to all keys using dot product:
+\begin{equation}
+\text{score}_{ij} = \mathbf{q}_i^\top \mathbf{k}_j = \sum_{l=1}^{d_k} q_{il} \cdot k_{jl}
+\label{eq:attention_score}
+\end{equation}
+
+In matrix form:
+\begin{equation}
+\mathbf{S} = \mathbf{Q} \mathbf{K}^\top \in \mathbb{R}^{N \times N}
+\label{eq:attention_scores_matrix}
+\end{equation}
+
+Element $S_{ij}$ measures how much query $i$ should attend to key $j$.
+
+\subsubsection{Step 2: Scale and Normalize}
+
+Raw dot products can have large magnitude, causing softmax to produce very peaked distributions (approaching one-hot). We scale by $\sqrt{d_k}$:
+\begin{equation}
+\mathbf{A} = \text{softmax}\left(\frac{\mathbf{Q} \mathbf{K}^\top}{\sqrt{d_k}}\right)
+\label{eq:attention_weights}
+\end{equation}
+
+The softmax is applied row-wise, so each row of $\mathbf{A}$ sums to 1:
+\begin{equation}
+A_{ij} = \frac{\exp(S_{ij} / \sqrt{d_k})}{\sum_{l=1}^{N} \exp(S_{il} / \sqrt{d_k})}
+\label{eq:softmax_attention}
+\end{equation}
+
+\textbf{Why scale by $\sqrt{d_k}$?} If query and key components are independent with zero mean and unit variance, then $\mathbf{q}^\top \mathbf{k}$ has variance $d_k$. Scaling by $\sqrt{d_k}$ normalizes the variance to 1, keeping softmax in a numerically stable regime.
+
+\subsubsection{Step 3: Compute Weighted Sum of Values}
+
+The output for each position is a weighted combination of values:
+\begin{equation}
+\text{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \mathbf{A} \mathbf{V} \in \mathbb{R}^{N \times d_v}
+\label{eq:attention_output}
+\end{equation}
+
+Each output token $\mathbf{y}_i$ is:
+\begin{equation}
+\mathbf{y}_i = \sum_{j=1}^{N} A_{ij} \mathbf{v}_j
+\label{eq:attention_output_token}
+\end{equation}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.7]
+    % Input
+    \node[draw, thick, minimum width=1.5cm, minimum height=3cm, fill=UofSCSandstorm] (X) at (0, 0) {$\mathbf{X}$};
+
+    % Q, K, V projections
+    \node[draw, thick, minimum width=1cm, minimum height=1.8cm, fill=UofSCAtlantic!30] (Q) at (3, 1.5) {$\mathbf{Q}$};
+    \node[draw, thick, minimum width=1cm, minimum height=1.8cm, fill=UofSCAtlantic!30] (K) at (3, 0) {$\mathbf{K}$};
+    \node[draw, thick, minimum width=1cm, minimum height=1.8cm, fill=UofSCAtlantic!30] (V) at (3, -1.5) {$\mathbf{V}$};
+
+    % Arrows from X
+    \draw[->, thick] (X.east) -- ++(0.5, 0) |- (Q.west);
+    \draw[->, thick] (X.east) -- (K.west);
+    \draw[->, thick] (X.east) -- ++(0.5, 0) |- (V.west);
+
+    % Labels for projections
+    \node at (1.7, 1.8) {\small $\mathbf{W}_Q$};
+    \node at (1.7, 0.3) {\small $\mathbf{W}_K$};
+    \node at (1.7, -1.2) {\small $\mathbf{W}_V$};
+
+    % QK^T
+    \node[draw, thick, circle, minimum size=0.8cm] (matmul1) at (5.5, 0.75) {$\times$};
+    \draw[->, thick] (Q.east) -- (matmul1);
+    \draw[->, thick] (K.east) -- ++(0.5, 0) -- ++(0, 0.75) -- (matmul1);
+
+    % Scale
+    \node[draw, thick, minimum width=1cm, minimum height=0.8cm] (scale) at (7, 0.75) {\small $\div\sqrt{d_k}$};
+    \draw[->, thick] (matmul1) -- (scale);
+
+    % Softmax
+    \node[draw, thick, minimum width=1.2cm, minimum height=0.8cm, fill=UofSCGarnet!20] (softmax) at (9, 0.75) {\small Softmax};
+    \draw[->, thick] (scale) -- (softmax);
+
+    % Attention weights
+    \node[draw, thick, minimum width=1cm, minimum height=1cm] (A) at (11, 0.75) {$\mathbf{A}$};
+    \draw[->, thick] (softmax) -- (A);
+
+    % Multiply with V
+    \node[draw, thick, circle, minimum size=0.8cm] (matmul2) at (11, -1.5) {$\times$};
+    \draw[->, thick] (A) -- (matmul2);
+    \draw[->, thick] (V.east) -- ++(6, 0) -- (matmul2);
+
+    % Output
+    \node[draw, thick, minimum width=1.5cm, minimum height=1.5cm, fill=UofSCHorseshoe!30] (out) at (13.5, -1.5) {Output};
+    \draw[->, thick] (matmul2) -- (out);
+\end{tikzpicture}
+\caption{Scaled dot-product attention. Input $\mathbf{X}$ is projected to queries, keys, and values. Attention weights are computed via scaled dot-product and softmax, then used to weight the values.}
+\label{fig:attention_mechanism}
+\end{figure}
+
+\subsection{Interpreting Attention}
+
+The attention mechanism can be understood through several lenses:
+
+\subsubsection{Soft Dictionary Lookup}
+
+Think of keys as ``addresses'' and values as ``contents'' in a dictionary. The query looks up the most relevant entries:
+\begin{itemize}
+    \item Hard lookup: Find exact key match, return corresponding value
+    \item Soft lookup: Compute similarity to all keys, return weighted average of values
+\end{itemize}
+
+\subsubsection{Information Routing}
+
+Each position decides where to gather information from based on content similarity. This is fundamentally different from CNNs, where information flow is determined by fixed spatial structure.
+
+\subsubsection{Weighted Message Passing}
+
+On a fully-connected graph where each token is a node, attention computes edge weights based on content, then passes messages (values) along weighted edges.
+
+\subsection{Multi-Head Attention}
+
+A single attention head may focus on one type of relationship. Multi-head attention runs $h$ parallel attention operations with different learned projections:
+\begin{equation}
+\text{MultiHead}(\mathbf{X}) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h) \mathbf{W}_O
+\label{eq:multihead}
+\end{equation}
+
+where each head is:
+\begin{equation}
+\text{head}_i = \text{Attention}(\mathbf{X}\mathbf{W}_Q^{(i)}, \mathbf{X}\mathbf{W}_K^{(i)}, \mathbf{X}\mathbf{W}_V^{(i)})
+\label{eq:attention_head}
+\end{equation}
+
+and $\mathbf{W}_O \in \mathbb{R}^{h \cdot d_v \times D}$ projects back to model dimension.
+
+\textbf{Benefits of multi-head attention:}
+\begin{itemize}
+    \item Different heads can attend to different aspects (position, color, shape)
+    \item Heads can specialize: some for local patterns, others for global
+    \item Increased representational capacity without proportional parameter increase
+\end{itemize}
+
+Typically, $d_k = d_v = D / h$, so total parameters are similar to single-head attention with dimension $D$.
+
+\begin{example}[Multi-Head Attention Dimensions]
+For ViT-Base with $D = 768$ and $h = 12$ heads:
+\begin{itemize}
+    \item Each head: $d_k = d_v = 768 / 12 = 64$
+    \item Per-head projections: $\mathbf{W}_Q^{(i)}, \mathbf{W}_K^{(i)}, \mathbf{W}_V^{(i)} \in \mathbb{R}^{768 \times 64}$
+    \item Output projection: $\mathbf{W}_O \in \mathbb{R}^{768 \times 768}$
+    \item Total attention parameters: $3 \times 768 \times 768 + 768 \times 768 = 4 \times 768^2 \approx 2.4$M
+\end{itemize}
+\end{example}
+
+\subsection{Self-Attention vs. Cross-Attention}
+
+So far, we've discussed \textbf{self-attention}, where queries, keys, and values all come from the same sequence. In \textbf{cross-attention}, queries come from one sequence while keys and values come from another:
+\begin{equation}
+\text{CrossAttention}(\mathbf{X}, \mathbf{Y}) = \text{softmax}\left(\frac{\mathbf{X}\mathbf{W}_Q (\mathbf{Y}\mathbf{W}_K)^\top}{\sqrt{d_k}}\right) \mathbf{Y}\mathbf{W}_V
+\label{eq:cross_attention}
+\end{equation}
+
+Cross-attention is crucial for:
+\begin{itemize}
+    \item \textbf{Language-conditioned control:} Attending to language instructions while processing visual input
+    \item \textbf{Multi-view fusion:} Combining information from multiple cameras
+    \item \textbf{Temporal integration:} Querying past observations while processing current input
+\end{itemize}
+
+\subsection{Computational Complexity}
+
+The attention computation $\mathbf{Q}\mathbf{K}^\top$ has complexity $\mathcal{O}(N^2 \cdot d_k)$ for sequence length $N$. For images:
+\begin{itemize}
+    \item $224 \times 224$ image with $16 \times 16$ patches: $N = 196$
+    \item Attention matrix: $196 \times 196 = 38,416$ elements
+    \item Manageable for typical image sizes
+\end{itemize}
+
+For high-resolution images or video (large $N$), quadratic complexity becomes prohibitive. Efficient attention variants exist:
+\begin{itemize}
+    \item \textbf{Linear attention:} Replace softmax with kernel approximation, achieving $\mathcal{O}(N \cdot d_k)$
+    \item \textbf{Sparse attention:} Only compute attention for a subset of positions
+    \item \textbf{Windowed attention:} Limit attention to local windows (like Swin Transformer)
+\end{itemize}
+
+For real-time control, attention efficiency is critical. Window-based approaches like Swin Transformer often provide the best accuracy-speed tradeoff.
+
+\subsection{Attention Maps for Interpretability}
+
+A key advantage of attention for control is \textbf{interpretability}. The attention weights $\mathbf{A}$ reveal what the model attends to when making decisions.
+
+For a ViT encoder, we can extract attention from the CLS token to all image patches, revealing which regions contribute to the representation:
+\begin{equation}
+\text{CLS attention} = A_{\text{cls}, :} \in \mathbb{R}^{N}
+\label{eq:cls_attention}
+\end{equation}
+
+Reshaping to image dimensions yields an attention heatmap showing ``where the model is looking.''
+
+\keypoint{For safety-critical control, attention maps provide valuable debugging and verification tools. If the model attends to irrelevant regions (e.g., background clutter instead of the robot arm), this signals potential failure modes before deployment.}
+
+\begin{example}[Attention Visualization for Manipulation]
+Consider a ViT encoder for a robotic manipulation task. The attention map from the CLS token shows:
+\begin{itemize}
+    \item High attention on the gripper fingers
+    \item High attention on the target object
+    \item Low attention on table surface and background
+\end{itemize}
+
+This confirms the encoder focuses on task-relevant features. If attention instead concentrated on distracting objects or shadows, we would investigate data augmentation, training objectives, or architectural changes.
+\end{example}
+
+%-------------------------------------------------------------------------------
+\section{Encoder Design for State Estimation}
+\label{sec:encoder_design}
+%-------------------------------------------------------------------------------
+
+Having established the building blocks---convolutions, attention, and their combinations---we now address the central question for control: how do we design an encoder that produces useful state representations from sensory data?
+
+\subsection{The Encoder's Role in Control}
+
+Recall the perception-control pipeline:
+\begin{equation}
+\mathbf{o}_t \xrightarrow{\text{Encoder } f_\theta} \hat{\mathbf{z}}_t \xrightarrow{\text{Controller } \pi} \mathbf{u}_t
+\label{eq:encoder_pipeline}
+\end{equation}
+
+The encoder $f_\theta$ with parameters $\theta$ maps observations $\mathbf{o}_t$ (images, point clouds, etc.) to latent states $\hat{\mathbf{z}}_t$. The controller $\pi$ (which may be learned or classical) then computes actions $\mathbf{u}_t$.
+
+\textbf{Key design questions:}
+\begin{enumerate}
+    \item What should the latent dimension $d = \dim(\hat{\mathbf{z}})$ be?
+    \item Should $\hat{\mathbf{z}}$ correspond to physical states or be abstract?
+    \item How do we ensure $\hat{\mathbf{z}}$ contains sufficient information for control?
+    \item How do we handle temporal dynamics (velocity, history)?
+\end{enumerate}
+
+\subsection{Latent Dimension Selection}
+
+The latent dimension $d$ determines the information bottleneck:
+\begin{itemize}
+    \item Too small: Loses information critical for control
+    \item Too large: May not compress away irrelevant variation; harder to train downstream controller
+\end{itemize}
+
+\subsubsection{Physical State Dimension as Guide}
+
+If you know the true state dimension (e.g., 6 DoF pose = 6 dimensions), set $d$ accordingly or slightly larger:
+\begin{equation}
+d \geq \dim(\text{physical state}) + \text{margin for uncertainty}
+\end{equation}
+
+For a pendulum with state $[\theta, \dot{\theta}]$, $d = 4$--$8$ is reasonable, allowing the encoder to represent uncertainty or additional features.
+
+\subsubsection{Empirical Selection}
+
+When true state dimension is unknown, use empirical methods:
+\begin{enumerate}
+    \item Train encoders with varying $d$
+    \item Evaluate downstream control performance
+    \item Select smallest $d$ that achieves target performance
+\end{enumerate}
+
+\textbf{Rule of thumb:} For manipulation tasks, $d = 32$--$128$ often works well. For navigation, $d = 64$--$256$ captures sufficient spatial information.
+
+\subsection{Encoder Architectures for Control}
+
+\subsubsection{CNN Encoder}
+
+The standard CNN encoder follows the pattern:
+\begin{equation}
+\mathbf{o} \xrightarrow{\text{CNN backbone}} \mathbf{h} \in \mathbb{R}^{C \times H' \times W'} \xrightarrow{\text{Pooling}} \bar{\mathbf{h}} \in \mathbb{R}^C \xrightarrow{\text{MLP}} \hat{\mathbf{z}} \in \mathbb{R}^d
+\label{eq:cnn_encoder}
+\end{equation}
+
+\textbf{Backbone options:}
+\begin{itemize}
+    \item \textbf{ResNet-18/34:} Good balance of capacity and speed; standard choice
+    \item \textbf{MobileNet:} Efficient for embedded deployment
+    \item \textbf{EfficientNet:} Scalable family with good accuracy-speed tradeoff
+\end{itemize}
+
+\textbf{Pooling strategies:}
+\begin{itemize}
+    \item \textbf{Global Average Pooling:} Simple, translation invariant
+    \item \textbf{Spatial Softmax:} Extracts expected keypoint locations; good for manipulation
+    \item \textbf{Flatten + FC:} Preserves spatial information but increases parameters
+\end{itemize}
+
+\subsubsection{Spatial Softmax for Keypoint Extraction}
+
+For manipulation and pose estimation, Spatial Softmax (Levine et al., 2016) extracts expected 2D keypoint coordinates:
+\begin{equation}
+\text{SpatialSoftmax}(\mathbf{h}_c) = \sum_{i,j} \text{softmax}(\mathbf{h}_c)_{i,j} \cdot [i, j]^\top
+\label{eq:spatial_softmax}
+\end{equation}
+
+For each channel $c$, this computes the expected spatial location weighted by the softmax of activations. If channel $c$ responds to a specific feature (e.g., gripper tip), the output is the feature's 2D image coordinates.
+
+With $C$ channels, Spatial Softmax produces $2C$ features (x and y for each channel), providing a compact, interpretable representation.
+
+\subsubsection{ViT Encoder}
+
+The ViT encoder uses the CLS token as the latent representation:
+\begin{equation}
+\mathbf{o} \xrightarrow{\text{Patch Embed}} \mathbf{Z}_0 \xrightarrow{\text{Transformer Blocks}} \mathbf{Z}_L \xrightarrow{\text{Extract CLS}} \mathbf{z}_L^{\text{cls}} \xrightarrow{\text{MLP}} \hat{\mathbf{z}}
+\label{eq:vit_encoder}
+\end{equation}
+
+Alternatively, we can average all patch tokens (excluding CLS):
+\begin{equation}
+\bar{\mathbf{z}} = \frac{1}{N} \sum_{i=1}^{N} \mathbf{z}_L^i
+\label{eq:vit_mean_pool}
+\end{equation}
+
+\subsubsection{Hybrid Encoder}
+
+Combining CNN and transformer leverages both architectures:
+\begin{equation}
+\mathbf{o} \xrightarrow{\text{CNN}} \mathbf{h} \xrightarrow{\text{Patchify}} \text{Tokens} \xrightarrow{\text{Transformer}} \hat{\mathbf{z}}
+\label{eq:hybrid_encoder}
+\end{equation}
+
+The CNN extracts local features; the transformer reasons globally. This often outperforms pure ViT on robotics tasks with limited data.
+
+\subsection{Handling Temporal Information}
+
+Single-frame encoders cannot estimate velocities or reason about dynamics. We need temporal integration.
+
+\subsubsection{Frame Stacking}
+
+Concatenate $k$ consecutive frames along the channel dimension:
+\begin{equation}
+\mathbf{o}_{\text{stacked}} = [\mathbf{o}_{t-k+1}, \ldots, \mathbf{o}_t] \in \mathbb{R}^{H \times W \times (k \cdot C)}
+\label{eq:frame_stacking}
+\end{equation}
+
+Simple and effective for short-term dynamics. Common choice: $k = 3$--$4$ frames.
+
+\textbf{Limitation:} Fixed temporal window; doesn't handle variable-length history or long-term dependencies.
+
+\subsubsection{Recurrent Encoders}
+
+Process frames sequentially with a recurrent network:
+\begin{align}
+\mathbf{h}_t &= f_{\text{CNN}}(\mathbf{o}_t) \\
+\hat{\mathbf{z}}_t &= f_{\text{RNN}}(\mathbf{h}_t, \hat{\mathbf{z}}_{t-1})
+\end{align}
+
+Options include LSTM, GRU, or transformer decoder with causal masking.
+
+\textbf{Benefits:} Handles variable history, can learn long-term dependencies.
+
+\textbf{Challenges:} Sequential processing prevents parallelization; training is more complex.
+
+\subsubsection{Temporal Transformers}
+
+For fixed-length history, apply transformer self-attention across time:
+\begin{equation}
+[\hat{\mathbf{z}}_{t-k+1}, \ldots, \hat{\mathbf{z}}_t] = \text{TemporalTransformer}([\mathbf{h}_{t-k+1}, \ldots, \mathbf{h}_t])
+\label{eq:temporal_transformer}
+\end{equation}
+
+Each frame attends to all other frames, enabling flexible temporal reasoning.
+
+\subsection{Multi-View and Multi-Modal Fusion}
+
+Many robotic systems have multiple cameras or sensor modalities.
+
+\subsubsection{Early Fusion}
+
+Concatenate inputs before encoding:
+\begin{equation}
+\mathbf{o}_{\text{fused}} = [\mathbf{o}_{\text{cam1}}, \mathbf{o}_{\text{cam2}}, \mathbf{o}_{\text{depth}}]
+\label{eq:early_fusion}
+\end{equation}
+
+Simple but doesn't leverage view-specific structure.
+
+\subsubsection{Late Fusion}
+
+Encode each view separately, then combine:
+\begin{equation}
+\hat{\mathbf{z}} = f_{\text{combine}}(f_{\theta_1}(\mathbf{o}_1), f_{\theta_2}(\mathbf{o}_2), \ldots)
+\label{eq:late_fusion}
+\end{equation}
+
+Combination can be concatenation, attention, or learned aggregation.
+
+\subsubsection{Cross-Attention Fusion}
+
+Use cross-attention between views:
+\begin{equation}
+\hat{\mathbf{z}}_1' = \text{CrossAttention}(\hat{\mathbf{z}}_1, \hat{\mathbf{z}}_2)
+\label{eq:cross_attention_fusion}
+\end{equation}
+
+View 1's representation attends to view 2, enabling information exchange based on content.
+
+\subsection{Uncertainty Quantification}
+
+For robust control, knowing \textit{how confident} the encoder is matters as much as the estimate itself.
+
+\subsubsection{Probabilistic Encoders}
+
+Instead of point estimates, output distribution parameters:
+\begin{equation}
+f_\theta(\mathbf{o}) = (\boldsymbol{\mu}, \boldsymbol{\sigma}) \quad \text{where} \quad \hat{\mathbf{z}} \sim \mathcal{N}(\boldsymbol{\mu}, \text{diag}(\boldsymbol{\sigma}^2))
+\label{eq:probabilistic_encoder}
+\end{equation}
+
+The variance $\boldsymbol{\sigma}^2$ indicates uncertainty. High uncertainty on critical states can trigger conservative control or fallback behaviors.
+
+\subsubsection{Ensemble Methods}
+
+Train $M$ encoders with different initializations:
+\begin{equation}
+\hat{\mathbf{z}} = \frac{1}{M} \sum_{m=1}^{M} f_{\theta_m}(\mathbf{o}), \quad \text{Var}[\hat{\mathbf{z}}] \approx \frac{1}{M} \sum_{m=1}^{M} (f_{\theta_m}(\mathbf{o}) - \hat{\mathbf{z}})^2
+\label{eq:ensemble_uncertainty}
+\end{equation}
+
+Disagreement among ensemble members indicates uncertainty.
+
+\textbf{Cost:} $M\times$ computation. Practical for $M = 3$--$5$ with efficient encoders.
+
+\subsubsection{Monte Carlo Dropout}
+
+Apply dropout at test time and run multiple forward passes:
+\begin{equation}
+\hat{\mathbf{z}}^{(i)} = f_\theta(\mathbf{o}; \text{dropout mask}_i)
+\label{eq:mc_dropout}
+\end{equation}
+
+Sample statistics provide uncertainty estimates with minimal overhead.
+
+\keypoint{For safety-critical control, uncertainty quantification enables the system to ``know what it doesn't know.'' When encoder uncertainty is high, the controller can reduce speed, increase margins, or request human intervention.}
+
+\subsection{Design Checklist for Control Encoders}
+
+When designing an encoder for a control application, consider:
+
+\begin{enumerate}
+    \item \textbf{Input modality:} RGB, depth, point cloud, or multi-modal?
+
+    \item \textbf{Temporal requirements:} Single frame sufficient, or need history for velocity/dynamics?
+
+    \item \textbf{Output representation:} Physical state, abstract embedding, or keypoints?
+
+    \item \textbf{Latent dimension:} Guided by physical state dimension or empirically tuned?
+
+    \item \textbf{Real-time constraints:} What latency is acceptable? This constrains model size.
+
+    \item \textbf{Training data:} Limited data favors CNN; abundant data enables ViT.
+
+    \item \textbf{Interpretability needs:} Is attention visualization or keypoint output required?
+
+    \item \textbf{Uncertainty requirements:} Does the controller need confidence estimates?
+
+    \item \textbf{Pre-training:} Can we leverage ImageNet or other pre-trained weights?
+\end{enumerate}
+
+%-------------------------------------------------------------------------------
+\section{Training Strategies}
+\label{sec:training_strategies}
+%-------------------------------------------------------------------------------
+
+The encoder architecture is only half the story---how we train it determines what the latent representation captures. This section covers training paradigms from supervised learning to self-supervised methods that don't require labeled data.
+
+\subsection{Supervised Learning for State Estimation}
+
+The most straightforward approach: given pairs $(\mathbf{o}_i, \mathbf{x}_i^*)$ of observations and ground-truth states, train the encoder to predict states directly.
+
+\subsubsection{Regression Loss}
+
+For continuous state estimation, minimize mean squared error:
+\begin{equation}
+\mathcal{L}_{\text{MSE}} = \frac{1}{N} \sum_{i=1}^{N} \| f_\theta(\mathbf{o}_i) - \mathbf{x}_i^* \|_2^2
+\label{eq:mse_loss}
+\end{equation}
+
+or mean absolute error (more robust to outliers):
+\begin{equation}
+\mathcal{L}_{\text{MAE}} = \frac{1}{N} \sum_{i=1}^{N} \| f_\theta(\mathbf{o}_i) - \mathbf{x}_i^* \|_1
+\label{eq:mae_loss}
+\end{equation}
+
+\textbf{Smooth L1 Loss} (Huber loss) combines both:
+\begin{equation}
+\mathcal{L}_{\text{Huber}}(e) = \begin{cases}
+\frac{1}{2} e^2 & \text{if } |e| < \delta \\
+\delta (|e| - \frac{1}{2}\delta) & \text{otherwise}
+\end{cases}
+\label{eq:huber_loss}
+\end{equation}
+
+Quadratic near zero (sensitive to small errors), linear for large errors (robust to outliers).
+
+\subsubsection{Handling Angular States}
+
+Angular states like rotation angles require special care due to wraparound ($\theta = 0$ and $\theta = 2\pi$ are identical):
+
+\textbf{Sine-Cosine Encoding:}
+\begin{equation}
+\text{Encode } \theta \text{ as } [\sin(\theta), \cos(\theta)]
+\label{eq:sincos_encoding}
+\end{equation}
+
+This maps angles to a continuous 2D representation without discontinuities. The inverse:
+\begin{equation}
+\theta = \text{atan2}(\sin(\theta), \cos(\theta))
+\label{eq:sincos_decode}
+\end{equation}
+
+\textbf{Geodesic Loss for Rotations:}
+
+For 3D rotations represented as rotation matrices $\mathbf{R}$:
+\begin{equation}
+\mathcal{L}_{\text{geodesic}}(\mathbf{R}, \mathbf{R}^*) = \| \log(\mathbf{R}^\top \mathbf{R}^*) \|_F
+\label{eq:geodesic_loss}
+\end{equation}
+
+This measures the true angular distance on SO(3), avoiding issues with Euler angle discontinuities.
+
+\subsubsection{Multi-Task Learning}
+
+Often we want to estimate multiple quantities: position, orientation, velocity, object pose. Multi-task learning trains a shared encoder with task-specific heads:
+\begin{equation}
+\hat{\mathbf{x}}_{\text{pos}} = g_{\text{pos}}(f_\theta(\mathbf{o})), \quad \hat{\mathbf{x}}_{\text{rot}} = g_{\text{rot}}(f_\theta(\mathbf{o})), \quad \ldots
+\label{eq:multitask}
+\end{equation}
+
+Combined loss:
+\begin{equation}
+\mathcal{L} = \sum_{\text{task } k} \lambda_k \mathcal{L}_k
+\label{eq:multitask_loss}
+\end{equation}
+
+\textbf{Loss weighting strategies:}
+\begin{itemize}
+    \item \textbf{Manual:} Set $\lambda_k$ based on task importance
+    \item \textbf{Uncertainty weighting:} Learn $\lambda_k$ as homoscedastic uncertainty (Kendall et al., 2018)
+    \item \textbf{Gradient balancing:} Adjust $\lambda_k$ to equalize gradient magnitudes
+\end{itemize}
+
+\subsubsection{Data Collection for Supervised Learning}
+
+Ground-truth states $\mathbf{x}^*$ must come from somewhere:
+
+\begin{itemize}
+    \item \textbf{Simulation:} Perfect ground truth available; domain gap is the challenge
+    \item \textbf{Motion capture:} High-accuracy tracking but limited to prepared environments
+    \item \textbf{Robot proprioception:} Joint encoders provide partial state (robot pose, not object pose)
+    \item \textbf{Manual annotation:} Labor-intensive but sometimes necessary
+\end{itemize}
+
+\warningbox{Supervised learning requires labeled data for every scenario the robot will encounter. This is often impractical for real-world deployment with diverse environments. Self-supervised methods address this limitation.}
+
+\subsection{Self-Supervised Learning}
+
+Self-supervised learning extracts supervisory signal from the data itself, eliminating the need for manual labels.
+
+\subsubsection{Reconstruction-Based Learning}
+
+Train an encoder-decoder pair (autoencoder) to reconstruct the input:
+\begin{equation}
+\mathcal{L}_{\text{recon}} = \| \mathbf{o} - \text{Dec}(f_\theta(\mathbf{o})) \|_2^2
+\label{eq:reconstruction_loss}
+\end{equation}
+
+The latent representation $\hat{\mathbf{z}} = f_\theta(\mathbf{o})$ must capture sufficient information to enable reconstruction.
+
+\textbf{Variational Autoencoder (VAE):}
+
+VAEs add a probabilistic twist, encouraging a structured latent space:
+\begin{equation}
+\mathcal{L}_{\text{VAE}} = \mathbb{E}_{q(\mathbf{z}|\mathbf{o})}[\log p(\mathbf{o}|\mathbf{z})] - D_{\text{KL}}(q(\mathbf{z}|\mathbf{o}) \| p(\mathbf{z}))
+\label{eq:vae_loss}
+\end{equation}
+
+where $q(\mathbf{z}|\mathbf{o})$ is the encoder, $p(\mathbf{o}|\mathbf{z})$ is the decoder, and $p(\mathbf{z}) = \mathcal{N}(0, \mathbf{I})$ is the prior.
+
+The KL divergence term regularizes the latent space, encouraging smoothness and preventing posterior collapse.
+
+\textbf{For control:} VAE latents can be fed to controllers, and the structured latent space enables interpolation and sampling.
+
+\subsubsection{Contrastive Learning}
+
+Contrastive methods learn representations by distinguishing similar from dissimilar pairs.
+
+\textbf{SimCLR Framework:}
+\begin{enumerate}
+    \item Apply random augmentations to each image, creating two views $\tilde{\mathbf{o}}_i$ and $\tilde{\mathbf{o}}_j$
+    \item Encode both views: $\mathbf{z}_i = f_\theta(\tilde{\mathbf{o}}_i)$, $\mathbf{z}_j = f_\theta(\tilde{\mathbf{o}}_j)$
+    \item Train to make views of the same image similar, different images dissimilar
+\end{enumerate}
+
+\textbf{NT-Xent Loss (Normalized Temperature-scaled Cross Entropy):}
+\begin{equation}
+\mathcal{L}_{i,j} = -\log \frac{\exp(\text{sim}(\mathbf{z}_i, \mathbf{z}_j) / \tau)}{\sum_{k \neq i} \exp(\text{sim}(\mathbf{z}_i, \mathbf{z}_k) / \tau)}
+\label{eq:ntxent}
+\end{equation}
+
+where $\text{sim}(\mathbf{u}, \mathbf{v}) = \mathbf{u}^\top \mathbf{v} / (\|\mathbf{u}\| \|\mathbf{v}\|)$ is cosine similarity and $\tau$ is a temperature parameter.
+
+\textbf{For robotics:} The choice of augmentations matters critically. Color jitter may be appropriate, but geometric augmentations (crop, flip) can destroy task-relevant information (e.g., left vs. right, object location).
+
+\subsubsection{Temporal Contrastive Learning}
+
+In robotics, temporal structure provides natural supervision: nearby frames show similar states.
+
+\textbf{Time Contrastive Networks (TCN):}
+\begin{itemize}
+    \item Positive pairs: Frames close in time from the same trajectory
+    \item Negative pairs: Frames from different times or trajectories
+\end{itemize}
+
+\begin{equation}
+\mathcal{L}_{\text{TCN}} = -\log \frac{\exp(\text{sim}(\mathbf{z}_t, \mathbf{z}_{t+\Delta}) / \tau)}{\exp(\text{sim}(\mathbf{z}_t, \mathbf{z}_{t+\Delta}) / \tau) + \sum_{\text{neg}} \exp(\text{sim}(\mathbf{z}_t, \mathbf{z}_{\text{neg}}) / \tau)}
+\label{eq:tcn_loss}
+\end{equation}
+
+This encourages the encoder to capture slowly-varying state information while discarding fast-varying nuisances (lighting flicker, noise).
+
+\subsubsection{Multi-View Contrastive Learning}
+
+With multiple cameras, different views of the same scene provide natural positive pairs:
+\begin{equation}
+\text{sim}(f_\theta(\mathbf{o}_{\text{cam1}}), f_\theta(\mathbf{o}_{\text{cam2}})) \text{ should be high}
+\label{eq:multiview_contrastive}
+\end{equation}
+
+This encourages view-invariant representations focused on 3D scene structure rather than 2D appearance.
+
+\subsection{Prediction-Based Learning}
+
+Learning to predict future observations or states provides rich supervisory signal.
+
+\subsubsection{Forward Prediction}
+
+Given observation and action, predict next observation:
+\begin{equation}
+\mathcal{L}_{\text{forward}} = \| \mathbf{o}_{t+1} - g_\phi(f_\theta(\mathbf{o}_t), \mathbf{u}_t) \|_2^2
+\label{eq:forward_prediction}
+\end{equation}
+
+where $g_\phi$ is a dynamics model operating on latent representations.
+
+\textbf{Latent forward prediction} avoids pixel reconstruction:
+\begin{equation}
+\mathcal{L}_{\text{latent}} = \| f_\theta(\mathbf{o}_{t+1}) - g_\phi(f_\theta(\mathbf{o}_t), \mathbf{u}_t) \|_2^2
+\label{eq:latent_forward}
+\end{equation}
+
+This trains the encoder to produce predictable representations.
+
+\subsubsection{Inverse Dynamics}
+
+Given two observations, predict the action that caused the transition:
+\begin{equation}
+\mathcal{L}_{\text{inverse}} = \| \mathbf{u}_t - g_\psi(f_\theta(\mathbf{o}_t), f_\theta(\mathbf{o}_{t+1})) \|_2^2
+\label{eq:inverse_dynamics}
+\end{equation}
+
+This encourages the representation to capture action-relevant state changes.
+
+\subsubsection{Joint Forward-Inverse Learning}
+
+Combining forward and inverse objectives often works better than either alone:
+\begin{equation}
+\mathcal{L} = \lambda_{\text{fwd}} \mathcal{L}_{\text{forward}} + \lambda_{\text{inv}} \mathcal{L}_{\text{inverse}}
+\label{eq:joint_fwd_inv}
+\end{equation}
+
+The encoder must capture both controllable aspects (inverse) and predictable dynamics (forward).
+
+\subsection{Training Pipelines and Practical Considerations}
+
+\subsubsection{Pre-training and Fine-tuning}
+
+A common workflow:
+\begin{enumerate}
+    \item \textbf{Pre-train} on large dataset (ImageNet) or with self-supervised objective on unlabeled robot data
+    \item \textbf{Fine-tune} on task-specific labeled data
+\end{enumerate}
+
+Pre-training provides good initialization; fine-tuning adapts to the specific task.
+
+\textbf{Freezing strategies:}
+\begin{itemize}
+    \item \textbf{Full fine-tuning:} Update all parameters
+    \item \textbf{Linear probing:} Freeze encoder, only train the head
+    \item \textbf{Gradual unfreezing:} Start frozen, progressively unfreeze deeper layers
+\end{itemize}
+
+\subsubsection{Data Augmentation}
+
+Augmentation creates artificial training diversity, improving generalization:
+
+\textbf{Standard image augmentations:}
+\begin{itemize}
+    \item Color jitter (brightness, contrast, saturation)
+    \item Random erasing / cutout
+    \item Gaussian noise
+    \item JPEG compression artifacts
+\end{itemize}
+
+\textbf{Geometric augmentations (use with care):}
+\begin{itemize}
+    \item Random crop (may change task-relevant positions)
+    \item Rotation (may destroy orientation information)
+    \item Flip (may invert left/right)
+\end{itemize}
+
+\keypoint{For control tasks, augmentations must not destroy task-relevant information. If the task requires knowing object position, random cropping is problematic. If orientation matters, rotations should be limited or avoided.}
+
+\subsubsection{Curriculum Learning}
+
+Start with easy examples, progressively increase difficulty:
+\begin{itemize}
+    \item Begin with simple backgrounds, add clutter gradually
+    \item Start with slow motions, increase speed
+    \item Begin with centered objects, add position variation
+\end{itemize}
+
+Curriculum learning can significantly speed convergence and improve final performance.
+
+\subsubsection{Domain Randomization}
+
+For sim-to-real transfer, randomize simulation parameters during training:
+\begin{itemize}
+    \item Lighting direction, intensity, color
+    \item Object textures and colors
+    \item Camera parameters (position, field of view, noise)
+    \item Physics parameters (friction, mass)
+\end{itemize}
+
+The encoder learns to ignore varied parameters and focus on invariant task-relevant features.
+
+\subsection{Evaluation Metrics for Learned Encoders}
+
+How do we know if our encoder is good? Evaluation depends on the end goal.
+
+\subsubsection{Direct State Estimation Metrics}
+
+If ground-truth states are available:
+\begin{itemize}
+    \item \textbf{Mean Absolute Error (MAE):} Average absolute prediction error
+    \item \textbf{Root Mean Square Error (RMSE):} Square root of mean squared error
+    \item \textbf{Percentage of correct predictions:} Fraction within tolerance
+\end{itemize}
+
+\subsubsection{Downstream Control Performance}
+
+The true test is control performance:
+\begin{itemize}
+    \item \textbf{Success rate:} Fraction of tasks completed successfully
+    \item \textbf{Tracking error:} Deviation from desired trajectory
+    \item \textbf{Sample efficiency:} How much data needed to achieve target performance
+\end{itemize}
+
+\subsubsection{Representation Quality Metrics}
+
+Evaluate the latent space directly:
+\begin{itemize}
+    \item \textbf{Linear probe accuracy:} How well can a linear classifier predict states from latents?
+    \item \textbf{Nearest neighbor consistency:} Do similar states map to nearby latents?
+    \item \textbf{Disentanglement scores:} Do latent dimensions correspond to distinct factors?
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\section{End-to-End vs. Modular Approaches}
+\label{sec:end_to_end_vs_modular}
+%-------------------------------------------------------------------------------
+
+A fundamental design choice in learned perception for control: should the perception and control systems be trained jointly (end-to-end) or separately (modular)?
+
+\subsection{The End-to-End Philosophy}
+
+End-to-end learning trains the entire pipeline---from raw sensors to control outputs---as a single differentiable system:
+\begin{equation}
+\mathbf{u} = \pi_\phi(f_\theta(\mathbf{o}))
+\label{eq:end_to_end}
+\end{equation}
+
+where $\theta$ (encoder) and $\phi$ (policy/controller) are jointly optimized.
+
+\subsubsection{Advantages of End-to-End}
+
+\begin{enumerate}
+    \item \textbf{Task-optimal representations:} The encoder learns exactly what the controller needs, avoiding wasted capacity on irrelevant features.
+
+    \item \textbf{No information bottleneck design:} We don't need to manually specify what intermediate representation should look like.
+
+    \item \textbf{Gradient flow:} Backpropagation from task performance directly shapes perception.
+
+    \item \textbf{Simplicity:} One training pipeline, one objective function.
+\end{enumerate}
+
+\subsubsection{Disadvantages of End-to-End}
+
+\begin{enumerate}
+    \item \textbf{Sample inefficiency:} Learning perception and control together requires more data than learning either separately.
+
+    \item \textbf{Interpretability:} Latent representations may not correspond to meaningful states; debugging is difficult.
+
+    \item \textbf{Transfer difficulty:} Changing the task may require retraining perception from scratch.
+
+    \item \textbf{Safety concerns:} Hard to verify what the system ``sees'' or guarantee behavior.
+
+    \item \textbf{Credit assignment:} When the system fails, is it perception or control at fault?
+\end{enumerate}
+
+\subsubsection{When End-to-End Works Well}
+
+End-to-end learning excels when:
+\begin{itemize}
+    \item Abundant data (simulation or extensive robot operation)
+    \item Task is fixed or narrowly defined
+    \item Interpretability is not required
+    \item The optimal representation is unknown or hard to specify
+\end{itemize}
+
+\textbf{Example:} Autonomous driving with millions of miles of data---AlphaGo-style approaches where compute and data are plentiful.
+
+\subsection{The Modular Philosophy}
+
+Modular approaches separate perception from control:
+\begin{equation}
+\hat{\mathbf{x}} = f_\theta(\mathbf{o}), \quad \mathbf{u} = \pi(\hat{\mathbf{x}})
+\label{eq:modular}
+\end{equation}
+
+The encoder produces interpretable state estimates; the controller operates on these estimates using classical or learned methods.
+
+\subsubsection{Advantages of Modular}
+
+\begin{enumerate}
+    \item \textbf{Interpretability:} State estimates can be inspected, validated, and debugged.
+
+    \item \textbf{Reusability:} A well-trained encoder can be reused for multiple downstream tasks.
+
+    \item \textbf{Safety verification:} Classical control techniques with provable guarantees can be applied to the estimated state.
+
+    \item \textbf{Sample efficiency:} Pre-trained perception reduces data needs for control learning.
+
+    \item \textbf{Debuggability:} Clear interface for isolating perception vs. control failures.
+\end{enumerate}
+
+\subsubsection{Disadvantages of Modular}
+
+\begin{enumerate}
+    \item \textbf{Information bottleneck:} The intermediate representation may discard information useful for control.
+
+    \item \textbf{Compounding errors:} Perception errors propagate to control; no end-to-end correction.
+
+    \item \textbf{Interface design:} Must decide what states to estimate, which may require domain knowledge.
+
+    \item \textbf{Suboptimal overall:} Separately optimal perception and control may not yield optimal joint performance.
+\end{enumerate}
+
+\subsubsection{When Modular Works Well}
+
+Modular approaches excel when:
+\begin{itemize}
+    \item Limited training data
+    \item Safety and interpretability are requirements
+    \item The state representation is well-understood
+    \item Multiple tasks share the same perception needs
+    \item Classical control provides sufficient performance
+\end{itemize}
+
+\textbf{Example:} Industrial manipulation with well-defined objects---use learned object detection, then classical motion planning.
+
+\subsection{Hybrid Approaches}
+
+In practice, pure end-to-end and pure modular are extremes. Hybrid approaches combine their strengths.
+
+\subsubsection{Auxiliary Supervision}
+
+Train end-to-end but add auxiliary losses that encourage interpretable intermediate representations:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{task}} + \lambda \mathcal{L}_{\text{aux}}(\hat{\mathbf{z}}, \mathbf{x}^*)
+\label{eq:auxiliary_supervision}
+\end{equation}
+
+The auxiliary loss encourages latent $\hat{\mathbf{z}}$ to predict ground-truth state $\mathbf{x}^*$, providing interpretability while allowing end-to-end task optimization.
+
+\subsubsection{Modular Training, End-to-End Fine-tuning}
+
+\begin{enumerate}
+    \item Train perception module with state supervision
+    \item Train control module on estimated states
+    \item Fine-tune end-to-end with task objective
+\end{enumerate}
+
+This gets the benefits of modular initialization with end-to-end refinement.
+
+\subsubsection{Frozen Perception}
+
+Train perception on diverse data, freeze it, then train only the controller:
+\begin{equation}
+\mathbf{u} = \pi_\phi(f_{\theta^*}(\mathbf{o}))
+\label{eq:frozen_perception}
+\end{equation}
+
+where $\theta^*$ is fixed. This leverages pre-trained perception while enabling task-specific control learning.
+
+\subsection{Comparison Summary}
+
+\begin{table}[htbp]
+\centering
+\caption{End-to-end vs. modular comparison}
+\label{tab:e2e_vs_modular}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Criterion} & \textbf{End-to-End} & \textbf{Modular} \\
+\midrule
+Data efficiency & Low & High \\
+Peak performance & High & Medium \\
+Interpretability & Low & High \\
+Safety verification & Difficult & Easier \\
+Transfer to new tasks & Difficult & Easier \\
+Debugging & Difficult & Easier \\
+Implementation complexity & Lower & Higher \\
+Domain knowledge required & Lower & Higher \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\keypoint{For safety-critical applications (medical robotics, autonomous vehicles in complex scenarios), modular or hybrid approaches with interpretable state estimates are strongly preferred. For research or when peak performance is paramount and data is abundant, end-to-end learning is attractive.}
+
+\subsection{Case Study: Robot Manipulation}
+
+Consider designing a vision-based manipulation system. Here's how the choice might play out:
+
+\textbf{End-to-end approach:}
+\begin{itemize}
+    \item Input: RGB image of workspace
+    \item Output: Gripper velocity commands
+    \item Training: Imitation learning from demonstrations or RL in simulation
+    \item Pros: Can learn subtle visuomotor coordination
+    \item Cons: Hard to verify what visual cues it uses; may fail unpredictably on new objects
+\end{itemize}
+
+\textbf{Modular approach:}
+\begin{itemize}
+    \item Perception: Object detector + pose estimator
+    \item Control: Motion planner with collision avoidance
+    \item Pros: Can verify object detection, inspect planned motions, add safety constraints
+    \item Cons: May not handle novel objects; perception errors cause planning failures
+\end{itemize}
+
+\textbf{Hybrid approach:}
+\begin{itemize}
+    \item Perception: Learned encoder with auxiliary keypoint supervision
+    \item Control: Learned policy with task reward + imitation regularization
+    \item Training: Pre-train perception, then fine-tune end-to-end
+    \item Pros: Interpretable keypoints for debugging; end-to-end refinement for performance
+    \item Cons: More complex training pipeline
+\end{itemize}
+
+The right choice depends on deployment context, available data, safety requirements, and acceptable failure modes.
+
+%-------------------------------------------------------------------------------
+\section{Practical Applications and Worked Examples}
+\label{sec:practical_applications}
+%-------------------------------------------------------------------------------
+
+This section presents detailed worked examples applying the concepts developed throughout this chapter. Each example includes problem formulation, architecture design, training procedures, and analysis.
+
+\subsection{Example 1: CNN Encoder for Pendulum Angle Estimation}
+
+\textbf{Problem:} Design a CNN encoder to estimate the angle $\theta$ of a simple pendulum from camera images.
+
+\subsubsection{Setup}
+
+We have a camera observing a pendulum. The image is $128 \times 128$ pixels, RGB. The task is to estimate $\theta \in [-\pi, \pi]$ from each frame.
+
+\textbf{Why is this non-trivial?} The relationship between pixels and angle depends on:
+\begin{itemize}
+    \item Camera position and orientation
+    \item Lighting conditions
+    \item Pendulum appearance (color, shape)
+    \item Background clutter
+\end{itemize}
+
+No closed-form equation exists; we must learn the mapping.
+
+\subsubsection{Architecture Design}
+
+We use a simple CNN encoder:
+
+\begin{align}
+&\text{Input: } 128 \times 128 \times 3 \\
+&\text{Conv}(3 \rightarrow 32, \text{kernel}=5, \text{stride}=2, \text{pad}=2) \rightarrow \text{BN} \rightarrow \text{ReLU} \quad \text{Output: } 64 \times 64 \times 32 \\
+&\text{Conv}(32 \rightarrow 64, \text{kernel}=3, \text{stride}=2, \text{pad}=1) \rightarrow \text{BN} \rightarrow \text{ReLU} \quad \text{Output: } 32 \times 32 \times 64 \\
+&\text{Conv}(64 \rightarrow 128, \text{kernel}=3, \text{stride}=2, \text{pad}=1) \rightarrow \text{BN} \rightarrow \text{ReLU} \quad \text{Output: } 16 \times 16 \times 128 \\
+&\text{Conv}(128 \rightarrow 256, \text{kernel}=3, \text{stride}=2, \text{pad}=1) \rightarrow \text{BN} \rightarrow \text{ReLU} \quad \text{Output: } 8 \times 8 \times 256 \\
+&\text{GlobalAvgPool} \quad \text{Output: } 256 \\
+&\text{FC}(256 \rightarrow 64) \rightarrow \text{ReLU} \\
+&\text{FC}(64 \rightarrow 2) \quad \text{Output: } [\sin(\theta), \cos(\theta)]
+\end{align}
+
+\textbf{Key design choices:}
+\begin{itemize}
+    \item Strided convolutions for downsampling (no pooling)
+    \item Output is $[\sin(\theta), \cos(\theta)]$ to handle angle wraparound
+    \item Global average pooling provides translation invariance
+    \item Total parameters: approximately 400K
+\end{itemize}
+
+\subsubsection{Training}
+
+\textbf{Data collection:}
+\begin{itemize}
+    \item Simulate pendulum at 1000 random angles
+    \item Render images with varied lighting (random directional light)
+    \item Add small random camera position perturbations
+    \item Record ground-truth $\theta$ for each image
+\end{itemize}
+
+\textbf{Loss function:}
+\begin{equation}
+\mathcal{L} = \left\| \begin{bmatrix} \hat{s} \\ \hat{c} \end{bmatrix} - \begin{bmatrix} \sin(\theta^*) \\ \cos(\theta^*) \end{bmatrix} \right\|_2^2
+\label{eq:pendulum_loss}
+\end{equation}
+
+where $[\hat{s}, \hat{c}]$ is the network output and $\theta^*$ is ground truth.
+
+\textbf{Training procedure:}
+\begin{itemize}
+    \item Optimizer: Adam with learning rate $10^{-3}$
+    \item Batch size: 64
+    \item Epochs: 100
+    \item Data augmentation: Color jitter, Gaussian noise
+\end{itemize}
+
+\subsubsection{Inference}
+
+At test time, recover angle from network output:
+\begin{equation}
+\hat{\theta} = \text{atan2}(\hat{s}, \hat{c})
+\label{eq:pendulum_inference}
+\end{equation}
+
+\subsubsection{Results Analysis}
+
+After training:
+\begin{itemize}
+    \item Mean absolute error: $1.2°$ on test set
+    \item 95th percentile error: $3.5°$
+    \item Inference time: 2.1 ms on GPU
+\end{itemize}
+
+\textbf{Failure modes:}
+\begin{itemize}
+    \item Errors increase when pendulum rod aligns with lighting direction (low contrast)
+    \item Extreme angles near $\pm 180°$ have slightly higher error
+\end{itemize}
+
+\textbf{Integration with control:}
+The estimated angle can be fed to a PD controller:
+\begin{equation}
+\tau = K_p (\theta_{\text{ref}} - \hat{\theta}) + K_d (0 - \hat{\dot{\theta}})
+\label{eq:pendulum_pd}
+\end{equation}
+
+where $\hat{\dot{\theta}}$ is estimated by finite difference of consecutive $\hat{\theta}$ values or from a frame-stacking encoder.
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 2: ViT Encoder for Robot Arm State Estimation}
+
+\textbf{Problem:} Estimate the 6-DOF joint angles of a robot arm from a single camera image.
+
+\subsubsection{Setup}
+
+A stationary camera observes a 6-DOF robot arm. The goal is to estimate joint angles $\mathbf{q} = [q_1, \ldots, q_6]^\top$ from images of size $224 \times 224 \times 3$.
+
+\textbf{Challenge:} Self-occlusion---some joints may not be visible from the camera viewpoint. The model must infer occluded joint angles from visible arm configuration.
+
+\subsubsection{Architecture}
+
+We use ViT-Small:
+\begin{itemize}
+    \item Patch size: $16 \times 16$ $\Rightarrow$ $N = 196$ patches
+    \item Embedding dimension: $D = 384$
+    \item Layers: $L = 12$
+    \item Heads: $h = 6$
+    \item MLP hidden dimension: $1536$
+\end{itemize}
+
+Output head:
+\begin{align}
+\mathbf{z}_{\text{cls}} &\in \mathbb{R}^{384} \\
+\text{MLP}(384 \rightarrow 128 \rightarrow 12) &\Rightarrow [\sin(q_1), \cos(q_1), \ldots, \sin(q_6), \cos(q_6)]
+\end{align}
+
+\subsubsection{Training Details}
+
+\textbf{Data:}
+\begin{itemize}
+    \item 50,000 robot configurations from simulation
+    \item Random joint angles within limits
+    \item Randomized lighting and textures (domain randomization)
+    \item 80/10/10 train/val/test split
+\end{itemize}
+
+\textbf{Pre-training:} Initialize ViT from ImageNet pre-trained weights (except patch embedding and output head).
+
+\textbf{Loss:} Sum of per-joint sine-cosine MSE losses.
+
+\textbf{Training:}
+\begin{itemize}
+    \item Optimizer: AdamW with weight decay $0.01$
+    \item Learning rate: $10^{-4}$ with cosine decay
+    \item Batch size: 32
+    \item Epochs: 50
+\end{itemize}
+
+\subsubsection{Attention Analysis}
+
+After training, we visualize attention from the CLS token to image patches. Key observations:
+
+\begin{enumerate}
+    \item \textbf{Joint 1 (base):} Attention focuses on base rotation indicator
+    \item \textbf{Joint 2-3 (shoulder/elbow):} Attention on upper arm and elbow
+    \item \textbf{Joint 4-6 (wrist):} Attention concentrates on end-effector
+\end{enumerate}
+
+The attention maps confirm the model has learned to focus on task-relevant regions.
+
+\subsubsection{Results}
+
+\begin{table}[htbp]
+\centering
+\caption{Joint angle estimation errors (degrees)}
+\label{tab:robot_arm_results}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Metric} & \textbf{$q_1$} & \textbf{$q_2$} & \textbf{$q_3$} & \textbf{$q_4$} & \textbf{$q_5$} & \textbf{$q_6$} \\
+\midrule
+MAE & 1.8 & 2.3 & 2.1 & 3.2 & 3.8 & 4.1 \\
+RMSE & 2.4 & 3.1 & 2.8 & 4.5 & 5.2 & 5.6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Wrist joints (4-6) have higher error due to smaller visual appearance change per degree and frequent occlusion.
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 3: Attention Visualization for Grasp Quality Prediction}
+
+\textbf{Problem:} Given an image of a robotic gripper approaching an object, predict grasp success probability and visualize which image regions influence the prediction.
+
+\subsubsection{Setup}
+
+\begin{itemize}
+    \item Input: $224 \times 224$ RGB image showing gripper and object
+    \item Output: Probability $p \in [0, 1]$ of successful grasp
+    \item Architecture: ViT-Tiny with binary classification head
+\end{itemize}
+
+\subsubsection{Attention Extraction}
+
+For layer $l$ and head $h$, extract attention weights $\mathbf{A}^{(l,h)} \in \mathbb{R}^{(N+1) \times (N+1)}$.
+
+\textbf{Rollout attention:} Aggregate attention across layers:
+\begin{equation}
+\bar{\mathbf{A}} = \mathbf{I} + \frac{1}{L \cdot h} \sum_{l=1}^{L} \sum_{h=1}^{H} \mathbf{A}^{(l,h)}
+\label{eq:rollout_init}
+\end{equation}
+\begin{equation}
+\tilde{\mathbf{A}} = \bar{\mathbf{A}}^L \quad \text{(matrix power)}
+\label{eq:rollout_power}
+\end{equation}
+
+\textbf{CLS attention map:} Extract row corresponding to CLS token, reshape to image grid.
+
+\subsubsection{Interpretation}
+
+For a successful grasp prediction ($p = 0.92$):
+\begin{itemize}
+    \item High attention on gripper fingers aligned with object
+    \item High attention on contact points
+    \item Low attention on background and table
+\end{itemize}
+
+For a failed grasp prediction ($p = 0.15$):
+\begin{itemize}
+    \item Attention on gripper missing the object
+    \item Attention on collision regions
+    \item Some attention on object edges where grasp would slip
+\end{itemize}
+
+\keypoint{Attention visualization provides interpretable explanations for model predictions, crucial for debugging failures and building trust in learned perception systems.}
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 4: Feature Extraction for Object Manipulation}
+
+\textbf{Problem:} Design a perception system that extracts task-relevant features for pick-and-place manipulation.
+
+\subsubsection{Task Definition}
+
+The robot must:
+\begin{enumerate}
+    \item Detect target object in cluttered scene
+    \item Estimate 6-DOF object pose
+    \item Plan grasp and motion
+\end{enumerate}
+
+\subsubsection{Two-Stage Architecture}
+
+\textbf{Stage 1: Object Detection (Frozen backbone)}
+\begin{itemize}
+    \item Use pre-trained object detector (e.g., YOLO, Faster R-CNN)
+    \item Crop region of interest around detected object
+    \item Output: Bounding box, object class
+\end{itemize}
+
+\textbf{Stage 2: Pose Estimation (Task-specific)}
+\begin{itemize}
+    \item Input: Cropped object region ($128 \times 128$)
+    \item Architecture: ResNet-18 encoder + pose head
+    \item Output: 3D position $(x, y, z)$ and rotation (quaternion)
+\end{itemize}
+
+\subsubsection{Spatial Feature Maps}
+
+Instead of global pooling, preserve spatial features:
+\begin{equation}
+\mathbf{F} = f_{\text{backbone}}(\mathbf{o}) \in \mathbb{R}^{C \times H' \times W'}
+\label{eq:spatial_features}
+\end{equation}
+
+Apply Spatial Softmax to extract keypoint coordinates:
+\begin{equation}
+(u_c, v_c) = \sum_{i,j} \text{softmax}(\mathbf{F}_c)_{i,j} \cdot (i, j)
+\label{eq:keypoint_extraction}
+\end{equation}
+
+For $C = 32$ channels, we get 32 keypoints $(u_c, v_c)_{c=1}^{32}$ representing salient object features.
+
+\subsubsection{From Keypoints to Pose}
+
+A small MLP maps keypoints to pose:
+\begin{equation}
+(\hat{\mathbf{p}}, \hat{\mathbf{q}}) = g_\phi([(u_1, v_1), \ldots, (u_{32}, v_{32})])
+\label{eq:keypoint_to_pose}
+\end{equation}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Keypoints are interpretable---we can visualize them on the image
+    \item Intermediate representation aids debugging
+    \item Camera calibration changes only require re-training the MLP, not the backbone
+\end{itemize}
+
+\subsubsection{Results}
+
+Position error: $< 5$ mm for objects within 50 cm of camera.
+
+Orientation error: $< 5°$ for symmetric objects.
+
+\textbf{Failure analysis:} Errors increase for highly symmetric objects (orientation ambiguity) and reflective surfaces (specular reflections confuse features).
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 5: Training a Perception Encoder with Contrastive Learning}
+
+\textbf{Problem:} Train an image encoder for robot manipulation without any labeled data.
+
+\subsubsection{Data Collection}
+
+Collect 100,000 images from robot operation:
+\begin{itemize}
+    \item Random motions in workspace
+    \item Various objects, lighting conditions
+    \item No labels---just raw images
+\end{itemize}
+
+\subsubsection{SimCLR Training}
+
+\textbf{Augmentation pipeline:}
+\begin{enumerate}
+    \item Random crop (90-100\% of image) and resize to $224 \times 224$
+    \item Random horizontal flip (disabled if task is lateralized)
+    \item Color jitter (brightness 0.4, contrast 0.4, saturation 0.4, hue 0.1)
+    \item Random grayscale (probability 0.2)
+    \item Gaussian blur (probability 0.5)
+\end{enumerate}
+
+\textbf{Network:} ResNet-18 backbone + MLP projection head ($512 \rightarrow 256 \rightarrow 128$).
+
+\textbf{Loss:} NT-Xent with temperature $\tau = 0.1$.
+
+\textbf{Training:}
+\begin{itemize}
+    \item Batch size: 256 (need large batches for contrastive learning)
+    \item Epochs: 200
+    \item Optimizer: LARS with learning rate 0.3
+\end{itemize}
+
+\subsubsection{Evaluation: Linear Probe}
+
+Freeze the encoder, train a linear classifier on top:
+\begin{equation}
+\hat{\mathbf{x}} = \mathbf{W} f_\theta(\mathbf{o}) + \mathbf{b}
+\label{eq:linear_probe}
+\end{equation}
+
+With 1000 labeled examples:
+\begin{itemize}
+    \item Object position error: 12 mm (contrastive) vs. 8 mm (supervised with all data)
+    \item Significant data efficiency improvement
+\end{itemize}
+
+\subsubsection{Transfer to New Task}
+
+The contrastive encoder transfers to a new manipulation task (different objects):
+\begin{itemize}
+    \item Fine-tune last two ResNet blocks + new head
+    \item 500 labeled examples achieve same performance as 5000 with random initialization
+    \item 10$\times$ data efficiency gain
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 6: Latent Space Analysis for Learned Representations}
+
+\textbf{Problem:} Analyze and visualize the latent space of a trained encoder to understand what it has learned.
+
+\subsubsection{Setup}
+
+We have a trained encoder $f_\theta$ producing latent representations $\mathbf{z} \in \mathbb{R}^{64}$ for a mobile robot navigation task.
+
+\subsubsection{Dimensionality Reduction for Visualization}
+
+Apply t-SNE or UMAP to project 64D latents to 2D:
+\begin{equation}
+\mathbf{z}^{2D} = \text{UMAP}(\mathbf{z})
+\label{eq:umap}
+\end{equation}
+
+Color points by ground-truth labels (robot position, orientation, room ID).
+
+\subsubsection{Observations}
+
+\textbf{Position encoding:}
+\begin{itemize}
+    \item Nearby physical positions cluster together in latent space
+    \item Smooth transitions between adjacent regions
+    \item Indicates the encoder has learned spatial structure
+\end{itemize}
+
+\textbf{Orientation encoding:}
+\begin{itemize}
+    \item Orientations form circular patterns within position clusters
+    \item 180° orientations are far apart; 0° and 360° are close
+    \item Encoder has learned angular periodicity
+\end{itemize}
+
+\textbf{Room segmentation:}
+\begin{itemize}
+    \item Different rooms form distinct clusters
+    \item Doorways appear as thin bridges between clusters
+    \item Encoder captures topological structure
+\end{itemize}
+
+\subsubsection{Nearest Neighbor Analysis}
+
+For each test image, find $k$-nearest neighbors in latent space:
+\begin{equation}
+\text{NN}_k(\mathbf{z}) = \text{argmin}_{k} \| \mathbf{z} - \mathbf{z}_i \|_2
+\label{eq:knn}
+\end{equation}
+
+Evaluate: Do nearest neighbors have similar ground-truth states?
+
+\textbf{Results:}
+\begin{itemize}
+    \item 95\% of nearest neighbors within 0.5 m of query position
+    \item 88\% within 20° of query orientation
+    \item Strong correlation between latent and physical distance
+\end{itemize}
+
+\subsubsection{Disentanglement Analysis}
+
+Compute correlation between each latent dimension and ground-truth factors:
+\begin{equation}
+\rho_{ij} = \text{corr}(z_i, \text{factor}_j)
+\label{eq:disentanglement}
+\end{equation}
+
+\textbf{Findings:}
+\begin{itemize}
+    \item Dimensions 1-5 correlate strongly with $x$-position
+    \item Dimensions 6-10 correlate with $y$-position
+    \item Dimensions 11-15 correlate with orientation
+    \item Remaining dimensions capture lighting, time of day, clutter
+\end{itemize}
+
+Partial disentanglement emerges from training, though not perfect.
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 7: Multi-View Fusion for 3D State Estimation}
+
+\textbf{Problem:} Estimate 3D object pose using two cameras with known extrinsics.
+
+\subsubsection{Architecture}
+
+\textbf{Per-view encoding:}
+\begin{equation}
+\mathbf{z}_1 = f_\theta(\mathbf{o}_1), \quad \mathbf{z}_2 = f_\theta(\mathbf{o}_2)
+\label{eq:multiview_encode}
+\end{equation}
+
+Same encoder for both views (weight sharing).
+
+\textbf{Cross-attention fusion:}
+\begin{align}
+\mathbf{z}_1' &= \mathbf{z}_1 + \text{CrossAttn}(\mathbf{z}_1, \mathbf{z}_2) \\
+\mathbf{z}_2' &= \mathbf{z}_2 + \text{CrossAttn}(\mathbf{z}_2, \mathbf{z}_1)
+\end{align}
+
+\textbf{Final prediction:}
+\begin{equation}
+\hat{\mathbf{x}} = g_\phi(\mathbf{z}_1' + \mathbf{z}_2')
+\label{eq:multiview_predict}
+\end{equation}
+
+\subsubsection{Comparison with Baselines}
+
+\begin{table}[htbp]
+\centering
+\caption{Multi-view fusion comparison (position RMSE in mm)}
+\label{tab:multiview_comparison}
+\begin{tabular}{lc}
+\toprule
+\textbf{Method} & \textbf{Position RMSE} \\
+\midrule
+Single view (camera 1 only) & 15.2 \\
+Single view (camera 2 only) & 14.8 \\
+Early fusion (concatenate images) & 12.1 \\
+Late fusion (concatenate features) & 10.5 \\
+Cross-attention fusion & 8.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Cross-attention fusion outperforms alternatives by learning which view to trust for each spatial region.
+
+\subsubsection{Attention Pattern Analysis}
+
+Attention patterns reveal:
+\begin{itemize}
+    \item When object is occluded in view 1, attention increases to corresponding region in view 2
+    \item Edges and corners receive high cross-attention (geometrically informative)
+    \item Texture regions receive low cross-attention (view-dependent, not useful for 3D)
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 8: Real-Time Encoder Optimization}
+
+\textbf{Problem:} Deploy a perception encoder on a robot with 10 ms latency budget.
+
+\subsubsection{Baseline Analysis}
+
+ResNet-18 encoder:
+\begin{itemize}
+    \item Parameters: 11.7M
+    \item Inference time (GPU): 5.2 ms
+    \item Inference time (CPU): 48 ms
+    \item Accuracy: baseline
+\end{itemize}
+
+\subsubsection{Optimization Strategies}
+
+\textbf{1. Model compression (pruning):}
+
+Remove 50\% of weights with smallest magnitude:
+\begin{itemize}
+    \item Parameters: 5.9M
+    \item Inference time (GPU): 4.1 ms
+    \item Accuracy drop: 2\%
+\end{itemize}
+
+\textbf{2. Knowledge distillation:}
+
+Train a smaller student network to mimic the larger teacher:
+\begin{equation}
+\mathcal{L}_{\text{distill}} = \lambda \mathcal{L}_{\text{task}} + (1-\lambda) \| f_{\text{student}}(\mathbf{o}) - f_{\text{teacher}}(\mathbf{o}) \|_2^2
+\label{eq:distillation}
+\end{equation}
+
+MobileNet-V2 student:
+\begin{itemize}
+    \item Parameters: 3.5M
+    \item Inference time (GPU): 2.8 ms
+    \item Inference time (CPU): 18 ms
+    \item Accuracy drop: 5\%
+\end{itemize}
+
+\textbf{3. Quantization:}
+
+Convert from FP32 to INT8:
+\begin{itemize}
+    \item Parameters: 3.5M (same count, 4$\times$ smaller storage)
+    \item Inference time (CPU): 9 ms
+    \item Accuracy drop: 1\% additional
+\end{itemize}
+
+\subsubsection{Final Deployment Configuration}
+
+MobileNet-V2 with INT8 quantization:
+\begin{itemize}
+    \item Inference time: 9 ms (within 10 ms budget)
+    \item Total accuracy drop from baseline: 6\%
+    \item Acceptable tradeoff for real-time deployment
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 9: Domain Adaptation for Sim-to-Real Transfer}
+
+\textbf{Problem:} An encoder trained in simulation fails when deployed on real robot due to visual domain gap.
+
+\subsubsection{Domain Gap Analysis}
+
+Simulation vs. reality differences:
+\begin{itemize}
+    \item Lighting: Uniform in sim, variable in real
+    \item Textures: Synthetic in sim, complex in real
+    \item Noise: Clean in sim, sensor noise in real
+    \item Dynamics: Idealized in sim, friction/backlash in real
+\end{itemize}
+
+\subsubsection{Domain Randomization}
+
+During simulation training, randomize:
+\begin{itemize}
+    \item Lighting direction: Uniform on hemisphere
+    \item Lighting color: Temperature 3000K--7000K
+    \item Object textures: Random colors, patterns
+    \item Camera noise: Gaussian $\sigma = 0.02$
+    \item Camera position: $\pm 5$ cm perturbation
+\end{itemize}
+
+\subsubsection{Results}
+
+\begin{table}[htbp]
+\centering
+\caption{Sim-to-real transfer performance (success rate \%)}
+\label{tab:sim_to_real}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Training} & \textbf{Sim Test} & \textbf{Real Test} \\
+\midrule
+Sim only (no randomization) & 95 & 42 \\
+Sim with domain randomization & 89 & 78 \\
+Sim + 100 real examples fine-tune & 88 & 85 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Domain randomization significantly improves real-world performance. Fine-tuning on small real dataset closes remaining gap.
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 10: Temporal Encoding for Velocity Estimation}
+
+\textbf{Problem:} Estimate object velocity from a sequence of images.
+
+\subsubsection{Challenge}
+
+Single-frame encoders cannot estimate velocity---it requires temporal information.
+
+\subsubsection{Architecture: Frame Stacking + 3D Convolution}
+
+Stack 4 consecutive frames:
+\begin{equation}
+\mathbf{o}_{\text{stack}} = [\mathbf{o}_{t-3}, \mathbf{o}_{t-2}, \mathbf{o}_{t-1}, \mathbf{o}_t] \in \mathbb{R}^{4 \times H \times W \times C}
+\label{eq:frame_stack}
+\end{equation}
+
+Apply 3D convolutions that operate across time:
+\begin{equation}
+\text{Conv3D}(4 \times 3 \rightarrow 64, \text{kernel}=(2, 5, 5))
+\label{eq:conv3d}
+\end{equation}
+
+The temporal kernel (size 2) learns to detect motion.
+
+\subsubsection{Alternative: Optical Flow + 2D CNN}
+
+Compute optical flow between consecutive frames, concatenate with current frame:
+\begin{equation}
+\mathbf{o}_{\text{flow}} = [\mathbf{o}_t, \text{Flow}(\mathbf{o}_{t-1}, \mathbf{o}_t)]
+\label{eq:optical_flow_input}
+\end{equation}
+
+Optical flow explicitly encodes motion; CNN extracts velocity from flow patterns.
+
+\subsubsection{Results Comparison}
+
+\begin{table}[htbp]
+\centering
+\caption{Velocity estimation comparison}
+\label{tab:velocity_estimation}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Velocity MAE (m/s)} & \textbf{Inference (ms)} \\
+\midrule
+Single frame (impossible) & N/A & N/A \\
+Frame difference & 0.15 & 1.2 \\
+Optical flow + CNN & 0.08 & 8.5 \\
+3D CNN (4 frames) & 0.09 & 6.2 \\
+Temporal transformer & 0.07 & 12.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Optical flow provides explicit motion cues; 3D CNN learns motion patterns implicitly. Temporal transformer achieves best accuracy but at higher computational cost.
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 11: Uncertainty-Aware State Estimation}
+
+\textbf{Problem:} Provide uncertainty estimates alongside state predictions for safe control.
+
+\subsubsection{Probabilistic Encoder Design}
+
+Output mean and log-variance:
+\begin{equation}
+f_\theta(\mathbf{o}) = (\boldsymbol{\mu}, \log \boldsymbol{\sigma}^2) \in \mathbb{R}^{2d}
+\label{eq:prob_encoder}
+\end{equation}
+
+\textbf{Why log-variance?} Ensures $\sigma^2 > 0$ via $\sigma^2 = \exp(\log \sigma^2)$.
+
+\subsubsection{Training with Negative Log-Likelihood}
+
+Assume Gaussian output distribution:
+\begin{equation}
+\mathcal{L} = \frac{1}{2} \sum_{i=1}^{d} \left[ \frac{(x_i^* - \mu_i)^2}{\sigma_i^2} + \log \sigma_i^2 \right]
+\label{eq:nll_loss}
+\end{equation}
+
+This loss:
+\begin{itemize}
+    \item Penalizes prediction errors scaled by uncertainty
+    \item Penalizes overconfidence (small $\sigma$ with large error)
+    \item Rewards appropriate uncertainty calibration
+\end{itemize}
+
+\subsubsection{Calibration Analysis}
+
+For well-calibrated uncertainty:
+\begin{itemize}
+    \item 68\% of true values should fall within $\mu \pm \sigma$
+    \item 95\% within $\mu \pm 2\sigma$
+\end{itemize}
+
+\textbf{Results:}
+\begin{itemize}
+    \item Empirical coverage at $1\sigma$: 71\% (well-calibrated)
+    \item Empirical coverage at $2\sigma$: 94\% (slightly overconfident)
+\end{itemize}
+
+\subsubsection{Uncertainty-Aware Control}
+
+Use uncertainty for adaptive control gains:
+\begin{equation}
+K_p(\sigma) = K_{p,\text{base}} \cdot \min\left(1, \frac{\sigma_{\text{threshold}}}{\sigma}\right)
+\label{eq:uncertainty_control}
+\end{equation}
+
+High uncertainty $\Rightarrow$ lower gains $\Rightarrow$ more conservative behavior.
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 12: Hybrid CNN-Transformer for Manipulation}
+
+\textbf{Problem:} Design an encoder that combines CNN efficiency with transformer global reasoning for a challenging manipulation task.
+
+\subsubsection{Task: Cluttered Bin Picking}
+
+Pick target object from cluttered bin with many similar objects. Requires:
+\begin{itemize}
+    \item Local feature extraction (object boundaries, textures)
+    \item Global reasoning (which object is accessible, collision-free)
+\end{itemize}
+
+\subsubsection{Architecture}
+
+\textbf{Stage 1: CNN Feature Extraction}
+\begin{equation}
+\mathbf{F} = \text{ResNet18\_stem}(\mathbf{o}) \in \mathbb{R}^{256 \times 14 \times 14}
+\label{eq:cnn_features}
+\end{equation}
+
+Produces spatial feature map.
+
+\textbf{Stage 2: Patchify and Embed}
+\begin{equation}
+\mathbf{Z}_0 = \text{Flatten}(\mathbf{F}) + \mathbf{E}_{\text{pos}} \in \mathbb{R}^{196 \times 256}
+\label{eq:patchify}
+\end{equation}
+
+Treat CNN feature map as tokens.
+
+\textbf{Stage 3: Transformer Blocks}
+
+Apply 4 transformer encoder blocks:
+\begin{equation}
+\mathbf{Z}_4 = \text{TransformerEncoder}(\mathbf{Z}_0, L=4, H=8)
+\label{eq:transformer_stage}
+\end{equation}
+
+\textbf{Stage 4: Output}
+\begin{equation}
+\hat{\mathbf{x}} = \text{MLP}(\text{MeanPool}(\mathbf{Z}_4))
+\label{eq:hybrid_output}
+\end{equation}
+
+\subsubsection{Comparison}
+
+\begin{table}[htbp]
+\centering
+\caption{Cluttered bin picking performance}
+\label{tab:bin_picking}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Success \%} & \textbf{Params} & \textbf{Latency (ms)} \\
+\midrule
+CNN only (ResNet-18) & 72 & 11.7M & 5.2 \\
+ViT-Small & 68 & 22M & 8.5 \\
+Hybrid CNN-Transformer & 81 & 14.2M & 7.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The hybrid approach outperforms both pure CNN (lacks global reasoning) and pure ViT (insufficient inductive bias for limited data).
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 13: Self-Supervised Pre-training for Navigation}
+
+\textbf{Problem:} Train a perception encoder for indoor navigation using only unlabeled video.
+
+\subsubsection{Data}
+
+10 hours of robot exploration video:
+\begin{itemize}
+    \item RGB images at 10 Hz
+    \item Odometry (robot motion between frames)
+    \item No position labels, no maps
+\end{itemize}
+
+\subsubsection{Training Objectives}
+
+\textbf{1. Temporal contrastive:}
+Adjacent frames (positive), distant frames (negative).
+
+\textbf{2. Inverse dynamics:}
+Predict odometry from consecutive frame embeddings:
+\begin{equation}
+\hat{\mathbf{u}} = g_{\text{inv}}(f_\theta(\mathbf{o}_t), f_\theta(\mathbf{o}_{t+1}))
+\label{eq:inv_dyn_nav}
+\end{equation}
+
+\textbf{3. Forward prediction:}
+Predict future embedding from current embedding and action:
+\begin{equation}
+\hat{\mathbf{z}}_{t+1} = g_{\text{fwd}}(f_\theta(\mathbf{o}_t), \mathbf{u}_t)
+\label{eq:fwd_pred_nav}
+\end{equation}
+
+\textbf{Combined loss:}
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{contrastive}} + \lambda_{\text{inv}} \mathcal{L}_{\text{inverse}} + \lambda_{\text{fwd}} \mathcal{L}_{\text{forward}}
+\label{eq:combined_ssl}
+\end{equation}
+
+\subsubsection{Downstream Evaluation}
+
+\textbf{Task:} Point-goal navigation---navigate to coordinates without map.
+
+\textbf{Results with 100 labeled trajectories:}
+\begin{itemize}
+    \item Random init: 45\% success
+    \item ImageNet pre-train: 58\% success
+    \item Self-supervised pre-train: 72\% success
+\end{itemize}
+
+Self-supervised pre-training on domain-specific data outperforms generic ImageNet features.
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 14: Encoder Fine-tuning Strategies}
+
+\textbf{Problem:} Fine-tune a pre-trained encoder for a new manipulation task with limited data (500 examples).
+
+\subsubsection{Strategies Compared}
+
+\textbf{1. Full fine-tuning:}
+Update all encoder parameters.
+
+\textbf{2. Linear probing:}
+Freeze encoder, only train output head.
+
+\textbf{3. Last-layer fine-tuning:}
+Freeze all but final encoder block.
+
+\textbf{4. Gradual unfreezing:}
+Start with linear probing, progressively unfreeze layers.
+
+\textbf{5. LoRA (Low-Rank Adaptation):}
+Add small trainable matrices to frozen layers:
+\begin{equation}
+\mathbf{W}' = \mathbf{W} + \mathbf{B}\mathbf{A}, \quad \mathbf{B} \in \mathbb{R}^{d \times r}, \mathbf{A} \in \mathbb{R}^{r \times d}
+\label{eq:lora}
+\end{equation}
+where $r \ll d$ (e.g., $r = 8$).
+
+\subsubsection{Results}
+
+\begin{table}[htbp]
+\centering
+\caption{Fine-tuning strategy comparison (500 examples)}
+\label{tab:finetuning}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Strategy} & \textbf{Test MAE} & \textbf{Trainable Params} \\
+\midrule
+Full fine-tuning & 8.5 & 11.7M (100\%) \\
+Linear probing & 12.3 & 0.1M (0.8\%) \\
+Last-layer FT & 9.8 & 2.4M (20\%) \\
+Gradual unfreezing & 7.9 & 11.7M (100\%) \\
+LoRA ($r=8$) & 8.2 & 0.3M (2.5\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Gradual unfreezing achieves best performance; LoRA provides excellent accuracy-parameter tradeoff.
+
+%-------------------------------------------------------------------------------
+
+\subsection{Example 15: Complete Perception Pipeline for Autonomous Racing}
+
+\textbf{Problem:} Design end-to-end perception for an autonomous racing car operating at 50 Hz.
+
+\subsubsection{Requirements}
+
+\begin{itemize}
+    \item Input: 3 cameras (front, left, right), $640 \times 480$ each
+    \item Output: Track boundaries, opponent positions, optimal racing line
+    \item Latency budget: 20 ms total (perception + control)
+    \item Perception budget: 12 ms
+\end{itemize}
+
+\subsubsection{Architecture}
+
+\textbf{Shared backbone:}
+EfficientNet-B0 (5.3M params, 4 ms per image)
+
+Process 3 cameras in parallel $\Rightarrow$ 4 ms total (GPU parallelism).
+
+\textbf{Multi-view fusion:}
+\begin{equation}
+\mathbf{z}_{\text{fused}} = \text{MLP}([\mathbf{z}_{\text{front}}, \mathbf{z}_{\text{left}}, \mathbf{z}_{\text{right}}])
+\label{eq:racing_fusion}
+\end{equation}
+Latency: 2 ms
+
+\textbf{Task heads:}
+\begin{itemize}
+    \item Track boundary: 2D polynomial coefficients (2 ms)
+    \item Opponent detection: Bounding boxes via small detection head (3 ms)
+    \item Racing line: Waypoints in vehicle frame (1 ms)
+\end{itemize}
+
+Total latency: $4 + 2 + 3 = 9$ ms (within 12 ms budget).
+
+\subsubsection{Training Pipeline}
+
+\textbf{Phase 1: Simulation pre-training}
+\begin{itemize}
+    \item 1M frames from racing simulator
+    \item Domain randomization (weather, lighting, track textures)
+    \item Multi-task supervised learning
+\end{itemize}
+
+\textbf{Phase 2: Real-world fine-tuning}
+\begin{itemize}
+    \item 50K frames from real test track
+    \item Gradual unfreezing strategy
+    \item Focus on domain-specific features (tire marks, actual opponents)
+\end{itemize}
+
+\subsubsection{Performance}
+
+\begin{itemize}
+    \item Track boundary error: $< 10$ cm at 30 m lookahead
+    \item Opponent detection: 98\% recall, 95\% precision
+    \item Racing line error: $< 20$ cm
+    \item Overall system enables competitive lap times against human drivers
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\section{Algorithm Implementations}
+\label{sec:algorithm_implementations}
+%-------------------------------------------------------------------------------
+
+This section provides production-ready pseudocode for the core algorithms covered in this chapter. Each algorithm includes complexity analysis, numerical considerations, and implementation guidance.
+
+\subsection{CNN Encoder Implementation}
+
+\begin{algorithm}[H]
+\caption{CNN Encoder for State Estimation}
+\label{alg:cnn_encoder}
+\begin{algorithmic}[1]
+\REQUIRE Image $\mathbf{o} \in \mathbb{R}^{H \times W \times C}$, encoder parameters $\theta$
+\ENSURE Latent state $\hat{\mathbf{z}} \in \mathbb{R}^d$
+\STATE \COMMENT{Convolutional feature extraction}
+\STATE $\mathbf{h} \gets \mathbf{o}$
+\FOR{$l = 1$ \TO $L_{\text{conv}}$}
+    \STATE $\mathbf{h} \gets \text{Conv2D}(\mathbf{h}; \mathbf{W}_l, \mathbf{b}_l, \text{stride}_l, \text{padding}_l)$
+    \STATE $\mathbf{h} \gets \text{BatchNorm}(\mathbf{h}; \gamma_l, \beta_l)$
+    \STATE $\mathbf{h} \gets \text{ReLU}(\mathbf{h})$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Global pooling to fixed-size vector}
+\STATE $\bar{\mathbf{h}} \gets \text{GlobalAveragePool}(\mathbf{h})$ \COMMENT{$\bar{\mathbf{h}} \in \mathbb{R}^{C_L}$}
+\STATE
+\STATE \COMMENT{MLP projection to latent space}
+\FOR{$l = 1$ \TO $L_{\text{MLP}}$}
+    \STATE $\bar{\mathbf{h}} \gets \text{Linear}(\bar{\mathbf{h}}; \mathbf{W}_l^{\text{fc}}, \mathbf{b}_l^{\text{fc}})$
+    \IF{$l < L_{\text{MLP}}$}
+        \STATE $\bar{\mathbf{h}} \gets \text{ReLU}(\bar{\mathbf{h}})$
+    \ENDIF
+\ENDFOR
+\STATE
+\STATE $\hat{\mathbf{z}} \gets \bar{\mathbf{h}}$
+\RETURN $\hat{\mathbf{z}}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Complexity:}
+\begin{itemize}
+    \item Conv layer $l$: $\mathcal{O}(K^2 \cdot C_{l-1} \cdot C_l \cdot H_l \cdot W_l)$
+    \item Total: Dominated by early layers with large spatial dimensions
+    \item Typical ResNet-18: $\sim 1.8 \times 10^9$ FLOPs for $224 \times 224$ input
+\end{itemize}
+
+\subsection{2D Convolution Operation}
+
+\begin{algorithm}[H]
+\caption{2D Convolution (Single Output Channel)}
+\label{alg:conv2d}
+\begin{algorithmic}[1]
+\REQUIRE Input $\mathbf{X} \in \mathbb{R}^{C_{\text{in}} \times H \times W}$, kernel $\mathbf{W} \in \mathbb{R}^{C_{\text{in}} \times K \times K}$, bias $b$, stride $S$, padding $P$
+\ENSURE Output $\mathbf{Y} \in \mathbb{R}^{H' \times W'}$ where $H' = \lfloor(H + 2P - K)/S\rfloor + 1$
+\STATE $\mathbf{X}_{\text{pad}} \gets \text{ZeroPad}(\mathbf{X}, P)$ \COMMENT{Pad input with zeros}
+\STATE
+\FOR{$i = 0$ \TO $H' - 1$}
+    \FOR{$j = 0$ \TO $W' - 1$}
+        \STATE $\text{sum} \gets 0$
+        \FOR{$c = 0$ \TO $C_{\text{in}} - 1$}
+            \FOR{$m = 0$ \TO $K - 1$}
+                \FOR{$n = 0$ \TO $K - 1$}
+                    \STATE $\text{sum} \gets \text{sum} + \mathbf{W}[c, m, n] \cdot \mathbf{X}_{\text{pad}}[c, i \cdot S + m, j \cdot S + n]$
+                \ENDFOR
+            \ENDFOR
+        \ENDFOR
+        \STATE $\mathbf{Y}[i, j] \gets \text{sum} + b$
+    \ENDFOR
+\ENDFOR
+\RETURN $\mathbf{Y}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes:}
+\begin{itemize}
+    \item In practice, use highly optimized libraries (cuDNN, MKL-DNN)
+    \item Memory layout matters: NCHW (batch, channel, height, width) is common on GPU
+    \item Im2col transformation converts convolution to matrix multiplication for efficiency
+\end{itemize}
+
+\subsection{Scaled Dot-Product Attention}
+
+\begin{algorithm}[H]
+\caption{Scaled Dot-Product Attention}
+\label{alg:attention}
+\begin{algorithmic}[1]
+\REQUIRE Queries $\mathbf{Q} \in \mathbb{R}^{N \times d_k}$, Keys $\mathbf{K} \in \mathbb{R}^{M \times d_k}$, Values $\mathbf{V} \in \mathbb{R}^{M \times d_v}$
+\ENSURE Attention output $\mathbf{Y} \in \mathbb{R}^{N \times d_v}$
+\STATE \COMMENT{Compute attention scores}
+\STATE $\mathbf{S} \gets \mathbf{Q} \mathbf{K}^\top$ \COMMENT{$\mathbf{S} \in \mathbb{R}^{N \times M}$}
+\STATE
+\STATE \COMMENT{Scale by sqrt of key dimension}
+\STATE $\mathbf{S} \gets \mathbf{S} / \sqrt{d_k}$
+\STATE
+\STATE \COMMENT{Apply softmax row-wise}
+\FOR{$i = 0$ \TO $N - 1$}
+    \STATE $\mathbf{S}[i, :] \gets \text{Softmax}(\mathbf{S}[i, :])$
+\ENDFOR
+\STATE \COMMENT{$\mathbf{S}$ is now attention weights $\mathbf{A}$}
+\STATE
+\STATE \COMMENT{Compute weighted sum of values}
+\STATE $\mathbf{Y} \gets \mathbf{S} \mathbf{V}$
+\RETURN $\mathbf{Y}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Numerical Stability:}
+For softmax, subtract max before exponentiation:
+\begin{equation}
+\text{Softmax}(\mathbf{x})_i = \frac{\exp(x_i - \max(\mathbf{x}))}{\sum_j \exp(x_j - \max(\mathbf{x}))}
+\end{equation}
+
+\textbf{Complexity:} $\mathcal{O}(N \cdot M \cdot d_k + N \cdot M \cdot d_v)$. Quadratic in sequence length.
+
+\subsection{Multi-Head Attention}
+
+\begin{algorithm}[H]
+\caption{Multi-Head Self-Attention}
+\label{alg:multihead_attention}
+\begin{algorithmic}[1]
+\REQUIRE Input $\mathbf{X} \in \mathbb{R}^{N \times D}$, projection matrices $\mathbf{W}_Q^{(h)}, \mathbf{W}_K^{(h)}, \mathbf{W}_V^{(h)} \in \mathbb{R}^{D \times d}$ for $h = 1, \ldots, H$, output projection $\mathbf{W}_O \in \mathbb{R}^{H \cdot d \times D}$
+\ENSURE Output $\mathbf{Y} \in \mathbb{R}^{N \times D}$
+\STATE $\text{heads} \gets []$ \COMMENT{List to store head outputs}
+\STATE
+\FOR{$h = 1$ \TO $H$}
+    \STATE \COMMENT{Project to queries, keys, values for this head}
+    \STATE $\mathbf{Q}^{(h)} \gets \mathbf{X} \mathbf{W}_Q^{(h)}$
+    \STATE $\mathbf{K}^{(h)} \gets \mathbf{X} \mathbf{W}_K^{(h)}$
+    \STATE $\mathbf{V}^{(h)} \gets \mathbf{X} \mathbf{W}_V^{(h)}$
+    \STATE
+    \STATE \COMMENT{Compute attention for this head}
+    \STATE $\text{head}_h \gets \text{ScaledDotProductAttention}(\mathbf{Q}^{(h)}, \mathbf{K}^{(h)}, \mathbf{V}^{(h)})$
+    \STATE $\text{heads}.\text{append}(\text{head}_h)$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Concatenate all heads}
+\STATE $\mathbf{H} \gets \text{Concat}(\text{heads}, \text{axis}=1)$ \COMMENT{$\mathbf{H} \in \mathbb{R}^{N \times (H \cdot d)}$}
+\STATE
+\STATE \COMMENT{Final linear projection}
+\STATE $\mathbf{Y} \gets \mathbf{H} \mathbf{W}_O$
+\RETURN $\mathbf{Y}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Parallelization:} In practice, all heads are computed in parallel by batching the projections.
+
+\subsection{Vision Transformer Forward Pass}
+
+\begin{algorithm}[H]
+\caption{Vision Transformer Encoder}
+\label{alg:vit_encoder}
+\begin{algorithmic}[1]
+\REQUIRE Image $\mathbf{o} \in \mathbb{R}^{H \times W \times C}$, patch size $P$, embedding dim $D$, number of layers $L$
+\ENSURE CLS token embedding $\mathbf{z}_{\text{cls}} \in \mathbb{R}^D$
+\STATE \COMMENT{Patchify and embed}
+\STATE $N \gets (H / P) \times (W / P)$ \COMMENT{Number of patches}
+\STATE $\text{patches} \gets \text{ExtractPatches}(\mathbf{o}, P)$ \COMMENT{$N$ patches of size $P \times P \times C$}
+\STATE $\text{patches} \gets \text{Flatten}(\text{patches})$ \COMMENT{Each patch: $\mathbb{R}^{P^2 \cdot C}$}
+\STATE
+\STATE \COMMENT{Linear projection to embedding space}
+\STATE $\mathbf{Z}_0 \gets \text{patches} \cdot \mathbf{E}$ \COMMENT{$\mathbf{E} \in \mathbb{R}^{(P^2 \cdot C) \times D}$}
+\STATE
+\STATE \COMMENT{Add positional embeddings}
+\STATE $\mathbf{Z}_0 \gets \mathbf{Z}_0 + \mathbf{E}_{\text{pos}}$ \COMMENT{$\mathbf{E}_{\text{pos}} \in \mathbb{R}^{N \times D}$}
+\STATE
+\STATE \COMMENT{Prepend CLS token}
+\STATE $\mathbf{Z}_0 \gets \text{Concat}([\mathbf{z}_{\text{cls}}^{(0)}; \mathbf{Z}_0])$ \COMMENT{Now $\mathbf{Z}_0 \in \mathbb{R}^{(N+1) \times D}$}
+\STATE
+\STATE \COMMENT{Transformer encoder blocks}
+\FOR{$l = 1$ \TO $L$}
+    \STATE \COMMENT{Multi-head self-attention with residual}
+    \STATE $\mathbf{Z}' \gets \mathbf{Z}_{l-1} + \text{MSA}(\text{LayerNorm}(\mathbf{Z}_{l-1}))$
+    \STATE
+    \STATE \COMMENT{MLP with residual}
+    \STATE $\mathbf{Z}_l \gets \mathbf{Z}' + \text{MLP}(\text{LayerNorm}(\mathbf{Z}'))$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Extract final CLS token}
+\STATE $\mathbf{z}_{\text{cls}} \gets \text{LayerNorm}(\mathbf{Z}_L)[0]$ \COMMENT{First token is CLS}
+\RETURN $\mathbf{z}_{\text{cls}}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Contrastive Learning Training Loop}
+
+\begin{algorithm}[H]
+\caption{SimCLR Contrastive Learning}
+\label{alg:simclr}
+\begin{algorithmic}[1]
+\REQUIRE Dataset $\mathcal{D}$, encoder $f_\theta$, projection head $g_\phi$, augmentation $\mathcal{T}$, temperature $\tau$, batch size $B$, epochs $E$
+\ENSURE Trained encoder parameters $\theta$
+\FOR{epoch $= 1$ \TO $E$}
+    \FOR{each minibatch $\{\mathbf{o}_1, \ldots, \mathbf{o}_B\}$ from $\mathcal{D}$}
+        \STATE \COMMENT{Generate augmented views}
+        \FOR{$i = 1$ \TO $B$}
+            \STATE $\tilde{\mathbf{o}}_i^{(1)} \gets \mathcal{T}(\mathbf{o}_i)$ \COMMENT{First augmentation}
+            \STATE $\tilde{\mathbf{o}}_i^{(2)} \gets \mathcal{T}(\mathbf{o}_i)$ \COMMENT{Second augmentation}
+        \ENDFOR
+        \STATE
+        \STATE \COMMENT{Encode and project all views}
+        \FOR{$i = 1$ \TO $B$}
+            \STATE $\mathbf{z}_i^{(1)} \gets g_\phi(f_\theta(\tilde{\mathbf{o}}_i^{(1)}))$
+            \STATE $\mathbf{z}_i^{(2)} \gets g_\phi(f_\theta(\tilde{\mathbf{o}}_i^{(2)}))$
+        \ENDFOR
+        \STATE
+        \STATE \COMMENT{Compute NT-Xent loss}
+        \STATE $\mathcal{L} \gets 0$
+        \FOR{$i = 1$ \TO $B$}
+            \STATE \COMMENT{Positive pair: $(i, 1)$ and $(i, 2)$}
+            \STATE $\text{sim}_{+} \gets \mathbf{z}_i^{(1)\top} \mathbf{z}_i^{(2)} / (\|\mathbf{z}_i^{(1)}\| \|\mathbf{z}_i^{(2)}\|)$
+            \STATE $\text{denom} \gets 0$
+            \FOR{$j = 1$ \TO $B$}
+                \FOR{$k \in \{1, 2\}$}
+                    \IF{$(j, k) \neq (i, 1)$}
+                        \STATE $\text{sim}_{jk} \gets \mathbf{z}_i^{(1)\top} \mathbf{z}_j^{(k)} / (\|\mathbf{z}_i^{(1)}\| \|\mathbf{z}_j^{(k)}\|)$
+                        \STATE $\text{denom} \gets \text{denom} + \exp(\text{sim}_{jk} / \tau)$
+                    \ENDIF
+                \ENDFOR
+            \ENDFOR
+            \STATE $\mathcal{L} \gets \mathcal{L} - \log\left(\frac{\exp(\text{sim}_{+} / \tau)}{\text{denom}}\right)$
+        \ENDFOR
+        \STATE $\mathcal{L} \gets \mathcal{L} / (2B)$
+        \STATE
+        \STATE \COMMENT{Update parameters}
+        \STATE $\theta, \phi \gets \text{AdamUpdate}(\theta, \phi, \nabla_{\theta, \phi} \mathcal{L})$
+    \ENDFOR
+\ENDFOR
+\RETURN $\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Key Implementation Details:}
+\begin{itemize}
+    \item Large batch sizes (256--4096) improve contrastive learning
+    \item Projection head $g_\phi$ is discarded after training; only $f_\theta$ is used
+    \item Temperature $\tau = 0.1$ works well for most applications
+\end{itemize}
+
+\subsection{Spatial Softmax for Keypoint Extraction}
+
+\begin{algorithm}[H]
+\caption{Spatial Softmax Keypoint Extraction}
+\label{alg:spatial_softmax}
+\begin{algorithmic}[1]
+\REQUIRE Feature map $\mathbf{F} \in \mathbb{R}^{C \times H \times W}$, temperature $T$
+\ENSURE Keypoint coordinates $\{(u_c, v_c)\}_{c=1}^C$
+\STATE \COMMENT{Create coordinate grids}
+\STATE $\mathbf{U} \gets \text{linspace}(0, 1, W)$ \COMMENT{Normalized x-coordinates}
+\STATE $\mathbf{V} \gets \text{linspace}(0, 1, H)$ \COMMENT{Normalized y-coordinates}
+\STATE $\mathbf{U}, \mathbf{V} \gets \text{meshgrid}(\mathbf{U}, \mathbf{V})$ \COMMENT{$H \times W$ grids}
+\STATE
+\FOR{$c = 1$ \TO $C$}
+    \STATE \COMMENT{Apply spatial softmax to channel $c$}
+    \STATE $\mathbf{S}_c \gets \text{Softmax}(\mathbf{F}[c, :, :] / T)$ \COMMENT{$H \times W$ soft attention}
+    \STATE
+    \STATE \COMMENT{Compute expected coordinates}
+    \STATE $u_c \gets \sum_{i,j} \mathbf{S}_c[i, j] \cdot \mathbf{U}[i, j]$
+    \STATE $v_c \gets \sum_{i,j} \mathbf{S}_c[i, j] \cdot \mathbf{V}[i, j]$
+\ENDFOR
+\RETURN $\{(u_c, v_c)\}_{c=1}^C$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Properties:}
+\begin{itemize}
+    \item Differentiable: Gradients flow through to the feature map
+    \item Output: $2C$ values (x, y for each of $C$ keypoints)
+    \item Temperature $T$ controls sharpness: low $T$ $\rightarrow$ harder attention, high $T$ $\rightarrow$ softer
+\end{itemize}
+
+\subsection{Training Loop with Supervised Learning}
+
+\begin{algorithm}[H]
+\caption{Supervised Encoder Training}
+\label{alg:supervised_training}
+\begin{algorithmic}[1]
+\REQUIRE Training data $\{(\mathbf{o}_i, \mathbf{x}_i^*)\}_{i=1}^N$, encoder $f_\theta$, learning rate $\eta$, epochs $E$
+\ENSURE Trained parameters $\theta$
+\STATE Initialize $\theta$ (random or pre-trained)
+\STATE
+\FOR{epoch $= 1$ \TO $E$}
+    \STATE Shuffle training data
+    \FOR{each minibatch $\{(\mathbf{o}_i, \mathbf{x}_i^*)\}_{i=1}^B$}
+        \STATE \COMMENT{Forward pass}
+        \FOR{$i = 1$ \TO $B$}
+            \STATE $\hat{\mathbf{x}}_i \gets f_\theta(\mathbf{o}_i)$
+        \ENDFOR
+        \STATE
+        \STATE \COMMENT{Compute loss}
+        \STATE $\mathcal{L} \gets \frac{1}{B} \sum_{i=1}^B \|\hat{\mathbf{x}}_i - \mathbf{x}_i^*\|_2^2$
+        \STATE
+        \STATE \COMMENT{Backward pass}
+        \STATE $\mathbf{g} \gets \nabla_\theta \mathcal{L}$
+        \STATE
+        \STATE \COMMENT{Parameter update (Adam)}
+        \STATE $\mathbf{m} \gets \beta_1 \mathbf{m} + (1 - \beta_1) \mathbf{g}$
+        \STATE $\mathbf{v} \gets \beta_2 \mathbf{v} + (1 - \beta_2) \mathbf{g}^2$
+        \STATE $\hat{\mathbf{m}} \gets \mathbf{m} / (1 - \beta_1^t)$ \COMMENT{Bias correction}
+        \STATE $\hat{\mathbf{v}} \gets \mathbf{v} / (1 - \beta_2^t)$
+        \STATE $\theta \gets \theta - \eta \cdot \hat{\mathbf{m}} / (\sqrt{\hat{\mathbf{v}}} + \epsilon)$
+    \ENDFOR
+    \STATE
+    \STATE \COMMENT{Validation (optional)}
+    \STATE $\mathcal{L}_{\text{val}} \gets \text{EvaluateOnValidation}(f_\theta)$
+    \STATE \COMMENT{Early stopping, learning rate scheduling, etc.}
+\ENDFOR
+\RETURN $\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Hyperparameter Guidelines:}
+\begin{itemize}
+    \item Learning rate: $10^{-4}$ to $10^{-3}$ for Adam
+    \item Batch size: 32--128 for supervised learning
+    \item Adam parameters: $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\epsilon = 10^{-8}$
+\end{itemize}
+
+\subsection{Inference with Uncertainty Estimation}
+
+\begin{algorithm}[H]
+\caption{Monte Carlo Dropout Inference}
+\label{alg:mc_dropout}
+\begin{algorithmic}[1]
+\REQUIRE Image $\mathbf{o}$, encoder $f_\theta$ with dropout, number of samples $M$
+\ENSURE Mean prediction $\hat{\boldsymbol{\mu}}$, uncertainty $\hat{\boldsymbol{\sigma}}$
+\STATE $\text{predictions} \gets []$
+\STATE
+\FOR{$m = 1$ \TO $M$}
+    \STATE \COMMENT{Forward pass with dropout enabled}
+    \STATE $\hat{\mathbf{x}}^{(m)} \gets f_\theta(\mathbf{o}, \text{training=True})$ \COMMENT{Dropout active}
+    \STATE $\text{predictions}.\text{append}(\hat{\mathbf{x}}^{(m)})$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Compute statistics}
+\STATE $\hat{\boldsymbol{\mu}} \gets \frac{1}{M} \sum_{m=1}^M \hat{\mathbf{x}}^{(m)}$
+\STATE $\hat{\boldsymbol{\sigma}}^2 \gets \frac{1}{M} \sum_{m=1}^M (\hat{\mathbf{x}}^{(m)} - \hat{\boldsymbol{\mu}})^2$
+\STATE $\hat{\boldsymbol{\sigma}} \gets \sqrt{\hat{\boldsymbol{\sigma}}^2}$
+\RETURN $\hat{\boldsymbol{\mu}}, \hat{\boldsymbol{\sigma}}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Practical Considerations:}
+\begin{itemize}
+    \item $M = 10$--$30$ samples typically sufficient
+    \item Latency increases linearly with $M$
+    \item Can be parallelized by batching the $M$ forward passes
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\section{Chapter Summary}
+\label{sec:chapter_summary}
+%-------------------------------------------------------------------------------
+
+This chapter introduced the neural network architectures and training methods that enable learned perception for control systems. We have bridged the gap between raw sensory data and the state representations that controllers require, opening the door to vision-based control in environments where classical perception fails.
+
+\subsection{Key Concepts Developed}
+
+\textbf{Convolutional Neural Networks:}
+\begin{itemize}
+    \item CNNs exploit image structure through local connectivity and weight sharing
+    \item The convolution operation slides learned filters across images, detecting patterns at all spatial locations
+    \item Hierarchical feature extraction builds from edges to objects through stacked layers
+    \item Residual connections enable training of very deep networks
+    \item Receptive field analysis ensures the network can ``see'' relevant spatial context
+\end{itemize}
+
+\textbf{Vision Transformers:}
+\begin{itemize}
+    \item ViTs treat images as sequences of patches, applying transformer architecture from NLP
+    \item Patch embedding converts image regions to token vectors with positional information
+    \item Self-attention enables global reasoning from the first layer, unlike CNNs' local receptive fields
+    \item The CLS token aggregates information into a single image-level representation
+    \item ViTs require more data than CNNs but offer interpretable attention maps
+\end{itemize}
+
+\textbf{Attention Mechanism:}
+\begin{itemize}
+    \item Attention computes content-based routing through queries, keys, and values
+    \item Scaled dot-product attention prevents softmax saturation
+    \item Multi-head attention captures diverse relationships in parallel
+    \item Attention weights provide interpretability: we can visualize what the model attends to
+\end{itemize}
+
+\textbf{Encoder Design for Control:}
+\begin{itemize}
+    \item Latent dimension should match or slightly exceed physical state dimension
+    \item Temporal information (for velocity) requires frame stacking, recurrence, or temporal attention
+    \item Multi-view and multi-modal fusion combine information from multiple sensors
+    \item Uncertainty quantification (probabilistic encoders, ensembles, MC dropout) enables safe control
+\end{itemize}
+
+\textbf{Training Strategies:}
+\begin{itemize}
+    \item Supervised learning with state labels is straightforward but requires ground truth
+    \item Self-supervised methods (reconstruction, contrastive, predictive) learn from unlabeled data
+    \item Pre-training on large datasets followed by fine-tuning is often most effective
+    \item Data augmentation and domain randomization improve generalization
+\end{itemize}
+
+\textbf{End-to-End vs. Modular:}
+\begin{itemize}
+    \item End-to-end training optimizes perception for the control task directly
+    \item Modular approaches provide interpretability, safety verification, and reusability
+    \item Hybrid methods combine the benefits of both paradigms
+    \item The choice depends on data availability, safety requirements, and deployment context
+\end{itemize}
+
+\subsection{Core Competencies Developed}
+
+After working through this chapter, you should be able to:
+
+\begin{enumerate}
+    \item \textbf{Design CNN encoders} for visual state estimation, selecting appropriate layer configurations, kernel sizes, and output representations
+
+    \item \textbf{Implement Vision Transformers} for image encoding, understanding patch embedding, positional encoding, and the role of the CLS token
+
+    \item \textbf{Explain attention mathematically} and compute scaled dot-product attention and multi-head attention step-by-step
+
+    \item \textbf{Choose encoder architectures} appropriate for specific control tasks based on data availability, latency requirements, and interpretability needs
+
+    \item \textbf{Train perception encoders} using supervised, contrastive, and self-supervised methods, understanding the tradeoffs of each
+
+    \item \textbf{Analyze learned representations} through visualization, nearest neighbor analysis, and disentanglement metrics
+
+    \item \textbf{Integrate perception with control} by designing interfaces between encoder outputs and downstream controllers
+
+    \item \textbf{Optimize for real-time deployment} through model compression, quantization, and efficient architecture selection
+
+    \item \textbf{Handle domain shift} through domain randomization, fine-tuning, and transfer learning strategies
+\end{enumerate}
+
+\subsection{Practical Guidelines}
+
+\textbf{Architecture Selection:}
+\begin{itemize}
+    \item Start with ResNet-18 or MobileNet for most control tasks---they offer good accuracy-speed tradeoffs
+    \item Use ViT only when abundant data is available or when pre-trained models can be leveraged
+    \item Consider hybrid CNN-Transformer architectures for tasks requiring both local and global reasoning
+\end{itemize}
+
+\textbf{Training:}
+\begin{itemize}
+    \item Pre-train on large datasets (ImageNet or domain-specific) before task-specific fine-tuning
+    \item Use self-supervised pre-training when labeled data is scarce
+    \item Apply appropriate augmentation---but be careful not to destroy task-relevant information
+    \item Monitor both training loss and downstream control performance
+\end{itemize}
+
+\textbf{Deployment:}
+\begin{itemize}
+    \item Profile encoder latency early in the design process
+    \item Use quantization (INT8) for CPU deployment
+    \item Consider ensembles or MC dropout for uncertainty when safety is critical
+    \item Validate attention maps or feature visualizations before trusting the model
+\end{itemize}
+
+\textbf{Debugging:}
+\begin{itemize}
+    \item When control fails, first check if perception is the bottleneck (evaluate encoder independently)
+    \item Visualize attention maps or intermediate features to understand what the model sees
+    \item Test on held-out data from diverse conditions to identify generalization gaps
+    \item Collect failure cases and analyze common patterns
+\end{itemize}
+
+\subsection{Connection to Subsequent Chapters}
+
+This chapter provides the perception foundation for advanced topics in later chapters:
+
+\begin{itemize}
+    \item \textbf{Chapter 16 (World Models):} The encoder architectures here form the observation encoder in world models, which also learn dynamics and enable model-based planning
+
+    \item \textbf{Chapter 17 (Hybrid Control):} Learned perception enables visual feedback for classical controllers, combining the robustness of proven control methods with the flexibility of learned perception
+
+    \item \textbf{Chapter 18 (Differentiable Control):} End-to-end differentiable pipelines optimize perception and control jointly, requiring the gradients through encoders developed here
+
+    \item \textbf{Chapter 19 (Diffusion Policies):} Diffusion-based control operates on latent representations, using encoder architectures from this chapter to produce the conditioning information
+
+    \item \textbf{Chapter 20 (Sim-to-Real):} Domain randomization and transfer learning techniques from this chapter are essential for deploying learned perception from simulation to real robots
+\end{itemize}
+
+\subsection{Looking Forward}
+
+Learned perception transforms what's possible in control systems. Where classical approaches require structured environments, calibrated sensors, and hand-designed features, neural encoders learn directly from data. A robot can now estimate object pose from cluttered scenes, a drone can navigate from onboard cameras, and a manipulator can understand complex spatial relationships.
+
+Yet learned perception is not a silver bullet. Neural networks can fail unpredictably, especially on out-of-distribution inputs. Interpretability remains a challenge. Real-time constraints limit model complexity. And the hunger for training data can be insatiable.
+
+The most effective control systems will combine learned perception with classical control theory---using neural networks where they excel (handling visual complexity, generalizing from data) while relying on proven methods where they're needed (stability guarantees, constraint satisfaction, interpretable behavior). The subsequent chapters explore exactly these hybrid approaches, building on the perception foundation established here.
+
+\subsection{Further Reading}
+
+For deeper exploration of the topics in this chapter:
+
+\textbf{Foundational Papers:}
+\begin{itemize}
+    \item LeCun et al., ``Gradient-Based Learning Applied to Document Recognition'' (1998)---the original CNN paper
+    \item He et al., ``Deep Residual Learning for Image Recognition'' (2015)---residual networks
+    \item Vaswani et al., ``Attention Is All You Need'' (2017)---the transformer architecture
+    \item Dosovitskiy et al., ``An Image is Worth 16x16 Words'' (2020)---Vision Transformer
+    \item Chen et al., ``A Simple Framework for Contrastive Learning'' (2020)---SimCLR
+\end{itemize}
+
+\textbf{Control-Specific Applications:}
+\begin{itemize}
+    \item Levine et al., ``End-to-End Training of Deep Visuomotor Policies'' (2016)---deep learning for robot control
+    \item Nair et al., ``Visual Reinforcement Learning with Imagined Goals'' (2018)---goal-conditioned visual RL
+    \item Radosavovic et al., ``Real-World Robot Learning with Masked Visual Pre-training'' (2022)---self-supervised pre-training for robots
+\end{itemize}
+
+\textbf{Textbooks:}
+\begin{itemize}
+    \item Goodfellow, Bengio, and Courville, \textit{Deep Learning}---comprehensive deep learning fundamentals
+    \item Szeliski, \textit{Computer Vision: Algorithms and Applications}---classical and modern vision
+    \item Prince, \textit{Understanding Deep Learning}---modern deep learning with mathematical rigor
+\end{itemize}
+
+\vspace{1em}
+
+This chapter has equipped you with the tools to design, train, and deploy neural network encoders for control applications. The next chapter extends these ideas to world models---learned dynamics that predict how the environment evolves, enabling model-based planning and control.
+
