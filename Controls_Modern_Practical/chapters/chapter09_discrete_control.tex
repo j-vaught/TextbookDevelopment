@@ -1,0 +1,3396 @@
+\chapter{Discrete-Domain Control}
+\label{ch:discrete_control}
+
+\whythismatters{
+Every modern control system runs on a digital computer. Your carefully designed continuous-time controller must be converted to discrete-time form before it can execute on a microcontroller, PLC, or embedded processor. This chapter bridges the gap between the elegant mathematics of continuous control theory and the practical reality of digital implementation.
+
+We will develop the Z-transform as the discrete analog of the Laplace transform, master multiple discretization methods with their tradeoffs, learn to analyze stability using the Jury test, and implement digital PID controllers with anti-windup. By the end, you will be able to take any continuous controller design and implement it robustly on digital hardware while understanding exactly what you gain and lose in the process.
+}
+
+\section{Introduction to Discrete-Time Control}
+\label{sec:discrete_intro}
+
+When I design a controller using continuous-time techniques---root locus, Bode plots, state-space methods---I am working in an idealized world where signals exist at every instant and computations happen instantaneously. Real implementation shatters these assumptions. A microcontroller samples the sensor signal at discrete instants, computes the control law using finite-precision arithmetic, and outputs a command that is held constant until the next sample.
+
+Understanding this discrete-time reality is essential for several reasons:
+
+\begin{enumerate}
+    \item \textbf{Sampling introduces delay:} Even with infinitely fast computation, sampling at period $T$ introduces an average delay of $T/2$. This delay degrades phase margin and can destabilize a system.
+
+    \item \textbf{Aliasing corrupts information:} If we sample too slowly, high-frequency signals fold back and appear as low-frequency disturbances that we cannot distinguish from the true signal.
+
+    \item \textbf{Discretization methods matter:} Different methods for converting continuous controllers to discrete form have different accuracy, stability properties, and computational costs.
+
+    \item \textbf{Finite word length causes errors:} Quantization in A/D converters and coefficient representation introduces noise and can even cause limit cycles in feedback systems.
+\end{enumerate}
+
+The good news is that discrete-time control theory is a mature field with elegant mathematics and practical tools. The Z-transform plays the same role for discrete systems that the Laplace transform plays for continuous systems, and most of the intuition you have built transfers directly.
+
+\subsection{Continuous vs. Discrete Signals}
+
+A continuous-time signal $x(t)$ is defined for all $t \in \mathbb{R}$. A discrete-time signal $x[n]$ or $x(kT)$ is defined only at integer multiples of the sampling period $T$:
+\begin{equation}
+x[n] = x(nT), \quad n = 0, 1, 2, \ldots
+\end{equation}
+
+I will use both notations interchangeably: $x[n]$ emphasizes the sequence nature, while $x(kT)$ or $x_k$ emphasizes the connection to the underlying continuous signal sampled at times $kT$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.9\textwidth,
+    height=5cm,
+    xlabel={Time},
+    ylabel={Amplitude},
+    xmin=0, xmax=5,
+    ymin=-1.2, ymax=1.2,
+    xtick={0,1,2,3,4,5},
+    xticklabels={$0$,$T$,$2T$,$3T$,$4T$,$5T$},
+    grid=major,
+    grid style={gray!30},
+    legend pos=north east
+]
+\addplot[domain=0:5, samples=200, UofSCGarnet, thick] {sin(deg(2*x))};
+\addplot[only marks, mark=*, mark size=3pt, UofSCAtlantic] coordinates {
+    (0,0) (1,0.909) (2,0.141) (3,-0.757) (4,-0.959) (5,-0.544)
+};
+\legend{Continuous $x(t)$, Sampled $x[n]$}
+\end{axis}
+\end{tikzpicture}
+\caption{A continuous signal (solid line) and its sampled version (dots). Information between samples is lost.}
+\label{fig:continuous_vs_discrete}
+\end{figure}
+
+The sampling process is mathematically represented by multiplication with an impulse train:
+\begin{equation}
+x^*(t) = x(t) \cdot \sum_{n=0}^{\infty} \delta(t - nT) = \sum_{n=0}^{\infty} x(nT) \delta(t - nT)
+\end{equation}
+
+This ``starred'' signal $x^*(t)$ contains the same information as the discrete sequence $x[n]$ but is expressed in continuous-time form, which is useful for analyzing hybrid systems.
+
+\subsection{The Ideal Sampler and Zero-Order Hold}
+
+In a typical digital control system, two critical components interface between the continuous plant and the discrete controller:
+
+\begin{enumerate}
+    \item \textbf{Analog-to-Digital Converter (ADC):} Samples the continuous sensor signal and converts it to a digital number. We model this as an ideal sampler.
+
+    \item \textbf{Digital-to-Analog Converter (DAC):} Converts the digital controller output to a continuous signal for the actuator. Most DACs include a zero-order hold (ZOH).
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=2cm, auto]
+    \node[input] (input) {};
+    \node[block, right=1.5cm of input] (adc) {ADC};
+    \node[block, right=2cm of adc] (controller) {Digital Controller};
+    \node[block, right=2cm of controller] (dac) {DAC/ZOH};
+    \node[block, right=2cm of dac] (plant) {Plant $G(s)$};
+    \node[output, right=1.5cm of plant] (output) {};
+    \node[block, below=1cm of controller] (sensor) {Sensor};
+
+    \draw[arrow] (input) -- node[above]{$r(t)$} (adc);
+    \draw[arrow] (adc) -- node[above]{$r[n]$} (controller);
+    \draw[arrow] (controller) -- node[above]{$u[n]$} (dac);
+    \draw[arrow] (dac) -- node[above]{$u(t)$} (plant);
+    \draw[arrow] (plant) -- node[above]{$y(t)$} (output);
+    \draw[arrow] (plant) |- (sensor);
+    \draw[arrow] (sensor) -| node[near end, left]{$y[n]$} (controller);
+\end{tikzpicture}
+\caption{Block diagram of a sampled-data control system showing the ADC, digital controller, DAC with ZOH, and continuous plant.}
+\label{fig:sampled_data_system}
+\end{figure}
+
+The \textbf{zero-order hold (ZOH)} holds each sample value constant until the next sample arrives:
+\begin{equation}
+u(t) = u[n] = u(nT), \quad nT \leq t < (n+1)T
+\end{equation}
+
+This creates a staircase approximation to what would ideally be a smooth control signal. The ZOH transfer function in the Laplace domain is:
+\begin{equation}
+G_{\text{ZOH}}(s) = \frac{1 - e^{-sT}}{s}
+\label{eq:zoh_transfer}
+\end{equation}
+
+To derive this, note that a unit impulse at $t = 0$ held for duration $T$ is a rectangular pulse of height 1 from $t = 0$ to $t = T$:
+\begin{equation}
+h_{\text{ZOH}}(t) = u(t) - u(t-T)
+\end{equation}
+where $u(t)$ is the unit step function. Taking the Laplace transform:
+\begin{equation}
+\mathcal{L}\{h_{\text{ZOH}}(t)\} = \frac{1}{s} - \frac{e^{-sT}}{s} = \frac{1 - e^{-sT}}{s}
+\end{equation}
+
+The ZOH introduces phase lag that increases with frequency. At frequency $\omega$, the ZOH contributes:
+\begin{equation}
+\angle G_{\text{ZOH}}(j\omega) = -\frac{\omega T}{2}
+\end{equation}
+
+This means the ZOH acts approximately like a pure time delay of $T/2$ seconds---half the sampling period.
+
+%===============================================================================
+\section{The Z-Transform}
+\label{sec:z_transform}
+
+The Z-transform is to discrete-time systems what the Laplace transform is to continuous-time systems. It converts difference equations into algebraic equations, enables frequency-domain analysis, and provides a framework for understanding stability and performance.
+
+\subsection{Definition and Derivation}
+
+For a discrete-time signal $x[n]$ defined for $n \geq 0$, the \textbf{one-sided Z-transform} is:
+\begin{equation}
+\boxed{X(z) = \mathcal{Z}\{x[n]\} = \sum_{n=0}^{\infty} x[n] z^{-n}}
+\label{eq:z_transform_def}
+\end{equation}
+
+where $z$ is a complex variable. The transform exists when the sum converges, which occurs for $|z| > R$ where $R$ is the radius of convergence.
+
+Where does this come from? Consider sampling a continuous signal $x(t)$ at intervals $T$. The Laplace transform of the sampled signal is:
+\begin{align}
+X^*(s) &= \mathcal{L}\left\{\sum_{n=0}^{\infty} x(nT) \delta(t - nT)\right\} \\
+&= \sum_{n=0}^{\infty} x(nT) e^{-snT}
+\end{align}
+
+If we define $z = e^{sT}$, then $e^{-snT} = z^{-n}$, and:
+\begin{equation}
+X^*(s) = \sum_{n=0}^{\infty} x[n] z^{-n} = X(z)
+\end{equation}
+
+This substitution $z = e^{sT}$ is the fundamental connection between continuous and discrete domains. It maps the left half of the $s$-plane (stable region) to the interior of the unit circle in the $z$-plane (stable region for discrete systems).
+
+\subsection{Inverse Z-Transform}
+
+The formal inverse Z-transform is given by the contour integral:
+\begin{equation}
+x[n] = \mathcal{Z}^{-1}\{X(z)\} = \frac{1}{2\pi j} \oint_C X(z) z^{n-1} dz
+\end{equation}
+
+where $C$ is a counterclockwise contour enclosing all poles of $X(z)z^{n-1}$.
+
+In practice, we rarely evaluate this integral directly. Instead, we use these methods:
+
+\begin{enumerate}
+    \item \textbf{Table lookup:} Recognize $X(z)$ as a standard form and read off $x[n]$.
+
+    \item \textbf{Partial fraction expansion:} Decompose $X(z)/z$ into simple fractions, find the inverse of each term, then sum.
+
+    \item \textbf{Long division:} Divide the numerator by the denominator to get a power series in $z^{-1}$.
+
+    \item \textbf{Residue method:} Apply the residue theorem to evaluate the contour integral.
+\end{enumerate}
+
+For control engineering, partial fraction expansion is usually the most practical approach.
+
+\subsection{Common Z-Transform Pairs}
+
+\begin{table}[htbp]
+\centering
+\caption{Common Z-Transform Pairs (assuming $n \geq 0$)}
+\label{tab:z_transform_pairs}
+\begin{tabular}{lll}
+\toprule
+\textbf{Signal $x[n]$} & \textbf{Z-Transform $X(z)$} & \textbf{ROC} \\
+\midrule
+$\delta[n]$ (unit impulse) & $1$ & All $z$ \\[0.5em]
+$u[n]$ (unit step) & $\displaystyle\frac{z}{z-1}$ & $|z| > 1$ \\[1em]
+$n u[n]$ (ramp) & $\displaystyle\frac{z}{(z-1)^2}$ & $|z| > 1$ \\[1em]
+$n^2 u[n]$ & $\displaystyle\frac{z(z+1)}{(z-1)^3}$ & $|z| > 1$ \\[1em]
+$a^n u[n]$ (exponential) & $\displaystyle\frac{z}{z-a}$ & $|z| > |a|$ \\[1em]
+$n a^n u[n]$ & $\displaystyle\frac{az}{(z-a)^2}$ & $|z| > |a|$ \\[1em]
+$\sin(\omega_0 n T) u[n]$ & $\displaystyle\frac{z \sin(\omega_0 T)}{z^2 - 2z\cos(\omega_0 T) + 1}$ & $|z| > 1$ \\[1em]
+$\cos(\omega_0 n T) u[n]$ & $\displaystyle\frac{z(z - \cos(\omega_0 T))}{z^2 - 2z\cos(\omega_0 T) + 1}$ & $|z| > 1$ \\[1em]
+$a^n \sin(\omega_0 n T) u[n]$ & $\displaystyle\frac{az \sin(\omega_0 T)}{z^2 - 2az\cos(\omega_0 T) + a^2}$ & $|z| > |a|$ \\[1em]
+$a^n \cos(\omega_0 n T) u[n]$ & $\displaystyle\frac{z(z - a\cos(\omega_0 T))}{z^2 - 2az\cos(\omega_0 T) + a^2}$ & $|z| > |a|$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Let me derive a few of these to show the process.
+
+\textbf{Derivation: Unit step $u[n]$}
+
+The unit step is $u[n] = 1$ for $n \geq 0$:
+\begin{equation}
+X(z) = \sum_{n=0}^{\infty} 1 \cdot z^{-n} = \sum_{n=0}^{\infty} \left(\frac{1}{z}\right)^n
+\end{equation}
+
+This is a geometric series with ratio $1/z$. It converges for $|1/z| < 1$, i.e., $|z| > 1$:
+\begin{equation}
+X(z) = \frac{1}{1 - z^{-1}} = \frac{z}{z-1}
+\end{equation}
+
+\textbf{Derivation: Exponential $a^n u[n]$}
+
+\begin{equation}
+X(z) = \sum_{n=0}^{\infty} a^n z^{-n} = \sum_{n=0}^{\infty} \left(\frac{a}{z}\right)^n = \frac{1}{1 - az^{-1}} = \frac{z}{z-a}
+\end{equation}
+
+This converges for $|a/z| < 1$, i.e., $|z| > |a|$.
+
+\textbf{Derivation: Ramp $n u[n]$}
+
+We can use the differentiation property. If $X(z) = \mathcal{Z}\{x[n]\}$, then:
+\begin{equation}
+\mathcal{Z}\{n x[n]\} = -z \frac{dX(z)}{dz}
+\end{equation}
+
+With $x[n] = u[n]$ and $X(z) = z/(z-1)$:
+\begin{align}
+\frac{d}{dz}\left(\frac{z}{z-1}\right) &= \frac{(z-1) \cdot 1 - z \cdot 1}{(z-1)^2} = \frac{-1}{(z-1)^2}
+\end{align}
+
+Therefore:
+\begin{equation}
+\mathcal{Z}\{n u[n]\} = -z \cdot \frac{-1}{(z-1)^2} = \frac{z}{(z-1)^2}
+\end{equation}
+
+\subsection{Properties of the Z-Transform}
+
+The Z-transform has properties analogous to the Laplace transform:
+
+\begin{table}[htbp]
+\centering
+\caption{Properties of the Z-Transform}
+\label{tab:z_transform_properties}
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Time Domain} & \textbf{Z-Domain} \\
+\midrule
+Linearity & $ax_1[n] + bx_2[n]$ & $aX_1(z) + bX_2(z)$ \\[0.3em]
+Time shift (delay) & $x[n-k]$ & $z^{-k} X(z)$ \\[0.3em]
+Time advance & $x[n+k]$ & $z^k X(z) - \sum_{i=0}^{k-1} x[i] z^{k-i}$ \\[0.3em]
+Scaling & $a^n x[n]$ & $X(z/a)$ \\[0.3em]
+Time reversal & $x[-n]$ & $X(1/z)$ \\[0.3em]
+Convolution & $x_1[n] * x_2[n]$ & $X_1(z) \cdot X_2(z)$ \\[0.3em]
+Multiplication by $n$ & $n x[n]$ & $-z \frac{dX(z)}{dz}$ \\[0.3em]
+Initial value & $x[0]$ & $\lim_{z \to \infty} X(z)$ \\[0.3em]
+Final value & $\lim_{n \to \infty} x[n]$ & $\lim_{z \to 1} (z-1) X(z)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The \textbf{time shift property} is particularly important for control. If $X(z) = \mathcal{Z}\{x[n]\}$, then:
+\begin{equation}
+\mathcal{Z}\{x[n-1]\} = z^{-1} X(z)
+\end{equation}
+
+This means $z^{-1}$ represents a one-sample delay, just as $e^{-sT}$ represents a time delay of $T$ in continuous systems. This is the foundation for converting difference equations to transfer functions.
+
+The \textbf{final value theorem} states:
+\begin{equation}
+\lim_{n \to \infty} x[n] = \lim_{z \to 1} (z-1) X(z)
+\end{equation}
+
+provided the limit exists (i.e., the system is stable and has a finite steady-state value). This is the discrete analog of the continuous final value theorem $\lim_{t \to \infty} x(t) = \lim_{s \to 0} s X(s)$.
+
+\warningbox{The final value theorem only applies if all poles of $(z-1)X(z)$ are inside the unit circle. If the system is unstable or has sustained oscillations, the theorem gives incorrect results.}
+
+%===============================================================================
+\section{Discretization Methods}
+\label{sec:discretization}
+
+Given a continuous-time transfer function $G(s)$, how do we obtain an equivalent discrete-time transfer function $G(z)$? This is the discretization problem, and there are several approaches with different tradeoffs.
+
+\subsection{Zero-Order Hold (ZOH) Discretization}
+
+The ZOH method models what actually happens in most digital control systems: the continuous plant sees a piecewise-constant input from a DAC with zero-order hold.
+
+Given a continuous transfer function $G(s)$ preceded by a ZOH, the exact discrete equivalent is:
+\begin{equation}
+\boxed{G(z) = (1 - z^{-1}) \mathcal{Z}\left\{\frac{G(s)}{s}\right\} = \frac{z-1}{z} \mathcal{Z}\left\{\frac{G(s)}{s}\right\}}
+\label{eq:zoh_discretization}
+\end{equation}
+
+\textbf{Derivation:}
+
+The continuous-time output when the input is a step of height $u_k$ starting at $t = kT$ is:
+\begin{equation}
+y(t) = u_k \cdot \mathcal{L}^{-1}\left\{\frac{G(s)}{s}\right\}_{t-kT}, \quad t \geq kT
+\end{equation}
+
+At the next sample time $t = (k+1)T$, the output contribution from this step is:
+\begin{equation}
+y[(k+1)T] = u_k \cdot g_{\text{step}}(T)
+\end{equation}
+
+where $g_{\text{step}}(T)$ is the step response evaluated at $t = T$. The Z-transform of the step response is $\mathcal{Z}\{G(s)/s\}$, and accounting for the ZOH effect gives equation \eqref{eq:zoh_discretization}.
+
+\begin{example}[ZOH Discretization of First-Order System]
+\label{ex:zoh_first_order}
+
+Discretize $G(s) = \frac{1}{s+a}$ using ZOH with sampling period $T$.
+
+\textbf{Solution:}
+
+First, find $G(s)/s$:
+\begin{equation}
+\frac{G(s)}{s} = \frac{1}{s(s+a)}
+\end{equation}
+
+Partial fraction expansion:
+\begin{equation}
+\frac{1}{s(s+a)} = \frac{1}{a}\left(\frac{1}{s} - \frac{1}{s+a}\right)
+\end{equation}
+
+Taking the inverse Laplace transform:
+\begin{equation}
+\mathcal{L}^{-1}\left\{\frac{1}{s(s+a)}\right\} = \frac{1}{a}(1 - e^{-at})u(t)
+\end{equation}
+
+Sampling at $t = nT$:
+\begin{equation}
+g[n] = \frac{1}{a}(1 - e^{-anT})u[n]
+\end{equation}
+
+Taking the Z-transform:
+\begin{align}
+\mathcal{Z}\left\{\frac{G(s)}{s}\right\} &= \frac{1}{a}\left(\frac{z}{z-1} - \frac{z}{z-e^{-aT}}\right) \\
+&= \frac{1}{a} \cdot \frac{z(z-e^{-aT}) - z(z-1)}{(z-1)(z-e^{-aT})} \\
+&= \frac{1}{a} \cdot \frac{z(1-e^{-aT})}{(z-1)(z-e^{-aT})}
+\end{align}
+
+Applying the ZOH formula:
+\begin{align}
+G(z) &= \frac{z-1}{z} \cdot \frac{1}{a} \cdot \frac{z(1-e^{-aT})}{(z-1)(z-e^{-aT})} \\
+&= \frac{1-e^{-aT}}{a(z-e^{-aT})}
+\end{align}
+
+Let $\alpha = e^{-aT}$. Then:
+\begin{equation}
+\boxed{G(z) = \frac{1-\alpha}{a(z-\alpha)} = \frac{(1-e^{-aT})/a}{z-e^{-aT}}}
+\end{equation}
+
+\textbf{Verification:}
+
+The DC gain should be preserved. For the continuous system:
+\begin{equation}
+G(0) = \frac{1}{a}
+\end{equation}
+
+For the discrete system at $z = 1$ (DC):
+\begin{equation}
+G(1) = \frac{1-e^{-aT}}{a(1-e^{-aT})} = \frac{1}{a} \quad \checkmark
+\end{equation}
+
+The pole at $s = -a$ maps to $z = e^{-aT}$, which is inside the unit circle for $a > 0$ (stable). This is exactly the mapping $z = e^{sT}$.
+\end{example}
+
+\begin{example}[ZOH Discretization of Second-Order System]
+\label{ex:zoh_second_order}
+
+Discretize $G(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}$ using ZOH with sampling period $T$.
+
+\textbf{Solution:}
+
+This is a standard underdamped second-order system (assuming $\zeta < 1$). Let me work through this carefully.
+
+First:
+\begin{equation}
+\frac{G(s)}{s} = \frac{\omega_n^2}{s(s^2 + 2\zeta\omega_n s + \omega_n^2)}
+\end{equation}
+
+The denominator factors as $s(s - p_1)(s - p_2)$ where:
+\begin{equation}
+p_{1,2} = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2} = -\sigma \pm j\omega_d
+\end{equation}
+
+with $\sigma = \zeta\omega_n$ and $\omega_d = \omega_n\sqrt{1-\zeta^2}$.
+
+Partial fraction expansion:
+\begin{equation}
+\frac{\omega_n^2}{s(s^2 + 2\zeta\omega_n s + \omega_n^2)} = \frac{1}{s} + \frac{As + B}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+Solving for $A$ and $B$:
+\begin{equation}
+\omega_n^2 = (s^2 + 2\zeta\omega_n s + \omega_n^2) + s(As + B)
+\end{equation}
+
+Comparing coefficients: $A = -1$, $B = -2\zeta\omega_n$.
+
+The inverse Laplace transform of the step response is:
+\begin{equation}
+g_{\text{step}}(t) = \left[1 - e^{-\sigma t}\left(\cos(\omega_d t) + \frac{\sigma}{\omega_d}\sin(\omega_d t)\right)\right] u(t)
+\end{equation}
+
+Let $r = e^{-\sigma T}$ and $\theta = \omega_d T$. The sampled step response is:
+\begin{equation}
+g[n] = 1 - r^n \cos(n\theta) - \frac{\sigma}{\omega_d} r^n \sin(n\theta)
+\end{equation}
+
+Taking Z-transforms and applying the ZOH formula gives (after considerable algebra):
+\begin{equation}
+\boxed{G(z) = \frac{b_0 + b_1 z^{-1}}{1 + a_1 z^{-1} + a_2 z^{-2}}}
+\end{equation}
+
+where:
+\begin{align}
+a_1 &= -2e^{-\sigma T}\cos(\omega_d T) \\
+a_2 &= e^{-2\sigma T} \\
+b_0 &= 1 - e^{-\sigma T}\left(\cos(\omega_d T) + \frac{\sigma}{\omega_d}\sin(\omega_d T)\right) \\
+b_1 &= e^{-2\sigma T} + e^{-\sigma T}\left(\frac{\sigma}{\omega_d}\sin(\omega_d T) - \cos(\omega_d T)\right)
+\end{align}
+
+The discrete poles are:
+\begin{equation}
+z_{1,2} = e^{-\sigma T}e^{\pm j\omega_d T} = r e^{\pm j\theta}
+\end{equation}
+
+These lie on a circle of radius $r = e^{-\sigma T}$ at angles $\pm\theta = \pm\omega_d T$.
+\end{example}
+
+\subsection{Tustin (Bilinear) Transformation}
+
+The Tustin method, also called the bilinear transformation, substitutes:
+\begin{equation}
+\boxed{s = \frac{2}{T}\frac{z-1}{z+1} \quad \Leftrightarrow \quad z = \frac{1 + \frac{sT}{2}}{1 - \frac{sT}{2}}}
+\label{eq:tustin_transform}
+\end{equation}
+
+To discretize $G(s)$, simply replace every $s$ with $\frac{2}{T}\frac{z-1}{z+1}$:
+\begin{equation}
+G(z) = G(s)\Big|_{s = \frac{2}{T}\frac{z-1}{z+1}}
+\end{equation}
+
+\textbf{Derivation:}
+
+The Tustin transformation comes from the trapezoidal integration rule. For a continuous integrator $H(s) = 1/s$, the differential equation is:
+\begin{equation}
+\dot{y} = u \quad \Rightarrow \quad y(t) = \int_0^t u(\tau) d\tau
+\end{equation}
+
+Using trapezoidal integration:
+\begin{equation}
+y[n] = y[n-1] + \frac{T}{2}(u[n] + u[n-1])
+\end{equation}
+
+Taking Z-transforms:
+\begin{equation}
+Y(z) = z^{-1}Y(z) + \frac{T}{2}(U(z) + z^{-1}U(z))
+\end{equation}
+\begin{equation}
+Y(z)(1 - z^{-1}) = \frac{T}{2}U(z)(1 + z^{-1})
+\end{equation}
+\begin{equation}
+H(z) = \frac{Y(z)}{U(z)} = \frac{T}{2}\frac{1 + z^{-1}}{1 - z^{-1}} = \frac{T}{2}\frac{z+1}{z-1}
+\end{equation}
+
+For a continuous integrator, $H(s) = 1/s$. Equating:
+\begin{equation}
+\frac{1}{s} = \frac{T}{2}\frac{z+1}{z-1} \quad \Rightarrow \quad s = \frac{2}{T}\frac{z-1}{z+1}
+\end{equation}
+
+\textbf{Properties of Tustin Transformation:}
+
+\begin{enumerate}
+    \item \textbf{Stability preservation:} The left half $s$-plane maps to the interior of the unit circle. A stable continuous system yields a stable discrete system.
+
+    \item \textbf{No aliasing:} Unlike ZOH, the Tustin method never folds frequencies---it warps them instead.
+
+    \item \textbf{Frequency warping:} The continuous frequency $\omega_c$ maps to discrete frequency $\omega_d$ according to:
+    \begin{equation}
+    \omega_d = \frac{2}{T}\tan\left(\frac{\omega_c T}{2}\right) \quad \Leftrightarrow \quad \omega_c = \frac{2}{T}\arctan\left(\frac{\omega_d T}{2}\right)
+    \end{equation}
+
+    This warping is negligible for $\omega T \ll 1$ but significant near the Nyquist frequency.
+
+    \item \textbf{Exact at DC:} Both methods give the same DC gain: $G(z)|_{z=1} = G(s)|_{s=0}$.
+\end{enumerate}
+
+\keypoint{The Tustin transformation warps frequencies, so a notch filter designed at 60 Hz continuous will not be exactly at 60 Hz discrete unless you pre-warp the design frequency.}
+
+\textbf{Pre-warping:}
+
+To match the frequency response exactly at a critical frequency $\omega_c$, use the pre-warped Tustin transformation:
+\begin{equation}
+s = \frac{\omega_c}{\tan(\omega_c T/2)} \cdot \frac{z-1}{z+1}
+\end{equation}
+
+This ensures the discrete frequency response matches the continuous response exactly at $\omega = \omega_c$.
+
+\begin{example}[Tustin Discretization of First-Order System]
+\label{ex:tustin_first_order}
+
+Discretize $G(s) = \frac{1}{s+a}$ using Tustin with sampling period $T$.
+
+\textbf{Solution:}
+
+Substitute $s = \frac{2}{T}\frac{z-1}{z+1}$:
+\begin{align}
+G(z) &= \frac{1}{\frac{2}{T}\frac{z-1}{z+1} + a} \\
+&= \frac{1}{\frac{2(z-1) + aT(z+1)}{T(z+1)}} \\
+&= \frac{T(z+1)}{2(z-1) + aT(z+1)} \\
+&= \frac{T(z+1)}{(2+aT)z + (aT-2)} \\
+&= \frac{T}{2+aT} \cdot \frac{z+1}{z - \frac{2-aT}{2+aT}}
+\end{align}
+
+Let $\beta = \frac{2-aT}{2+aT}$. Then:
+\begin{equation}
+\boxed{G(z) = \frac{T}{2+aT} \cdot \frac{z+1}{z-\beta} = \frac{T(1+z^{-1})}{(2+aT)(1-\beta z^{-1})}}
+\end{equation}
+
+\textbf{Comparison with ZOH:}
+
+For ZOH, we found $G(z) = \frac{1-e^{-aT}}{a(z-e^{-aT})}$.
+
+For Tustin, the pole is at $z = \frac{2-aT}{2+aT}$.
+
+For small $aT$:
+\begin{equation}
+e^{-aT} \approx 1 - aT + \frac{(aT)^2}{2} - \ldots
+\end{equation}
+\begin{equation}
+\frac{2-aT}{2+aT} = \frac{1 - aT/2}{1 + aT/2} \approx (1 - aT/2)(1 - aT/2) = 1 - aT + \frac{(aT)^2}{4} + \ldots
+\end{equation}
+
+Both approximate $1 - aT$ for small $T$, but ZOH is exact for the pole mapping while Tustin has $O((aT)^2)$ error.
+\end{example}
+
+\subsection{Forward and Backward Euler Methods}
+
+The Euler methods are simpler but less accurate than Tustin.
+
+\textbf{Forward Euler (Forward Difference):}
+\begin{equation}
+s \approx \frac{z-1}{T} \quad \Rightarrow \quad z = 1 + sT
+\label{eq:forward_euler}
+\end{equation}
+
+This comes from approximating the derivative as:
+\begin{equation}
+\dot{x}(t) \approx \frac{x[n+1] - x[n]}{T}
+\end{equation}
+
+\textbf{Backward Euler (Backward Difference):}
+\begin{equation}
+s \approx \frac{z-1}{Tz} = \frac{1 - z^{-1}}{T} \quad \Rightarrow \quad z = \frac{1}{1-sT}
+\label{eq:backward_euler}
+\end{equation}
+
+This comes from:
+\begin{equation}
+\dot{x}(t) \approx \frac{x[n] - x[n-1]}{T}
+\end{equation}
+
+\textbf{Stability mapping:}
+
+\begin{itemize}
+    \item \textbf{Forward Euler:} Maps $s = -a$ to $z = 1 - aT$. For stability, need $|1-aT| < 1$, which requires $0 < aT < 2$. A very stable continuous pole ($a$ large) can become unstable if $T$ is too large!
+
+    \item \textbf{Backward Euler:} Maps $s = -a$ to $z = \frac{1}{1+aT}$, which is always inside the unit circle for $a > 0$. Backward Euler is unconditionally stable for stable continuous systems.
+
+    \item \textbf{Tustin:} Maps $s = -a$ to $z = \frac{2-aT}{2+aT}$, which is always between $-1$ and $+1$ for $a > 0$. Tustin is also unconditionally stable.
+\end{itemize}
+
+\warningbox{Forward Euler can destabilize a stable system if the sampling period is too long! Always check that $aT < 2$ for all poles, or use Tustin/backward Euler.}
+
+\subsection{Matched Pole-Zero Method}
+
+The matched pole-zero (MPZ) method directly maps poles and zeros using the exact relationship $z = e^{sT}$:
+
+\begin{enumerate}
+    \item Map each continuous pole $s = p_i$ to discrete pole $z = e^{p_i T}$
+    \item Map each continuous zero $s = z_i$ to discrete zero $z = e^{z_i T}$
+    \item Add zeros at $z = -1$ (Nyquist frequency) if the continuous system is strictly proper
+    \item Adjust gain to match DC gain or another critical frequency
+\end{enumerate}
+
+\begin{example}[Matched Pole-Zero Discretization]
+\label{ex:mpz_discretization}
+
+Discretize $G(s) = \frac{s+2}{(s+1)(s+3)}$ using MPZ with $T = 0.1$ s.
+
+\textbf{Solution:}
+
+The continuous system has:
+\begin{itemize}
+    \item Poles at $s = -1$ and $s = -3$
+    \item Zero at $s = -2$
+    \item DC gain: $G(0) = \frac{2}{1 \cdot 3} = \frac{2}{3}$
+\end{itemize}
+
+Map poles and zeros:
+\begin{align}
+z_{\text{pole1}} &= e^{-1 \cdot 0.1} = e^{-0.1} = 0.9048 \\
+z_{\text{pole2}} &= e^{-3 \cdot 0.1} = e^{-0.3} = 0.7408 \\
+z_{\text{zero}} &= e^{-2 \cdot 0.1} = e^{-0.2} = 0.8187
+\end{align}
+
+Since the continuous system has 2 poles and 1 zero (relative degree 1), we add one zero at $z = -1$:
+\begin{equation}
+G(z) = K \frac{(z - 0.8187)(z + 1)}{(z - 0.9048)(z - 0.7408)}
+\end{equation}
+
+Find $K$ to match DC gain. At $z = 1$:
+\begin{equation}
+G(1) = K \frac{(1 - 0.8187)(1 + 1)}{(1 - 0.9048)(1 - 0.7408)} = K \frac{0.1813 \cdot 2}{0.0952 \cdot 0.2592} = K \frac{0.3626}{0.0247} = 14.68 K
+\end{equation}
+
+Setting $G(1) = 2/3$:
+\begin{equation}
+K = \frac{2/3}{14.68} = 0.0454
+\end{equation}
+
+Therefore:
+\begin{equation}
+\boxed{G(z) = 0.0454 \frac{(z - 0.8187)(z + 1)}{(z - 0.9048)(z - 0.7408)}}
+\end{equation}
+\end{example}
+
+\subsection{Comparison of Discretization Methods}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Discretization Methods}
+\label{tab:discretization_comparison}
+\begin{tabular}{p{2.5cm}p{3cm}p{3cm}p{4cm}}
+\toprule
+\textbf{Method} & \textbf{Advantages} & \textbf{Disadvantages} & \textbf{Best Used For} \\
+\midrule
+ZOH & Exact for step inputs; models physical DAC & Complex formulas; no simple $s \to z$ mapping & Plant discretization; simulation \\[0.5em]
+Tustin & Preserves stability; no aliasing; simple formula & Frequency warping; less accurate for large $T$ & Controller discretization; filters \\[0.5em]
+Forward Euler & Simplest formula & Can destabilize; poor accuracy & Quick prototyping only \\[0.5em]
+Backward Euler & Unconditionally stable & Less accurate than Tustin & Stiff systems; guaranteed stability \\[0.5em]
+Matched PZ & Exact pole/zero mapping & Ad hoc; requires adding zeros & When pole locations critical \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\keypoint{For discretizing controllers, use Tustin (with pre-warping if needed). For discretizing plants for simulation, use ZOH. Avoid forward Euler except for very fast sampling.}
+
+%===============================================================================
+\section{Discrete Transfer Functions and Difference Equations}
+\label{sec:discrete_tf}
+
+Just as continuous transfer functions relate Laplace transforms of outputs to inputs, discrete transfer functions relate Z-transforms. The key difference is that discrete systems are described by difference equations rather than differential equations.
+
+\subsection{From Difference Equations to Transfer Functions}
+
+A linear time-invariant discrete system is described by a difference equation:
+\begin{equation}
+y[n] + a_1 y[n-1] + \cdots + a_N y[n-N] = b_0 u[n] + b_1 u[n-1] + \cdots + b_M u[n-M]
+\end{equation}
+
+Taking the Z-transform and using the time-shift property:
+\begin{equation}
+Y(z)(1 + a_1 z^{-1} + \cdots + a_N z^{-N}) = U(z)(b_0 + b_1 z^{-1} + \cdots + b_M z^{-M})
+\end{equation}
+
+The transfer function is:
+\begin{equation}
+\boxed{G(z) = \frac{Y(z)}{U(z)} = \frac{b_0 + b_1 z^{-1} + \cdots + b_M z^{-M}}{1 + a_1 z^{-1} + \cdots + a_N z^{-N}}}
+\label{eq:discrete_tf}
+\end{equation}
+
+Multiplying numerator and denominator by $z^N$:
+\begin{equation}
+G(z) = \frac{b_0 z^N + b_1 z^{N-1} + \cdots + b_M z^{N-M}}{z^N + a_1 z^{N-1} + \cdots + a_N}
+\end{equation}
+
+\subsection{Causality and Realizability}
+
+A discrete system is \textbf{causal} (realizable) if the current output depends only on current and past inputs. For the transfer function in equation \eqref{eq:discrete_tf}:
+
+\begin{itemize}
+    \item \textbf{Causal:} $M \leq N$ (numerator degree $\leq$ denominator degree)
+    \item \textbf{Strictly causal:} $M < N$ (numerator degree $<$ denominator degree), meaning $b_0 = 0$
+\end{itemize}
+
+A non-causal system would require future inputs, which is impossible in real-time control.
+
+\begin{example}[Difference Equation to Transfer Function]
+\label{ex:diff_eq_to_tf}
+
+A digital filter is described by:
+\begin{equation}
+y[n] - 0.8 y[n-1] = 0.1 u[n] + 0.1 u[n-1]
+\end{equation}
+
+Find the transfer function and determine if it is causal.
+
+\textbf{Solution:}
+
+Taking Z-transforms:
+\begin{equation}
+Y(z) - 0.8 z^{-1} Y(z) = 0.1 U(z) + 0.1 z^{-1} U(z)
+\end{equation}
+\begin{equation}
+Y(z)(1 - 0.8 z^{-1}) = U(z)(0.1 + 0.1 z^{-1})
+\end{equation}
+\begin{equation}
+G(z) = \frac{0.1 + 0.1 z^{-1}}{1 - 0.8 z^{-1}} = \frac{0.1(z + 1)}{z - 0.8}
+\end{equation}
+
+The system has:
+\begin{itemize}
+    \item One pole at $z = 0.8$
+    \item One zero at $z = -1$
+    \item Numerator and denominator have equal degree, so $M = N = 1$
+\end{itemize}
+
+The system is causal (but not strictly causal since $b_0 = 0.1 \neq 0$).
+\end{example}
+
+\subsection{Block Diagram Algebra}
+
+Discrete transfer functions combine using the same rules as continuous systems:
+
+\begin{itemize}
+    \item \textbf{Series:} $G(z) = G_1(z) G_2(z)$
+    \item \textbf{Parallel:} $G(z) = G_1(z) + G_2(z)$
+    \item \textbf{Feedback:} $G_{cl}(z) = \frac{G(z)}{1 + G(z)H(z)}$ (negative feedback)
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=2cm, auto]
+    \node[input] (input) {};
+    \node[sum, right=1cm of input] (sum) {};
+    \node[block, right=1.5cm of sum] (G) {$G(z)$};
+    \node[output, right=1.5cm of G] (output) {};
+    \node[block, below=1cm of G] (H) {$H(z)$};
+
+    \draw[arrow] (input) -- node[above]{$R(z)$} (sum);
+    \draw[arrow] (sum) -- node[above]{$E(z)$} (G);
+    \draw[arrow] (G) -- node[above, near end]{$Y(z)$} (output);
+    \draw[arrow] (G.east) |- ++(0.5,-0.5) |- (H.east);
+    \draw[arrow] (H.west) -| node[near end, left]{$-$} (sum.south);
+    \node[left] at (sum.west) {$+$};
+\end{tikzpicture}
+\caption{Discrete feedback system.}
+\label{fig:discrete_feedback}
+\end{figure}
+
+The closed-loop transfer function from $R(z)$ to $Y(z)$ is:
+\begin{equation}
+\frac{Y(z)}{R(z)} = \frac{G(z)}{1 + G(z)H(z)}
+\end{equation}
+
+For unity feedback ($H(z) = 1$):
+\begin{equation}
+\frac{Y(z)}{R(z)} = \frac{G(z)}{1 + G(z)}
+\end{equation}
+
+\subsection{Implementing Difference Equations}
+
+To implement a transfer function on a digital computer, we convert it to a difference equation:
+
+Given:
+\begin{equation}
+G(z) = \frac{b_0 + b_1 z^{-1} + b_2 z^{-2}}{1 + a_1 z^{-1} + a_2 z^{-2}}
+\end{equation}
+
+The difference equation is:
+\begin{equation}
+y[n] = b_0 u[n] + b_1 u[n-1] + b_2 u[n-2] - a_1 y[n-1] - a_2 y[n-2]
+\end{equation}
+
+This is the \textbf{Direct Form I} implementation. Each sample period, we:
+\begin{enumerate}
+    \item Read the current input $u[n]$
+    \item Compute $y[n]$ using stored past values
+    \item Store $u[n]$ and $y[n]$ for next iteration
+    \item Output $y[n]$
+\end{enumerate}
+
+\begin{algorithm}[htbp]
+\caption{Direct Form I Implementation}
+\label{alg:direct_form_1}
+\begin{algorithmic}[1]
+\REQUIRE Coefficients $b_0, b_1, b_2, a_1, a_2$; input $u[n]$
+\ENSURE Output $y[n]$
+\STATE \textbf{Initialize:} $u_{n1} \gets 0$, $u_{n2} \gets 0$, $y_{n1} \gets 0$, $y_{n2} \gets 0$
+\STATE \COMMENT{Main loop (called every sample period)}
+\STATE $y_n \gets b_0 \cdot u_n + b_1 \cdot u_{n1} + b_2 \cdot u_{n2} - a_1 \cdot y_{n1} - a_2 \cdot y_{n2}$
+\STATE $u_{n2} \gets u_{n1}$ \COMMENT{Shift input history}
+\STATE $u_{n1} \gets u_n$
+\STATE $y_{n2} \gets y_{n1}$ \COMMENT{Shift output history}
+\STATE $y_{n1} \gets y_n$
+\RETURN $y_n$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Direct Form II} uses fewer memory locations by combining the delays:
+\begin{align}
+w[n] &= u[n] - a_1 w[n-1] - a_2 w[n-2] \\
+y[n] &= b_0 w[n] + b_1 w[n-1] + b_2 w[n-2]
+\end{align}
+
+This requires only two state variables ($w[n-1]$ and $w[n-2]$) instead of four.
+
+%===============================================================================
+\section{Mapping Between s-Plane and z-Plane}
+\label{sec:s_to_z_mapping}
+
+Understanding how continuous-time poles and zeros map to discrete-time equivalents is essential for analyzing sampled-data systems.
+
+\subsection{The Fundamental Mapping}
+
+The exact relationship between continuous and discrete domains is:
+\begin{equation}
+\boxed{z = e^{sT}}
+\label{eq:s_to_z_mapping}
+\end{equation}
+
+This is not an approximation---it is the exact relationship for sampled systems. Let me explore its implications.
+
+\textbf{Stability boundary:}
+
+In the $s$-plane, the stability boundary is the imaginary axis ($\text{Re}(s) = 0$). Setting $s = j\omega$:
+\begin{equation}
+z = e^{j\omega T}
+\end{equation}
+
+This traces out the unit circle as $\omega$ varies! Specifically:
+\begin{itemize}
+    \item $\omega = 0$ maps to $z = 1$
+    \item $\omega = \pi/T$ (Nyquist frequency) maps to $z = e^{j\pi} = -1$
+    \item $\omega = 2\pi/T$ (sampling frequency) maps to $z = e^{j2\pi} = 1$ again
+\end{itemize}
+
+\keypoint{The unit circle in the $z$-plane corresponds to the imaginary axis in the $s$-plane. Inside the unit circle is stable; outside is unstable.}
+
+\subsection{Mapping Regions}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.2]
+    % s-plane
+    \begin{scope}[xshift=-4cm]
+        \draw[->] (-2.5,0) -- (2.5,0) node[right] {$\sigma$};
+        \draw[->] (0,-2.5) -- (0,2.5) node[above] {$j\omega$};
+
+        % Stable region
+        \fill[UofSCAtlantic!20] (-2.5,-2.5) rectangle (0,2.5);
+
+        % Labels
+        \node at (-1.25,1.5) {Stable};
+        \node at (1.25,1.5) {Unstable};
+
+        % Boundary
+        \draw[UofSCGarnet, thick] (0,-2.5) -- (0,2.5);
+
+        % Nyquist lines
+        \draw[UofSCGrey50, dashed] (-2.5,1.57) -- (2.5,1.57) node[right, font=\small] {$\omega_s/2$};
+        \draw[UofSCGrey50, dashed] (-2.5,-1.57) -- (2.5,-1.57) node[right, font=\small] {$-\omega_s/2$};
+
+        % Primary strip
+        \draw[UofSCHorseshoe, thick, <->] (-0.3,1.57) -- (-0.3,-1.57);
+        \node[UofSCHorseshoe, left, font=\small] at (-0.5,0) {Primary strip};
+
+        \node[below] at (0,-2.8) {\textbf{$s$-plane}};
+    \end{scope}
+
+    % z-plane
+    \begin{scope}[xshift=4cm]
+        \draw[->] (-2.5,0) -- (2.5,0) node[right] {$\text{Re}(z)$};
+        \draw[->] (0,-2.5) -- (0,2.5) node[above] {$\text{Im}(z)$};
+
+        % Unit circle
+        \draw[UofSCGarnet, thick] (0,0) circle (1.5);
+
+        % Stable region
+        \fill[UofSCAtlantic!20] (0,0) circle (1.5);
+
+        % Labels
+        \node at (0,0.5) {Stable};
+        \node at (2,1.5) {Unstable};
+
+        % Key points
+        \fill[UofSCGarnet] (1.5,0) circle (2pt) node[below right] {$z=1$};
+        \fill[UofSCGarnet] (-1.5,0) circle (2pt) node[below left] {$z=-1$};
+        \fill[UofSCGarnet] (0,1.5) circle (2pt) node[above right] {$z=j$};
+        \fill[UofSCGarnet] (0,-1.5) circle (2pt) node[below right] {$z=-j$};
+
+        \node[below] at (0,-2.8) {\textbf{$z$-plane}};
+    \end{scope}
+
+    % Arrow showing mapping
+    \draw[->, thick, UofSCGarnet] (-1,0) -- (1,0) node[midway, above] {$z = e^{sT}$};
+\end{tikzpicture}
+\caption{Mapping from $s$-plane to $z$-plane. The left half $s$-plane maps to the interior of the unit circle.}
+\label{fig:s_to_z_mapping}
+\end{figure}
+
+The mapping $z = e^{sT}$ has several important properties:
+
+\begin{enumerate}
+    \item \textbf{Left half-plane to unit disk:} If $\text{Re}(s) < 0$, then $|z| = |e^{sT}| = e^{\text{Re}(s)T} < 1$.
+
+    \item \textbf{Right half-plane to exterior:} If $\text{Re}(s) > 0$, then $|z| > 1$.
+
+    \item \textbf{Imaginary axis to unit circle:} If $\text{Re}(s) = 0$, then $|z| = 1$.
+
+    \item \textbf{Many-to-one:} The mapping is periodic in $\omega$ with period $\omega_s = 2\pi/T$. All frequencies $\omega + k\omega_s$ map to the same point on the unit circle.
+\end{enumerate}
+
+\subsection{Constant Damping Ratio Lines}
+
+In the $s$-plane, lines of constant damping ratio $\zeta$ radiate from the origin at angle $\theta = \cos^{-1}(\zeta)$ from the negative real axis.
+
+For $s = \sigma + j\omega$ with $\zeta = -\sigma/|s|$:
+\begin{equation}
+z = e^{\sigma T} e^{j\omega T} = r e^{j\theta}
+\end{equation}
+
+where $r = e^{\sigma T}$ and $\theta = \omega T$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.5]
+    \draw[->] (-1.5,0) -- (1.8,0) node[right] {$\text{Re}(z)$};
+    \draw[->] (0,-1.5) -- (0,1.5) node[above] {$\text{Im}(z)$};
+
+    % Unit circle
+    \draw[UofSCBlack, thick] (0,0) circle (1);
+
+    % Constant zeta lines (spirals)
+    \foreach \zeta/\col in {0.1/UofSCRose, 0.3/UofSCGarnet, 0.5/UofSCAtlantic, 0.7/UofSCCongaree, 0.9/UofSCHorseshoe} {
+        \draw[\col, thick, domain=0:180, samples=100, smooth]
+            plot ({exp(-\zeta*\x/57.3)*cos(\x)}, {exp(-\zeta*\x/57.3)*sin(\x)});
+        \draw[\col, thick, domain=0:180, samples=100, smooth]
+            plot ({exp(-\zeta*\x/57.3)*cos(\x)}, {-exp(-\zeta*\x/57.3)*sin(\x)});
+    }
+
+    % Constant omega_n lines (circles)
+    \foreach \r in {0.3, 0.5, 0.7, 0.9} {
+        \draw[UofSCGrey50, thin] (0,0) circle (\r);
+    }
+
+    % Labels
+    \node[UofSCRose, above right, font=\small] at (0.9,0.3) {$\zeta=0.1$};
+    \node[UofSCCongaree, above left, font=\small] at (-0.2,0.6) {$\zeta=0.7$};
+
+    % Key points
+    \fill (1,0) circle (1.5pt) node[below right] {$1$};
+    \fill (-1,0) circle (1.5pt) node[below left] {$-1$};
+\end{tikzpicture}
+\caption{Constant damping ratio lines in the $z$-plane form logarithmic spirals.}
+\label{fig:z_plane_damping}
+\end{figure}
+
+Lines of constant $\zeta$ in the $s$-plane become logarithmic spirals in the $z$-plane, converging toward the origin.
+
+\subsection{Constant Natural Frequency Lines}
+
+Lines of constant natural frequency $\omega_n$ are circles in the $s$-plane centered at the origin. In the $z$-plane, these map to circles of radius $r = e^{-\zeta\omega_n T}$ for a given $\zeta$.
+
+\subsection{Design Specifications in the z-Plane}
+
+When designing discrete controllers, we can translate continuous specifications:
+
+\begin{table}[htbp]
+\centering
+\caption{Continuous to Discrete Specification Translation}
+\label{tab:spec_translation}
+\begin{tabular}{lll}
+\toprule
+\textbf{Specification} & \textbf{$s$-Plane} & \textbf{$z$-Plane} \\
+\midrule
+Stability & $\text{Re}(s) < 0$ & $|z| < 1$ \\[0.3em]
+Settling time $t_s$ & $\text{Re}(s) < -4/t_s$ & $|z| < e^{-4T/t_s}$ \\[0.3em]
+Damping $\zeta$ & Angle from neg. real axis & Logarithmic spiral \\[0.3em]
+Natural freq. $\omega_n$ & Distance from origin & Related to angle on unit circle \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For a pole at $z = re^{j\theta}$ with $r < 1$:
+\begin{itemize}
+    \item The equivalent continuous pole is $s = \frac{1}{T}\ln(z) = \frac{1}{T}(\ln r + j\theta)$
+    \item Settling time: $t_s \approx -\frac{4T}{\ln r}$ (to 2\% of final value)
+    \item Damped frequency: $\omega_d = \theta/T$ rad/s
+\end{itemize}
+
+%===============================================================================
+\section{Jury Stability Test}
+\label{sec:jury_test}
+
+The Jury stability test is to discrete systems what the Routh-Hurwitz criterion is to continuous systems. It determines whether all roots of a polynomial lie inside the unit circle without actually computing the roots.
+
+\subsection{Motivation}
+
+Given a discrete characteristic polynomial:
+\begin{equation}
+P(z) = a_n z^n + a_{n-1} z^{n-1} + \cdots + a_1 z + a_0
+\label{eq:char_poly}
+\end{equation}
+
+We want to determine if all roots satisfy $|z_i| < 1$ (stable) without finding the roots explicitly. For high-order systems, root-finding is numerically sensitive, and we often just need a yes/no stability answer.
+
+\subsection{Necessary Conditions}
+
+Before constructing the Jury array, we can check three necessary (but not sufficient) conditions:
+
+\begin{enumerate}
+    \item $P(1) > 0$: The polynomial evaluated at $z = 1$ must be positive.
+    \item $(-1)^n P(-1) > 0$: This ensures no roots at or outside $z = -1$.
+    \item $|a_0| < a_n$: The constant term magnitude must be less than the leading coefficient.
+\end{enumerate}
+
+If any of these fail, the system is definitely unstable. If all pass, we proceed to the full Jury test.
+
+\textbf{Derivation of Condition 1:}
+
+If all roots are inside the unit circle, then:
+\begin{equation}
+P(z) = a_n(z - z_1)(z - z_2) \cdots (z - z_n)
+\end{equation}
+
+At $z = 1$:
+\begin{equation}
+P(1) = a_n(1 - z_1)(1 - z_2) \cdots (1 - z_n)
+\end{equation}
+
+Since each $|z_i| < 1$, each factor $(1 - z_i)$ has positive real part (the factor lies in the right half of the complex plane centered at $z = 1$). For real coefficients, complex roots come in conjugate pairs, so the product of conjugate factors is a positive real number. Therefore $P(1) > 0$ if we assume $a_n > 0$ (we can always normalize).
+
+\textbf{Derivation of Condition 3:}
+
+The product of all roots equals:
+\begin{equation}
+z_1 z_2 \cdots z_n = (-1)^n \frac{a_0}{a_n}
+\end{equation}
+
+If all $|z_i| < 1$, then:
+\begin{equation}
+|z_1 z_2 \cdots z_n| = \left|\frac{a_0}{a_n}\right| < 1
+\end{equation}
+
+Therefore $|a_0| < |a_n|$, or with our normalization $a_n > 0$: $|a_0| < a_n$.
+
+\subsection{The Jury Array}
+
+The complete Jury test constructs an array from the polynomial coefficients. For a polynomial of degree $n$:
+\begin{equation}
+P(z) = a_n z^n + a_{n-1} z^{n-1} + \cdots + a_1 z + a_0
+\end{equation}
+
+Construct the following array with $2n - 3$ rows:
+
+\begin{center}
+\begin{tabular}{c|ccccccc}
+Row & $z^0$ & $z^1$ & $z^2$ & $\cdots$ & $z^{n-2}$ & $z^{n-1}$ & $z^n$ \\
+\hline
+1 & $a_0$ & $a_1$ & $a_2$ & $\cdots$ & $a_{n-2}$ & $a_{n-1}$ & $a_n$ \\
+2 & $a_n$ & $a_{n-1}$ & $a_{n-2}$ & $\cdots$ & $a_2$ & $a_1$ & $a_0$ \\
+\hline
+3 & $b_0$ & $b_1$ & $b_2$ & $\cdots$ & $b_{n-2}$ & $b_{n-1}$ & \\
+4 & $b_{n-1}$ & $b_{n-2}$ & $b_{n-3}$ & $\cdots$ & $b_1$ & $b_0$ & \\
+\hline
+5 & $c_0$ & $c_1$ & $c_2$ & $\cdots$ & $c_{n-2}$ & & \\
+6 & $c_{n-2}$ & $c_{n-3}$ & $c_{n-4}$ & $\cdots$ & $c_0$ & & \\
+\hline
+$\vdots$ & $\vdots$ & & & & & & \\
+\hline
+$2n-3$ & $p_0$ & $p_1$ & $p_2$ & & & & \\
+\end{tabular}
+\end{center}
+
+The elements are computed as follows:
+\begin{equation}
+b_k = \begin{vmatrix} a_0 & a_{n-k} \\ a_n & a_k \end{vmatrix} = a_0 a_k - a_n a_{n-k}, \quad k = 0, 1, \ldots, n-1
+\end{equation}
+
+\begin{equation}
+c_k = \begin{vmatrix} b_0 & b_{n-1-k} \\ b_{n-1} & b_k \end{vmatrix} = b_0 b_k - b_{n-1} b_{n-1-k}, \quad k = 0, 1, \ldots, n-2
+\end{equation}
+
+And so on for subsequent rows.
+
+\subsection{Stability Criterion}
+
+The system is stable if and only if all of the following conditions hold:
+
+\begin{enumerate}
+    \item $P(1) > 0$
+    \item $(-1)^n P(-1) > 0$
+    \item $|a_0| < a_n$
+    \item $|b_0| > |b_{n-1}|$
+    \item $|c_0| > |c_{n-2}|$
+    \item Continue for all odd rows: $|(\text{first element})| > |(\text{last element})|$
+\end{enumerate}
+
+\keypoint{The Jury test requires $n-1$ determinant inequality checks (for odd rows 3, 5, 7, ..., up to row $2n-3$), plus the three preliminary conditions.}
+
+\subsection{Special Cases}
+
+\textbf{Second-order systems ($n = 2$):}
+
+For $P(z) = a_2 z^2 + a_1 z + a_0$, the necessary and sufficient conditions simplify to:
+\begin{align}
+P(1) &= a_2 + a_1 + a_0 > 0 \\
+P(-1) &= a_2 - a_1 + a_0 > 0 \\
+|a_0| &< a_2
+\end{align}
+
+These three conditions are both necessary and sufficient---no Jury array needed!
+
+\textbf{Third-order systems ($n = 3$):}
+
+For $P(z) = a_3 z^3 + a_2 z^2 + a_1 z + a_0$:
+\begin{align}
+P(1) &= a_3 + a_2 + a_1 + a_0 > 0 \\
+-P(-1) &= a_3 - a_2 + a_1 - a_0 > 0 \\
+|a_0| &< a_3 \\
+|a_0^2 - a_3^2| &> |a_0 a_2 - a_1 a_3|
+\end{align}
+
+The last condition comes from the Jury array with $b_0 = a_0^2 - a_3^2$ and $b_2 = a_0 a_2 - a_1 a_3$.
+
+\begin{example}[Jury Test for Second-Order System]
+\label{ex:jury_second_order}
+
+Determine the stability of the closed-loop system with characteristic polynomial:
+\begin{equation}
+P(z) = z^2 - 1.2z + 0.35
+\end{equation}
+
+\textbf{Solution:}
+
+Here $a_2 = 1$, $a_1 = -1.2$, $a_0 = 0.35$.
+
+Check the three conditions:
+
+\textbf{Condition 1:} $P(1) = 1 - 1.2 + 0.35 = 0.15 > 0$ \checkmark
+
+\textbf{Condition 2:} $P(-1) = 1 + 1.2 + 0.35 = 2.55 > 0$ \checkmark
+
+\textbf{Condition 3:} $|a_0| = 0.35 < 1 = a_2$ \checkmark
+
+All conditions satisfied, so the system is \textbf{stable}.
+
+We can verify by finding roots:
+\begin{equation}
+z = \frac{1.2 \pm \sqrt{1.44 - 1.40}}{2} = \frac{1.2 \pm 0.2}{2}
+\end{equation}
+
+The roots are $z_1 = 0.7$ and $z_2 = 0.5$, both inside the unit circle.
+\end{example}
+
+\begin{example}[Jury Test for Third-Order System]
+\label{ex:jury_third_order}
+
+Analyze the stability of:
+\begin{equation}
+P(z) = z^3 - 1.3z^2 + 0.62z - 0.12
+\end{equation}
+
+\textbf{Solution:}
+
+Coefficients: $a_3 = 1$, $a_2 = -1.3$, $a_1 = 0.62$, $a_0 = -0.12$.
+
+\textbf{Condition 1:} $P(1) = 1 - 1.3 + 0.62 - 0.12 = 0.20 > 0$ \checkmark
+
+\textbf{Condition 2:} $-P(-1) = -(-1 - 1.3 - 0.62 - 0.12) = 3.04 > 0$ \checkmark
+
+\textbf{Condition 3:} $|a_0| = 0.12 < 1 = a_3$ \checkmark
+
+Now construct the Jury array:
+
+Row 1: $-0.12$, $0.62$, $-1.3$, $1$
+
+Row 2: $1$, $-1.3$, $0.62$, $-0.12$
+
+Compute $b_k$:
+\begin{align}
+b_0 &= a_0 \cdot a_0 - a_3 \cdot a_3 = (-0.12)^2 - (1)^2 = 0.0144 - 1 = -0.9856 \\
+b_1 &= a_0 \cdot a_1 - a_3 \cdot a_2 = (-0.12)(0.62) - (1)(-1.3) = -0.0744 + 1.3 = 1.2256 \\
+b_2 &= a_0 \cdot a_2 - a_3 \cdot a_1 = (-0.12)(-1.3) - (1)(0.62) = 0.156 - 0.62 = -0.464
+\end{align}
+
+Row 3: $-0.9856$, $1.2256$, $-0.464$
+
+\textbf{Condition 4:} $|b_0| > |b_2|$?
+
+$|-0.9856| = 0.9856$ and $|-0.464| = 0.464$
+
+$0.9856 > 0.464$ \checkmark
+
+All conditions satisfied. The system is \textbf{stable}.
+\end{example}
+
+\begin{example}[Jury Test Showing Instability]
+\label{ex:jury_unstable}
+
+Analyze the stability of:
+\begin{equation}
+P(z) = z^3 + 0.5z^2 - 0.4z - 0.8
+\end{equation}
+
+\textbf{Solution:}
+
+Coefficients: $a_3 = 1$, $a_2 = 0.5$, $a_1 = -0.4$, $a_0 = -0.8$.
+
+\textbf{Condition 1:} $P(1) = 1 + 0.5 - 0.4 - 0.8 = 0.3 > 0$ \checkmark
+
+\textbf{Condition 2:} $-P(-1) = -(-1 + 0.5 + 0.4 - 0.8) = -(-0.9) = 0.9 > 0$ \checkmark
+
+\textbf{Condition 3:} $|a_0| = 0.8 < 1 = a_3$ \checkmark
+
+Construct Jury array:
+
+Row 1: $-0.8$, $-0.4$, $0.5$, $1$
+
+Row 2: $1$, $0.5$, $-0.4$, $-0.8$
+
+Compute $b_k$:
+\begin{align}
+b_0 &= (-0.8)^2 - (1)^2 = 0.64 - 1 = -0.36 \\
+b_1 &= (-0.8)(-0.4) - (1)(0.5) = 0.32 - 0.5 = -0.18 \\
+b_2 &= (-0.8)(0.5) - (1)(-0.4) = -0.4 + 0.4 = 0
+\end{align}
+
+Row 3: $-0.36$, $-0.18$, $0$
+
+\textbf{Condition 4:} $|b_0| > |b_2|$?
+
+$|-0.36| = 0.36$ and $|0| = 0$
+
+$0.36 > 0$ \checkmark
+
+All conditions satisfied, so the system is \textbf{stable}.
+
+Let me verify by finding roots numerically. Using the cubic formula or numerical methods, the roots are approximately $z_1 \approx 0.8$, $z_2 \approx -0.65 + 0.47j$, $z_3 \approx -0.65 - 0.47j$.
+
+Checking magnitudes: $|z_1| = 0.8$, $|z_{2,3}| = \sqrt{0.65^2 + 0.47^2} = \sqrt{0.643} = 0.80$.
+
+All roots are inside the unit circle, confirming stability.
+\end{example}
+
+\begin{example}[Finding Stability Margins with Jury Test]
+\label{ex:jury_margin}
+
+A discrete control system has the characteristic equation:
+\begin{equation}
+P(z) = z^2 + (K-2)z + (0.5 - 0.5K)
+\end{equation}
+
+Find the range of gain $K$ for stability.
+
+\textbf{Solution:}
+
+Here $a_2 = 1$, $a_1 = K-2$, $a_0 = 0.5 - 0.5K$.
+
+Apply the stability conditions:
+
+\textbf{Condition 1:} $P(1) > 0$
+\begin{equation}
+1 + (K-2) + (0.5 - 0.5K) > 0 \Rightarrow 0.5K - 0.5 > 0 \Rightarrow K > 1
+\end{equation}
+
+\textbf{Condition 2:} $P(-1) > 0$
+\begin{equation}
+1 - (K-2) + (0.5 - 0.5K) > 0 \Rightarrow 3.5 - 1.5K > 0 \Rightarrow K < \frac{7}{3} \approx 2.33
+\end{equation}
+
+\textbf{Condition 3:} $|a_0| < a_2$
+\begin{equation}
+|0.5 - 0.5K| < 1
+\end{equation}
+
+This gives: $-1 < 0.5 - 0.5K < 1$
+
+From $0.5 - 0.5K > -1$: $K < 3$
+
+From $0.5 - 0.5K < 1$: $K > -1$
+
+Combined: $-1 < K < 3$.
+
+Taking the intersection of all conditions:
+\begin{equation}
+\boxed{1 < K < \frac{7}{3}}
+\end{equation}
+
+The system is stable for $1 < K < 2.33$.
+\end{example}
+
+\subsection{Relationship to Bilinear Transformation}
+
+There is an elegant connection between the Jury test and the Routh-Hurwitz criterion. If we apply the bilinear transformation:
+\begin{equation}
+z = \frac{w+1}{w-1} \quad \Leftrightarrow \quad w = \frac{z+1}{z-1}
+\end{equation}
+
+This maps:
+\begin{itemize}
+    \item Interior of unit circle ($|z| < 1$) to left half $w$-plane ($\text{Re}(w) < 0$)
+    \item Unit circle ($|z| = 1$) to imaginary axis ($\text{Re}(w) = 0$)
+    \item Exterior of unit circle ($|z| > 1$) to right half $w$-plane ($\text{Re}(w) > 0$)
+\end{itemize}
+
+Therefore, we can:
+\begin{enumerate}
+    \item Transform $P(z)$ to $Q(w) = P\left(\frac{w+1}{w-1}\right) \cdot (w-1)^n$
+    \item Apply Routh-Hurwitz to $Q(w)$
+\end{enumerate}
+
+This is sometimes easier for hand calculations than the full Jury array.
+
+%===============================================================================
+\section{Digital PID Controller Implementation}
+\label{sec:digital_pid}
+
+The PID controller is the workhorse of industrial control. Converting a continuous PID to digital form requires careful attention to discretization, anti-windup, and numerical issues.
+
+\subsection{Continuous PID Review}
+
+The ideal continuous PID controller is:
+\begin{equation}
+u(t) = K_p e(t) + K_i \int_0^t e(\tau) d\tau + K_d \frac{de(t)}{dt}
+\end{equation}
+
+In transfer function form:
+\begin{equation}
+G_c(s) = K_p + \frac{K_i}{s} + K_d s = K_p \left(1 + \frac{1}{T_i s} + T_d s\right)
+\end{equation}
+
+where $T_i = K_p/K_i$ is the integral time and $T_d = K_d/K_p$ is the derivative time.
+
+\subsection{Discretizing the PID Terms}
+
+Each term requires a different discretization approach:
+
+\textbf{Proportional term:}
+\begin{equation}
+u_P[n] = K_p e[n]
+\end{equation}
+
+This is trivial---no discretization needed.
+
+\textbf{Integral term:}
+
+Using Tustin (trapezoidal) integration:
+\begin{equation}
+u_I[n] = u_I[n-1] + K_i \frac{T}{2}(e[n] + e[n-1])
+\end{equation}
+
+Using backward Euler:
+\begin{equation}
+u_I[n] = u_I[n-1] + K_i T \cdot e[n]
+\end{equation}
+
+Using forward Euler:
+\begin{equation}
+u_I[n] = u_I[n-1] + K_i T \cdot e[n-1]
+\end{equation}
+
+Tustin is generally preferred for accuracy.
+
+\textbf{Derivative term:}
+
+The pure derivative $K_d s$ is problematic because it amplifies high-frequency noise. In practice, we always use a filtered derivative:
+\begin{equation}
+G_D(s) = \frac{K_d s}{1 + \frac{T_d}{N}s}
+\end{equation}
+
+where $N$ is typically 8--20. This limits the derivative gain at high frequencies to $K_d N$.
+
+Discretizing with backward Euler:
+\begin{equation}
+u_D[n] = \frac{T_d}{T_d + NT}u_D[n-1] + \frac{K_d N}{T_d + NT}(e[n] - e[n-1])
+\end{equation}
+
+Let $\alpha = T_d/(T_d + NT)$. Then:
+\begin{equation}
+u_D[n] = \alpha \cdot u_D[n-1] + K_d \frac{N(1-\alpha)}{T_d}(e[n] - e[n-1])
+\end{equation}
+
+\textbf{Derivative on measurement:}
+
+To avoid derivative kick when the setpoint changes, we often compute the derivative of the measurement $y$ rather than the error $e$:
+\begin{equation}
+u_D[n] = \alpha \cdot u_D[n-1] - K_d \frac{N(1-\alpha)}{T_d}(y[n] - y[n-1])
+\end{equation}
+
+The negative sign accounts for $e = r - y$.
+
+\subsection{Complete Digital PID Algorithm}
+
+Combining all terms:
+
+\begin{algorithm}[htbp]
+\caption{Digital PID Controller with Derivative Filter}
+\label{alg:digital_pid}
+\begin{algorithmic}[1]
+\REQUIRE Gains $K_p$, $K_i$, $K_d$; filter $N$; sample time $T$; setpoint $r$
+\ENSURE Control output $u$
+\STATE \textbf{Initialize:} $e_{prev} \gets 0$, $u_I \gets 0$, $u_D \gets 0$, $y_{prev} \gets 0$
+\STATE \COMMENT{Call every sample period with measurement $y$:}
+\STATE $e \gets r - y$ \COMMENT{Compute error}
+\STATE $u_P \gets K_p \cdot e$ \COMMENT{Proportional}
+\STATE $u_I \gets u_I + K_i \cdot T \cdot (e + e_{prev})/2$ \COMMENT{Integral (Tustin)}
+\STATE $\alpha \gets T_d / (T_d + N \cdot T)$ where $T_d = K_d/K_p$
+\STATE $u_D \gets \alpha \cdot u_D - K_d \cdot N \cdot (1-\alpha)/T_d \cdot (y - y_{prev})$ \COMMENT{Filtered derivative}
+\STATE $u \gets u_P + u_I + u_D$ \COMMENT{Total output}
+\STATE $e_{prev} \gets e$ \COMMENT{Store for next iteration}
+\STATE $y_{prev} \gets y$
+\RETURN $u$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Anti-Windup}
+
+Integrator windup occurs when the actuator saturates but the integrator continues accumulating error. When the error changes sign, the wound-up integrator causes large overshoot and slow recovery.
+
+\textbf{Clamping method:}
+
+The simplest approach is to clamp the integrator when the output saturates:
+\begin{equation}
+\text{If } |u| > u_{max}: \quad u_I[n] = u_I[n-1] \quad \text{(stop integrating)}
+\end{equation}
+
+\textbf{Back-calculation method:}
+
+A more sophisticated approach feeds back the saturation error:
+\begin{equation}
+u_I[n] = u_I[n-1] + K_i T \cdot e[n] + \frac{T}{T_t}(u_{sat} - u)
+\end{equation}
+
+where $u_{sat}$ is the saturated output, $u$ is the unsaturated output, and $T_t$ is the tracking time constant (often set to $\sqrt{T_i T_d}$).
+
+\begin{algorithm}[htbp]
+\caption{Digital PID with Anti-Windup (Back-Calculation)}
+\label{alg:pid_antiwindup}
+\begin{algorithmic}[1]
+\REQUIRE Gains $K_p$, $K_i$, $K_d$; limits $u_{min}$, $u_{max}$; tracking time $T_t$
+\STATE $e \gets r - y$
+\STATE $u_P \gets K_p \cdot e$
+\STATE $u_I \gets u_I + K_i \cdot T \cdot e + (T/T_t) \cdot (u_{sat,prev} - u_{prev})$
+\STATE $u_D \gets \alpha \cdot u_D - K_d \cdot (N/T_d) \cdot (1-\alpha) \cdot (y - y_{prev})$
+\STATE $u \gets u_P + u_I + u_D$
+\STATE $u_{sat} \gets \text{clamp}(u, u_{min}, u_{max})$ \COMMENT{Apply saturation}
+\STATE $u_{sat,prev} \gets u_{sat}$; $u_{prev} \gets u$
+\RETURN $u_{sat}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Velocity Form PID}
+
+An alternative formulation computes the \textit{change} in control output rather than the absolute value:
+\begin{equation}
+\Delta u[n] = u[n] - u[n-1]
+\end{equation}
+
+For PID:
+\begin{align}
+\Delta u[n] = K_p (e[n] - e[n-1]) + K_i T \cdot e[n] + K_d \frac{e[n] - 2e[n-1] + e[n-2]}{T}
+\end{align}
+
+The velocity form has advantages:
+\begin{itemize}
+    \item Inherent anti-windup: saturation naturally limits how fast output changes
+    \item Bumpless transfer: switching controllers doesn't cause output jumps
+    \item No integrator state to manage
+\end{itemize}
+
+The output is computed as:
+\begin{equation}
+u[n] = u[n-1] + \Delta u[n]
+\end{equation}
+
+\subsection{Position vs. Velocity Form Comparison}
+
+\begin{table}[htbp]
+\centering
+\caption{Position Form vs. Velocity Form PID}
+\label{tab:position_vs_velocity}
+\begin{tabular}{lll}
+\toprule
+\textbf{Aspect} & \textbf{Position Form} & \textbf{Velocity Form} \\
+\midrule
+Computes & Absolute output $u[n]$ & Change $\Delta u[n]$ \\
+Windup & Requires explicit anti-windup & Inherent limiting \\
+Bumpless transfer & Requires initialization & Automatic \\
+Setpoint changes & Direct response & May need modification \\
+State variables & $u_I$, $u_D$, $e_{prev}$ & $e_{prev}$, $e_{prev2}$, $u_{prev}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{example}[Implementing Digital PID for Motor Speed Control]
+\label{ex:digital_pid_motor}
+
+A DC motor speed control system samples at $T = 0.01$ s. The continuous PID gains are $K_p = 2$, $K_i = 10$, $K_d = 0.1$. The motor driver saturates at $\pm 12$ V.
+
+Design the digital PID with anti-windup using the back-calculation method.
+
+\textbf{Solution:}
+
+First, compute the derivative filter coefficient. Using $N = 10$ and $T_d = K_d/K_p = 0.05$ s:
+\begin{equation}
+\alpha = \frac{T_d}{T_d + NT} = \frac{0.05}{0.05 + 10 \cdot 0.01} = \frac{0.05}{0.15} = 0.333
+\end{equation}
+
+The tracking time constant for anti-windup:
+\begin{equation}
+T_t = \sqrt{T_i T_d} = \sqrt{\frac{K_p}{K_i} \cdot \frac{K_d}{K_p}} = \sqrt{\frac{K_d}{K_i}} = \sqrt{\frac{0.1}{10}} = 0.1 \text{ s}
+\end{equation}
+
+The digital PID algorithm becomes:
+
+\begin{verbatim}
+// Parameters
+Kp = 2.0; Ki = 10.0; Kd = 0.1;
+T = 0.01; N = 10; Tt = 0.1;
+alpha = 0.333;
+u_min = -12; u_max = 12;
+
+// State variables (initialize to zero)
+e_prev = 0; y_prev = 0;
+u_I = 0; u_D = 0;
+u_prev = 0; u_sat_prev = 0;
+
+// Main loop (called every T seconds)
+function compute_pid(r, y):
+    e = r - y                           // Error
+    u_P = Kp * e                         // Proportional
+
+    // Integral with anti-windup back-calculation
+    u_I = u_I + Ki * T * e + (T/Tt) * (u_sat_prev - u_prev)
+
+    // Filtered derivative on measurement
+    u_D = alpha * u_D - Kd * N * (1-alpha) / 0.05 * (y - y_prev)
+
+    u = u_P + u_I + u_D                  // Total output
+
+    // Apply saturation
+    u_sat = max(u_min, min(u_max, u))
+
+    // Store for next iteration
+    e_prev = e; y_prev = y
+    u_prev = u; u_sat_prev = u_sat
+
+    return u_sat
+\end{verbatim}
+
+Let me trace through a few iterations. Suppose the setpoint is $r = 100$ rad/s and the motor starts at rest.
+
+\textbf{Iteration 1:} $y = 0$
+\begin{align}
+e &= 100 - 0 = 100 \\
+u_P &= 2 \cdot 100 = 200 \\
+u_I &= 0 + 10 \cdot 0.01 \cdot 100 + 0 = 10 \\
+u_D &= 0 - 0.1 \cdot 10 \cdot 0.667 / 0.05 \cdot (0 - 0) = 0 \\
+u &= 200 + 10 + 0 = 210 \text{ V (exceeds limit)}\\
+u_{sat} &= 12 \text{ V}
+\end{align}
+
+\textbf{Iteration 2:} Suppose $y = 5$
+\begin{align}
+e &= 100 - 5 = 95 \\
+u_P &= 2 \cdot 95 = 190 \\
+u_I &= 10 + 10 \cdot 0.01 \cdot 95 + \frac{0.01}{0.1}(12 - 210) = 10 + 9.5 - 19.8 = -0.3 \\
+u_D &= 0.333 \cdot 0 - 0.1 \cdot 10 \cdot 0.667 / 0.05 \cdot (5 - 0) = -6.67 \\
+u &= 190 - 0.3 - 6.67 = 183 \text{ V (still saturated)}\\
+u_{sat} &= 12 \text{ V}
+\end{align}
+
+Notice how the anti-windup term reduced the integrator from what would have been $10 + 9.5 = 19.5$ down to $-0.3$. This prevents the massive integrator buildup that would otherwise occur.
+\end{example}
+
+%===============================================================================
+\section{Sampling Considerations}
+\label{sec:sampling}
+
+Choosing the sample rate is one of the most important decisions in digital control system design. Sample too slowly and you lose information and phase margin; sample too fast and you waste computational resources and amplify noise.
+
+\subsection{The Sampling Theorem}
+
+The Shannon-Nyquist sampling theorem states:
+
+\begin{theorem}[Sampling Theorem]
+A bandlimited continuous signal with highest frequency component $f_{max}$ can be perfectly reconstructed from its samples if the sampling frequency satisfies:
+\begin{equation}
+f_s > 2 f_{max}
+\end{equation}
+The minimum sampling rate $f_N = 2f_{max}$ is called the Nyquist rate.
+\end{theorem}
+
+In the frequency domain, sampling creates copies of the signal spectrum at multiples of the sampling frequency $f_s$. If $f_s < 2f_{max}$, these copies overlap, causing \textbf{aliasing}---high-frequency content masquerades as low-frequency content, and this distortion cannot be undone.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.95\textwidth,
+    height=5cm,
+    xlabel={Frequency},
+    ylabel={Magnitude},
+    xmin=-3, xmax=3,
+    ymin=0, ymax=1.3,
+    xtick={-2,-1,0,1,2},
+    xticklabels={$-f_s$,$-f_s/2$,$0$,$f_s/2$,$f_s$},
+    ytick=\empty,
+    axis lines=middle,
+    every axis x label/.style={at={(ticklabel* cs:1.02)}, anchor=west},
+    every axis y label/.style={at={(ticklabel* cs:1.02)}, anchor=south}
+]
+% Original spectrum centered at 0
+\addplot[UofSCGarnet, thick, domain=-0.4:0.4, samples=50] {0.8*cos(deg(x*180/0.4))^2 + 0.2};
+% Copy at +fs
+\addplot[UofSCAtlantic, thick, domain=1.6:2.4, samples=50] {0.8*cos(deg((x-2)*180/0.4))^2 + 0.2};
+% Copy at -fs
+\addplot[UofSCAtlantic, thick, domain=-2.4:-1.6, samples=50] {0.8*cos(deg((x+2)*180/0.4))^2 + 0.2};
+
+% Nyquist frequency markers
+\draw[UofSCGrey50, dashed] (-1,0) -- (-1,1.2);
+\draw[UofSCGrey50, dashed] (1,0) -- (1,1.2);
+
+\node[above, font=\small] at (0,1.1) {Original};
+\node[above, font=\small] at (2,1.1) {Copy};
+\end{axis}
+\end{tikzpicture}
+\caption{Proper sampling: the signal spectrum fits within $\pm f_s/2$ with no overlap.}
+\label{fig:proper_sampling}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.95\textwidth,
+    height=5cm,
+    xlabel={Frequency},
+    ylabel={Magnitude},
+    xmin=-3, xmax=3,
+    ymin=0, ymax=1.3,
+    xtick={-2,-1,0,1,2},
+    xticklabels={$-f_s$,$-f_s/2$,$0$,$f_s/2$,$f_s$},
+    ytick=\empty,
+    axis lines=middle,
+    every axis x label/.style={at={(ticklabel* cs:1.02)}, anchor=west},
+    every axis y label/.style={at={(ticklabel* cs:1.02)}, anchor=south}
+]
+% Original spectrum (too wide)
+\addplot[UofSCGarnet, thick, domain=-0.7:0.7, samples=50] {0.8*cos(deg(x*180/0.7))^2 + 0.2};
+% Copy at +fs
+\addplot[UofSCAtlantic, thick, domain=1.3:2.7, samples=50] {0.8*cos(deg((x-2)*180/0.7))^2 + 0.2};
+% Copy at -fs
+\addplot[UofSCAtlantic, thick, domain=-2.7:-1.3, samples=50] {0.8*cos(deg((x+2)*180/0.7))^2 + 0.2};
+
+% Overlap regions (aliasing)
+\fill[UofSCRose, opacity=0.3] (axis cs:-1.3,0) rectangle (axis cs:-0.7,1);
+\fill[UofSCRose, opacity=0.3] (axis cs:0.7,0) rectangle (axis cs:1.3,1);
+
+% Nyquist frequency markers
+\draw[UofSCGrey50, dashed] (-1,0) -- (-1,1.2);
+\draw[UofSCGrey50, dashed] (1,0) -- (1,1.2);
+
+\node[UofSCRose, font=\small] at (1.0,0.7) {Aliasing};
+\end{axis}
+\end{tikzpicture}
+\caption{Aliasing: the signal bandwidth exceeds $f_s/2$, causing spectral overlap.}
+\label{fig:aliasing}
+\end{figure}
+
+\subsection{Anti-Aliasing Filters}
+
+In practice, real signals are never perfectly bandlimited. We must use an \textbf{anti-aliasing filter} (AAF) before sampling to attenuate high-frequency content:
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=2cm, auto]
+    \node[input] (input) {};
+    \node[block, right=1.5cm of input] (aaf) {Anti-Alias Filter};
+    \node[block, right=2cm of aaf] (sampler) {Sampler};
+    \node[output, right=1.5cm of sampler] (output) {};
+
+    \draw[arrow] (input) -- node[above]{Continuous} (aaf);
+    \draw[arrow] (aaf) -- node[above]{Filtered} (sampler);
+    \draw[arrow] (sampler) -- node[above]{Discrete} (output);
+
+    \node[below=0.5cm of aaf, font=\small] {Analog LPF};
+    \node[below=0.5cm of sampler, font=\small] {$f_s$};
+\end{tikzpicture}
+\caption{Anti-aliasing filter precedes the sampler.}
+\label{fig:aaf_block}
+\end{figure}
+
+The AAF is typically a low-pass analog filter with cutoff below $f_s/2$. Common choices:
+
+\begin{itemize}
+    \item \textbf{Butterworth:} Maximally flat passband, gradual rolloff
+    \item \textbf{Chebyshev:} Sharper rolloff, passband ripple
+    \item \textbf{Bessel:} Linear phase (constant group delay), gradual rolloff
+\end{itemize}
+
+For control systems, the Bessel filter is often preferred because its constant group delay minimizes phase distortion of the feedback signal.
+
+\subsection{Sample Rate Selection for Control}
+
+The Nyquist rate is the absolute minimum for signal reconstruction, but control systems need much higher rates for good performance. Here are practical guidelines:
+
+\textbf{Rule of thumb:} Sample 10--30 times faster than the closed-loop bandwidth.
+\begin{equation}
+f_s \geq 10 \cdot f_{BW}
+\end{equation}
+
+where $f_{BW}$ is the closed-loop bandwidth in Hz.
+
+\textbf{More precise guidelines:}
+
+\begin{table}[htbp]
+\centering
+\caption{Sample Rate Selection Guidelines}
+\label{tab:sample_rate_guidelines}
+\begin{tabular}{ll}
+\toprule
+\textbf{Design Criterion} & \textbf{Recommended $\omega_s/\omega_{BW}$} \\
+\midrule
+Minimum for stability & $> 2$ (Nyquist) \\
+Basic functionality & $6$--$10$ \\
+Good performance & $10$--$20$ \\
+Near-continuous behavior & $20$--$30$ \\
+Very high precision & $> 30$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Alternative criteria:}
+
+\begin{enumerate}
+    \item \textbf{Based on settling time:} $T < t_s/10$ where $t_s$ is the desired settling time.
+
+    \item \textbf{Based on phase margin:} ZOH introduces phase lag of $\omega T/2$ radians. At the gain crossover frequency $\omega_c$:
+    \begin{equation}
+    \text{Phase lag from sampling} = \frac{\omega_c T}{2} \text{ radians} = \frac{180 \omega_c T}{2\pi} \text{ degrees}
+    \end{equation}
+    To keep this under 5--10 degrees:
+    \begin{equation}
+    T < \frac{0.17 \text{ to } 0.35}{\omega_c}
+    \end{equation}
+
+    \item \textbf{Based on rise time:} $T < t_r/4$ to $t_r/10$ where $t_r$ is the rise time.
+\end{enumerate}
+
+\begin{example}[Sample Rate Selection]
+\label{ex:sample_rate}
+
+A position control system has the following specifications:
+\begin{itemize}
+    \item Closed-loop bandwidth: 50 rad/s
+    \item Desired phase margin: 45 degrees
+    \item Maximum allowable phase loss from sampling: 10 degrees
+\end{itemize}
+
+Determine an appropriate sample rate.
+
+\textbf{Solution:}
+
+\textbf{Method 1: Bandwidth rule}
+
+Using the 20$\times$ rule for good performance:
+\begin{equation}
+\omega_s = 20 \cdot \omega_{BW} = 20 \cdot 50 = 1000 \text{ rad/s}
+\end{equation}
+\begin{equation}
+f_s = \frac{1000}{2\pi} = 159 \text{ Hz}, \quad T = 6.3 \text{ ms}
+\end{equation}
+
+\textbf{Method 2: Phase margin constraint}
+
+The phase lag from ZOH at crossover frequency $\omega_c \approx \omega_{BW} = 50$ rad/s should be less than 10 degrees:
+\begin{equation}
+\frac{\omega_c T}{2} < \frac{10\pi}{180} = 0.175 \text{ rad}
+\end{equation}
+\begin{equation}
+T < \frac{2 \cdot 0.175}{50} = 7.0 \text{ ms}
+\end{equation}
+
+Both methods give similar results. I would recommend:
+\begin{equation}
+\boxed{T = 5 \text{ ms} \quad (f_s = 200 \text{ Hz})}
+\end{equation}
+
+This provides some margin beyond the minimum requirements.
+\end{example}
+
+\subsection{Effects of Sampling Rate on Performance}
+
+\textbf{Too slow sampling:}
+\begin{itemize}
+    \item Reduced phase margin (ZOH lag)
+    \item Potential instability
+    \item Poor disturbance rejection
+    \item Aliased noise
+    \item Coarse control resolution in time
+\end{itemize}
+
+\textbf{Too fast sampling:}
+\begin{itemize}
+    \item Increased computational load
+    \item More susceptible to quantization noise
+    \item Numerical precision issues (coefficients approach 1.0)
+    \item Higher sensor noise bandwidth
+    \item Diminishing returns on performance
+\end{itemize}
+
+\keypoint{There is a ``sweet spot'' for sample rate---fast enough for good performance but not so fast that you waste resources or amplify noise.}
+
+\subsection{Computational Delay}
+
+In addition to the ZOH delay of $T/2$, real digital controllers have computational delay $\tau_c$ from:
+\begin{itemize}
+    \item A/D conversion time
+    \item Control law computation
+    \item D/A conversion time
+    \item Communication latency
+\end{itemize}
+
+The total effective delay is:
+\begin{equation}
+\tau_{total} \approx \frac{T}{2} + \tau_c
+\end{equation}
+
+If $\tau_c$ is significant compared to $T$, you may need to account for it in the controller design or increase the sample rate.
+
+For systems where computation completes within one sample period, the total delay is approximately one sample period $T$ (half from ZOH, half from ``compute then output'' timing).
+
+\subsection{Multirate Sampling}
+
+Some systems benefit from different sample rates for different loops:
+
+\begin{itemize}
+    \item \textbf{Inner loop (fast):} Current or velocity control, 1--10 kHz
+    \item \textbf{Outer loop (slower):} Position or force control, 100--1000 Hz
+    \item \textbf{Supervisory loop (slowest):} Path planning, mode switching, 10--100 Hz
+\end{itemize}
+
+This hierarchical structure is common in motor drives, robotics, and process control.
+
+%===============================================================================
+\section{Practical Applications and Worked Examples}
+\label{sec:discrete_examples}
+
+This section presents comprehensive worked examples that integrate the concepts from throughout the chapter. Each example is worked in detail, showing the complete solution process.
+
+%-------------------------------------------------------------------------------
+\begin{example}[Z-Transform of a Damped Sinusoid]
+\label{ex:z_damped_sinusoid}
+
+Find the Z-transform of the sampled signal $x[n] = e^{-0.5nT}\sin(2nT)$ for $n \geq 0$, with sampling period $T = 0.1$ s.
+
+\textbf{Solution:}
+
+This is a damped sinusoid with decay rate $a = 0.5$ and frequency $\omega_0 = 2$ rad/s.
+
+Using the Z-transform pair for $a^n \sin(\omega_0 nT)$:
+\begin{equation}
+\mathcal{Z}\{e^{-anT}\sin(\omega_0 nT)\} = \frac{e^{-aT}z\sin(\omega_0 T)}{z^2 - 2e^{-aT}z\cos(\omega_0 T) + e^{-2aT}}
+\end{equation}
+
+Substituting our values:
+\begin{align}
+e^{-aT} &= e^{-0.5 \cdot 0.1} = e^{-0.05} = 0.9512 \\
+\sin(\omega_0 T) &= \sin(2 \cdot 0.1) = \sin(0.2) = 0.1987 \\
+\cos(\omega_0 T) &= \cos(0.2) = 0.9801 \\
+e^{-2aT} &= e^{-0.1} = 0.9048
+\end{align}
+
+Therefore:
+\begin{align}
+X(z) &= \frac{0.9512 \cdot z \cdot 0.1987}{z^2 - 2 \cdot 0.9512 \cdot z \cdot 0.9801 + 0.9048} \\
+&= \frac{0.1890z}{z^2 - 1.8644z + 0.9048}
+\end{align}
+
+\textbf{Verification:}
+
+The denominator factors as $(z - p)(z - p^*)$ where $p = e^{-aT}e^{j\omega_0 T} = 0.9512 e^{j0.2}$.
+\begin{equation}
+p = 0.9512(\cos 0.2 + j\sin 0.2) = 0.9512(0.9801 + j \cdot 0.1987) = 0.9323 + j0.1890
+\end{equation}
+
+Check: $p + p^* = 2 \cdot 0.9323 = 1.8646 \approx 1.8644$ \checkmark
+
+$pp^* = 0.9323^2 + 0.1890^2 = 0.869 + 0.036 = 0.905 \approx 0.9048$ \checkmark
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Complete Discretization Comparison]
+\label{ex:discretization_comparison}
+
+Discretize the lead compensator $G_c(s) = \frac{s + 2}{s + 10}$ using ZOH, Tustin, and matched pole-zero methods with $T = 0.05$ s. Compare the frequency responses.
+
+\textbf{Solution:}
+
+\textbf{Method 1: Zero-Order Hold}
+
+Using the ZOH formula:
+\begin{equation}
+G(z) = \frac{z-1}{z} \mathcal{Z}\left\{\frac{G_c(s)}{s}\right\}
+\end{equation}
+
+First, find $G_c(s)/s$:
+\begin{equation}
+\frac{G_c(s)}{s} = \frac{s+2}{s(s+10)}
+\end{equation}
+
+Partial fractions:
+\begin{equation}
+\frac{s+2}{s(s+10)} = \frac{A}{s} + \frac{B}{s+10}
+\end{equation}
+
+$A = \frac{2}{10} = 0.2$, $B = \frac{-10+2}{-10} = 0.8$
+
+\begin{equation}
+\frac{G_c(s)}{s} = \frac{0.2}{s} + \frac{0.8}{s+10}
+\end{equation}
+
+Taking Z-transform:
+\begin{equation}
+\mathcal{Z}\left\{\frac{G_c(s)}{s}\right\} = 0.2 \cdot \frac{z}{z-1} + 0.8 \cdot \frac{z}{z-e^{-10 \cdot 0.05}}
+\end{equation}
+
+With $e^{-0.5} = 0.6065$:
+\begin{equation}
+\mathcal{Z}\left\{\frac{G_c(s)}{s}\right\} = \frac{0.2z}{z-1} + \frac{0.8z}{z-0.6065}
+\end{equation}
+
+Combining over common denominator:
+\begin{equation}
+= \frac{0.2z(z-0.6065) + 0.8z(z-1)}{(z-1)(z-0.6065)} = \frac{z^2 - 0.9213z}{(z-1)(z-0.6065)}
+\end{equation}
+
+Applying ZOH:
+\begin{equation}
+G_{ZOH}(z) = \frac{z-1}{z} \cdot \frac{z(z - 0.9213)}{(z-1)(z-0.6065)} = \frac{z - 0.9213}{z - 0.6065}
+\end{equation}
+
+\textbf{Method 2: Tustin (Bilinear)}
+
+Substitute $s = \frac{2}{T}\frac{z-1}{z+1} = 40\frac{z-1}{z+1}$:
+\begin{align}
+G_{Tustin}(z) &= \frac{40\frac{z-1}{z+1} + 2}{40\frac{z-1}{z+1} + 10} \\
+&= \frac{40(z-1) + 2(z+1)}{40(z-1) + 10(z+1)} \\
+&= \frac{42z - 38}{50z - 30} \\
+&= \frac{42(z - 0.905)}{50(z - 0.6)} \\
+&= 0.84 \cdot \frac{z - 0.905}{z - 0.6}
+\end{align}
+
+\textbf{Method 3: Matched Pole-Zero}
+
+Map pole: $z_p = e^{-10 \cdot 0.05} = e^{-0.5} = 0.6065$
+
+Map zero: $z_z = e^{-2 \cdot 0.05} = e^{-0.1} = 0.9048$
+
+Form transfer function:
+\begin{equation}
+G_{MPZ}(z) = K \cdot \frac{z - 0.9048}{z - 0.6065}
+\end{equation}
+
+Match DC gain. Continuous: $G_c(0) = 2/10 = 0.2$
+
+Discrete at $z = 1$: $G(1) = K \cdot \frac{1 - 0.9048}{1 - 0.6065} = K \cdot \frac{0.0952}{0.3935} = 0.242K$
+
+Setting equal: $0.242K = 0.2 \Rightarrow K = 0.826$
+\begin{equation}
+G_{MPZ}(z) = 0.826 \cdot \frac{z - 0.9048}{z - 0.6065}
+\end{equation}
+
+\textbf{Comparison Summary:}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Pole} & \textbf{Zero} & \textbf{DC Gain} \\
+\midrule
+ZOH & 0.6065 & 0.9213 & $\frac{1-0.9213}{1-0.6065} = 0.200$ \\
+Tustin & 0.6000 & 0.9048 & $0.84 \cdot \frac{0.0952}{0.4} = 0.200$ \\
+Matched PZ & 0.6065 & 0.9048 & 0.200 \\
+Exact ($e^{sT}$) & 0.6065 & 0.9048 & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+All methods preserve DC gain. ZOH gives a slightly different zero location. Tustin has slightly different pole location due to frequency warping. Matched PZ gives exact pole/zero mapping.
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Digital PID Design for Temperature Control]
+\label{ex:pid_temperature}
+
+A thermal system has the transfer function:
+\begin{equation}
+G(s) = \frac{5}{(s+0.1)(s+0.5)} \quad [\text{$^\circ$C/W}]
+\end{equation}
+
+Design a digital PI controller to achieve:
+\begin{itemize}
+    \item Zero steady-state error to step input
+    \item Settling time $< 30$ s
+    \item Overshoot $< 20\%$
+\end{itemize}
+
+Use a sample rate of 10 Hz ($T = 0.1$ s).
+
+\textbf{Solution:}
+
+\textit{Step 1: Analyze the plant}
+
+The plant has poles at $s = -0.1$ and $s = -0.5$, with DC gain $5/(0.1 \cdot 0.5) = 100$.
+
+The dominant time constant is $\tau = 1/0.1 = 10$ s, so open-loop settling would be about 40 s.
+
+\textit{Step 2: Design continuous PI controller}
+
+For PI control: $G_c(s) = K_p(1 + \frac{1}{T_i s}) = K_p \frac{T_i s + 1}{T_i s}$
+
+Place the PI zero to cancel the slow plant pole:
+\begin{equation}
+T_i = \frac{1}{0.1} = 10 \text{ s}
+\end{equation}
+
+This gives:
+\begin{equation}
+G_c(s) = K_p \frac{10s + 1}{10s} = K_p \frac{s + 0.1}{s}
+\end{equation}
+
+The open-loop transfer function becomes:
+\begin{equation}
+G_c(s)G(s) = K_p \frac{s + 0.1}{s} \cdot \frac{5}{(s+0.1)(s+0.5)} = \frac{5K_p}{s(s+0.5)}
+\end{equation}
+
+For settling time $< 30$ s with some margin, target $\zeta\omega_n \approx 4/25 = 0.16$ (to 2\%).
+
+Using root locus or direct calculation, the closed-loop has characteristic equation:
+\begin{equation}
+s^2 + 0.5s + 5K_p = 0
+\end{equation}
+
+For $\zeta = 0.5$ (giving $\sim$16\% overshoot):
+\begin{equation}
+2\zeta\omega_n = 0.5 \Rightarrow \omega_n = 0.5 \text{ rad/s}
+\end{equation}
+\begin{equation}
+\omega_n^2 = 5K_p = 0.25 \Rightarrow K_p = 0.05
+\end{equation}
+
+Verify overshoot: $\%OS = e^{-\pi\zeta/\sqrt{1-\zeta^2}} \cdot 100 = e^{-\pi \cdot 0.5/0.866} \cdot 100 = 16.3\%$ \checkmark
+
+Settling time: $t_s = 4/(\zeta\omega_n) = 4/(0.5 \cdot 0.5) = 16$ s \checkmark
+
+\textit{Step 3: Convert gains to standard form}
+
+$K_p = 0.05$, $T_i = 10$ s, so $K_i = K_p/T_i = 0.005$
+
+\textit{Step 4: Discretize using Tustin}
+
+For PI: $G_c(s) = K_p + \frac{K_i}{s}$
+
+Discretize the integrator:
+\begin{equation}
+\frac{1}{s} \xrightarrow{\text{Tustin}} \frac{T}{2}\frac{z+1}{z-1} = \frac{0.1}{2}\frac{z+1}{z-1} = 0.05\frac{z+1}{z-1}
+\end{equation}
+
+The digital PI is:
+\begin{equation}
+G_c(z) = K_p + K_i \cdot 0.05\frac{z+1}{z-1} = 0.05 + 0.005 \cdot 0.05\frac{z+1}{z-1}
+\end{equation}
+\begin{equation}
+= 0.05 + \frac{0.00025(z+1)}{z-1}
+\end{equation}
+
+Combining:
+\begin{equation}
+G_c(z) = \frac{0.05(z-1) + 0.00025(z+1)}{z-1} = \frac{0.05025z - 0.04975}{z-1}
+\end{equation}
+
+\textit{Step 5: Implement as difference equation}
+\begin{equation}
+U(z)(z-1) = E(z)(0.05025z - 0.04975)
+\end{equation}
+\begin{equation}
+u[n] - u[n-1] = 0.05025 e[n] - 0.04975 e[n-1]
+\end{equation}
+\begin{equation}
+\boxed{u[n] = u[n-1] + 0.05025 e[n] - 0.04975 e[n-1]}
+\end{equation}
+
+Or equivalently using standard PI form:
+\begin{equation}
+u[n] = u[n-1] + K_p(e[n] - e[n-1]) + K_i T \cdot e[n]
+\end{equation}
+with $K_p = 0.05$, $K_i = 0.005$, $T = 0.1$:
+\begin{equation}
+u[n] = u[n-1] + 0.05(e[n] - e[n-1]) + 0.0005 \cdot e[n]
+\end{equation}
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Jury Stability Analysis of Closed-Loop System]
+\label{ex:jury_closed_loop}
+
+A discrete control system has plant:
+\begin{equation}
+G(z) = \frac{0.1(z + 0.8)}{(z - 0.9)(z - 0.7)}
+\end{equation}
+
+with proportional controller $K$. Find the range of $K$ for closed-loop stability.
+
+\textbf{Solution:}
+
+The closed-loop characteristic polynomial is:
+\begin{equation}
+1 + KG(z) = 0
+\end{equation}
+\begin{equation}
+(z - 0.9)(z - 0.7) + 0.1K(z + 0.8) = 0
+\end{equation}
+\begin{equation}
+z^2 - 1.6z + 0.63 + 0.1Kz + 0.08K = 0
+\end{equation}
+\begin{equation}
+z^2 + (0.1K - 1.6)z + (0.63 + 0.08K) = 0
+\end{equation}
+
+So $a_2 = 1$, $a_1 = 0.1K - 1.6$, $a_0 = 0.63 + 0.08K$.
+
+Apply Jury conditions for second-order system:
+
+\textbf{Condition 1:} $P(1) > 0$
+\begin{equation}
+1 + (0.1K - 1.6) + (0.63 + 0.08K) > 0
+\end{equation}
+\begin{equation}
+0.18K + 0.03 > 0 \Rightarrow K > -0.167
+\end{equation}
+
+Since we typically have $K > 0$, this is satisfied.
+
+\textbf{Condition 2:} $P(-1) > 0$
+\begin{equation}
+1 - (0.1K - 1.6) + (0.63 + 0.08K) > 0
+\end{equation}
+\begin{equation}
+-0.02K + 3.23 > 0 \Rightarrow K < 161.5
+\end{equation}
+
+\textbf{Condition 3:} $|a_0| < a_2$
+\begin{equation}
+|0.63 + 0.08K| < 1
+\end{equation}
+
+For $K > 0$: $0.63 + 0.08K < 1 \Rightarrow K < 4.625$
+
+And $0.63 + 0.08K > -1 \Rightarrow K > -20.375$ (satisfied for $K > 0$)
+
+\textbf{Combined:} The system is stable for:
+\begin{equation}
+\boxed{0 < K < 4.625}
+\end{equation}
+
+At $K = 4.625$, one root reaches $|z| = 1$ (unit circle). Let's verify: with $K = 4.625$:
+\begin{equation}
+z^2 + (0.4625 - 1.6)z + (0.63 + 0.37) = z^2 - 1.1375z + 1 = 0
+\end{equation}
+
+Roots: $z = \frac{1.1375 \pm \sqrt{1.294 - 4}}{2} = \frac{1.1375 \pm j1.645}{2}$
+
+Magnitude: $|z| = \sqrt{(0.569)^2 + (0.822)^2} = \sqrt{1} = 1$ \checkmark
+
+The system goes unstable through complex conjugate poles crossing the unit circle.
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Discretizing a Continuous Controller with Pre-warping]
+\label{ex:prewarping}
+
+A notch filter designed to reject 60 Hz interference has the continuous transfer function:
+\begin{equation}
+G(s) = \frac{s^2 + (2\pi \cdot 60)^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+where $\omega_n = 2\pi \cdot 60 = 377$ rad/s and $\zeta = 0.1$ (for a 10\% bandwidth).
+
+Discretize using Tustin with pre-warping at 60 Hz, with sample rate $f_s = 1000$ Hz.
+
+\textbf{Solution:}
+
+The standard Tustin transformation would warp the 60 Hz notch to a different frequency. To preserve the notch location exactly, we use pre-warped Tustin.
+
+\textit{Step 1: Calculate pre-warping factor}
+
+For the critical frequency $\omega_c = 2\pi \cdot 60 = 377$ rad/s and $T = 0.001$ s:
+\begin{equation}
+\omega_c T = 377 \cdot 0.001 = 0.377 \text{ rad}
+\end{equation}
+
+The pre-warped coefficient is:
+\begin{equation}
+\alpha = \frac{\omega_c}{\tan(\omega_c T / 2)} = \frac{377}{\tan(0.1885)} = \frac{377}{0.1908} = 1976
+\end{equation}
+
+Compare with standard Tustin: $2/T = 2000$. The difference is small because $\omega_c T \ll 1$.
+
+\textit{Step 2: Apply pre-warped transformation}
+
+Substitute $s = \alpha \frac{z-1}{z+1} = 1976 \frac{z-1}{z+1}$:
+
+For the numerator $s^2 + \omega_n^2$:
+\begin{align}
+s^2 + \omega_n^2 &= \left(1976 \frac{z-1}{z+1}\right)^2 + 377^2 \\
+&= \frac{1976^2(z-1)^2 + 377^2(z+1)^2}{(z+1)^2} \\
+&= \frac{3904576(z^2 - 2z + 1) + 142129(z^2 + 2z + 1)}{(z+1)^2} \\
+&= \frac{4046705z^2 - 7524894z + 4046705}{(z+1)^2}
+\end{align}
+
+For the denominator $s^2 + 2\zeta\omega_n s + \omega_n^2$ with $2\zeta\omega_n = 75.4$:
+\begin{align}
+&= \frac{1976^2(z-1)^2 + 1976 \cdot 75.4(z^2-1) + 377^2(z+1)^2}{(z+1)^2} \\
+&= \frac{3904576(z^2 - 2z + 1) + 148990(z^2-1) + 142129(z^2 + 2z + 1)}{(z+1)^2} \\
+&= \frac{4195695z^2 - 7524894z + 3897715}{(z+1)^2}
+\end{align}
+
+The discrete transfer function is:
+\begin{equation}
+G(z) = \frac{4046705z^2 - 7524894z + 4046705}{4195695z^2 - 7524894z + 3897715}
+\end{equation}
+
+Normalizing by dividing by leading coefficient:
+\begin{equation}
+G(z) = 0.9645 \cdot \frac{z^2 - 1.859z + 1}{z^2 - 1.793z + 0.929}
+\end{equation}
+
+\textit{Step 3: Verify notch frequency}
+
+At $z = e^{j\omega T}$ with $\omega = 377$ rad/s:
+\begin{equation}
+z = e^{j \cdot 0.377} = \cos(0.377) + j\sin(0.377) = 0.930 + j0.369
+\end{equation}
+
+The numerator at this point:
+\begin{equation}
+z^2 - 1.859z + 1 = (0.930 + j0.369)^2 - 1.859(0.930 + j0.369) + 1
+\end{equation}
+
+Computing: $z^2 = 0.729 + j0.686$
+
+$z^2 - 1.859z + 1 = 0.729 + j0.686 - 1.729 - j0.686 + 1 = 0$
+
+The notch is exactly at 60 Hz as designed.
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Discrete Root Locus Design]
+\label{ex:discrete_root_locus}
+
+A sampled-data system with $T = 0.1$ s has the discrete plant:
+\begin{equation}
+G(z) = \frac{0.0484(z + 0.9672)}{(z - 1)(z - 0.6065)}
+\end{equation}
+
+Use root locus techniques to design a controller that places closed-loop poles at damping ratio $\zeta = 0.5$.
+
+\textbf{Solution:}
+
+\textit{Step 1: Determine target pole locations}
+
+For $\zeta = 0.5$, the angle from the negative real axis in the $s$-plane is:
+\begin{equation}
+\theta_s = \cos^{-1}(0.5) = 60°
+\end{equation}
+
+In the $z$-plane, constant $\zeta$ lines are logarithmic spirals. For a dominant pole with reasonable settling, let's target $|z| = 0.8$.
+
+The angle is related by $z = e^{sT}$. For $s = -\sigma + j\omega_d$ with $\zeta = 0.5$:
+\begin{equation}
+|z| = e^{-\sigma T} = 0.8 \Rightarrow \sigma = -\frac{\ln 0.8}{0.1} = 2.23
+\end{equation}
+
+With $\zeta = 0.5$: $\omega_n = \sigma/\zeta = 4.46$ rad/s
+
+$\omega_d = \omega_n\sqrt{1-\zeta^2} = 4.46 \cdot 0.866 = 3.86$ rad/s
+
+The $z$-plane angle: $\theta = \omega_d T = 0.386$ rad $= 22.1°$
+
+Target poles: $z = 0.8 e^{\pm j22.1°} = 0.741 \pm j0.301$
+
+\textit{Step 2: Check if target is achievable with proportional gain}
+
+The root locus for $1 + KG(z) = 0$ has:
+\begin{itemize}
+    \item Open-loop poles: $z = 1$, $z = 0.6065$
+    \item Open-loop zero: $z = -0.9672$
+\end{itemize}
+
+The locus goes from poles at $z = 1$ and $z = 0.6065$ toward the zero at $z = -0.9672$.
+
+For a point to be on the root locus, the angle condition must be satisfied:
+\begin{equation}
+\angle G(z_d) = (2k+1) \cdot 180°
+\end{equation}
+
+At $z_d = 0.741 + j0.301$:
+\begin{align}
+\angle(z_d + 0.9672) &= \angle(1.708 + j0.301) = \tan^{-1}(0.301/1.708) = 10.0° \\
+\angle(z_d - 1) &= \angle(-0.259 + j0.301) = 180° - \tan^{-1}(0.301/0.259) = 180° - 49.3° = 130.7° \\
+\angle(z_d - 0.6065) &= \angle(0.135 + j0.301) = \tan^{-1}(0.301/0.135) = 65.8°
+\end{align}
+
+Total angle: $10.0° - 130.7° - 65.8° = -186.5° \approx 173.5°$
+
+This is close to but not exactly $180°$, so we need a compensator.
+
+\textit{Step 3: Design lead compensator}
+
+We need to add $180° - 173.5° = 6.5°$ of phase. A lead compensator:
+\begin{equation}
+G_c(z) = K \frac{z - z_c}{z - p_c}
+\end{equation}
+
+with $z_c > p_c$ adds phase lead. Place zero at $z_c = 0.7$ (near target) and find pole:
+
+Contribution from compensator zero: $\angle(0.741 + j0.301 - 0.7) = \angle(0.041 + j0.301) = 82.2°$
+
+Need compensator pole contribution: $82.2° - 6.5° = 75.7°$
+
+So $\angle(z_d - p_c) = 75.7°$, meaning $p_c$ is at angle $-75.7°$ from $z_d$.
+
+From $z_d = 0.741 + j0.301$: the pole should be at approximately $z = 0.741 - 0.301/\tan(75.7°) = 0.741 - 0.077 = 0.664$
+
+Check: $\angle(0.741 + j0.301 - 0.664) = \angle(0.077 + j0.301) = 75.6°$ \checkmark
+
+\textit{Step 4: Find gain $K$}
+
+Using magnitude condition at $z_d$:
+\begin{equation}
+|KG_c(z_d)G(z_d)| = 1
+\end{equation}
+
+Computing magnitudes:
+\begin{align}
+|z_d + 0.9672| &= |1.708 + j0.301| = 1.734 \\
+|z_d - 1| &= |-0.259 + j0.301| = 0.397 \\
+|z_d - 0.6065| &= |0.135 + j0.301| = 0.330 \\
+|z_d - 0.7| &= |0.041 + j0.301| = 0.304 \\
+|z_d - 0.664| &= |0.077 + j0.301| = 0.311
+\end{align}
+
+\begin{equation}
+K = \frac{|z_d - 1| \cdot |z_d - 0.6065| \cdot |z_d - 0.664|}{0.0484 \cdot |z_d + 0.9672| \cdot |z_d - 0.7|}
+\end{equation}
+\begin{equation}
+K = \frac{0.397 \cdot 0.330 \cdot 0.311}{0.0484 \cdot 1.734 \cdot 0.304} = \frac{0.0407}{0.0255} = 1.60
+\end{equation}
+
+\textit{Step 5: Final controller}
+\begin{equation}
+\boxed{G_c(z) = 1.60 \cdot \frac{z - 0.7}{z - 0.664}}
+\end{equation}
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Comparing Discretization Accuracy Through Simulation]
+\label{ex:discretization_accuracy}
+
+A continuous system $G(s) = \frac{10}{s + 5}$ is controlled with unity feedback. Compare the step responses using ZOH, Tustin, and forward Euler discretization with $T = 0.1$ s.
+
+\textbf{Solution:}
+
+\textit{Continuous closed-loop:}
+\begin{equation}
+G_{cl}(s) = \frac{10/(s+5)}{1 + 10/(s+5)} = \frac{10}{s + 15}
+\end{equation}
+
+Step response: $y(t) = \frac{10}{15}(1 - e^{-15t}) = 0.667(1 - e^{-15t})$
+
+Settling time (to 2\%): $t_s = 4/15 = 0.267$ s
+
+\textit{Discrete closed-loop with ZOH:}
+
+From earlier, $G_{ZOH}(z) = \frac{1 - e^{-5T}}{5(z - e^{-5T})} = \frac{0.0787}{z - 0.6065}$
+
+Closed-loop:
+\begin{equation}
+G_{cl}(z) = \frac{0.0787/(z - 0.6065)}{1 + 0.0787/(z - 0.6065)} = \frac{0.0787}{z - 0.6065 + 0.0787} = \frac{0.0787}{z - 0.5278}
+\end{equation}
+
+\textit{Discrete closed-loop with Tustin:}
+
+$G_{Tustin}(z) = \frac{T}{2+aT}\frac{z+1}{z-\beta}$ where $a = 5$, $\beta = \frac{2-5T}{2+5T} = \frac{1.5}{2.5} = 0.6$
+
+$G_{Tustin}(z) = \frac{0.1}{2.5}\frac{z+1}{z-0.6} = \frac{0.04(z+1)}{z-0.6}$
+
+Closed-loop:
+\begin{equation}
+G_{cl}(z) = \frac{0.04(z+1)/(z-0.6)}{1 + 0.04(z+1)/(z-0.6)} = \frac{0.04(z+1)}{z - 0.6 + 0.04z + 0.04} = \frac{0.04(z+1)}{1.04z - 0.56}
+\end{equation}
+\begin{equation}
+= \frac{0.0385(z+1)}{z - 0.538}
+\end{equation}
+
+\textit{Discrete closed-loop with Forward Euler:}
+
+$s \to \frac{z-1}{T}$: $G_{FE}(z) = \frac{10}{\frac{z-1}{0.1} + 5} = \frac{10 \cdot 0.1}{z - 1 + 0.5} = \frac{1}{z - 0.5}$
+
+Closed-loop:
+\begin{equation}
+G_{cl}(z) = \frac{1/(z-0.5)}{1 + 1/(z-0.5)} = \frac{1}{z - 0.5 + 1} = \frac{1}{z + 0.5}
+\end{equation}
+
+\textit{Comparison of closed-loop poles:}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{CL Pole} & \textbf{Equivalent Cont. Pole} \\
+\midrule
+Continuous & --- & $s = -15$ \\
+ZOH & $z = 0.528$ & $s = \ln(0.528)/0.1 = -6.39$ \\
+Tustin & $z = 0.538$ & $s = -6.20$ \\
+Forward Euler & $z = -0.5$ & $s = \ln(0.5)/0.1 = -6.93$ \\
+Exact mapping & $z = e^{-15 \cdot 0.1} = 0.223$ & $s = -15$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+All methods give significantly slower response than the continuous system because the sample rate ($T = 0.1$ s) is not fast enough---the continuous system has bandwidth 15 rad/s but the Nyquist frequency is only $\pi/0.1 = 31.4$ rad/s.
+
+For accurate discretization, we need $\omega T \ll 1$. Here $\omega T = 15 \cdot 0.1 = 1.5$, which is too large.
+
+\textbf{Lesson:} For this system, a sample period of $T < 0.02$ s would be more appropriate.
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Digital PID with Velocity Form and Bumpless Transfer]
+\label{ex:velocity_pid}
+
+Implement a velocity-form PID for a system that requires switching between automatic and manual modes without output bumps.
+
+\textbf{Solution:}
+
+The velocity form computes $\Delta u[n] = u[n] - u[n-1]$:
+
+\begin{equation}
+\Delta u[n] = K_p(e[n] - e[n-1]) + K_i T \cdot e[n] + K_d \frac{e[n] - 2e[n-1] + e[n-2]}{T}
+\end{equation}
+
+Implementation:
+
+\begin{verbatim}
+class VelocityPID:
+    def __init__(self, Kp, Ki, Kd, T, u_min, u_max):
+        self.Kp = Kp
+        self.Ki = Ki
+        self.Kd = Kd
+        self.T = T
+        self.u_min = u_min
+        self.u_max = u_max
+
+        # State
+        self.e_prev = 0
+        self.e_prev2 = 0
+        self.u_prev = 0
+
+    def compute(self, r, y):
+        e = r - y
+
+        # Velocity form PID
+        delta_u = self.Kp * (e - self.e_prev)
+        delta_u += self.Ki * self.T * e
+        delta_u += self.Kd * (e - 2*self.e_prev + self.e_prev2) / self.T
+
+        # Integrate and saturate
+        u = self.u_prev + delta_u
+        u_sat = max(self.u_min, min(self.u_max, u))
+
+        # Update state
+        self.e_prev2 = self.e_prev
+        self.e_prev = e
+        self.u_prev = u_sat
+
+        return u_sat
+
+    def set_manual(self, u_manual):
+        """Bumpless transfer to manual mode"""
+        self.u_prev = u_manual
+
+    def switch_to_auto(self, y_current):
+        """Bumpless transfer to auto mode"""
+        # Set error history to current error
+        # Output will not jump because delta_u starts at 0
+        self.e_prev = 0
+        self.e_prev2 = 0
+        # u_prev is already the last manual output
+\end{verbatim}
+
+\textbf{Bumpless Transfer:}
+
+When switching from manual to automatic:
+\begin{enumerate}
+    \item Keep $u_{prev}$ at the last manual output value
+    \item Initialize error history to zero
+    \item First $\Delta u$ will be small (based only on current error)
+\end{enumerate}
+
+When switching from automatic to manual:
+\begin{enumerate}
+    \item Just override output with manual value
+    \item Update $u_{prev} = u_{manual}$ so return to auto is smooth
+\end{enumerate}
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Stability Analysis with Parameter Variations]
+\label{ex:stability_variations}
+
+A digital control system has characteristic polynomial:
+\begin{equation}
+P(z) = z^3 + a_2 z^2 + a_1 z + a_0
+\end{equation}
+
+where the coefficients depend on gain $K$ and sampling period $T$ as:
+\begin{align}
+a_2 &= -2e^{-T} + KT^2/2 \\
+a_1 &= e^{-2T} + KT^2(1 - e^{-T}) \\
+a_0 &= -KT^2 e^{-T}/2
+\end{align}
+
+For $T = 0.1$ s, find the range of $K$ for stability.
+
+\textbf{Solution:}
+
+Substitute $T = 0.1$:
+\begin{align}
+e^{-T} &= e^{-0.1} = 0.9048 \\
+e^{-2T} &= e^{-0.2} = 0.8187 \\
+T^2 &= 0.01
+\end{align}
+
+\begin{align}
+a_2 &= -2(0.9048) + K(0.01)/2 = -1.8097 + 0.005K \\
+a_1 &= 0.8187 + 0.01K(1 - 0.9048) = 0.8187 + 0.000952K \\
+a_0 &= -0.01K(0.9048)/2 = -0.004524K
+\end{align}
+
+Apply Jury conditions for third-order system.
+
+\textbf{Condition 1:} $P(1) > 0$
+\begin{equation}
+1 + (-1.8097 + 0.005K) + (0.8187 + 0.000952K) + (-0.004524K) > 0
+\end{equation}
+\begin{equation}
+0.009 + 0.001428K > 0
+\end{equation}
+
+Since $0.009 > 0$ and coefficient of $K$ is positive, this is satisfied for all $K > -6.3$.
+
+\textbf{Condition 2:} $-P(-1) > 0$ (since $n = 3$ is odd)
+\begin{equation}
+-[(-1) + (-1.8097 + 0.005K) - (0.8187 + 0.000952K) + (-0.004524K)] > 0
+\end{equation}
+\begin{equation}
+-[-3.6284 - 0.000476K] > 0
+\end{equation}
+\begin{equation}
+3.6284 + 0.000476K > 0
+\end{equation}
+
+Satisfied for $K > -7622$ (essentially always for positive $K$).
+
+\textbf{Condition 3:} $|a_0| < 1$
+\begin{equation}
+|{-0.004524K}| < 1 \Rightarrow |K| < 221
+\end{equation}
+
+For positive $K$: $0 < K < 221$.
+
+\textbf{Condition 4:} Jury array criterion
+
+Construct $b_k$:
+\begin{align}
+b_0 &= a_0^2 - 1 = (0.004524K)^2 - 1 = 2.05 \times 10^{-5} K^2 - 1 \\
+b_1 &= a_0 a_1 - a_2 = (-0.004524K)(0.8187 + 0.000952K) - (-1.8097 + 0.005K) \\
+&= -0.003703K - 4.31 \times 10^{-6} K^2 + 1.8097 - 0.005K \\
+&= 1.8097 - 0.008703K - 4.31 \times 10^{-6} K^2 \\
+b_2 &= a_0 a_2 - a_1 = (-0.004524K)(-1.8097 + 0.005K) - (0.8187 + 0.000952K) \\
+&= 0.008187K - 2.26 \times 10^{-5} K^2 - 0.8187 - 0.000952K \\
+&= -0.8187 + 0.007235K - 2.26 \times 10^{-5} K^2
+\end{align}
+
+Need $|b_0| > |b_2|$.
+
+For small $K$: $b_0 \approx -1$, $b_2 \approx -0.8187$
+
+$|b_0| = 1 > 0.8187 = |b_2|$ \checkmark
+
+For large $K$: The $K^2$ terms dominate, and we need to check carefully.
+
+Through numerical analysis or plotting, the stability boundary occurs around $K \approx 180$.
+
+\textbf{Result:}
+\begin{equation}
+\boxed{0 < K < 180 \text{ (approximately)}}
+\end{equation}
+
+The exact upper bound can be found by solving $|b_0| = |b_2|$ for $K$.
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Inverse Z-Transform Using Partial Fractions]
+\label{ex:inverse_z}
+
+Find the inverse Z-transform of:
+\begin{equation}
+Y(z) = \frac{z^2 + 2z}{(z - 0.5)(z - 0.8)^2}
+\end{equation}
+
+\textbf{Solution:}
+
+First, divide by $z$ to set up partial fractions:
+\begin{equation}
+\frac{Y(z)}{z} = \frac{z + 2}{(z - 0.5)(z - 0.8)^2}
+\end{equation}
+
+Partial fraction expansion:
+\begin{equation}
+\frac{z + 2}{(z - 0.5)(z - 0.8)^2} = \frac{A}{z - 0.5} + \frac{B}{z - 0.8} + \frac{C}{(z - 0.8)^2}
+\end{equation}
+
+\textbf{Find A:} Multiply both sides by $(z - 0.5)$ and set $z = 0.5$:
+\begin{equation}
+A = \frac{0.5 + 2}{(0.5 - 0.8)^2} = \frac{2.5}{0.09} = 27.78
+\end{equation}
+
+\textbf{Find C:} Multiply both sides by $(z - 0.8)^2$ and set $z = 0.8$:
+\begin{equation}
+C = \frac{0.8 + 2}{0.8 - 0.5} = \frac{2.8}{0.3} = 9.33
+\end{equation}
+
+\textbf{Find B:} Use any convenient value, say $z = 0$:
+\begin{equation}
+\frac{2}{(-0.5)(0.64)} = \frac{27.78}{-0.5} + \frac{B}{-0.8} + \frac{9.33}{0.64}
+\end{equation}
+\begin{equation}
+-6.25 = -55.56 - 1.25B + 14.58
+\end{equation}
+\begin{equation}
+-6.25 = -40.98 - 1.25B \Rightarrow B = -27.78
+\end{equation}
+
+So:
+\begin{equation}
+\frac{Y(z)}{z} = \frac{27.78}{z - 0.5} - \frac{27.78}{z - 0.8} + \frac{9.33}{(z - 0.8)^2}
+\end{equation}
+
+Multiply by $z$:
+\begin{equation}
+Y(z) = \frac{27.78z}{z - 0.5} - \frac{27.78z}{z - 0.8} + \frac{9.33z}{(z - 0.8)^2}
+\end{equation}
+
+Using Z-transform tables:
+\begin{itemize}
+    \item $\mathcal{Z}^{-1}\left\{\frac{z}{z-a}\right\} = a^n u[n]$
+    \item $\mathcal{Z}^{-1}\left\{\frac{z}{(z-a)^2}\right\} = na^{n-1}u[n]$
+\end{itemize}
+
+Therefore:
+\begin{equation}
+\boxed{y[n] = 27.78 \cdot (0.5)^n - 27.78 \cdot (0.8)^n + 9.33 \cdot n \cdot (0.8)^{n-1}, \quad n \geq 0}
+\end{equation}
+
+Or equivalently:
+\begin{equation}
+y[n] = 27.78[(0.5)^n - (0.8)^n] + 11.67 \cdot n \cdot (0.8)^n
+\end{equation}
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Sample Rate Selection for Robotic Arm]
+\label{ex:sample_rate_robot}
+
+A robotic arm joint has the dynamics:
+\begin{equation}
+G(s) = \frac{100}{s(s + 10)}
+\end{equation}
+
+The control objective is:
+\begin{itemize}
+    \item Position accuracy: $\pm 0.1$ degrees
+    \item Settling time: $< 0.5$ s
+    \item Overshoot: $< 10\%$
+\end{itemize}
+
+Determine an appropriate sample rate.
+
+\textbf{Solution:}
+
+\textit{Step 1: Estimate closed-loop bandwidth}
+
+For 10\% overshoot, $\zeta \approx 0.6$.
+
+For $t_s = 0.5$ s: $\omega_n \approx 4/(\zeta \cdot t_s) = 4/(0.6 \cdot 0.5) = 13.3$ rad/s
+
+Closed-loop bandwidth is approximately $\omega_{BW} \approx \omega_n = 13.3$ rad/s.
+
+\textit{Step 2: Apply sampling rules}
+
+\textbf{20x rule:} $\omega_s > 20 \cdot \omega_{BW} = 266$ rad/s $\Rightarrow T < 24$ ms
+
+\textbf{Settling time rule:} $T < t_s/10 = 50$ ms
+
+\textbf{Phase margin rule:} For 5$^\circ$ loss at crossover ($\omega_c \approx 10$ rad/s):
+\begin{equation}
+\frac{\omega_c T}{2} < \frac{5\pi}{180} \Rightarrow T < 17 \text{ ms}
+\end{equation}
+
+\textit{Step 3: Consider practical factors}
+
+\begin{itemize}
+    \item Encoder resolution affects position accuracy more than sample rate
+    \item Servo drive may have its own current loop at 10+ kHz
+    \item Communication latency (e.g., CAN bus) may add 1--2 ms
+\end{itemize}
+
+\textit{Step 4: Select sample rate}
+
+Taking the most restrictive requirement (phase margin) with some margin:
+
+\begin{equation}
+\boxed{T = 10 \text{ ms} \quad (f_s = 100 \text{ Hz})}
+\end{equation}
+
+This provides:
+\begin{itemize}
+    \item ZOH phase lag at crossover: $\frac{10 \cdot 0.01}{2} \cdot \frac{180}{\pi} = 2.9°$ (acceptable)
+    \item 50 samples per settling time (good resolution)
+    \item Margin for computational and communication delays
+\end{itemize}
+\end{example}
+
+%-------------------------------------------------------------------------------
+\begin{example}[Handling Actuator Saturation in Digital Control]
+\label{ex:saturation}
+
+A discrete position controller commands a motor that saturates at $\pm 10$ V. The controller is:
+\begin{equation}
+G_c(z) = \frac{2(z - 0.8)}{z - 0.95}
+\end{equation}
+
+Design an implementation that handles saturation gracefully.
+
+\textbf{Solution:}
+
+Convert to difference equation:
+\begin{equation}
+U(z)(z - 0.95) = 2E(z)(z - 0.8)
+\end{equation}
+\begin{equation}
+u[n] - 0.95 u[n-1] = 2e[n] - 1.6e[n-1]
+\end{equation}
+\begin{equation}
+u[n] = 0.95 u[n-1] + 2e[n] - 1.6e[n-1]
+\end{equation}
+
+The pole at $z = 0.95$ acts like an integrator (slow decay). Without anti-windup, saturation can cause the internal state to wind up.
+
+\textbf{Implementation with back-calculation anti-windup:}
+
+\begin{verbatim}
+class DiscreteController:
+    def __init__(self):
+        self.u_prev = 0       # Previous unsaturated output
+        self.u_sat_prev = 0   # Previous saturated output
+        self.e_prev = 0
+
+        # Controller coefficients
+        self.a1 = 0.95
+        self.b0 = 2.0
+        self.b1 = -1.6
+
+        # Saturation limits
+        self.u_min = -10
+        self.u_max = 10
+
+        # Anti-windup tracking gain
+        self.Kt = 0.5  # Tune this
+
+    def compute(self, e):
+        # Compute unsaturated output
+        u = self.a1 * self.u_prev + self.b0 * e + self.b1 * self.e_prev
+
+        # Add anti-windup correction
+        u += self.Kt * (self.u_sat_prev - self.u_prev)
+
+        # Apply saturation
+        u_sat = max(self.u_min, min(self.u_max, u))
+
+        # Update state
+        self.u_prev = u
+        self.u_sat_prev = u_sat
+        self.e_prev = e
+
+        return u_sat
+\end{verbatim}
+
+\textbf{Choosing the tracking gain $K_t$:}
+
+The tracking gain determines how fast the controller state tracks the saturated output. Too small: slow recovery from saturation. Too large: may cause oscillation.
+
+A good starting point is $K_t \approx 1 - a_1 = 1 - 0.95 = 0.05$ to $0.5$.
+
+\textbf{Alternative: Conditional integration}
+
+Only update the integrating state when not saturated:
+\begin{verbatim}
+def compute_conditional(self, e):
+    if abs(self.u_prev) < self.u_max:
+        u = self.a1 * self.u_prev + self.b0 * e + self.b1 * self.e_prev
+    else:
+        # Freeze the pole state, only pass through direct terms
+        u = self.u_prev + self.b0 * (e - self.e_prev)
+
+    u_sat = max(self.u_min, min(self.u_max, u))
+    self.u_prev = u_sat  # Track saturated output
+    self.e_prev = e
+    return u_sat
+\end{verbatim}
+\end{example}
+
+%===============================================================================
+\section{Algorithm Implementations}
+\label{sec:discrete_algorithms}
+
+This section provides complete algorithm implementations for the key techniques covered in this chapter. These can serve as reference implementations or starting points for your own code.
+
+\subsection{Z-Transform Computation}
+
+Computing the Z-transform of a sampled signal numerically:
+
+\begin{algorithm}[htbp]
+\caption{Numerical Z-Transform Evaluation}
+\label{alg:z_transform_eval}
+\begin{algorithmic}[1]
+\REQUIRE Sequence $x[0], x[1], \ldots, x[N-1]$; evaluation point $z \in \mathbb{C}$
+\ENSURE $X(z) = \sum_{n=0}^{N-1} x[n] z^{-n}$
+\STATE $X \gets 0$
+\STATE $z_{inv} \gets 1/z$
+\STATE $z_{power} \gets 1$ \COMMENT{$z^{-n}$ accumulator}
+\FOR{$n = 0$ \TO $N-1$}
+    \STATE $X \gets X + x[n] \cdot z_{power}$
+    \STATE $z_{power} \gets z_{power} \cdot z_{inv}$
+\ENDFOR
+\RETURN $X$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Discretization Routines}
+
+\begin{algorithm}[htbp]
+\caption{Tustin Discretization of Transfer Function}
+\label{alg:tustin_discretization}
+\begin{algorithmic}[1]
+\REQUIRE Continuous TF numerator $[b_m, \ldots, b_0]$, denominator $[a_n, \ldots, a_0]$; sample time $T$
+\ENSURE Discrete TF numerator and denominator coefficients
+\STATE $\alpha \gets 2/T$
+\STATE \COMMENT{Build polynomial $(1 + z^{-1})^k$ and $(1 - z^{-1})^k$ coefficients}
+\STATE Initialize $num\_z \gets [0, \ldots, 0]$ (length $n+1$)
+\STATE Initialize $den\_z \gets [0, \ldots, 0]$ (length $n+1$)
+\FOR{each term $b_k s^k$ in numerator}
+    \STATE Add $b_k \alpha^k \cdot$ (conv of $(1-z^{-1})^k$ and $(1+z^{-1})^{n-k}$) to $num\_z$
+\ENDFOR
+\FOR{each term $a_k s^k$ in denominator}
+    \STATE Add $a_k \alpha^k \cdot$ (conv of $(1-z^{-1})^k$ and $(1+z^{-1})^{n-k}$) to $den\_z$
+\ENDFOR
+\STATE Normalize so leading denominator coefficient is 1
+\RETURN $num\_z$, $den\_z$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Python implementation:}
+
+\begin{verbatim}
+import numpy as np
+from scipy import signal
+
+def tustin_discretize(num_s, den_s, T, prewarp_freq=None):
+    """
+    Discretize continuous transfer function using Tustin method.
+
+    Parameters:
+        num_s: Numerator coefficients [b_n, ..., b_0]
+        den_s: Denominator coefficients [a_n, ..., a_0]
+        T: Sample period (seconds)
+        prewarp_freq: Pre-warp frequency (rad/s), optional
+
+    Returns:
+        num_z, den_z: Discrete transfer function coefficients
+    """
+    if prewarp_freq is not None:
+        alpha = prewarp_freq / np.tan(prewarp_freq * T / 2)
+    else:
+        alpha = 2 / T
+
+    # Use scipy's bilinear transform
+    num_z, den_z = signal.bilinear(num_s, den_s, 1/T)
+
+    return num_z, den_z
+
+def zoh_discretize(num_s, den_s, T):
+    """
+    Discretize using Zero-Order Hold method.
+
+    Parameters:
+        num_s: Numerator coefficients
+        den_s: Denominator coefficients
+        T: Sample period
+
+    Returns:
+        num_z, den_z: Discrete transfer function coefficients
+    """
+    sys_c = signal.TransferFunction(num_s, den_s)
+    sys_d = signal.cont2discrete((num_s, den_s), T, method='zoh')
+    return sys_d[0].flatten(), sys_d[1]
+\end{verbatim}
+
+\subsection{Jury Stability Test Implementation}
+
+\begin{algorithm}[htbp]
+\caption{Jury Stability Test}
+\label{alg:jury_test}
+\begin{algorithmic}[1]
+\REQUIRE Polynomial coefficients $[a_n, a_{n-1}, \ldots, a_0]$ (highest degree first)
+\ENSURE Boolean: True if all roots inside unit circle
+\STATE $n \gets$ degree of polynomial
+\STATE \COMMENT{Preliminary checks}
+\IF{$a_n = 0$}
+    \RETURN False \COMMENT{Not a valid polynomial}
+\ENDIF
+\STATE Normalize: divide all coefficients by $a_n$ so leading coeff is 1
+\STATE Reverse to get $[a_0, a_1, \ldots, a_n]$ (lowest degree first)
+\STATE $P_1 \gets$ evaluate polynomial at $z = 1$
+\IF{$P_1 \leq 0$}
+    \RETURN False
+\ENDIF
+\STATE $P_{m1} \gets$ evaluate polynomial at $z = -1$
+\IF{$(-1)^n \cdot P_{m1} \leq 0$}
+    \RETURN False
+\ENDIF
+\IF{$|a_0| \geq 1$}
+    \RETURN False
+\ENDIF
+\STATE \COMMENT{Build Jury array}
+\STATE $row \gets [a_0, a_1, \ldots, a_n]$
+\FOR{$k = n$ \DOWNTO $2$}
+    \STATE $row\_rev \gets$ reverse of $row$
+    \STATE $new\_row \gets []$
+    \FOR{$j = 0$ \TO $k-1$}
+        \STATE $new\_row[j] \gets row[0] \cdot row[j] - row[k] \cdot row\_rev[j]$
+    \ENDFOR
+    \IF{$|new\_row[0]| \leq |new\_row[k-1]|$}
+        \RETURN False
+    \ENDIF
+    \STATE $row \gets new\_row$
+\ENDFOR
+\RETURN True
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Python implementation:}
+
+\begin{verbatim}
+import numpy as np
+
+def jury_test(coeffs):
+    """
+    Perform Jury stability test.
+
+    Parameters:
+        coeffs: Polynomial coefficients [a_n, a_{n-1}, ..., a_0]
+                from highest to lowest degree
+
+    Returns:
+        (stable, details): Tuple of (bool, dict with test results)
+    """
+    coeffs = np.array(coeffs, dtype=float)
+    n = len(coeffs) - 1
+
+    if n < 1:
+        return True, {"message": "Constant or empty polynomial"}
+
+    # Normalize
+    if coeffs[0] == 0:
+        return False, {"message": "Leading coefficient is zero"}
+    coeffs = coeffs / coeffs[0]
+
+    # Reverse for convenience (a_0 first)
+    a = coeffs[::-1]
+
+    details = {}
+
+    # Condition 1: P(1) > 0
+    P1 = np.sum(coeffs)
+    details['P(1)'] = P1
+    if P1 <= 0:
+        return False, details
+
+    # Condition 2: (-1)^n * P(-1) > 0
+    Pm1 = np.polyval(coeffs, -1)
+    test2 = ((-1)**n) * Pm1
+    details['(-1)^n * P(-1)'] = test2
+    if test2 <= 0:
+        return False, details
+
+    # Condition 3: |a_0| < a_n (after normalization, a_n = 1)
+    details['|a_0|'] = abs(a[0])
+    if abs(a[0]) >= 1:
+        return False, details
+
+    # Build Jury array
+    row = a.copy()
+    for k in range(n, 1, -1):
+        row_rev = row[::-1]
+        new_row = np.zeros(k)
+        for j in range(k):
+            new_row[j] = row[0] * row[j] - row[k] * row_rev[j]
+
+        details[f'|b_0| vs |b_{k-1}| at k={k}'] = (abs(new_row[0]),
+                                                    abs(new_row[k-1]))
+        if abs(new_row[0]) <= abs(new_row[k-1]):
+            return False, details
+
+        row = new_row
+
+    return True, details
+
+# Example usage
+coeffs = [1, -1.3, 0.62, -0.12]  # z^3 - 1.3z^2 + 0.62z - 0.12
+stable, details = jury_test(coeffs)
+print(f"Stable: {stable}")
+print(f"Details: {details}")
+\end{verbatim}
+
+\subsection{Complete Digital PID Controller}
+
+\begin{algorithm}[htbp]
+\caption{Industrial Digital PID Controller}
+\label{alg:industrial_pid}
+\begin{algorithmic}[1]
+\REQUIRE Gains $K_p, K_i, K_d$; sample time $T$; limits $u_{min}, u_{max}$
+\REQUIRE Filter coefficient $N$; tracking time $T_t$
+\ENSURE Saturated control output $u_{sat}$
+\STATE \COMMENT{Initialization (call once)}
+\STATE $e_{prev} \gets 0$; $y_{prev} \gets 0$
+\STATE $u_I \gets 0$; $u_D \gets 0$
+\STATE $u_{prev} \gets 0$; $u_{sat,prev} \gets 0$
+\STATE $T_d \gets K_d / K_p$ if $K_p \neq 0$ else $0$
+\STATE $\alpha \gets T_d / (T_d + N \cdot T)$ if $(T_d + N \cdot T) \neq 0$ else $0$
+\STATE
+\STATE \COMMENT{Main loop (call every $T$ seconds with setpoint $r$ and measurement $y$)}
+\PROCEDURE{ComputePID}{$r$, $y$}
+    \STATE $e \gets r - y$
+    \STATE \COMMENT{Proportional term}
+    \STATE $u_P \gets K_p \cdot e$
+    \STATE \COMMENT{Integral with anti-windup back-calculation}
+    \STATE $u_I \gets u_I + K_i \cdot T \cdot (e + e_{prev})/2$
+    \STATE $u_I \gets u_I + (T / T_t) \cdot (u_{sat,prev} - u_{prev})$
+    \STATE \COMMENT{Derivative on measurement with filter}
+    \STATE $u_D \gets \alpha \cdot u_D - K_d \cdot N \cdot (1 - \alpha) / (T_d + 0.001) \cdot (y - y_{prev})$
+    \STATE \COMMENT{Total output}
+    \STATE $u \gets u_P + u_I + u_D$
+    \STATE \COMMENT{Apply saturation}
+    \STATE $u_{sat} \gets \max(u_{min}, \min(u_{max}, u))$
+    \STATE \COMMENT{Update states}
+    \STATE $e_{prev} \gets e$; $y_{prev} \gets y$
+    \STATE $u_{prev} \gets u$; $u_{sat,prev} \gets u_{sat}$
+    \RETURN $u_{sat}$
+\ENDPROCEDURE
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complete Python class:}
+
+\begin{verbatim}
+class DigitalPID:
+    """
+    Industrial-grade digital PID controller with:
+    - Derivative filtering
+    - Anti-windup (back-calculation)
+    - Derivative on measurement
+    - Bumpless transfer capability
+    """
+
+    def __init__(self, Kp, Ki, Kd, T, u_min=-float('inf'),
+                 u_max=float('inf'), N=10, Tt=None):
+        """
+        Initialize PID controller.
+
+        Parameters:
+            Kp: Proportional gain
+            Ki: Integral gain
+            Kd: Derivative gain
+            T: Sample time (seconds)
+            u_min, u_max: Output saturation limits
+            N: Derivative filter coefficient (typically 8-20)
+            Tt: Anti-windup tracking time (default: sqrt(Ti*Td))
+        """
+        self.Kp = Kp
+        self.Ki = Ki
+        self.Kd = Kd
+        self.T = T
+        self.u_min = u_min
+        self.u_max = u_max
+        self.N = N
+
+        # Compute derivative filter coefficient
+        self.Td = Kd / Kp if Kp != 0 else 0
+        denom = self.Td + N * T
+        self.alpha = self.Td / denom if denom != 0 else 0
+
+        # Anti-windup tracking time
+        if Tt is not None:
+            self.Tt = Tt
+        else:
+            Ti = Kp / Ki if Ki != 0 else float('inf')
+            self.Tt = np.sqrt(Ti * self.Td) if Ti * self.Td > 0 else T
+
+        # State variables
+        self.reset()
+
+    def reset(self):
+        """Reset controller state."""
+        self.e_prev = 0
+        self.y_prev = 0
+        self.u_I = 0
+        self.u_D = 0
+        self.u_prev = 0
+        self.u_sat_prev = 0
+
+    def compute(self, r, y):
+        """
+        Compute control output.
+
+        Parameters:
+            r: Setpoint
+            y: Measurement
+
+        Returns:
+            Saturated control output
+        """
+        e = r - y
+
+        # Proportional
+        u_P = self.Kp * e
+
+        # Integral with Tustin and anti-windup
+        self.u_I += self.Ki * self.T * (e + self.e_prev) / 2
+        self.u_I += (self.T / self.Tt) * (self.u_sat_prev - self.u_prev)
+
+        # Filtered derivative on measurement
+        if self.Td > 0:
+            deriv_gain = self.Kd * self.N * (1 - self.alpha) / self.Td
+            self.u_D = self.alpha * self.u_D - deriv_gain * (y - self.y_prev)
+        else:
+            self.u_D = 0
+
+        # Total output
+        u = u_P + self.u_I + self.u_D
+
+        # Saturation
+        u_sat = np.clip(u, self.u_min, self.u_max)
+
+        # Update state
+        self.e_prev = e
+        self.y_prev = y
+        self.u_prev = u
+        self.u_sat_prev = u_sat
+
+        return u_sat
+
+    def set_output(self, u):
+        """Set output for bumpless transfer from manual mode."""
+        self.u_prev = u
+        self.u_sat_prev = np.clip(u, self.u_min, self.u_max)
+        self.u_I = u - self.Kp * self.e_prev  # Back-calculate integrator
+\end{verbatim}
+
+\subsection{Difference Equation Implementation}
+
+General implementation for any discrete transfer function:
+
+\begin{verbatim}
+class DiscreteTransferFunction:
+    """
+    Implements a discrete transfer function as a difference equation.
+
+    G(z) = (b_0 + b_1*z^-1 + ... + b_M*z^-M) /
+           (1 + a_1*z^-1 + ... + a_N*z^-N)
+    """
+
+    def __init__(self, num, den):
+        """
+        Parameters:
+            num: Numerator coefficients [b_0, b_1, ..., b_M]
+            den: Denominator coefficients [1, a_1, ..., a_N]
+        """
+        self.num = np.array(num)
+        self.den = np.array(den)
+
+        # Normalize denominator
+        self.num = self.num / self.den[0]
+        self.den = self.den / self.den[0]
+
+        self.M = len(self.num) - 1
+        self.N = len(self.den) - 1
+
+        # State buffers
+        self.u_buffer = np.zeros(self.M + 1)  # Input history
+        self.y_buffer = np.zeros(self.N)      # Output history
+
+    def reset(self):
+        """Clear state buffers."""
+        self.u_buffer = np.zeros(self.M + 1)
+        self.y_buffer = np.zeros(self.N)
+
+    def __call__(self, u):
+        """
+        Process one sample.
+
+        Parameters:
+            u: Current input
+
+        Returns:
+            Current output
+        """
+        # Shift input buffer and add new input
+        self.u_buffer = np.roll(self.u_buffer, 1)
+        self.u_buffer[0] = u
+
+        # Compute output: y[n] = sum(b*u) - sum(a*y_prev)
+        y = np.dot(self.num, self.u_buffer[:len(self.num)])
+        if self.N > 0:
+            y -= np.dot(self.den[1:], self.y_buffer[:self.N])
+
+        # Shift output buffer
+        if self.N > 0:
+            self.y_buffer = np.roll(self.y_buffer, 1)
+            self.y_buffer[0] = y
+
+        return y
+
+# Example usage
+num = [0.1, 0.1]      # 0.1 + 0.1*z^-1
+den = [1, -0.8]       # 1 - 0.8*z^-1
+G = DiscreteTransferFunction(num, den)
+
+# Simulate step response
+for k in range(20):
+    y = G(1.0)  # Unit step input
+    print(f"k={k}: y={y:.4f}")
+\end{verbatim}
+
+%===============================================================================
+\section{Chapter Summary}
+\label{sec:discrete_summary}
+
+This chapter covered the essential theory and practice of discrete-time control systems. Let me summarize the key concepts and provide guidance for practical implementation.
+
+\subsection{Key Concepts}
+
+\textbf{Z-Transform:}
+\begin{itemize}
+    \item The Z-transform is defined as $X(z) = \sum_{n=0}^{\infty} x[n] z^{-n}$
+    \item It relates to the Laplace transform through $z = e^{sT}$
+    \item The time-shift property $\mathcal{Z}\{x[n-1]\} = z^{-1}X(z)$ is fundamental
+    \item Final value theorem: $\lim_{n\to\infty} x[n] = \lim_{z\to 1}(z-1)X(z)$
+\end{itemize}
+
+\textbf{Discretization Methods:}
+\begin{itemize}
+    \item \textbf{ZOH:} Exact for step inputs; use for plant discretization
+    \item \textbf{Tustin:} Preserves stability; use for controller discretization
+    \item \textbf{Forward Euler:} Simple but can destabilize; avoid unless $aT \ll 1$
+    \item \textbf{Backward Euler:} Unconditionally stable; good for stiff systems
+    \item \textbf{Matched PZ:} Exact pole/zero mapping; use when locations are critical
+\end{itemize}
+
+\textbf{Stability:}
+\begin{itemize}
+    \item Discrete systems are stable when all poles satisfy $|z| < 1$
+    \item The unit circle in the $z$-plane corresponds to the imaginary axis in the $s$-plane
+    \item Jury test determines stability without computing roots
+    \item For second-order systems: $P(1) > 0$, $P(-1) > 0$, $|a_0| < a_n$
+\end{itemize}
+
+\textbf{Digital PID:}
+\begin{itemize}
+    \item Discretize integral using Tustin: $u_I[n] = u_I[n-1] + K_i T(e[n] + e[n-1])/2$
+    \item Always filter the derivative: use $N = 8$--$20$
+    \item Compute derivative on measurement to avoid setpoint kick
+    \item Implement anti-windup using back-calculation or clamping
+    \item Velocity form provides inherent anti-windup and bumpless transfer
+\end{itemize}
+
+\textbf{Sampling:}
+\begin{itemize}
+    \item Nyquist rate ($2f_{max}$) is the absolute minimum
+    \item For control, sample 10--30 times faster than closed-loop bandwidth
+    \item ZOH introduces phase lag of approximately $\omega T/2$ radians
+    \item Always use anti-aliasing filters before sampling
+\end{itemize}
+
+\subsection{Design Guidelines}
+
+\begin{enumerate}
+    \item \textbf{Choose sample rate first:} Target $\omega_s > 20 \omega_{BW}$ for good performance.
+
+    \item \textbf{Design in continuous domain:} Use familiar tools (root locus, Bode, state space).
+
+    \item \textbf{Discretize carefully:} Use Tustin for controllers, ZOH for simulation.
+
+    \item \textbf{Verify stability:} Apply Jury test or check pole locations.
+
+    \item \textbf{Implement robustly:} Include anti-windup, filtering, and saturation handling.
+
+    \item \textbf{Test thoroughly:} Simulate with realistic conditions before deployment.
+\end{enumerate}
+
+\subsection{Common Pitfalls}
+
+\begin{enumerate}
+    \item \textbf{Sampling too slowly:} Causes phase margin loss and potential instability.
+
+    \item \textbf{Forgetting anti-aliasing:} High-frequency noise aliases into control band.
+
+    \item \textbf{Using forward Euler:} Can destabilize stable continuous systems.
+
+    \item \textbf{Ignoring windup:} Actuator saturation causes slow recovery and overshoot.
+
+    \item \textbf{Unfiltered derivative:} Amplifies measurement noise.
+
+    \item \textbf{Assuming exact discretization:} All methods approximate; faster sampling helps.
+
+    \item \textbf{Forgetting computational delay:} Real controllers have non-zero execution time.
+\end{enumerate}
+
+\subsection{When to Use What}
+
+\begin{center}
+\begin{tabular}{p{5cm}p{8cm}}
+\toprule
+\textbf{Task} & \textbf{Recommended Approach} \\
+\midrule
+Discretizing a plant for simulation & ZOH method \\
+Discretizing a PID controller & Tustin with derivative filter \\
+Discretizing a notch filter & Tustin with pre-warping at notch frequency \\
+Checking stability without computing roots & Jury test \\
+Designing directly in discrete domain & Discrete root locus or pole placement \\
+Implementing on resource-limited MCU & Velocity-form PID, fixed-point arithmetic \\
+Handling actuator limits & Back-calculation anti-windup \\
+Switching between auto/manual modes & Velocity form or proper state tracking \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Moving Forward}
+
+The techniques in this chapter prepare you for:
+\begin{itemize}
+    \item \textbf{State-space methods:} Discrete state observers and LQR (Chapter 11)
+    \item \textbf{Model predictive control:} Naturally formulated in discrete time (Chapter 14)
+    \item \textbf{Digital signal processing:} Filter design and implementation
+    \item \textbf{Embedded systems:} Real-time control on microcontrollers
+\end{itemize}
+
+Digital control is the reality of modern systems. Master these fundamentals, and you will be equipped to implement sophisticated control algorithms on any digital platform.
+
