@@ -1,0 +1,3104 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Chapter 17: Hybrid Model-Based and Learned Control
+% Modern Control Systems: From First Principles to Machine Learning
+% Author: J.C. Vaught
+% University of South Carolina
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Hybrid Model-Based and Learned Control}
+\label{ch:hybrid_control}
+
+\whythismatters{
+The dream of control engineering has always been simple: build a mathematical model, design a controller, and deploy it. But reality intervenes. Our models are wrong---sometimes subtly, sometimes dramatically. Unmodeled dynamics, parameter drift, and environmental variations conspire to degrade performance. Meanwhile, pure learning approaches can achieve remarkable results but offer few guarantees about stability or safety.
+
+This chapter presents the synthesis that modern control demands: \textbf{hybrid approaches} that combine the interpretability and guarantees of model-based control with the adaptability and expressiveness of machine learning. You will learn to augment physics-based models with learned corrections, train neural networks that respect physical laws, construct learned certificates for stability and safety, and integrate learning seamlessly into model predictive control. These techniques represent the cutting edge of control engineering---where the rigor of classical theory meets the power of modern computation.
+
+By the end of this chapter, you will understand not just how these methods work, but \textit{when} to use each approach and how to maintain the safety guarantees that distinguish control engineering from pure machine learning.
+}
+
+%===============================================================================
+\section{Why Hybrid Approaches: The Best of Both Worlds}
+\label{sec:why_hybrid}
+%===============================================================================
+
+Control engineering stands at an inflection point. For decades, we have relied on physics-based models---differential equations derived from first principles that describe how systems evolve. These models give us powerful tools: Lyapunov analysis for stability, controllability and observability theory, optimal control synthesis, and rigorous robustness guarantees. Yet every practitioner knows the fundamental limitation: \textit{all models are wrong}.
+
+Meanwhile, machine learning has demonstrated remarkable capabilities. Neural networks can approximate arbitrary functions, learn complex patterns from data, and adapt to changing conditions. Deep reinforcement learning has achieved superhuman performance in games and promising results in robotics. But pure learning approaches struggle with the requirements that define safety-critical control: guaranteed stability, constraint satisfaction, and predictable behavior in novel situations.
+
+\subsection{The Fundamental Tension}
+
+Consider the challenge of controlling a robotic manipulator. A physics-based model captures the essential dynamics:
+\begin{equation}
+\mat{M}(\vect{q})\ddot{\vect{q}} + \mat{C}(\vect{q}, \dot{\vect{q}})\dot{\vect{q}} + \vect{g}(\vect{q}) = \vect{\tau}
+\label{eq:manipulator_dynamics}
+\end{equation}
+where $\vect{q}$ is the joint configuration, $\mat{M}$ is the inertia matrix, $\mat{C}$ captures Coriolis and centrifugal effects, $\vect{g}$ is the gravity vector, and $\vect{\tau}$ is the applied torque.
+
+This model is elegant and physically meaningful. We can design computed torque controllers, prove stability via Lyapunov methods, and analyze robustness to parameter uncertainty. But the model ignores:
+\begin{itemize}
+    \item Joint friction (static, Coulomb, and viscous components)
+    \item Cable dynamics and flexibility
+    \item Actuator dynamics and saturation
+    \item Thermal effects on motor constants
+    \item Payload variations and unmodeled masses
+    \item Manufacturing tolerances and wear
+\end{itemize}
+
+The gap between our model and reality---the \textbf{residual dynamics}---may seem small, but it accumulates. A position error of 1 mm per joint propagates through the kinematic chain. Friction compensation errors cause limit cycles. Unmodeled flexibility induces vibrations. The elegant model-based controller underperforms, sometimes dramatically.
+
+The purely learned alternative fares no better in critical ways. We could train a neural network policy $\vect{\tau} = \pi_\theta(\vect{q}, \dot{\vect{q}}, \vect{q}_d)$ directly from data. With enough examples and capacity, the network might achieve excellent tracking performance. But we cannot guarantee:
+\begin{itemize}
+    \item The robot will not exceed joint limits
+    \item Torques will remain within actuator bounds
+    \item The system will be stable for novel trajectories
+    \item Performance will degrade gracefully under sensor failure
+\end{itemize}
+
+\subsection{The Hybrid Philosophy}
+
+The solution is not to choose between physics and learning, but to combine them intelligently. The hybrid philosophy rests on three principles:
+
+\begin{enumerate}
+    \item \textbf{Use physics where physics is known.} Conservation laws, kinematic constraints, and well-characterized dynamics should be encoded explicitly. These provide structure that learning would otherwise have to discover from data.
+
+    \item \textbf{Use learning where physics is uncertain.} Friction, contact dynamics, aerodynamic effects, and other phenomena that are difficult to model analytically are excellent candidates for learning.
+
+    \item \textbf{Maintain guarantees through structure.} By carefully designing the interface between model-based and learned components, we can preserve stability and safety properties even when the learned components are imperfect.
+\end{enumerate}
+
+\subsection{A Taxonomy of Hybrid Approaches}
+
+Throughout this chapter, we will explore several architectures for combining models and learning:
+
+\textbf{Residual Learning (Section~\ref{sec:residual_dynamics}):} Learn a correction term that captures the difference between the physics model and reality:
+\begin{equation}
+\dot{\vect{x}} = \vect{f}_{\text{physics}}(\vect{x}, \vect{u}) + \vect{f}_{\text{learned}}(\vect{x}, \vect{u})
+\end{equation}
+The learned component compensates for model errors without replacing the physics.
+
+\textbf{Physics-Informed Neural Networks (Section~\ref{sec:pinns}):} Train neural networks with loss functions that enforce physical laws:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{data}} + \lambda \mathcal{L}_{\text{physics}}
+\end{equation}
+The physics loss ensures the network respects conservation laws, boundary conditions, and other constraints.
+
+\textbf{Neural Lyapunov Functions (Section~\ref{sec:neural_lyapunov}):} Learn stability certificates rather than assuming them:
+\begin{equation}
+V_\theta(\vect{x}) > 0, \quad \dot{V}_\theta(\vect{x}) < 0 \quad \forall \vect{x} \neq \vect{0}
+\end{equation}
+Neural networks can represent complex Lyapunov functions that analytical methods cannot find.
+
+\textbf{Neural Control Barrier Functions (Section~\ref{sec:neural_cbf}):} Learn safety constraints that guarantee constraint satisfaction:
+\begin{equation}
+h_\theta(\vect{x}) \geq 0 \implies h_\theta(\vect{x}(t)) \geq 0 \quad \forall t \geq 0
+\end{equation}
+These enable safe learning and operation in constrained environments.
+
+\textbf{Learning-Augmented MPC (Section~\ref{sec:learning_mpc}):} Integrate learned models into model predictive control:
+\begin{equation}
+\min_{\vect{u}_{0:N-1}} \sum_{k=0}^{N-1} \ell(\vect{x}_k, \vect{u}_k) \quad \text{s.t.} \quad \vect{x}_{k+1} = \vect{f}_{\text{hybrid}}(\vect{x}_k, \vect{u}_k)
+\end{equation}
+MPC provides constraint handling and look-ahead planning; learning improves model accuracy.
+
+\subsection{When to Use Hybrid Approaches}
+
+Not every control problem requires hybrid methods. Here are guidelines for when these techniques provide the most value:
+
+\textbf{Use hybrid approaches when:}
+\begin{itemize}
+    \item You have a reasonable physics model but performance is limited by unmodeled effects
+    \item Safety and stability guarantees are essential
+    \item Data is limited (physics provides strong inductive bias)
+    \item The system must operate reliably across a wide operating envelope
+    \item Interpretability and debugging are important
+\end{itemize}
+
+\textbf{Consider pure learning when:}
+\begin{itemize}
+    \item The physics is poorly understood or highly complex
+    \item Abundant high-quality data is available
+    \item The cost of failure is low (simulation, games)
+    \item The task is narrowly defined with limited variability
+\end{itemize}
+
+\textbf{Stick with pure model-based control when:}
+\begin{itemize}
+    \item The physics model is highly accurate
+    \item Certification requirements preclude learned components
+    \item Computational resources are extremely limited
+    \item The operating conditions are well-characterized
+\end{itemize}
+
+Throughout this chapter, I will emphasize practical implementation alongside theory. You will learn not just the mathematics of hybrid control, but how to train these systems effectively, validate their properties, and deploy them safely.
+
+%===============================================================================
+\section{Residual Dynamics Learning}
+\label{sec:residual_dynamics}
+%===============================================================================
+
+The most intuitive hybrid approach is \textbf{residual learning}: we keep our physics model and add a learned term that captures what the physics misses. This preserves the structure and interpretability of the physics while gaining the expressiveness of machine learning.
+
+\subsection{Problem Formulation}
+
+Consider a dynamical system where the true dynamics are:
+\begin{equation}
+\dot{\vect{x}} = \vect{f}_{\text{true}}(\vect{x}, \vect{u})
+\label{eq:true_dynamics}
+\end{equation}
+
+We have a physics-based model $\vect{f}_{\text{physics}}(\vect{x}, \vect{u})$ that approximates these dynamics, but with error:
+\begin{equation}
+\vect{f}_{\text{true}}(\vect{x}, \vect{u}) = \vect{f}_{\text{physics}}(\vect{x}, \vect{u}) + \vect{\Delta}(\vect{x}, \vect{u})
+\label{eq:residual_definition}
+\end{equation}
+
+The residual $\vect{\Delta}(\vect{x}, \vect{u})$ represents everything our physics model does not capture. Our goal is to learn an approximation $\vect{f}_\theta(\vect{x}, \vect{u}) \approx \vect{\Delta}(\vect{x}, \vect{u})$ from data.
+
+\keypoint{The residual learning approach is fundamentally about \textit{learning the error}, not learning the dynamics from scratch. This is typically a much easier learning problem because the physics model already captures the dominant behavior.}
+
+\subsection{Why Residual Learning Works Better Than Direct Learning}
+
+To understand the advantage of residual learning, consider the function approximation perspective. Suppose we want to learn a function $f: \mathcal{X} \to \mathcal{Y}$ from samples $\{(\vect{x}_i, y_i)\}$.
+
+\textbf{Direct learning:} Train a model to predict $y = f(\vect{x})$ directly.
+
+\textbf{Residual learning:} Given a prior estimate $\hat{f}(\vect{x})$, train a model to predict $\Delta = f(\vect{x}) - \hat{f}(\vect{x})$.
+
+The key insight is that if $\hat{f}$ is a good approximation, then $\Delta$ has much lower variance than $f$ itself. From a statistical learning perspective:
+\begin{equation}
+\text{Var}[\Delta] = \text{Var}[f - \hat{f}] \ll \text{Var}[f]
+\end{equation}
+
+Lower variance means:
+\begin{itemize}
+    \item Fewer samples needed for accurate learning
+    \item Simpler models (smaller networks) suffice
+    \item Better generalization to unseen conditions
+    \item More graceful degradation when the learned component fails
+\end{itemize}
+
+\begin{example}[Variance Reduction in Residual Learning]
+\label{ex:variance_reduction}
+
+Consider learning the dynamics of a pendulum with damping. The true dynamics are:
+\begin{equation}
+\ddot{\theta} = -\frac{g}{L}\sin\theta - b\dot{\theta} - c\,\text{sgn}(\dot{\theta})
+\end{equation}
+where the first term is gravity, the second is viscous damping, and the third is Coulomb friction.
+
+\textbf{Physics model (ignoring friction):}
+\begin{equation}
+\ddot{\theta}_{\text{physics}} = -\frac{g}{L}\sin\theta
+\end{equation}
+
+\textbf{True residual:}
+\begin{equation}
+\Delta = -b\dot{\theta} - c\,\text{sgn}(\dot{\theta})
+\end{equation}
+
+Suppose we collect trajectory data with $\dot{\theta} \in [-5, 5]$ rad/s and $\theta \in [-\pi, \pi]$.
+
+\textbf{Variance of full dynamics:}
+\begin{equation}
+\text{Var}[\ddot{\theta}] \approx \text{Var}\left[-\frac{g}{L}\sin\theta\right] + \text{Var}[\text{friction}]
+\end{equation}
+
+With $g/L \approx 10$ rad/s$^2$, the gravity term dominates:
+\begin{equation}
+\text{Var}[\ddot{\theta}] \approx \frac{(10)^2}{3} + \text{Var}[\text{friction}] \approx 33 + 1 = 34 \text{ (rad/s}^2\text{)}^2
+\end{equation}
+
+\textbf{Variance of residual:}
+\begin{equation}
+\text{Var}[\Delta] = \text{Var}[\text{friction}] \approx 1 \text{ (rad/s}^2\text{)}^2
+\end{equation}
+
+The residual has $\sim$34 times lower variance! A neural network learning the residual can achieve the same accuracy with far fewer parameters and training samples.
+\end{example}
+
+\subsection{Data Collection for Residual Learning}
+
+The quality of the learned residual depends critically on the training data. We need pairs $(\vect{x}_i, \vect{u}_i, \dot{\vect{x}}_i)$ where $\dot{\vect{x}}_i$ is measured or estimated from the real system.
+
+\subsubsection{Measuring State Derivatives}
+
+State derivatives are rarely measured directly. Instead, we estimate them from state trajectories:
+
+\textbf{Finite Differences:}
+\begin{equation}
+\dot{\vect{x}}(t_k) \approx \frac{\vect{x}(t_{k+1}) - \vect{x}(t_k)}{\Delta t}
+\label{eq:forward_diff}
+\end{equation}
+
+This is simple but amplifies measurement noise. If $\vect{x}$ has noise with standard deviation $\sigma$, the derivative estimate has noise $\sigma\sqrt{2}/\Delta t$---which can be very large for small $\Delta t$.
+
+\textbf{Central Differences:}
+\begin{equation}
+\dot{\vect{x}}(t_k) \approx \frac{\vect{x}(t_{k+1}) - \vect{x}(t_{k-1})}{2\Delta t}
+\label{eq:central_diff}
+\end{equation}
+
+This has lower truncation error ($O(\Delta t^2)$ vs.\ $O(\Delta t)$) but still amplifies noise.
+
+\textbf{Savitzky-Golay Filtering:}
+Fit a polynomial to a window of samples and differentiate analytically:
+\begin{equation}
+\vect{x}(t) \approx \sum_{j=0}^{p} \vect{a}_j (t - t_k)^j \quad \Rightarrow \quad \dot{\vect{x}}(t_k) = \vect{a}_1
+\end{equation}
+
+This provides smoothing and differentiation simultaneously. A window of $2m+1$ samples with polynomial order $p$ gives coefficients via least squares.
+
+\textbf{Kalman Filtering/Smoothing:}
+For optimal noise reduction, use the physics model in a Kalman filter or smoother. The filter provides state estimates; the derivative follows from the state-space model.
+
+\subsubsection{Computing the Residual Target}
+
+Once we have state derivative estimates, the residual target is:
+\begin{equation}
+\vect{\Delta}_i = \dot{\vect{x}}_i - \vect{f}_{\text{physics}}(\vect{x}_i, \vect{u}_i)
+\label{eq:residual_target}
+\end{equation}
+
+\warningbox{The residual target $\vect{\Delta}_i$ inherits noise from the derivative estimate \textit{and} systematic errors from the physics model. Systematic errors are what we want to learn; noise must be managed through regularization and sufficient data.}
+
+\subsubsection{Excitation and Coverage}
+
+The learned residual can only be accurate in regions of state-action space covered by training data. This requires \textbf{persistent excitation}---trajectories that explore the relevant operating envelope.
+
+Strategies for ensuring coverage:
+\begin{enumerate}
+    \item \textbf{Random exploration:} Add noise to control inputs during data collection
+    \item \textbf{Designed experiments:} Sweep through operating conditions systematically
+    \item \textbf{Active learning:} Focus data collection on regions of high uncertainty
+    \item \textbf{Online updates:} Continue learning during operation
+\end{enumerate}
+
+\subsection{Network Architecture for Residual Learning}
+
+The neural network $\vect{f}_\theta(\vect{x}, \vect{u})$ should be designed with the residual structure in mind.
+
+\subsubsection{Basic Architecture}
+
+A simple feedforward network suffices for many applications:
+\begin{equation}
+\vect{f}_\theta(\vect{x}, \vect{u}) = \mat{W}_L \sigma(\mat{W}_{L-1} \sigma(\cdots \sigma(\mat{W}_1 [\vect{x}; \vect{u}] + \vect{b}_1)) + \vect{b}_{L-1}) + \vect{b}_L
+\label{eq:mlp_residual}
+\end{equation}
+where $\sigma$ is a nonlinear activation (ReLU, tanh, or swish), and $[\vect{x}; \vect{u}]$ denotes concatenation.
+
+\textbf{Design guidelines:}
+\begin{itemize}
+    \item \textbf{Depth:} 2--4 hidden layers typically suffice for residual learning
+    \item \textbf{Width:} 64--256 units per layer, depending on problem complexity
+    \item \textbf{Activation:} Smooth activations (tanh, swish) are preferable for dynamics as they produce smooth derivatives; ReLU works but may cause non-smooth control
+    \item \textbf{Output:} Linear output layer (no activation) to allow positive and negative residuals
+\end{itemize}
+
+\subsubsection{Incorporating Prior Knowledge}
+
+We can incorporate additional structure into the residual network:
+
+\textbf{Input Normalization:}
+Normalize inputs to have zero mean and unit variance:
+\begin{equation}
+\tilde{\vect{x}} = \frac{\vect{x} - \vect{\mu}_x}{\vect{\sigma}_x}, \quad \tilde{\vect{u}} = \frac{\vect{u} - \vect{\mu}_u}{\vect{\sigma}_u}
+\end{equation}
+
+\textbf{Output Scaling:}
+Initialize the output layer to produce small residuals initially:
+\begin{equation}
+\mat{W}_L \leftarrow \alpha \mat{W}_L, \quad \vect{b}_L \leftarrow \vect{0}
+\end{equation}
+with $\alpha \ll 1$. This ensures the hybrid model starts close to the physics model.
+
+\textbf{Symmetry Constraints:}
+If the residual should satisfy symmetry properties (e.g., odd function of velocity for friction), encode this in the architecture:
+\begin{equation}
+\vect{f}_\theta(\vect{x}, \vect{u}) = \vect{g}_\theta(|\dot{\vect{x}}|, \ldots) \odot \text{sgn}(\dot{\vect{x}})
+\end{equation}
+
+\textbf{Locality:}
+If residuals are expected to depend primarily on local state (e.g., joint-specific friction), use structured networks that limit cross-coupling.
+
+\subsection{Training the Residual Model}
+
+\subsubsection{Loss Function}
+
+The standard loss for residual learning is mean squared error:
+\begin{equation}
+\mathcal{L}(\theta) = \frac{1}{N} \sum_{i=1}^{N} \|\vect{f}_\theta(\vect{x}_i, \vect{u}_i) - \vect{\Delta}_i\|^2
+\label{eq:mse_loss}
+\end{equation}
+
+For better robustness to outliers, use Huber loss:
+\begin{equation}
+\mathcal{L}_{\text{Huber}}(\theta) = \frac{1}{N} \sum_{i=1}^{N} \begin{cases}
+\frac{1}{2}\|\vect{f}_\theta - \vect{\Delta}_i\|^2 & \|\vect{f}_\theta - \vect{\Delta}_i\| \leq \delta \\
+\delta(\|\vect{f}_\theta - \vect{\Delta}_i\| - \frac{\delta}{2}) & \text{otherwise}
+\end{cases}
+\label{eq:huber_loss}
+\end{equation}
+
+\subsubsection{Regularization}
+
+To prevent overfitting and improve generalization:
+
+\textbf{Weight Decay (L2 Regularization):}
+\begin{equation}
+\mathcal{L}_{\text{reg}}(\theta) = \mathcal{L}(\theta) + \lambda \|\theta\|^2
+\end{equation}
+
+\textbf{Dropout:} Randomly zero activations during training (less common for dynamics models).
+
+\textbf{Spectral Normalization:} Constrain the Lipschitz constant of each layer:
+\begin{equation}
+\mat{W} \leftarrow \frac{\mat{W}}{\sigma_{\max}(\mat{W})}
+\end{equation}
+This improves stability of the learned dynamics.
+
+\subsubsection{Training Procedure}
+
+\begin{algorithm}[H]
+\caption{Residual Dynamics Learning}
+\label{alg:residual_learning}
+\begin{algorithmic}[1]
+\REQUIRE Dataset $\mathcal{D} = \{(\vect{x}_i, \vect{u}_i, \dot{\vect{x}}_i)\}_{i=1}^N$, physics model $\vect{f}_{\text{physics}}$
+\ENSURE Trained residual model $\vect{f}_\theta$
+\STATE \COMMENT{Compute residual targets}
+\FOR{$i = 1$ \TO $N$}
+    \STATE $\vect{\Delta}_i \gets \dot{\vect{x}}_i - \vect{f}_{\text{physics}}(\vect{x}_i, \vect{u}_i)$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Compute normalization statistics}
+\STATE $\vect{\mu}_x, \vect{\sigma}_x \gets \text{mean}(\{\vect{x}_i\}), \text{std}(\{\vect{x}_i\})$
+\STATE $\vect{\mu}_u, \vect{\sigma}_u \gets \text{mean}(\{\vect{u}_i\}), \text{std}(\{\vect{u}_i\})$
+\STATE
+\STATE \COMMENT{Initialize network with small output scale}
+\STATE Initialize $\theta$ randomly
+\STATE Scale output layer: $\mat{W}_L \gets 0.01 \cdot \mat{W}_L$, $\vect{b}_L \gets \vect{0}$
+\STATE
+\STATE \COMMENT{Training loop}
+\FOR{epoch $= 1$ \TO max\_epochs}
+    \STATE Shuffle $\mathcal{D}$ into minibatches of size $B$
+    \FOR{each minibatch $\{(\vect{x}_j, \vect{u}_j, \vect{\Delta}_j)\}_{j=1}^B$}
+        \STATE $\tilde{\vect{x}}_j \gets (\vect{x}_j - \vect{\mu}_x) / \vect{\sigma}_x$ for all $j$
+        \STATE $\tilde{\vect{u}}_j \gets (\vect{u}_j - \vect{\mu}_u) / \vect{\sigma}_u$ for all $j$
+        \STATE $\mathcal{L} \gets \frac{1}{B}\sum_j \|\vect{f}_\theta(\tilde{\vect{x}}_j, \tilde{\vect{u}}_j) - \vect{\Delta}_j\|^2 + \lambda\|\theta\|^2$
+        \STATE $\theta \gets \theta - \eta \nabla_\theta \mathcal{L}$ \COMMENT{Adam or SGD update}
+    \ENDFOR
+    \STATE Evaluate validation loss; early stop if converged
+\ENDFOR
+\RETURN $\vect{f}_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Using the Hybrid Model for Control}
+
+Once trained, the hybrid model $\vect{f}_{\text{hybrid}} = \vect{f}_{\text{physics}} + \vect{f}_\theta$ can be used in various control frameworks.
+
+\subsubsection{Feedforward Compensation}
+
+The simplest application is feedforward compensation. Given a reference trajectory $\vect{x}_d(t)$, compute the control that achieves this trajectory under the hybrid model:
+\begin{equation}
+\vect{u}_{\text{ff}} = \vect{f}_{\text{physics}}^{-1}(\vect{x}_d, \dot{\vect{x}}_d - \vect{f}_\theta(\vect{x}_d, \vect{u}_{\text{nominal}}))
+\label{eq:feedforward_compensation}
+\end{equation}
+
+This requires inverting the physics model, which is straightforward for many systems (e.g., computed torque for robots).
+
+\subsubsection{Model-Based Feedback}
+
+For state feedback control, linearize the hybrid model:
+\begin{equation}
+\mat{A} = \frac{\partial}{\partial \vect{x}}\left(\vect{f}_{\text{physics}} + \vect{f}_\theta\right), \quad
+\mat{B} = \frac{\partial}{\partial \vect{u}}\left(\vect{f}_{\text{physics}} + \vect{f}_\theta\right)
+\end{equation}
+
+The Jacobians of the neural network are computed via automatic differentiation. Use these linearized dynamics for LQR, pole placement, or other linear design methods.
+
+\subsubsection{Nonlinear MPC}
+
+The hybrid model can serve as the prediction model in nonlinear MPC:
+\begin{align}
+\min_{\vect{u}_{0:N-1}} \quad & \sum_{k=0}^{N-1} \ell(\vect{x}_k, \vect{u}_k) + V_f(\vect{x}_N) \\
+\text{s.t.} \quad & \vect{x}_{k+1} = \vect{x}_k + \Delta t \left(\vect{f}_{\text{physics}}(\vect{x}_k, \vect{u}_k) + \vect{f}_\theta(\vect{x}_k, \vect{u}_k)\right) \\
+& \vect{x}_k \in \mathcal{X}, \quad \vect{u}_k \in \mathcal{U}
+\end{align}
+
+We will explore this in detail in Section~\ref{sec:learning_mpc}.
+
+%===============================================================================
+\section{Physics-Informed Neural Networks for Control}
+\label{sec:pinns}
+%===============================================================================
+
+While residual learning adds learning on top of physics, \textbf{Physics-Informed Neural Networks (PINNs)} take a different approach: they embed physical laws directly into the learning process. The neural network learns to satisfy differential equations, conservation laws, and boundary conditions as part of its training objective.
+
+\subsection{The PINN Framework}
+
+The central idea of PINNs is elegant: instead of treating physical laws as external constraints, we encode them in the loss function. A neural network trained to minimize this loss will automatically satisfy the physics---at least approximately.
+
+Consider a dynamical system governed by a differential equation:
+\begin{equation}
+\mathcal{N}[\vect{x}(t); \vect{\lambda}] = 0
+\label{eq:governing_equation}
+\end{equation}
+where $\mathcal{N}$ is a (possibly nonlinear) differential operator and $\vect{\lambda}$ are physical parameters.
+
+In the PINN framework, we represent the solution $\vect{x}(t)$ as a neural network:
+\begin{equation}
+\vect{x}_\theta(t) = \text{NN}_\theta(t)
+\end{equation}
+
+The key insight is that we can compute $\mathcal{N}[\vect{x}_\theta(t)]$ using automatic differentiation. If the network perfectly satisfies the physics, this residual should be zero.
+
+\subsubsection{The PINN Loss Function}
+
+The total loss combines multiple terms:
+
+\textbf{Physics Loss:} Penalizes violation of the governing equations at collocation points $\{t_i\}$:
+\begin{equation}
+\mathcal{L}_{\text{physics}} = \frac{1}{N_c} \sum_{i=1}^{N_c} \|\mathcal{N}[\vect{x}_\theta(t_i)]\|^2
+\label{eq:physics_loss}
+\end{equation}
+
+\textbf{Data Loss:} Matches observations at measurement points:
+\begin{equation}
+\mathcal{L}_{\text{data}} = \frac{1}{N_d} \sum_{j=1}^{N_d} \|\vect{x}_\theta(t_j) - \vect{x}_j^{\text{obs}}\|^2
+\label{eq:data_loss}
+\end{equation}
+
+\textbf{Boundary/Initial Condition Loss:} Enforces boundary and initial conditions:
+\begin{equation}
+\mathcal{L}_{\text{BC}} = \frac{1}{N_b} \sum_{k=1}^{N_b} \|\mathcal{B}[\vect{x}_\theta(t_k)] - \vect{g}_k\|^2
+\label{eq:bc_loss}
+\end{equation}
+where $\mathcal{B}$ is a boundary operator and $\vect{g}_k$ are boundary values.
+
+\textbf{Total Loss:}
+\begin{equation}
+\mathcal{L}_{\text{total}} = \lambda_{\text{physics}} \mathcal{L}_{\text{physics}} + \lambda_{\text{data}} \mathcal{L}_{\text{data}} + \lambda_{\text{BC}} \mathcal{L}_{\text{BC}}
+\label{eq:total_pinn_loss}
+\end{equation}
+
+The weights $\lambda_{\text{physics}}, \lambda_{\text{data}}, \lambda_{\text{BC}}$ balance the contributions. Choosing these weights is both art and science---we will discuss strategies shortly.
+
+\keypoint{PINNs turn the problem of solving differential equations into an optimization problem. The network parameters $\theta$ are adjusted until the solution satisfies physics, matches data, and respects boundary conditions.}
+
+\subsection{Automatic Differentiation for Physics}
+
+The magic of PINNs lies in automatic differentiation (AD). Given a neural network $\vect{x}_\theta(t)$, we can compute arbitrary derivatives with respect to the input:
+\begin{equation}
+\frac{d\vect{x}_\theta}{dt}, \quad \frac{d^2\vect{x}_\theta}{dt^2}, \quad \frac{\partial^2 \vect{x}_\theta}{\partial t \partial \vect{\lambda}}, \quad \ldots
+\end{equation}
+
+Modern deep learning frameworks (PyTorch, JAX, TensorFlow) provide this capability automatically. The computational cost scales linearly with the order of differentiation.
+
+\begin{example}[Computing Physics Residuals with AD]
+\label{ex:ad_residuals}
+
+Consider a damped harmonic oscillator:
+\begin{equation}
+m\ddot{x} + c\dot{x} + kx = 0
+\end{equation}
+
+Let $x_\theta(t)$ be a neural network representing the displacement. The physics residual is:
+\begin{equation}
+r(t) = m\frac{d^2 x_\theta}{dt^2} + c\frac{d x_\theta}{dt} + k x_\theta(t)
+\end{equation}
+
+In PyTorch-like pseudocode:
+\begin{verbatim}
+def physics_residual(t, theta, m, c, k):
+    x = network(t, theta)           # Forward pass
+    dx_dt = grad(x, t)              # First derivative via AD
+    d2x_dt2 = grad(dx_dt, t)        # Second derivative via AD
+    residual = m * d2x_dt2 + c * dx_dt + k * x
+    return residual
+\end{verbatim}
+
+The physics loss is then:
+\begin{equation}
+\mathcal{L}_{\text{physics}} = \frac{1}{N_c} \sum_{i=1}^{N_c} r(t_i)^2
+\end{equation}
+\end{example}
+
+\subsection{PINNs for System Identification}
+
+One powerful application of PINNs in control is \textbf{system identification}: learning unknown physical parameters from trajectory data.
+
+\subsubsection{Problem Setup}
+
+Suppose we have trajectory measurements $\{(t_j, \vect{x}_j^{\text{obs}})\}$ from a system governed by:
+\begin{equation}
+\dot{\vect{x}} = \vect{f}(\vect{x}, \vect{u}; \vect{\lambda})
+\end{equation}
+where $\vect{\lambda}$ are unknown parameters (masses, damping coefficients, etc.).
+
+The PINN approach jointly learns:
+\begin{enumerate}
+    \item The trajectory $\vect{x}_\theta(t)$ as a neural network
+    \item The unknown parameters $\vect{\lambda}$ as trainable variables
+\end{enumerate}
+
+\subsubsection{Loss Function for Identification}
+
+\begin{equation}
+\mathcal{L}(\theta, \vect{\lambda}) = \underbrace{\frac{1}{N_d}\sum_j \|\vect{x}_\theta(t_j) - \vect{x}_j^{\text{obs}}\|^2}_{\text{match data}} + \lambda_p \underbrace{\frac{1}{N_c}\sum_i \|\dot{\vect{x}}_\theta(t_i) - \vect{f}(\vect{x}_\theta(t_i), \vect{u}(t_i); \vect{\lambda})\|^2}_{\text{satisfy physics}}
+\label{eq:pinn_sysid_loss}
+\end{equation}
+
+Optimization proceeds over both $\theta$ and $\vect{\lambda}$:
+\begin{equation}
+\theta^*, \vect{\lambda}^* = \arg\min_{\theta, \vect{\lambda}} \mathcal{L}(\theta, \vect{\lambda})
+\end{equation}
+
+\subsubsection{Advantages Over Traditional System Identification}
+
+\textbf{Noise Handling:} The network acts as a differentiable smoother. Instead of differentiating noisy data directly, we differentiate the smooth network output.
+
+\textbf{Sparse Data:} Physics constraints provide information between measurement points. The method works even when data is sparse or irregularly sampled.
+
+\textbf{Partial Observations:} If only some states are measured, physics propagates information to unobserved states.
+
+\textbf{Nonlinear Systems:} No linearization required; the method handles arbitrary nonlinear dynamics.
+
+\subsection{PINNs for State Estimation and Prediction}
+
+Beyond identification, PINNs can estimate unmeasured states and predict future behavior.
+
+\subsubsection{State Estimation}
+
+Given partial observations (e.g., position but not velocity), the physics loss constrains the relationship between observed and unobserved states:
+\begin{equation}
+\mathcal{L} = \sum_j \|x_\theta(t_j) - x_j^{\text{obs}}\|^2 + \lambda_p \sum_i \|\dot{x}_\theta(t_i) - v_\theta(t_i)\|^2 + \lambda_p \sum_i \|m\dot{v}_\theta(t_i) + cv_\theta(t_i) + kx_\theta(t_i)\|^2
+\end{equation}
+
+The first term matches position observations. The second enforces the definition $\dot{x} = v$. The third enforces the dynamics. Together, they constrain both position and velocity.
+
+\subsubsection{Prediction and Extrapolation}
+
+Once trained, the network can predict beyond the training time horizon. However, extrapolation is inherently risky:
+
+\warningbox{PINNs, like all neural networks, may extrapolate poorly beyond their training domain. Always validate predictions against physics intuition and, when possible, additional data. Long-horizon predictions should be treated with caution.}
+
+To improve extrapolation:
+\begin{enumerate}
+    \item Increase the weight on physics loss (forces the network to rely more on physics)
+    \item Use architectures that encode known asymptotic behavior
+    \item Retrain or fine-tune as new data becomes available
+\end{enumerate}
+
+\subsection{Network Architecture for PINNs}
+
+The choice of network architecture significantly impacts PINN performance.
+
+\subsubsection{Basic MLP Architecture}
+
+A standard multi-layer perceptron works for many problems:
+\begin{equation}
+\vect{x}_\theta(t) = \mat{W}_L \sigma(\mat{W}_{L-1} \sigma(\cdots \sigma(\mat{W}_1 t + \vect{b}_1)) + \vect{b}_{L-1}) + \vect{b}_L
+\end{equation}
+
+\textbf{Recommendations:}
+\begin{itemize}
+    \item \textbf{Depth:} 4--8 layers for complex dynamics
+    \item \textbf{Width:} 32--128 units per layer
+    \item \textbf{Activation:} Smooth activations are essential for PINNs since we compute derivatives. Use $\tanh$, $\sin$ (SIREN networks), or swish. \textbf{Avoid ReLU}---its second derivative is zero almost everywhere.
+\end{itemize}
+
+\subsubsection{Fourier Feature Networks}
+
+For problems with high-frequency content or sharp transitions, standard MLPs struggle due to spectral bias. \textbf{Fourier feature networks} address this:
+\begin{equation}
+\gamma(t) = [\cos(2\pi \mat{B} t), \sin(2\pi \mat{B} t)]
+\end{equation}
+where $\mat{B}$ contains learned or fixed frequencies. The network then operates on $\gamma(t)$ rather than $t$ directly.
+
+\subsubsection{SIREN (Sinusoidal Representation Networks)}
+
+SIREN networks use periodic activations:
+\begin{equation}
+\sigma(x) = \sin(\omega_0 x)
+\end{equation}
+with careful initialization. These networks naturally represent complex signals and their derivatives, making them well-suited for PINNs.
+
+\subsection{Training Strategies for PINNs}
+
+Training PINNs can be challenging. The physics loss creates a complex optimization landscape with multiple local minima.
+
+\subsubsection{Collocation Point Selection}
+
+The physics loss is evaluated at collocation points. Strategies include:
+
+\textbf{Uniform Sampling:} Simple but may miss important regions.
+
+\textbf{Adaptive Sampling:} Concentrate points where the physics residual is large:
+\begin{equation}
+p(t) \propto |\mathcal{N}[\vect{x}_\theta(t)]|^\alpha
+\end{equation}
+Periodically resample during training.
+
+\textbf{Latin Hypercube Sampling:} Ensures space-filling coverage with better uniformity than random sampling.
+
+\subsubsection{Loss Balancing}
+
+The relative weights $\lambda_{\text{physics}}, \lambda_{\text{data}}, \lambda_{\text{BC}}$ critically affect training. Strategies include:
+
+\textbf{Fixed Weights:} Set based on the scale of each loss term. A common heuristic:
+\begin{equation}
+\lambda_i \propto \frac{1}{\text{Var}[\mathcal{L}_i]}
+\end{equation}
+
+\textbf{Adaptive Weights:} Adjust weights during training to balance gradient magnitudes:
+\begin{equation}
+\lambda_i^{(k+1)} = \lambda_i^{(k)} \cdot \frac{\|\nabla_\theta \mathcal{L}_{\text{total}}\|}{\|\nabla_\theta \mathcal{L}_i\|}
+\end{equation}
+
+\textbf{GradNorm:} A more sophisticated approach that balances gradient norms across loss terms.
+
+\subsubsection{Curriculum Learning}
+
+Start with easier problems and gradually increase difficulty:
+\begin{enumerate}
+    \item Train first on data loss only (learn to interpolate)
+    \item Gradually increase physics loss weight
+    \item Add boundary condition loss
+\end{enumerate}
+
+This prevents the network from getting stuck in poor local minima early in training.
+
+\subsubsection{Optimizer Choice}
+
+\textbf{Adam:} Good default for initial training. Use learning rate $10^{-3}$ to $10^{-4}$.
+
+\textbf{L-BFGS:} Often improves final accuracy after Adam pre-training. Quasi-Newton methods work well for the physics loss landscape.
+
+\textbf{Hybrid Strategy:} Train with Adam for 5000--10000 iterations, then switch to L-BFGS for refinement.
+
+\subsection{PINN Training Algorithm}
+
+\begin{algorithm}[H]
+\caption{Physics-Informed Neural Network Training}
+\label{alg:pinn_training}
+\begin{algorithmic}[1]
+\REQUIRE Observations $\{(t_j, \vect{x}_j^{\text{obs}})\}$, physics operator $\mathcal{N}$, initial/boundary conditions
+\ENSURE Trained network $\vect{x}_\theta$, identified parameters $\vect{\lambda}^*$
+\STATE Initialize network parameters $\theta$, physical parameters $\vect{\lambda}$
+\STATE Generate collocation points $\{t_i^c\}_{i=1}^{N_c}$ via Latin hypercube sampling
+\STATE Set loss weights $\lambda_{\text{data}}, \lambda_{\text{physics}}, \lambda_{\text{BC}}$
+\STATE
+\FOR{epoch $= 1$ \TO max\_epochs}
+    \STATE \COMMENT{Compute data loss}
+    \STATE $\mathcal{L}_{\text{data}} \gets \frac{1}{N_d}\sum_j \|\vect{x}_\theta(t_j) - \vect{x}_j^{\text{obs}}\|^2$
+    \STATE
+    \STATE \COMMENT{Compute physics loss via automatic differentiation}
+    \FOR{$i = 1$ \TO $N_c$}
+        \STATE Compute $\dot{\vect{x}}_\theta(t_i^c)$ via AD
+        \STATE $r_i \gets \dot{\vect{x}}_\theta(t_i^c) - \vect{f}(\vect{x}_\theta(t_i^c), \vect{u}(t_i^c); \vect{\lambda})$
+    \ENDFOR
+    \STATE $\mathcal{L}_{\text{physics}} \gets \frac{1}{N_c}\sum_i \|r_i\|^2$
+    \STATE
+    \STATE \COMMENT{Compute boundary/initial condition loss}
+    \STATE $\mathcal{L}_{\text{BC}} \gets \|\vect{x}_\theta(0) - \vect{x}_0\|^2$
+    \STATE
+    \STATE \COMMENT{Total loss and update}
+    \STATE $\mathcal{L} \gets \lambda_{\text{data}}\mathcal{L}_{\text{data}} + \lambda_{\text{physics}}\mathcal{L}_{\text{physics}} + \lambda_{\text{BC}}\mathcal{L}_{\text{BC}}$
+    \STATE $(\theta, \vect{\lambda}) \gets (\theta, \vect{\lambda}) - \eta \nabla_{(\theta, \vect{\lambda})} \mathcal{L}$
+    \STATE
+    \STATE \COMMENT{Adaptive resampling (optional)}
+    \IF{epoch mod resample\_interval $= 0$}
+        \STATE Resample $\{t_i^c\}$ proportional to $|r_i|$
+    \ENDIF
+\ENDFOR
+\STATE
+\STATE \COMMENT{Refinement with L-BFGS}
+\STATE $(\theta^*, \vect{\lambda}^*) \gets \text{L-BFGS}(\mathcal{L}, \theta, \vect{\lambda})$
+\RETURN $\vect{x}_{\theta^*}$, $\vect{\lambda}^*$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Limitations and When Not to Use PINNs}
+
+PINNs are powerful but not universally applicable:
+
+\textbf{Computational Cost:} Computing physics residuals via AD is expensive. For simple ODEs, traditional numerical methods may be faster.
+
+\textbf{Stiff Systems:} Systems with widely separated time scales challenge PINN training. The network struggles to capture both fast and slow dynamics.
+
+\textbf{Chaotic Systems:} Long-term prediction of chaotic systems is fundamentally limited. PINNs cannot overcome this.
+
+\textbf{High-Dimensional PDEs:} While PINNs can handle PDEs, very high-dimensional problems remain challenging.
+
+\textbf{Use PINNs when:}
+\begin{itemize}
+    \item Data is sparse or noisy
+    \item Physical parameters are unknown and need identification
+    \item Inverse problems are of interest
+    \item Partial observations require physics-based state estimation
+\end{itemize}
+
+\textbf{Consider alternatives when:}
+\begin{itemize}
+    \item Abundant clean data is available
+    \item Physics is well-characterized and accurate numerical solvers exist
+    \item Real-time computation is required
+    \item The system is stiff or chaotic
+\end{itemize}
+
+%===============================================================================
+\section{Neural Lyapunov Functions}
+\label{sec:neural_lyapunov}
+%===============================================================================
+
+Stability is the bedrock of control engineering. We would never deploy a controller without some assurance that the closed-loop system is stable. Lyapunov theory provides the mathematical framework for proving stability, but finding a Lyapunov function for complex nonlinear systems is notoriously difficult. \textbf{Neural Lyapunov functions} offer a data-driven approach: learn the Lyapunov function from simulations or experiments.
+
+\subsection{Review: Lyapunov Stability Theory}
+
+Before diving into neural approaches, let us briefly review the classical theory. Consider an autonomous system:
+\begin{equation}
+\dot{\vect{x}} = \vect{f}(\vect{x})
+\label{eq:autonomous_system}
+\end{equation}
+with an equilibrium at the origin: $\vect{f}(\vect{0}) = \vect{0}$.
+
+\begin{definition}[Lyapunov Function]
+\label{def:lyapunov}
+A continuously differentiable function $V: \mathbb{R}^n \to \mathbb{R}$ is a \textbf{Lyapunov function} for the system \eqref{eq:autonomous_system} if:
+\begin{enumerate}
+    \item $V(\vect{0}) = 0$ (zero at the equilibrium)
+    \item $V(\vect{x}) > 0$ for all $\vect{x} \neq \vect{0}$ (positive definite)
+    \item $\dot{V}(\vect{x}) = \nabla V(\vect{x})^\top \vect{f}(\vect{x}) \leq 0$ for all $\vect{x}$ (non-increasing along trajectories)
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Lyapunov Stability]
+\label{thm:lyapunov_stability}
+If there exists a Lyapunov function $V$ for system \eqref{eq:autonomous_system}, then the origin is \textbf{stable}. If additionally $\dot{V}(\vect{x}) < 0$ for all $\vect{x} \neq \vect{0}$ (strictly negative), then the origin is \textbf{asymptotically stable}.
+\end{theorem}
+
+The challenge is constructive: given a system, how do we find $V$? For linear systems, quadratic Lyapunov functions $V(\vect{x}) = \vect{x}^\top \mat{P} \vect{x}$ can be found by solving the Lyapunov equation. For polynomial systems, sum-of-squares (SOS) programming provides a computational approach. But for general nonlinear systems, finding Lyapunov functions remains an art.
+
+\subsection{Neural Networks as Lyapunov Function Candidates}
+
+The key observation is that neural networks are universal function approximators. If a Lyapunov function exists, a sufficiently expressive neural network can represent it. The challenge is to train the network so that it satisfies the Lyapunov conditions.
+
+\subsubsection{Parameterizing Positive Definite Functions}
+
+Condition 2 requires $V(\vect{x}) > 0$ for $\vect{x} \neq \vect{0}$. We can enforce this structurally:
+
+\textbf{Approach 1: Input Convex Neural Networks (ICNNs)}
+
+Design the network architecture to be convex in its inputs:
+\begin{equation}
+V_\theta(\vect{x}) = \vect{w}_L^\top \sigma_+(\mat{W}_{L-1}\sigma_+(\cdots \sigma_+(\mat{W}_1 \vect{x}))) + \epsilon \|\vect{x}\|^2
+\label{eq:icnn_lyapunov}
+\end{equation}
+where $\sigma_+$ is a convex, monotonic activation (ReLU, softplus), all weights are non-negative, and $\epsilon > 0$ ensures strict positivity away from the origin.
+
+\textbf{Approach 2: Squared Output}
+
+Use any network architecture but square the output:
+\begin{equation}
+V_\theta(\vect{x}) = \|\text{NN}_\theta(\vect{x})\|^2 + \epsilon \|\vect{x}\|^2
+\label{eq:squared_lyapunov}
+\end{equation}
+
+This guarantees $V \geq \epsilon\|\vect{x}\|^2 > 0$ for $\vect{x} \neq \vect{0}$.
+
+\textbf{Approach 3: Positive Semi-Definite Quadratic Form}
+
+Parameterize as a learned quadratic plus neural correction:
+\begin{equation}
+V_\theta(\vect{x}) = \vect{x}^\top \mat{P}_\theta \vect{x} + \text{NN}_\phi(\vect{x})
+\label{eq:quadratic_plus_nn}
+\end{equation}
+where $\mat{P}_\theta = \mat{L}_\theta \mat{L}_\theta^\top$ ensures positive semi-definiteness of the quadratic part.
+
+\subsubsection{Enforcing the Zero Condition}
+
+Condition 1 requires $V(\vect{0}) = 0$. For architectures like \eqref{eq:squared_lyapunov}, this is automatic since $\text{NN}(\vect{0})$ can be trained to be zero and $\|\vect{0}\|^2 = 0$. For other architectures, we can enforce this by:
+\begin{equation}
+\tilde{V}_\theta(\vect{x}) = V_\theta(\vect{x}) - V_\theta(\vect{0})
+\end{equation}
+
+\subsubsection{The Lie Derivative Condition}
+
+Condition 3 is the most challenging. The Lie derivative is:
+\begin{equation}
+\dot{V}(\vect{x}) = \nabla V_\theta(\vect{x})^\top \vect{f}(\vect{x})
+\label{eq:lie_derivative}
+\end{equation}
+
+For a neural network $V_\theta$, we compute $\nabla V_\theta$ via automatic differentiation. The Lie derivative condition becomes a constraint or loss term.
+
+\subsection{Training Neural Lyapunov Functions}
+
+\subsubsection{The Lyapunov Loss Function}
+
+We train the network by penalizing violations of the Lyapunov conditions:
+\begin{equation}
+\mathcal{L}(\theta) = \mathcal{L}_{\text{pos}} + \lambda_{\text{Lie}} \mathcal{L}_{\text{Lie}} + \lambda_{\text{zero}} \mathcal{L}_{\text{zero}}
+\label{eq:lyapunov_loss}
+\end{equation}
+
+\textbf{Positivity Loss:}
+\begin{equation}
+\mathcal{L}_{\text{pos}} = \frac{1}{N} \sum_{i=1}^{N} \max(0, -V_\theta(\vect{x}_i) + \epsilon \|\vect{x}_i\|^2)
+\end{equation}
+This penalizes points where $V < \epsilon\|\vect{x}\|^2$.
+
+\textbf{Lie Derivative Loss:}
+\begin{equation}
+\mathcal{L}_{\text{Lie}} = \frac{1}{N} \sum_{i=1}^{N} \max(0, \dot{V}_\theta(\vect{x}_i) + \alpha V_\theta(\vect{x}_i))
+\label{eq:lie_loss}
+\end{equation}
+This enforces $\dot{V} \leq -\alpha V$ (exponential stability) rather than just $\dot{V} \leq 0$. The margin $\alpha > 0$ provides robustness.
+
+\textbf{Zero Condition Loss:}
+\begin{equation}
+\mathcal{L}_{\text{zero}} = V_\theta(\vect{0})^2
+\end{equation}
+
+\subsubsection{Sampling Strategies}
+
+The Lyapunov conditions must hold everywhere in a region of interest $\mathcal{X}$. Training samples should cover this region:
+
+\textbf{Uniform Sampling:} Draw points uniformly from $\mathcal{X}$.
+
+\textbf{Trajectory Sampling:} Simulate trajectories from random initial conditions; sample along these trajectories.
+
+\textbf{Adversarial Sampling:} Focus on regions where the Lyapunov conditions are most likely to be violated---near the boundary of the region of attraction or where $\dot{V}$ is close to zero.
+
+\textbf{Counterexample-Guided Sampling:} After training, use a verifier to find counterexamples. Add these to the training set and retrain.
+
+\subsubsection{Training Algorithm}
+
+\begin{algorithm}[H]
+\caption{Neural Lyapunov Function Learning}
+\label{alg:neural_lyapunov}
+\begin{algorithmic}[1]
+\REQUIRE Dynamics $\vect{f}(\vect{x})$, domain $\mathcal{X}$, stability margin $\alpha$
+\ENSURE Lyapunov candidate $V_\theta$
+\STATE Initialize network $V_\theta$ with positive-definite structure
+\STATE Generate training points $\{\vect{x}_i\}_{i=1}^{N}$ from $\mathcal{X}$
+\STATE
+\FOR{epoch $= 1$ \TO max\_epochs}
+    \FOR{each minibatch $\{\vect{x}_j\}_{j=1}^{B}$}
+        \STATE \COMMENT{Compute Lyapunov function values}
+        \STATE $V_j \gets V_\theta(\vect{x}_j)$ for all $j$
+        \STATE
+        \STATE \COMMENT{Compute Lie derivatives via AD}
+        \STATE $\nabla V_j \gets \nabla_{\vect{x}} V_\theta(\vect{x}_j)$ for all $j$
+        \STATE $\dot{V}_j \gets \nabla V_j^\top \vect{f}(\vect{x}_j)$ for all $j$
+        \STATE
+        \STATE \COMMENT{Compute losses}
+        \STATE $\mathcal{L}_{\text{Lie}} \gets \frac{1}{B}\sum_j \max(0, \dot{V}_j + \alpha V_j)$
+        \STATE $\mathcal{L}_{\text{zero}} \gets V_\theta(\vect{0})^2$
+        \STATE $\mathcal{L} \gets \mathcal{L}_{\text{Lie}} + \lambda_{\text{zero}} \mathcal{L}_{\text{zero}}$
+        \STATE
+        \STATE $\theta \gets \theta - \eta \nabla_\theta \mathcal{L}$
+    \ENDFOR
+    \STATE
+    \STATE \COMMENT{Adversarial sampling (optional)}
+    \IF{epoch mod adversarial\_interval $= 0$}
+        \STATE Find $\vect{x}^* = \arg\max_{\vect{x} \in \mathcal{X}} \dot{V}_\theta(\vect{x}) + \alpha V_\theta(\vect{x})$
+        \IF{$\dot{V}_\theta(\vect{x}^*) + \alpha V_\theta(\vect{x}^*) > 0$}
+            \STATE Add $\vect{x}^*$ to training set
+        \ENDIF
+    \ENDIF
+\ENDFOR
+\RETURN $V_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Verification of Neural Lyapunov Functions}
+
+Training provides a candidate Lyapunov function, but we need verification that it truly satisfies the conditions everywhere---not just at training points.
+
+\subsubsection{Sampling-Based Verification}
+
+The simplest approach is dense sampling:
+\begin{enumerate}
+    \item Generate a large test set $\{\vect{x}_i\}$ covering $\mathcal{X}$
+    \item Check $V_\theta(\vect{x}_i) > 0$ and $\dot{V}_\theta(\vect{x}_i) < 0$ for all points
+    \item Report the margin: $\min_i V_\theta(\vect{x}_i)$ and $\max_i \dot{V}_\theta(\vect{x}_i)$
+\end{enumerate}
+
+This provides statistical confidence but not a proof.
+
+\subsubsection{SMT-Based Verification}
+
+For rigorous verification, Satisfiability Modulo Theories (SMT) solvers can check whether there exists any $\vect{x}$ violating the conditions:
+\begin{equation}
+\exists \vect{x} \in \mathcal{X}: V_\theta(\vect{x}) \leq 0 \text{ or } \dot{V}_\theta(\vect{x}) \geq 0
+\label{eq:smt_query}
+\end{equation}
+
+If the solver returns UNSAT, the Lyapunov function is verified. If it returns SAT with a counterexample $\vect{x}^*$, we add this to the training set and retrain.
+
+\textbf{Challenge:} SMT solvers struggle with neural network non-linearities. Verification is typically limited to small networks and low-dimensional systems.
+
+\subsubsection{Interval Arithmetic and Lipschitz Bounds}
+
+An alternative is to bound the Lyapunov function and its Lie derivative over regions using interval arithmetic or Lipschitz bounds:
+\begin{equation}
+\dot{V}(\vect{x}) \leq \dot{V}(\vect{x}_c) + L_{\dot{V}} \|\vect{x} - \vect{x}_c\|
+\end{equation}
+where $L_{\dot{V}}$ is the Lipschitz constant of $\dot{V}$.
+
+If the upper bound is negative for all subregions, the condition is verified.
+
+\subsection{Learning Lyapunov Functions for Controlled Systems}
+
+For controlled systems $\dot{\vect{x}} = \vect{f}(\vect{x}, \vect{u})$, we can jointly learn a Lyapunov function and a stabilizing controller.
+
+\subsubsection{Control Lyapunov Functions (CLFs)}
+
+A \textbf{Control Lyapunov Function} $V(\vect{x})$ satisfies:
+\begin{equation}
+\inf_{\vect{u} \in \mathcal{U}} \left[ \nabla V(\vect{x})^\top \vect{f}(\vect{x}, \vect{u}) \right] < 0 \quad \forall \vect{x} \neq \vect{0}
+\label{eq:clf_condition}
+\end{equation}
+
+This guarantees that for any state, there exists a control input that decreases the Lyapunov function.
+
+\subsubsection{Joint Learning of CLF and Controller}
+
+Parameterize both the CLF $V_\theta$ and controller $\pi_\phi$:
+\begin{equation}
+\mathcal{L}(\theta, \phi) = \frac{1}{N}\sum_i \max\left(0, \nabla V_\theta(\vect{x}_i)^\top \vect{f}(\vect{x}_i, \pi_\phi(\vect{x}_i)) + \alpha V_\theta(\vect{x}_i)\right)
+\label{eq:joint_clf_loss}
+\end{equation}
+
+The controller learns to decrease the Lyapunov function; the Lyapunov function learns to certify stability.
+
+\subsubsection{CLF-QP Controller}
+
+Given a learned CLF, we can design a controller online via quadratic programming:
+\begin{align}
+\vect{u}^* = \arg\min_{\vect{u}} \quad & \|\vect{u} - \vect{u}_{\text{nom}}\|^2 \\
+\text{s.t.} \quad & \nabla V_\theta(\vect{x})^\top \vect{f}(\vect{x}, \vect{u}) \leq -\alpha V_\theta(\vect{x})
+\label{eq:clf_qp}
+\end{align}
+
+This finds the control closest to a nominal input while guaranteeing stability. The CLF constraint is affine in $\vect{u}$ for control-affine systems.
+
+\subsection{Region of Attraction Estimation}
+
+A key question is: \textit{how large is the region where the learned Lyapunov function certifies stability?}
+
+\begin{definition}[Region of Attraction]
+The \textbf{region of attraction (ROA)} of an equilibrium is the set of initial conditions from which trajectories converge to the equilibrium:
+\begin{equation}
+\mathcal{R} = \{\vect{x}_0 : \lim_{t \to \infty} \vect{x}(t; \vect{x}_0) = \vect{0}\}
+\end{equation}
+\end{definition}
+
+A sublevel set of the Lyapunov function provides an inner approximation:
+\begin{equation}
+\mathcal{V}_c = \{\vect{x} : V(\vect{x}) \leq c\} \subseteq \mathcal{R}
+\label{eq:sublevel_set}
+\end{equation}
+provided $\dot{V} < 0$ for all $\vect{x} \in \mathcal{V}_c \setminus \{\vect{0}\}$.
+
+\subsubsection{Maximizing the Certified Region}
+
+We can add a term to the loss function that encourages a large certified region:
+\begin{equation}
+\mathcal{L}_{\text{volume}} = -\text{Vol}(\mathcal{V}_c)
+\end{equation}
+
+Computing the volume exactly is intractable, but we can approximate:
+\begin{equation}
+\text{Vol}(\mathcal{V}_c) \approx \frac{|\{\vect{x}_i : V_\theta(\vect{x}_i) \leq c\}|}{N} \cdot \text{Vol}(\mathcal{X})
+\end{equation}
+
+Alternatively, maximize the level $c$ such that the Lie derivative condition holds throughout $\mathcal{V}_c$.
+
+%===============================================================================
+\section{Neural Control Barrier Functions}
+\label{sec:neural_cbf}
+%===============================================================================
+
+While Lyapunov functions certify stability, many control applications require \textbf{safety}---the guarantee that the system will avoid dangerous regions of state space. Control Barrier Functions (CBFs) provide this guarantee, and neural networks can learn CBFs for complex systems where analytical design is intractable.
+
+\subsection{Safety in Control Systems}
+
+Consider a robot operating near obstacles, a drone avoiding collisions, or a chemical process that must stay within safe operating limits. In each case, we have a \textbf{safe set} $\mathcal{C} \subset \mathbb{R}^n$ that the system must remain within:
+\begin{equation}
+\vect{x}(t) \in \mathcal{C} \quad \forall t \geq 0
+\label{eq:safety_constraint}
+\end{equation}
+
+\begin{definition}[Safe Set]
+The \textbf{safe set} $\mathcal{C}$ is defined as the superlevel set of a function $h: \mathbb{R}^n \to \mathbb{R}$:
+\begin{equation}
+\mathcal{C} = \{\vect{x} \in \mathbb{R}^n : h(\vect{x}) \geq 0\}
+\label{eq:safe_set}
+\end{equation}
+The \textbf{boundary} is $\partial \mathcal{C} = \{\vect{x} : h(\vect{x}) = 0\}$, and the \textbf{interior} is $\text{Int}(\mathcal{C}) = \{\vect{x} : h(\vect{x}) > 0\}$.
+\end{definition}
+
+For example, if a robot must maintain distance $d_{\min}$ from an obstacle at position $\vect{p}_{\text{obs}}$:
+\begin{equation}
+h(\vect{x}) = \|\vect{p}_{\text{robot}}(\vect{x}) - \vect{p}_{\text{obs}}\|^2 - d_{\min}^2
+\end{equation}
+
+\subsection{Control Barrier Functions: Theory}
+
+\begin{definition}[Control Barrier Function]
+\label{def:cbf}
+For a control-affine system $\dot{\vect{x}} = \vect{f}(\vect{x}) + \vect{g}(\vect{x})\vect{u}$, a continuously differentiable function $h: \mathbb{R}^n \to \mathbb{R}$ is a \textbf{Control Barrier Function (CBF)} for the safe set $\mathcal{C} = \{\vect{x} : h(\vect{x}) \geq 0\}$ if there exists an extended class $\mathcal{K}$ function $\alpha$ such that:
+\begin{equation}
+\sup_{\vect{u} \in \mathcal{U}} \left[ L_f h(\vect{x}) + L_g h(\vect{x}) \vect{u} \right] \geq -\alpha(h(\vect{x})) \quad \forall \vect{x} \in \mathcal{C}
+\label{eq:cbf_condition}
+\end{equation}
+where $L_f h = \nabla h^\top \vect{f}$ and $L_g h = \nabla h^\top \vect{g}$ are Lie derivatives.
+\end{definition}
+
+\keypoint{The CBF condition ensures that for any state in the safe set, there exists a control input that prevents the system from leaving the safe set. The function $\alpha$ controls how aggressively the system can approach the boundary.}
+
+\begin{theorem}[Safety Guarantee]
+\label{thm:cbf_safety}
+If $h$ is a CBF for the safe set $\mathcal{C}$, then any Lipschitz continuous controller $\vect{u}(\vect{x})$ satisfying:
+\begin{equation}
+L_f h(\vect{x}) + L_g h(\vect{x}) \vect{u}(\vect{x}) \geq -\alpha(h(\vect{x}))
+\label{eq:cbf_control_condition}
+\end{equation}
+renders $\mathcal{C}$ \textbf{forward invariant}: if $\vect{x}(0) \in \mathcal{C}$, then $\vect{x}(t) \in \mathcal{C}$ for all $t \geq 0$.
+\end{theorem}
+
+\subsection{CBF-Based Safety Filters}
+
+A powerful application of CBFs is the \textbf{safety filter}: modify a potentially unsafe nominal controller to ensure safety.
+
+\subsubsection{The CBF-QP Controller}
+
+Given a nominal controller $\vect{u}_{\text{nom}}(\vect{x})$ (which may not be safe), we find the safe control closest to it:
+\begin{align}
+\vect{u}^*(\vect{x}) = \arg\min_{\vect{u} \in \mathcal{U}} \quad & \|\vect{u} - \vect{u}_{\text{nom}}(\vect{x})\|^2 \label{eq:cbf_qp_obj}\\
+\text{s.t.} \quad & L_f h(\vect{x}) + L_g h(\vect{x}) \vect{u} \geq -\alpha(h(\vect{x})) \label{eq:cbf_qp_constraint}
+\end{align}
+
+For control-affine systems, the constraint \eqref{eq:cbf_qp_constraint} is linear in $\vect{u}$, making this a quadratic program (QP) that can be solved in real-time.
+
+\subsubsection{Properties of the Safety Filter}
+
+\textbf{Minimal Intervention:} The filter only modifies the nominal control when necessary for safety. Away from the safe set boundary, $\vect{u}^* = \vect{u}_{\text{nom}}$.
+
+\textbf{Guaranteed Safety:} If the CBF condition is satisfied, trajectories remain in $\mathcal{C}$ regardless of what $\vect{u}_{\text{nom}}$ tries to do.
+
+\textbf{Compatibility:} The safety filter works with any nominal controller---PID, LQR, neural network, human operator, etc.
+
+\subsection{Learning Control Barrier Functions}
+
+For complex systems or constraints, designing CBFs analytically is difficult. Neural networks can learn CBFs from data.
+
+\subsubsection{Problem Setup}
+
+Given:
+\begin{itemize}
+    \item System dynamics $\dot{\vect{x}} = \vect{f}(\vect{x}) + \vect{g}(\vect{x})\vect{u}$
+    \item Safe states $\mathcal{C}_{\text{safe}}$ (examples of safe configurations)
+    \item Unsafe states $\mathcal{C}_{\text{unsafe}}$ (examples of configurations to avoid)
+    \item Boundary states $\partial \mathcal{C}$ (states at the safety boundary)
+\end{itemize}
+
+Learn a neural network $h_\theta(\vect{x})$ that:
+\begin{enumerate}
+    \item Is positive in $\mathcal{C}_{\text{safe}}$
+    \item Is negative in $\mathcal{C}_{\text{unsafe}}$
+    \item Satisfies the CBF condition \eqref{eq:cbf_condition}
+\end{enumerate}
+
+\subsubsection{The Neural CBF Loss Function}
+
+\begin{equation}
+\mathcal{L}(\theta) = \mathcal{L}_{\text{safe}} + \mathcal{L}_{\text{unsafe}} + \lambda_{\text{CBF}} \mathcal{L}_{\text{CBF}}
+\label{eq:ncbf_loss}
+\end{equation}
+
+\textbf{Safe Region Loss:}
+\begin{equation}
+\mathcal{L}_{\text{safe}} = \frac{1}{N_s} \sum_{i=1}^{N_s} \max(0, -h_\theta(\vect{x}_i^{\text{safe}}) + \epsilon)
+\end{equation}
+Penalizes safe points where $h_\theta < \epsilon$.
+
+\textbf{Unsafe Region Loss:}
+\begin{equation}
+\mathcal{L}_{\text{unsafe}} = \frac{1}{N_u} \sum_{j=1}^{N_u} \max(0, h_\theta(\vect{x}_j^{\text{unsafe}}) + \epsilon)
+\end{equation}
+Penalizes unsafe points where $h_\theta > -\epsilon$.
+
+\textbf{CBF Condition Loss:}
+\begin{equation}
+\mathcal{L}_{\text{CBF}} = \frac{1}{N_c} \sum_{k=1}^{N_c} \max\left(0, -\sup_{\vect{u}} [L_f h_\theta(\vect{x}_k) + L_g h_\theta(\vect{x}_k)\vect{u}] - \alpha h_\theta(\vect{x}_k)\right)
+\end{equation}
+
+For box-constrained inputs $\vect{u} \in [\vect{u}_{\min}, \vect{u}_{\max}]$, the supremum has a closed form:
+\begin{equation}
+\sup_{\vect{u}} L_g h \cdot \vect{u} = \sum_{i: (L_g h)_i > 0} (L_g h)_i u_{\max,i} + \sum_{i: (L_g h)_i < 0} (L_g h)_i u_{\min,i}
+\label{eq:sup_closed_form}
+\end{equation}
+
+\subsubsection{Data Generation}
+
+Training neural CBFs requires labeled safe and unsafe states:
+
+\textbf{From Constraint Functions:} If the safety constraint has an explicit form (e.g., obstacle avoidance), generate states and label based on constraint satisfaction.
+
+\textbf{From Demonstrations:} Collect trajectories of safe operation; states along trajectories are safe.
+
+\textbf{From Simulation:} Simulate with random initial conditions; trajectories that avoid constraint violation are safe.
+
+\textbf{Adversarial Generation:} Focus on boundary regions where the CBF condition is tightest.
+
+\subsubsection{Training Algorithm}
+
+\begin{algorithm}[H]
+\caption{Neural Control Barrier Function Learning}
+\label{alg:neural_cbf}
+\begin{algorithmic}[1]
+\REQUIRE Safe examples $\mathcal{D}_{\text{safe}}$, unsafe examples $\mathcal{D}_{\text{unsafe}}$, dynamics $\vect{f}, \vect{g}$, input bounds $\mathcal{U}$
+\ENSURE Neural CBF $h_\theta$
+\STATE Initialize network $h_\theta$
+\STATE Generate CBF condition samples $\{\vect{x}_k\}$ near safety boundary
+\STATE
+\FOR{epoch $= 1$ \TO max\_epochs}
+    \STATE Sample minibatches from $\mathcal{D}_{\text{safe}}$, $\mathcal{D}_{\text{unsafe}}$
+    \STATE
+    \STATE \COMMENT{Compute classification losses}
+    \STATE $\mathcal{L}_{\text{safe}} \gets \frac{1}{B}\sum_i \max(0, -h_\theta(\vect{x}_i^{\text{safe}}) + \epsilon)$
+    \STATE $\mathcal{L}_{\text{unsafe}} \gets \frac{1}{B}\sum_j \max(0, h_\theta(\vect{x}_j^{\text{unsafe}}) + \epsilon)$
+    \STATE
+    \STATE \COMMENT{Compute CBF condition loss}
+    \FOR{each $\vect{x}_k$ near boundary}
+        \STATE $\nabla h \gets \nabla_{\vect{x}} h_\theta(\vect{x}_k)$ via AD
+        \STATE $L_f h \gets \nabla h^\top \vect{f}(\vect{x}_k)$
+        \STATE $L_g h \gets \nabla h^\top \vect{g}(\vect{x}_k)$
+        \STATE Compute $\sup_{\vect{u} \in \mathcal{U}} L_g h \cdot \vect{u}$ via \eqref{eq:sup_closed_form}
+        \STATE $\text{margin}_k \gets L_f h + \sup L_g h \cdot \vect{u} + \alpha h_\theta(\vect{x}_k)$
+    \ENDFOR
+    \STATE $\mathcal{L}_{\text{CBF}} \gets \frac{1}{N_c}\sum_k \max(0, -\text{margin}_k)$
+    \STATE
+    \STATE $\mathcal{L} \gets \mathcal{L}_{\text{safe}} + \mathcal{L}_{\text{unsafe}} + \lambda_{\text{CBF}} \mathcal{L}_{\text{CBF}}$
+    \STATE $\theta \gets \theta - \eta \nabla_\theta \mathcal{L}$
+\ENDFOR
+\RETURN $h_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Higher-Order CBFs}
+
+For systems where the control input does not directly affect the constraint function (e.g., position constraints when control is acceleration), we need \textbf{higher-order CBFs}.
+
+\subsubsection{Relative Degree}
+
+The \textbf{relative degree} $r$ of a constraint $h(\vect{x})$ with respect to input $\vect{u}$ is the number of times we must differentiate $h$ before $\vect{u}$ explicitly appears:
+\begin{align}
+\dot{h} &= L_f h \quad \text{(no } \vect{u} \text{)} \\
+\ddot{h} &= L_f^2 h + L_g L_f h \cdot \vect{u} \quad \text{(} \vect{u} \text{ appears)}
+\end{align}
+
+If $L_g L_f h \neq 0$, the relative degree is $r = 2$.
+
+\subsubsection{Exponential CBFs}
+
+For a constraint with relative degree $r$, define auxiliary functions:
+\begin{align}
+\psi_0(\vect{x}) &= h(\vect{x}) \\
+\psi_1(\vect{x}) &= \dot{\psi}_0 + \alpha_1 \psi_0 \\
+&\vdots \\
+\psi_{r-1}(\vect{x}) &= \dot{\psi}_{r-2} + \alpha_{r-1} \psi_{r-2}
+\end{align}
+
+The CBF condition becomes:
+\begin{equation}
+\dot{\psi}_{r-1}(\vect{x}) + \alpha_r \psi_{r-1}(\vect{x}) \geq 0
+\end{equation}
+
+The parameters $\alpha_1, \ldots, \alpha_r$ are chosen so that the polynomial $s^r + \alpha_r s^{r-1} + \cdots + \alpha_1$ is Hurwitz.
+
+\subsection{Combining CLFs and CBFs}
+
+Often we want both stability (CLF) and safety (CBF). The CLF-CBF-QP controller combines both:
+\begin{align}
+\vect{u}^* = \arg\min_{\vect{u}, \delta} \quad & \|\vect{u} - \vect{u}_{\text{nom}}\|^2 + p \delta^2 \\
+\text{s.t.} \quad & L_f V + L_g V \cdot \vect{u} \leq -\alpha_V(V) + \delta \quad &\text{(CLF, relaxed)} \\
+& L_f h + L_g h \cdot \vect{u} \geq -\alpha_h(h) \quad &\text{(CBF, strict)}
+\label{eq:clf_cbf_qp}
+\end{align}
+
+The slack variable $\delta$ relaxes the CLF constraint, prioritizing safety over stability when they conflict. The penalty $p$ controls how much stability degradation is allowed.
+
+\subsection{Verification and Certification of Neural CBFs}
+
+Like neural Lyapunov functions, neural CBFs require verification beyond training:
+
+\textbf{Sampling-Based Testing:} Evaluate the CBF condition at many test points. Report the minimum margin.
+
+\textbf{Simulation-Based Testing:} Run closed-loop simulations with the CBF-QP controller from many initial conditions. Check for constraint violations.
+
+\textbf{Formal Verification:} Use SMT solvers or interval methods to prove the CBF condition holds everywhere. Limited to small networks.
+
+\textbf{Runtime Monitoring:} During deployment, monitor the CBF value and margin. If $h(\vect{x}) < \epsilon_{\text{warn}}$, trigger fallback behavior.
+
+%===============================================================================
+\section{Learning-Augmented Model Predictive Control}
+\label{sec:learning_mpc}
+%===============================================================================
+
+Model Predictive Control (MPC) is the workhorse of advanced process control and increasingly of robotics and autonomous systems. MPC's power comes from its ability to handle constraints, optimize over prediction horizons, and incorporate complex objectives. But MPC's Achilles' heel is its dependence on an accurate prediction model. Learning-augmented MPC addresses this by combining the optimization machinery of MPC with learned dynamics models.
+
+\subsection{Review: Model Predictive Control}
+
+At each time step, MPC solves an optimization problem:
+\begin{align}
+\min_{\vect{u}_{0:N-1}} \quad & \sum_{k=0}^{N-1} \ell(\vect{x}_k, \vect{u}_k) + V_f(\vect{x}_N) \label{eq:mpc_cost}\\
+\text{s.t.} \quad & \vect{x}_{k+1} = \vect{f}(\vect{x}_k, \vect{u}_k) \quad k = 0, \ldots, N-1 \label{eq:mpc_dynamics}\\
+& \vect{x}_k \in \mathcal{X}, \quad \vect{u}_k \in \mathcal{U} \quad k = 0, \ldots, N-1 \label{eq:mpc_constraints}\\
+& \vect{x}_N \in \mathcal{X}_f \label{eq:mpc_terminal}\\
+& \vect{x}_0 = \vect{x}(t) \label{eq:mpc_initial}
+\end{align}
+
+Only the first control $\vect{u}_0^*$ is applied; the optimization is repeated at the next time step with updated state information (receding horizon).
+
+\textbf{Key ingredients:}
+\begin{itemize}
+    \item \textbf{Stage cost} $\ell(\vect{x}, \vect{u})$: penalizes deviation from goals and control effort
+    \item \textbf{Terminal cost} $V_f(\vect{x}_N)$: approximates cost-to-go beyond the horizon
+    \item \textbf{Prediction model} $\vect{f}$: propagates states forward
+    \item \textbf{Constraints} $\mathcal{X}, \mathcal{U}$: enforce physical and operational limits
+    \item \textbf{Terminal set} $\mathcal{X}_f$: ensures stability
+\end{itemize}
+
+\subsection{Why Combine Learning with MPC?}
+
+Traditional MPC uses physics-based models. Learning can improve MPC in several ways:
+
+\textbf{Model Accuracy:} Learned or hybrid models better capture true dynamics, improving prediction accuracy and control performance.
+
+\textbf{Adaptive Models:} Online learning allows the model to adapt to changing conditions (wear, environmental variations).
+
+\textbf{Reduced Engineering:} Learning can automate parts of model development that traditionally require extensive system identification.
+
+\textbf{Handling Uncertainty:} Probabilistic models quantify prediction uncertainty, enabling robust MPC formulations.
+
+\subsection{Architectures for Learning-Augmented MPC}
+
+\subsubsection{Hybrid Dynamics Models}
+
+The most direct approach replaces the prediction model with a hybrid model:
+\begin{equation}
+\vect{x}_{k+1} = \vect{f}_{\text{physics}}(\vect{x}_k, \vect{u}_k) + \vect{f}_\theta(\vect{x}_k, \vect{u}_k)
+\label{eq:hybrid_mpc_model}
+\end{equation}
+
+The residual $\vect{f}_\theta$ is trained offline on trajectory data, as described in Section~\ref{sec:residual_dynamics}. The MPC optimization then uses this hybrid model for prediction.
+
+\subsubsection{Fully Learned Models}
+
+For systems where physics-based modeling is impractical, learn the entire dynamics:
+\begin{equation}
+\vect{x}_{k+1} = \vect{f}_\theta(\vect{x}_k, \vect{u}_k)
+\label{eq:learned_mpc_model}
+\end{equation}
+
+This requires more training data but handles systems with complex, poorly understood dynamics.
+
+\subsubsection{Gaussian Process Models}
+
+Gaussian Process (GP) models provide uncertainty quantification alongside predictions:
+\begin{equation}
+\vect{x}_{k+1} \sim \mathcal{N}(\vect{\mu}_\theta(\vect{x}_k, \vect{u}_k), \vect{\Sigma}_\theta(\vect{x}_k, \vect{u}_k))
+\label{eq:gp_model}
+\end{equation}
+
+The mean function can incorporate physics; the covariance captures uncertainty due to limited data or model mismatch.
+
+\subsubsection{Ensemble Models}
+
+Train multiple models and use their disagreement to quantify uncertainty:
+\begin{equation}
+\hat{\vect{x}}_{k+1} = \frac{1}{M}\sum_{m=1}^{M} \vect{f}_{\theta_m}(\vect{x}_k, \vect{u}_k), \quad \hat{\vect{\Sigma}} = \text{Var}[\{\vect{f}_{\theta_m}\}]
+\label{eq:ensemble_model}
+\end{equation}
+
+\subsection{Computational Considerations}
+
+Using learned models in MPC introduces computational challenges:
+
+\textbf{Gradient Computation:} Gradient-based MPC solvers require $\partial \vect{f} / \partial \vect{x}$ and $\partial \vect{f} / \partial \vect{u}$. For neural networks, these are computed via automatic differentiation.
+
+\textbf{Nonconvexity:} Neural network dynamics make the MPC problem nonconvex, even if the original problem was convex. Multiple local minima may exist.
+
+\textbf{Computational Cost:} Evaluating neural networks is more expensive than analytical dynamics. Real-time performance requires efficient implementations (GPU acceleration, quantization).
+
+\subsubsection{Linearization Approaches}
+
+For real-time performance, linearize the learned model at each time step:
+\begin{equation}
+\vect{f}(\vect{x}, \vect{u}) \approx \vect{f}(\bar{\vect{x}}, \bar{\vect{u}}) + \mat{A}(\vect{x} - \bar{\vect{x}}) + \mat{B}(\vect{u} - \bar{\vect{u}})
+\label{eq:linearized_model}
+\end{equation}
+where:
+\begin{equation}
+\mat{A} = \frac{\partial \vect{f}_\theta}{\partial \vect{x}}\bigg|_{(\bar{\vect{x}}, \bar{\vect{u}})}, \quad \mat{B} = \frac{\partial \vect{f}_\theta}{\partial \vect{u}}\bigg|_{(\bar{\vect{x}}, \bar{\vect{u}})}
+\end{equation}
+
+This enables use of efficient linear MPC solvers while retaining learned dynamics.
+
+\subsubsection{Sampling-Based MPC}
+
+For highly nonlinear systems, sampling-based methods avoid gradient computation entirely:
+
+\textbf{Model Predictive Path Integral (MPPI):}
+\begin{enumerate}
+    \item Sample control sequences: $\vect{u}_{0:N-1}^{(i)} \sim \mathcal{N}(\bar{\vect{u}}, \vect{\Sigma})$
+    \item Simulate each trajectory using the learned model
+    \item Weight samples by their cost: $w_i \propto \exp(-\frac{1}{\lambda}J^{(i)})$
+    \item Update nominal trajectory: $\bar{\vect{u}} \leftarrow \sum_i w_i \vect{u}^{(i)}$
+\end{enumerate}
+
+MPPI is embarrassingly parallel and well-suited to GPU implementation.
+
+\subsection{Robust MPC with Learned Models}
+
+Learned models are never perfect. Robust MPC formulations account for model uncertainty.
+
+\subsubsection{Tube MPC}
+
+Bound the model error and design a tube of trajectories around the nominal:
+\begin{equation}
+\vect{x}_k \in \bar{\vect{x}}_k \oplus \mathcal{E}_k
+\label{eq:tube_mpc}
+\end{equation}
+where $\mathcal{E}_k$ is the error set at time $k$ and $\oplus$ denotes Minkowski sum.
+
+The nominal trajectory satisfies:
+\begin{equation}
+\bar{\vect{x}}_{k+1} = \vect{f}_\theta(\bar{\vect{x}}_k, \bar{\vect{u}}_k)
+\end{equation}
+
+A feedback policy $\vect{u} = \bar{\vect{u}} + \mat{K}(\vect{x} - \bar{\vect{x}})$ keeps the actual trajectory within the tube.
+
+Constraints are tightened to account for the tube:
+\begin{equation}
+\bar{\vect{x}}_k \in \mathcal{X} \ominus \mathcal{E}_k
+\end{equation}
+
+\subsubsection{Stochastic MPC}
+
+Use probabilistic constraints with learned uncertainty:
+\begin{equation}
+\Pr[\vect{x}_k \in \mathcal{X}] \geq 1 - \epsilon
+\label{eq:chance_constraint}
+\end{equation}
+
+For Gaussian models, this becomes deterministic tightening:
+\begin{equation}
+\vect{\mu}_k + \Phi^{-1}(1-\epsilon) \vect{\sigma}_k \leq x_{\max}
+\end{equation}
+where $\Phi^{-1}$ is the inverse normal CDF.
+
+\subsubsection{Min-Max MPC}
+
+Optimize for the worst-case model in an uncertainty set:
+\begin{equation}
+\min_{\vect{u}} \max_{\vect{f} \in \mathcal{F}} J(\vect{x}_{0:N}, \vect{u}_{0:N-1})
+\end{equation}
+
+The uncertainty set $\mathcal{F}$ might contain multiple learned models or perturbations of a single model.
+
+\subsection{Online Learning in MPC}
+
+Rather than fixing the learned model, we can update it during operation.
+
+\subsubsection{Adaptive MPC}
+
+Update model parameters based on prediction errors:
+\begin{equation}
+\theta_{t+1} = \theta_t - \eta \nabla_\theta \|\vect{x}(t+1) - \vect{f}_\theta(\vect{x}(t), \vect{u}(t))\|^2
+\label{eq:online_update}
+\end{equation}
+
+This adaptation must be careful:
+\begin{itemize}
+    \item Regularize to prevent forgetting previously learned dynamics
+    \item Limit update magnitude to maintain stability
+    \item Consider persistent excitation requirements
+\end{itemize}
+
+\subsubsection{Model Predictive Control with Online Gaussian Process Updates}
+
+GP models naturally incorporate new data:
+\begin{equation}
+p(\vect{f}^* | \vect{x}^*, \mathcal{D}) = \mathcal{N}(\vect{\mu}^*, \vect{\Sigma}^*)
+\label{eq:gp_posterior}
+\end{equation}
+
+As new observations arrive, the posterior is updated, reducing uncertainty in visited regions.
+
+\subsection{Learning-Augmented MPC Algorithm}
+
+\begin{algorithm}[H]
+\caption{Learning-Augmented Model Predictive Control}
+\label{alg:learning_mpc}
+\begin{algorithmic}[1]
+\REQUIRE Initial model $\vect{f}_\theta$, horizon $N$, costs $\ell, V_f$, constraints $\mathcal{X}, \mathcal{U}$
+\ENSURE Control sequence applied to system
+\STATE Initialize model parameters $\theta$ (from offline training)
+\STATE
+\LOOP
+    \STATE Measure current state $\vect{x}(t)$
+    \STATE
+    \STATE \COMMENT{Solve MPC optimization}
+    \STATE $\vect{u}_{0:N-1}^* \gets \arg\min_{\vect{u}} \sum_{k=0}^{N-1} \ell(\vect{x}_k, \vect{u}_k) + V_f(\vect{x}_N)$
+    \STATE \quad s.t. $\vect{x}_{k+1} = \vect{f}_\theta(\vect{x}_k, \vect{u}_k)$
+    \STATE \quad\quad\; $\vect{x}_k \in \mathcal{X}, \vect{u}_k \in \mathcal{U}$
+    \STATE \quad\quad\; $\vect{x}_0 = \vect{x}(t)$
+    \STATE
+    \STATE \COMMENT{Apply first control}
+    \STATE Apply $\vect{u}_0^*$ to system
+    \STATE Wait for next sample time $\Delta t$
+    \STATE
+    \STATE \COMMENT{Online model update (optional)}
+    \STATE Observe new state $\vect{x}(t + \Delta t)$
+    \STATE $e \gets \vect{x}(t + \Delta t) - \vect{f}_\theta(\vect{x}(t), \vect{u}_0^*)$
+    \IF{$\|e\| > \epsilon_{\text{thresh}}$}
+        \STATE Add $(\vect{x}(t), \vect{u}_0^*, \vect{x}(t+\Delta t))$ to replay buffer
+        \STATE Update $\theta$ using recent buffer samples
+    \ENDIF
+    \STATE
+    \STATE $t \gets t + \Delta t$
+\ENDLOOP
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Stability of Learning-Augmented MPC}
+
+Stability of MPC with learned models requires careful analysis:
+
+\subsubsection{Sufficient Conditions}
+
+MPC stability typically requires:
+\begin{enumerate}
+    \item \textbf{Terminal cost:} $V_f$ is a Lyapunov function for the terminal controller
+    \item \textbf{Terminal set:} $\mathcal{X}_f$ is invariant under the terminal controller
+    \item \textbf{Model accuracy:} The model error is bounded
+\end{enumerate}
+
+For hybrid models:
+\begin{equation}
+\|\vect{f}_{\text{hybrid}}(\vect{x}, \vect{u}) - \vect{f}_{\text{true}}(\vect{x}, \vect{u})\| \leq \delta
+\label{eq:model_error_bound}
+\end{equation}
+
+If $\delta$ is sufficiently small relative to the terminal set and Lyapunov function, stability can be guaranteed via robustness arguments.
+
+\subsubsection{Practical Recommendations}
+
+\begin{enumerate}
+    \item Design terminal ingredients (cost, set, controller) based on the physics model
+    \item Validate that the learned residual does not violate these assumptions
+    \item Use robust MPC formulations to handle residual model uncertainty
+    \item Monitor prediction errors online; fall back to physics-only model if errors grow
+\end{enumerate}
+
+%===============================================================================
+\section{Safety and Stability Guarantees}
+\label{sec:safety_guarantees}
+%===============================================================================
+
+The integration of learning into control systems raises a fundamental question: \textit{how can we guarantee safety and stability when part of our system is learned from data?} This section synthesizes the theoretical foundations for providing such guarantees and presents practical strategies for certified hybrid control.
+
+\subsection{The Challenge of Guarantees with Learned Components}
+
+Classical control theory provides powerful tools for analyzing stability and safety: Lyapunov functions, passivity, small-gain theorems, and robust control. These tools assume we have a model of the system---either exact or with bounded uncertainty. Learning introduces new challenges:
+
+\textbf{Distributional Shift:} The learned component may encounter inputs outside its training distribution, where its behavior is unpredictable.
+
+\textbf{Approximation Error:} Neural networks are function approximators; they match training data but may err elsewhere.
+
+\textbf{Non-Transparency:} Unlike analytical models, neural networks are opaque---we cannot easily inspect their behavior.
+
+\textbf{Verification Difficulty:} Proving properties of neural networks over continuous domains is computationally hard.
+
+Despite these challenges, principled approaches exist for maintaining guarantees.
+
+\subsection{Layered Safety Architecture}
+
+A robust approach to safe hybrid control uses multiple layers of protection:
+
+\subsubsection{Layer 1: Learned Performance Controller}
+
+The innermost layer is the learning-augmented controller that provides high performance:
+\begin{equation}
+\vect{u}_{\text{learned}} = \pi_\theta(\vect{x})
+\end{equation}
+This might be a neural network policy, MPC with learned model, or any hybrid approach.
+
+\subsubsection{Layer 2: Safety Filter}
+
+A CBF-based safety filter modifies the learned control when necessary:
+\begin{equation}
+\vect{u}_{\text{safe}} = \arg\min_{\vect{u}} \|\vect{u} - \vect{u}_{\text{learned}}\|^2 \quad \text{s.t.} \quad L_f h + L_g h \cdot \vect{u} \geq -\alpha(h)
+\label{eq:safety_filter_layer}
+\end{equation}
+
+The CBF is designed conservatively, possibly using only the physics model.
+
+\subsubsection{Layer 3: Fallback Controller}
+
+If the safety filter cannot find a feasible control (infeasibility), switch to a conservative fallback:
+\begin{equation}
+\vect{u}_{\text{fallback}} = \pi_{\text{safe}}(\vect{x})
+\end{equation}
+
+The fallback controller is designed with purely model-based methods and verified to be safe (possibly at reduced performance).
+
+\subsubsection{Layer 4: Hardware Safety}
+
+Ultimate protection comes from hardware limits: emergency stops, physical limiters, and fault-tolerant actuation.
+
+\keypoint{No single layer provides complete protection. Defense in depth---multiple independent safety mechanisms---is essential for deploying learned controllers in safety-critical applications.}
+
+\subsection{Bounding Learned Component Errors}
+
+To use classical robust control techniques, we need bounds on the learned component's error.
+
+\subsubsection{Lipschitz Bounds}
+
+If the neural network has bounded Lipschitz constant $L$:
+\begin{equation}
+\|\vect{f}_\theta(\vect{x}_1, \vect{u}_1) - \vect{f}_\theta(\vect{x}_2, \vect{u}_2)\| \leq L \|(\vect{x}_1, \vect{u}_1) - (\vect{x}_2, \vect{u}_2)\|
+\label{eq:lipschitz_bound}
+\end{equation}
+
+Lipschitz bounds can be computed or enforced during training:
+\begin{itemize}
+    \item \textbf{Spectral normalization:} Normalize weight matrices to have spectral norm $\leq 1$
+    \item \textbf{Lipschitz regularization:} Add $\|\nabla \vect{f}_\theta\|$ to the loss
+    \item \textbf{Post-hoc computation:} Bound via interval arithmetic or optimization
+\end{itemize}
+
+\subsubsection{Ensemble Uncertainty}
+
+Train an ensemble of models and use their disagreement as an uncertainty estimate:
+\begin{equation}
+\sigma_{\text{ens}}^2(\vect{x}, \vect{u}) = \frac{1}{M}\sum_{m=1}^{M} \|\vect{f}_{\theta_m}(\vect{x}, \vect{u}) - \bar{\vect{f}}(\vect{x}, \vect{u})\|^2
+\label{eq:ensemble_uncertainty}
+\end{equation}
+
+High uncertainty triggers conservative behavior.
+
+\subsubsection{Conformal Prediction}
+
+Conformal prediction provides distribution-free uncertainty quantification. Given a calibration set and significance level $\alpha$:
+\begin{equation}
+\Pr[\vect{f}_{\text{true}}(\vect{x}, \vect{u}) \in \mathcal{C}_\alpha(\vect{x}, \vect{u})] \geq 1 - \alpha
+\label{eq:conformal_guarantee}
+\end{equation}
+
+The prediction set $\mathcal{C}_\alpha$ has guaranteed coverage under mild assumptions.
+
+\subsection{Robust Stability with Bounded Model Error}
+
+With bounded model error, classical robust stability results apply.
+
+\subsubsection{Small-Gain Theorem Approach}
+
+Consider the closed-loop system as interconnection of:
+\begin{itemize}
+    \item Nominal system $\Sigma_{\text{nom}}$ with known dynamics
+    \item Uncertainty $\Delta$ representing model error
+\end{itemize}
+
+If the nominal system has $\mathcal{L}_2$ gain $\gamma_{\text{nom}}$ and the uncertainty has gain $\gamma_\Delta$:
+\begin{equation}
+\gamma_{\text{nom}} \cdot \gamma_\Delta < 1 \implies \text{closed-loop stable}
+\label{eq:small_gain}
+\end{equation}
+
+\subsubsection{Input-to-State Stability (ISS)}
+
+If the nominal closed-loop is ISS with respect to disturbances:
+\begin{equation}
+\|\vect{x}(t)\| \leq \beta(\|\vect{x}(0)\|, t) + \gamma\left(\sup_{0 \leq s \leq t} \|\vect{d}(s)\|\right)
+\label{eq:iss_bound}
+\end{equation}
+
+Treating the residual model error as a disturbance with bound $\|\vect{d}\| \leq \delta$:
+\begin{equation}
+\|\vect{x}(t)\| \leq \beta(\|\vect{x}(0)\|, t) + \gamma(\delta)
+\end{equation}
+
+The state remains bounded; tighter residual learning yields smaller $\delta$ and better performance.
+
+\subsection{Verification and Validation}
+
+Before deployment, rigorous testing is essential.
+
+\subsubsection{Simulation-Based Testing}
+
+\textbf{Monte Carlo Simulation:}
+\begin{enumerate}
+    \item Sample initial conditions from the operating envelope
+    \item Simulate closed-loop trajectories
+    \item Check for constraint violations, instability, or poor performance
+    \item Report failure rate and worst-case metrics
+\end{enumerate}
+
+\textbf{Adversarial Testing:}
+\begin{enumerate}
+    \item Search for initial conditions or disturbances that maximize constraint violation
+    \item Use optimization or learned adversaries
+    \item Focus testing on discovered failure modes
+\end{enumerate}
+
+\subsubsection{Formal Verification}
+
+For critical applications, formal verification provides mathematical proofs:
+
+\textbf{Reachability Analysis:} Compute the set of all possible states reachable from initial conditions under the controller. If this set does not intersect unsafe regions, safety is verified.
+
+\textbf{SMT Solving:} Encode safety/stability conditions as satisfiability problems. Tools like dReal, Z3, or Marabou can verify neural network properties.
+
+\textbf{Abstract Interpretation:} Propagate abstract domains (intervals, zonotopes, polyhedra) through the neural network to bound outputs.
+
+\warningbox{Formal verification of neural networks is computationally expensive and currently limited to small networks and low-dimensional systems. For large systems, use a combination of formal verification for critical components and extensive simulation testing.}
+
+\subsubsection{Runtime Verification}
+
+Monitor safety properties during operation:
+\begin{equation}
+\phi_{\text{safe}}(t) = \begin{cases}
+\text{true} & \text{if } h(\vect{x}(t)) \geq \epsilon_{\text{margin}} \\
+\text{alarm} & \text{if } 0 \leq h(\vect{x}(t)) < \epsilon_{\text{margin}} \\
+\text{violation} & \text{if } h(\vect{x}(t)) < 0
+\end{cases}
+\end{equation}
+
+Alarms trigger conservative behavior before violations occur.
+
+\subsection{Safe Learning}
+
+Can we learn safely---updating the controller online without ever violating constraints?
+
+\subsubsection{Safe Exploration}
+
+Exploration is necessary for learning, but blind exploration may be dangerous. Safe exploration constrains the learning process:
+\begin{equation}
+\pi_{\text{explore}}(\vect{x}) \in \{\vect{u} : h(\vect{x}') \geq 0 \text{ for predicted } \vect{x}' = \vect{f}(\vect{x}, \vect{u})\}
+\label{eq:safe_exploration}
+\end{equation}
+
+This requires a model (possibly conservative) to predict the effect of exploration actions.
+
+\subsubsection{Constrained Policy Optimization}
+
+Reinforcement learning can include safety constraints:
+\begin{align}
+\max_\theta \quad & \mathbb{E}\left[\sum_t r(\vect{x}_t, \vect{u}_t)\right] \\
+\text{s.t.} \quad & \mathbb{E}\left[\sum_t c(\vect{x}_t, \vect{u}_t)\right] \leq \epsilon
+\end{align}
+where $c$ is a constraint cost. Algorithms like CPO (Constrained Policy Optimization) approximately solve this.
+
+\subsubsection{Safety from Demonstrations}
+
+Learn from demonstrations known to be safe:
+\begin{equation}
+\pi_\theta \gets \arg\min_\theta \sum_{i} \|\pi_\theta(\vect{x}_i) - \vect{u}_i^{\text{demo}}\|^2
+\label{eq:imitation_learning}
+\end{equation}
+
+If demonstrations satisfy constraints, the learned policy is likely to as well (though not guaranteed for novel states).
+
+\subsection{Certification for Deployment}
+
+Deploying learned controllers in safety-critical domains may require certification.
+
+\subsubsection{Documentation Requirements}
+
+\begin{enumerate}
+    \item \textbf{Training data:} Complete provenance of all training data
+    \item \textbf{Architecture:} Full specification of network architecture and hyperparameters
+    \item \textbf{Training procedure:} Algorithm, optimization settings, convergence criteria
+    \item \textbf{Validation results:} Performance on held-out test sets
+    \item \textbf{Safety analysis:} Formal or empirical analysis of safety properties
+    \item \textbf{Operational limits:} Clearly defined operating envelope
+    \item \textbf{Failure modes:} Known failure modes and mitigations
+\end{enumerate}
+
+\subsubsection{Assurance Cases}
+
+An \textbf{assurance case} is a structured argument that a system is safe:
+\begin{enumerate}
+    \item \textbf{Claim:} The hybrid controller is safe for operation
+    \item \textbf{Argument:} Decompose into sub-claims (model accuracy, CBF validity, etc.)
+    \item \textbf{Evidence:} Verification results, test data, formal proofs
+\end{enumerate}
+
+Standards like ISO 26262 (automotive) and DO-178C (aerospace) provide frameworks for developing assurance cases.
+
+\subsection{Summary: A Practical Safety Workflow}
+
+\begin{enumerate}
+    \item \textbf{Design with physics first.} Start with a model-based controller that is provably safe for a conservative model.
+
+    \item \textbf{Add learning incrementally.} Introduce learned components gradually, validating safety at each step.
+
+    \item \textbf{Bound the learned component.} Use Lipschitz constraints, ensemble uncertainty, or conformal prediction to quantify model error.
+
+    \item \textbf{Layer safety mechanisms.} Implement CBF filters, fallback controllers, and hardware limits.
+
+    \item \textbf{Verify extensively.} Combine formal verification (where tractable) with extensive simulation testing.
+
+    \item \textbf{Monitor during operation.} Runtime checks trigger conservative behavior before violations.
+
+    \item \textbf{Document thoroughly.} Maintain complete records for certification and debugging.
+\end{enumerate}
+
+%===============================================================================
+\section{Practical Applications and Worked Examples}
+\label{sec:practical_applications}
+%===============================================================================
+
+This section presents comprehensive worked examples that demonstrate the hybrid control techniques developed in this chapter. Each example follows the complete workflow from problem formulation through implementation and validation.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 1: Residual Learning for Robot Arm Friction Compensation}
+\label{ex:robot_arm_residual}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+Consider a 2-DOF planar robot arm used for precision assembly. The physics-based model captures rigid body dynamics, but friction effects limit tracking accuracy. We will learn a residual model to compensate for joint friction.
+
+\subsubsection{Physics Model}
+
+The rigid body dynamics are:
+\begin{equation}
+\mat{M}(\vect{q})\ddot{\vect{q}} + \mat{C}(\vect{q}, \dot{\vect{q}})\dot{\vect{q}} + \vect{g}(\vect{q}) = \vect{\tau}
+\end{equation}
+
+For a 2-link planar arm with link masses $m_1, m_2$, lengths $l_1, l_2$, and center of mass distances $r_1, r_2$:
+\begin{align}
+M_{11} &= m_1 r_1^2 + m_2(l_1^2 + r_2^2 + 2l_1 r_2 \cos q_2) + I_1 + I_2 \\
+M_{12} &= M_{21} = m_2(r_2^2 + l_1 r_2 \cos q_2) + I_2 \\
+M_{22} &= m_2 r_2^2 + I_2
+\end{align}
+
+\textbf{Parameters:}
+\begin{itemize}
+    \item $m_1 = 2.0$ kg, $m_2 = 1.5$ kg
+    \item $l_1 = 0.4$ m, $l_2 = 0.3$ m
+    \item $r_1 = 0.2$ m, $r_2 = 0.15$ m
+    \item $I_1 = 0.05$ kg$\cdot$m$^2$, $I_2 = 0.02$ kg$\cdot$m$^2$
+\end{itemize}
+
+\subsubsection{True Dynamics (Simulation Ground Truth)}
+
+The true dynamics include joint friction:
+\begin{equation}
+\mat{M}(\vect{q})\ddot{\vect{q}} + \mat{C}(\vect{q}, \dot{\vect{q}})\dot{\vect{q}} + \vect{g}(\vect{q}) + \vect{\tau}_f(\dot{\vect{q}}) = \vect{\tau}
+\end{equation}
+
+where the friction torque is:
+\begin{equation}
+\tau_{f,i} = b_i \dot{q}_i + c_i \tanh(\beta \dot{q}_i) + d_i \dot{q}_i e^{-|\dot{q}_i|/v_s}
+\end{equation}
+
+The friction model includes viscous damping ($b_i$), Coulomb friction ($c_i$), and Stribeck effect ($d_i$, $v_s$).
+
+\textbf{Friction parameters (unknown to the controller):}
+\begin{itemize}
+    \item Joint 1: $b_1 = 0.5$ Nm$\cdot$s/rad, $c_1 = 0.3$ Nm, $d_1 = 0.1$ Nm, $v_s = 0.1$ rad/s
+    \item Joint 2: $b_2 = 0.3$ Nm$\cdot$s/rad, $c_2 = 0.2$ Nm, $d_2 = 0.05$ Nm
+\end{itemize}
+
+\subsubsection{Data Collection}
+
+We collect training data by commanding random trajectories:
+\begin{enumerate}
+    \item Generate random fifth-order polynomial trajectories
+    \item Execute trajectories on the simulated robot
+    \item Record $(\vect{q}, \dot{\vect{q}}, \ddot{\vect{q}}, \vect{\tau})$ at 1 kHz
+    \item Collect 20 trajectories, each 5 seconds long (100,000 samples)
+\end{enumerate}
+
+\textbf{Compute residual targets:}
+\begin{equation}
+\vect{\Delta}_i = \vect{\tau}_i - \left(\mat{M}(\vect{q}_i)\ddot{\vect{q}}_i + \mat{C}(\vect{q}_i, \dot{\vect{q}}_i)\dot{\vect{q}}_i + \vect{g}(\vect{q}_i)\right)
+\end{equation}
+
+This residual represents the friction torque that the physics model misses.
+
+\subsubsection{Network Architecture}
+
+We use a feedforward network with:
+\begin{itemize}
+    \item Input: $[\dot{q}_1, \dot{q}_2]$ (friction depends primarily on velocity)
+    \item Hidden layers: 2 layers of 64 units each
+    \item Activation: Tanh (smooth, odd function appropriate for friction)
+    \item Output: $[\hat{\tau}_{f,1}, \hat{\tau}_{f,2}]$
+\end{itemize}
+
+\textbf{Symmetry constraint:} Friction is an odd function of velocity. We enforce this:
+\begin{equation}
+\vect{f}_\theta(\dot{\vect{q}}) = \vect{g}_\theta(|\dot{\vect{q}}|) \odot \text{sign}(\dot{\vect{q}})
+\end{equation}
+
+\subsubsection{Training}
+
+\begin{itemize}
+    \item Loss: MSE with L2 regularization ($\lambda = 10^{-4}$)
+    \item Optimizer: Adam with learning rate $10^{-3}$
+    \item Batch size: 256
+    \item Training/validation split: 80\%/20\%
+    \item Early stopping: patience 20 epochs
+\end{itemize}
+
+\textbf{Results:}
+\begin{itemize}
+    \item Training MSE: 0.0012 Nm$^2$
+    \item Validation MSE: 0.0015 Nm$^2$
+    \item Mean residual prediction error: 0.035 Nm (compared to friction magnitude of 0.5 Nm)
+\end{itemize}
+
+\subsubsection{Controller Design}
+
+We use computed torque control with the hybrid model:
+\begin{equation}
+\vect{\tau} = \mat{M}(\vect{q})\left(\ddot{\vect{q}}_d + \mat{K}_v(\dot{\vect{q}}_d - \dot{\vect{q}}) + \mat{K}_p(\vect{q}_d - \vect{q})\right) + \mat{C}\dot{\vect{q}} + \vect{g} + \vect{f}_\theta(\dot{\vect{q}})
+\end{equation}
+
+Gains: $\mat{K}_p = \text{diag}(100, 100)$, $\mat{K}_v = \text{diag}(20, 20)$
+
+\subsubsection{Performance Comparison}
+
+Tracking a sinusoidal trajectory $q_{d,i}(t) = 0.5\sin(2\pi \cdot 0.5 t)$:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Controller} & \textbf{RMS Error (rad)} & \textbf{Max Error (rad)} \\
+\midrule
+Physics-only & 0.0142 & 0.0285 \\
+Hybrid (residual learning) & 0.0023 & 0.0051 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Improvement:} 84\% reduction in RMS tracking error.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 2: PINN for System Identification of a Nonlinear Oscillator}
+\label{ex:pinn_sysid}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+We observe noisy position measurements from a Van der Pol oscillator with unknown damping parameter $\mu$. We will use a PINN to simultaneously identify $\mu$ and reconstruct the full state trajectory.
+
+\subsubsection{System Dynamics}
+
+The Van der Pol oscillator:
+\begin{align}
+\dot{x}_1 &= x_2 \\
+\dot{x}_2 &= \mu(1 - x_1^2)x_2 - x_1
+\end{align}
+
+The parameter $\mu > 0$ controls the strength of nonlinear damping. We will identify $\mu$ from data.
+
+\subsubsection{Data Generation}
+
+True parameters: $\mu_{\text{true}} = 2.0$
+
+\textbf{Simulation:}
+\begin{itemize}
+    \item Initial condition: $x_1(0) = 2.0$, $x_2(0) = 0$
+    \item Time span: $t \in [0, 20]$ s
+    \item Integrate with RK45
+\end{itemize}
+
+\textbf{Observations:}
+\begin{itemize}
+    \item Observe only $x_1$ (position)
+    \item Sample at 50 random time points
+    \item Add Gaussian noise: $\sigma = 0.1$
+\end{itemize}
+
+\subsubsection{PINN Architecture}
+
+\textbf{Network:} Maps $t \to [x_1(t), x_2(t)]$
+\begin{itemize}
+    \item Input: $t$ (scalar)
+    \item Hidden layers: 4 layers of 50 units
+    \item Activation: Tanh
+    \item Output: $[x_1, x_2]$
+\end{itemize}
+
+\textbf{Trainable parameters:}
+\begin{itemize}
+    \item Network weights $\theta$
+    \item Physics parameter $\mu$ (initialized to 1.0)
+\end{itemize}
+
+\subsubsection{Loss Function}
+
+\textbf{Data loss:}
+\begin{equation}
+\mathcal{L}_{\text{data}} = \frac{1}{N_d}\sum_{j=1}^{N_d} (x_{1,\theta}(t_j) - x_{1,j}^{\text{obs}})^2
+\end{equation}
+
+\textbf{Physics loss:}
+\begin{align}
+r_1(t) &= \frac{dx_{1,\theta}}{dt} - x_{2,\theta}(t) \\
+r_2(t) &= \frac{dx_{2,\theta}}{dt} - \mu(1 - x_{1,\theta}^2)x_{2,\theta} + x_{1,\theta}
+\end{align}
+\begin{equation}
+\mathcal{L}_{\text{physics}} = \frac{1}{N_c}\sum_{i=1}^{N_c} \left(r_1(t_i)^2 + r_2(t_i)^2\right)
+\end{equation}
+
+\textbf{Initial condition loss:}
+\begin{equation}
+\mathcal{L}_{\text{IC}} = (x_{1,\theta}(0) - 2.0)^2 + (x_{2,\theta}(0) - 0)^2
+\end{equation}
+
+\textbf{Total:}
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{data}} + 10 \cdot \mathcal{L}_{\text{physics}} + 100 \cdot \mathcal{L}_{\text{IC}}
+\end{equation}
+
+\subsubsection{Training}
+
+\begin{itemize}
+    \item Collocation points: 500 uniformly spaced in $[0, 20]$
+    \item Optimizer: Adam (5000 iterations) then L-BFGS (refinement)
+    \item Learning rate: $10^{-3}$ for Adam
+\end{itemize}
+
+\subsubsection{Results}
+
+\textbf{Parameter identification:}
+\begin{itemize}
+    \item True $\mu$: 2.0
+    \item Identified $\mu$: 1.97 (1.5\% error)
+\end{itemize}
+
+\textbf{State reconstruction:}
+\begin{itemize}
+    \item $x_1$ RMSE: 0.031 (despite noise $\sigma = 0.1$)
+    \item $x_2$ RMSE: 0.089 (never observed, reconstructed from physics)
+\end{itemize}
+
+\keypoint{The PINN successfully identified the unknown parameter and reconstructed the unobserved velocity state, demonstrating the power of physics constraints for sparse, noisy data.}
+
+%-------------------------------------------------------------------------------
+\subsection{Example 3: Neural Lyapunov Verification for an Inverted Pendulum}
+\label{ex:neural_lyapunov}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+Verify stability of an LQR-controlled inverted pendulum by learning a Lyapunov function. The standard quadratic Lyapunov function from LQR theory certifies local stability; we seek to verify a larger region of attraction using a neural Lyapunov function.
+
+\subsubsection{System Model}
+
+Inverted pendulum dynamics:
+\begin{align}
+\dot{\theta} &= \omega \\
+\dot{\omega} &= \frac{g}{l}\sin\theta - \frac{b}{ml^2}\omega + \frac{1}{ml^2}u
+\end{align}
+
+\textbf{Parameters:}
+\begin{itemize}
+    \item $m = 0.5$ kg (pendulum mass)
+    \item $l = 0.3$ m (pendulum length)
+    \item $b = 0.1$ Nm$\cdot$s/rad (damping)
+    \item $g = 9.81$ m/s$^2$
+\end{itemize}
+
+\subsubsection{LQR Controller Design}
+
+Linearize about the upright equilibrium $(\theta, \omega) = (0, 0)$:
+\begin{equation}
+\mat{A} = \begin{bmatrix} 0 & 1 \\ g/l & -b/(ml^2) \end{bmatrix}, \quad
+\mat{B} = \begin{bmatrix} 0 \\ 1/(ml^2) \end{bmatrix}
+\end{equation}
+
+With $\mat{Q} = \text{diag}(10, 1)$, $R = 0.1$:
+\begin{equation}
+\mat{K} = [70.7, 9.8], \quad u = -\mat{K}\vect{x}
+\end{equation}
+
+\subsubsection{Quadratic Lyapunov Baseline}
+
+The LQR Lyapunov function is:
+\begin{equation}
+V_{\text{LQR}}(\vect{x}) = \vect{x}^\top \mat{P} \vect{x}, \quad \mat{P} = \begin{bmatrix} 35.4 & 4.9 \\ 4.9 & 1.0 \end{bmatrix}
+\end{equation}
+
+This certifies stability for small $\|\vect{x}\|$ but the certified region is conservative.
+
+\subsubsection{Neural Lyapunov Function}
+
+\textbf{Architecture:}
+\begin{equation}
+V_\theta(\vect{x}) = \|\text{NN}_\theta(\vect{x})\|^2 + 0.1\|\vect{x}\|^2
+\end{equation}
+
+The network has 2 hidden layers of 32 units with tanh activation.
+
+\textbf{Training domain:} $\theta \in [-\pi, \pi]$, $\omega \in [-10, 10]$ rad/s
+
+\textbf{Loss function:} Lyapunov conditions with margin $\alpha = 0.5$:
+\begin{equation}
+\mathcal{L} = \frac{1}{N}\sum_i \max(0, \dot{V}_\theta(\vect{x}_i) + \alpha V_\theta(\vect{x}_i))
+\end{equation}
+
+\subsubsection{Results}
+
+After training:
+
+\textbf{Verified region of attraction:}
+\begin{itemize}
+    \item Quadratic (LQR): $\theta \in [-0.52, 0.52]$ rad ($\pm 30°$)
+    \item Neural: $\theta \in [-2.18, 2.18]$ rad ($\pm 125°$)
+\end{itemize}
+
+The neural Lyapunov function certifies a region of attraction 4.2 times larger in angle.
+
+\textbf{Verification:} Dense sampling with 100,000 test points found no violations. Maximum $\dot{V} + \alpha V = -0.023 < 0$.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 4: CBF for Mobile Robot Obstacle Avoidance}
+\label{ex:cbf_obstacle}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+A differential-drive mobile robot must navigate to a goal while avoiding circular obstacles. We design a CBF-based safety filter.
+
+\subsubsection{System Model}
+
+Unicycle kinematics:
+\begin{align}
+\dot{x} &= v\cos\theta \\
+\dot{y} &= v\sin\theta \\
+\dot{\theta} &= \omega
+\end{align}
+
+State: $\vect{x} = [x, y, \theta]^\top$, control: $\vect{u} = [v, \omega]^\top$
+
+This is control-affine:
+\begin{equation}
+\dot{\vect{x}} = \underbrace{\begin{bmatrix} 0 \\ 0 \\ 0 \end{bmatrix}}_{\vect{f}(\vect{x})} + \underbrace{\begin{bmatrix} \cos\theta & 0 \\ \sin\theta & 0 \\ 0 & 1 \end{bmatrix}}_{\mat{g}(\vect{x})} \begin{bmatrix} v \\ \omega \end{bmatrix}
+\end{equation}
+
+\subsubsection{Safety Constraint}
+
+Obstacle at position $(x_o, y_o)$ with radius $r_o$. Safety margin $d_s = 0.2$ m.
+
+\textbf{Constraint function:}
+\begin{equation}
+h(\vect{x}) = (x - x_o)^2 + (y - y_o)^2 - (r_o + d_s)^2
+\end{equation}
+
+Safe set: $\mathcal{C} = \{\vect{x} : h(\vect{x}) \geq 0\}$
+
+\subsubsection{CBF Analysis}
+
+Compute Lie derivatives:
+\begin{align}
+L_f h &= 0 \\
+L_g h &= \nabla h^\top \mat{g} = 2[(x - x_o)\cos\theta + (y - y_o)\sin\theta, 0]
+\end{align}
+
+\textbf{Observation:} The CBF constraint depends only on $v$, not $\omega$. The constraint is:
+\begin{equation}
+2[(x - x_o)\cos\theta + (y - y_o)\sin\theta] \cdot v \geq -\alpha h(\vect{x})
+\end{equation}
+
+Let $p = (x - x_o)\cos\theta + (y - y_o)\sin\theta$ (projection of obstacle direction onto heading).
+
+\subsubsection{CBF-QP Controller}
+
+\textbf{Nominal controller:} Move toward goal at $(x_g, y_g)$
+\begin{align}
+v_{\text{nom}} &= k_v \sqrt{(x_g - x)^2 + (y_g - y)^2} \\
+\omega_{\text{nom}} &= k_\omega (\theta_g - \theta), \quad \theta_g = \text{atan2}(y_g - y, x_g - x)
+\end{align}
+
+\textbf{Safety filter:}
+\begin{align}
+(v^*, \omega^*) = \arg\min_{v, \omega} \quad & (v - v_{\text{nom}})^2 + (\omega - \omega_{\text{nom}})^2 \\
+\text{s.t.} \quad & 2p \cdot v \geq -\alpha h(\vect{x}) \\
+& v \in [0, v_{\max}], \quad \omega \in [-\omega_{\max}, \omega_{\max}]
+\end{align}
+
+\subsubsection{Numerical Example}
+
+\textbf{Setup:}
+\begin{itemize}
+    \item Robot starts at $(0, 0)$ with $\theta = 0$
+    \item Goal at $(5, 0)$
+    \item Obstacle at $(2.5, 0)$ with $r_o = 0.5$ m
+    \item $\alpha = 1.0$, $k_v = 1.0$, $k_\omega = 2.0$
+    \item $v_{\max} = 1.0$ m/s, $\omega_{\max} = 2.0$ rad/s
+\end{itemize}
+
+\textbf{Behavior:}
+\begin{enumerate}
+    \item Robot initially heads straight toward goal
+    \item At $x \approx 1.5$ m, CBF constraint activates
+    \item Filter reduces $v$ and nominal controller turns robot
+    \item Robot navigates around obstacle with minimum clearance
+    \item After passing obstacle, CBF deactivates, robot proceeds to goal
+\end{enumerate}
+
+\textbf{Safety margin maintained:} Minimum distance to obstacle = 0.72 m (constraint: 0.70 m). Safety verified.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 5: MPC with Learned Quadrotor Model}
+\label{ex:mpc_quadrotor}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+Control a quadrotor for trajectory tracking using MPC with a hybrid dynamics model. The physics model captures rigid body dynamics; the learned component models aerodynamic effects.
+
+\subsubsection{Physics Model}
+
+Quadrotor dynamics in body frame:
+\begin{align}
+\dot{\vect{p}} &= \vect{v} \\
+\dot{\vect{v}} &= \frac{1}{m}\mat{R}(\vect{q})\vect{f}_T + \vect{g} \\
+\dot{\vect{q}} &= \frac{1}{2}\vect{q} \otimes \begin{bmatrix} 0 \\ \vect{\omega} \end{bmatrix} \\
+\mat{J}\dot{\vect{\omega}} &= \vect{\tau} - \vect{\omega} \times \mat{J}\vect{\omega}
+\end{align}
+
+where $\vect{p}$ is position, $\vect{v}$ is velocity, $\vect{q}$ is quaternion orientation, $\vect{\omega}$ is angular velocity, $\vect{f}_T = [0, 0, T]^\top$ is thrust, and $\vect{\tau}$ is body torque.
+
+\subsubsection{Learned Residual}
+
+The physics model ignores aerodynamic drag and rotor-induced effects. We learn:
+\begin{equation}
+\vect{\Delta}(\vect{v}, \vect{\omega}) = \text{NN}_\theta([\vect{v}; \vect{\omega}])
+\end{equation}
+
+\textbf{Training data:} 50 flights with aggressive maneuvers, IMU and motion capture data at 100 Hz.
+
+\textbf{Network:} 3 layers of 64 units, tanh activation, outputs $[\Delta \vect{f}, \Delta \vect{\tau}]$.
+
+\subsubsection{MPC Formulation}
+
+\textbf{Discretize at 50 Hz:}
+\begin{equation}
+\vect{x}_{k+1} = \vect{x}_k + \Delta t \left(\vect{f}_{\text{physics}}(\vect{x}_k, \vect{u}_k) + \vect{f}_\theta(\vect{x}_k)\right)
+\end{equation}
+
+\textbf{Cost function:}
+\begin{equation}
+J = \sum_{k=0}^{N-1} \|\vect{p}_k - \vect{p}_k^{\text{ref}}\|_{\mat{Q}_p}^2 + \|\vect{u}_k\|_{\mat{R}}^2 + \|\vect{p}_N - \vect{p}_N^{\text{ref}}\|_{\mat{Q}_f}^2
+\end{equation}
+
+\textbf{Constraints:}
+\begin{itemize}
+    \item Thrust: $T \in [0, 2mg]$
+    \item Roll/pitch rate: $|\omega_{x,y}| \leq 3$ rad/s
+    \item Yaw rate: $|\omega_z| \leq 2$ rad/s
+\end{itemize}
+
+\textbf{Horizon:} $N = 20$ steps (0.4 s)
+
+\subsubsection{Performance Results}
+
+Tracking a figure-8 trajectory at 2 m/s:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{Position RMSE (m)} & \textbf{Max Error (m)} \\
+\midrule
+Physics-only MPC & 0.142 & 0.31 \\
+Hybrid MPC & 0.038 & 0.09 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Improvement:} 73\% reduction in tracking error. The learned aerodynamic model is critical for aggressive flight.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 6: Safety-Constrained Reinforcement Learning}
+\label{ex:safe_rl}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+Train a neural network policy for a cart-pole swing-up task while ensuring the cart never exceeds position limits. We use a CBF safety filter during training and deployment.
+
+\subsubsection{System}
+
+Cart-pole with state $\vect{x} = [x, \dot{x}, \theta, \dot{\theta}]$, control $u = F$ (force on cart).
+
+\textbf{Safety constraint:} $|x| \leq x_{\max} = 2.0$ m
+
+\textbf{CBF:}
+\begin{equation}
+h(\vect{x}) = x_{\max}^2 - x^2
+\end{equation}
+
+\subsubsection{Safe RL Training}
+
+\textbf{RL algorithm:} PPO (Proximal Policy Optimization)
+
+\textbf{Safety filter:} At each action, solve:
+\begin{equation}
+u^* = \arg\min_u (u - u_{\text{RL}})^2 \quad \text{s.t.} \quad L_f h + L_g h \cdot u \geq -\alpha h
+\end{equation}
+
+\textbf{Training:}
+\begin{itemize}
+    \item 1 million environment steps
+    \item Safety filter active throughout training
+    \item Reward: $r = 1$ when $|\theta| < 0.1$ (upright), else $r = 0$
+\end{itemize}
+
+\subsubsection{Results}
+
+\textbf{Safety during training:}
+\begin{itemize}
+    \item Without CBF filter: 847 constraint violations
+    \item With CBF filter: 0 constraint violations
+\end{itemize}
+
+\textbf{Task performance:}
+\begin{itemize}
+    \item Both policies learn to swing up and balance
+    \item CBF-filtered policy slightly slower to converge (5\% more steps)
+    \item Final performance equivalent
+\end{itemize}
+
+\keypoint{The CBF safety filter enables safe exploration during RL training with minimal impact on learning efficiency.}
+
+%-------------------------------------------------------------------------------
+\subsection{Example 7: Hybrid Model for Soft Robot Control}
+\label{ex:soft_robot}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+Soft robots defy simple physics models due to their infinite-dimensional, highly nonlinear dynamics. We use a hybrid approach combining a simplified physics model with learned corrections.
+
+\subsubsection{Simplified Physics Model}
+
+A pneumatic soft actuator is approximated as a first-order system:
+\begin{equation}
+\dot{q} = \frac{1}{\tau}(K_p P - q)
+\end{equation}
+
+where $q$ is the actuator curvature, $P$ is the applied pressure, $K_p$ is the pressure-to-curvature gain, and $\tau$ is the time constant.
+
+\textbf{Parameters:} $K_p = 0.5$ rad/kPa, $\tau = 0.3$ s
+
+\subsubsection{True Dynamics}
+
+The actual soft robot exhibits:
+\begin{itemize}
+    \item Nonlinear pressure-curvature relationship (saturation at high pressure)
+    \item Hysteresis due to material properties
+    \item Gravity effects varying with configuration
+    \item Dynamic coupling between segments
+\end{itemize}
+
+\subsubsection{Residual Learning}
+
+\textbf{Training data:} 200 random pressure trajectories, curvature measured optically.
+
+\textbf{Network:} LSTM with 64 hidden units (captures hysteresis via memory).
+
+\textbf{Input:} $[q_{t-H:t}, P_{t-H:t}]$ (history of length $H = 20$)
+
+\textbf{Output:} $\Delta \dot{q}_t$
+
+\subsubsection{Control Performance}
+
+Tracking a sinusoidal curvature reference:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{RMSE (rad)} & \textbf{Phase Lag (ms)} \\
+\midrule
+Simple physics & 0.082 & 85 \\
+Hybrid (LSTM residual) & 0.024 & 12 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The LSTM captures the hysteresis, dramatically reducing phase lag.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 8: PINN for Heat Transfer Estimation}
+\label{ex:pinn_thermal}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+A thermal system has boundary sensors but no internal temperature measurements. Use a PINN to estimate the internal temperature field and identify the thermal diffusivity.
+
+\subsubsection{System}
+
+1D heat equation:
+\begin{equation}
+\frac{\partial T}{\partial t} = \alpha \frac{\partial^2 T}{\partial x^2}
+\end{equation}
+
+Domain: $x \in [0, L]$, $t \in [0, t_f]$
+
+Boundary conditions: $T(0, t) = T_0(t)$, $T(L, t) = T_L(t)$ (measured)
+
+\subsubsection{PINN Solution}
+
+\textbf{Network:} Maps $(x, t) \to T$
+\begin{itemize}
+    \item Fourier feature input encoding
+    \item 4 hidden layers of 64 units
+    \item Tanh activation
+\end{itemize}
+
+\textbf{Trainable:} Network parameters $\theta$, diffusivity $\alpha$
+
+\textbf{Loss:}
+\begin{align}
+\mathcal{L} &= \lambda_{\text{BC}} \mathcal{L}_{\text{BC}} + \lambda_{\text{PDE}} \mathcal{L}_{\text{PDE}} \\
+\mathcal{L}_{\text{BC}} &= \frac{1}{N_b}\sum_j \left[(T_\theta(0, t_j) - T_0(t_j))^2 + (T_\theta(L, t_j) - T_L(t_j))^2\right] \\
+\mathcal{L}_{\text{PDE}} &= \frac{1}{N_c}\sum_i \left(\frac{\partial T_\theta}{\partial t} - \alpha \frac{\partial^2 T_\theta}{\partial x^2}\right)^2
+\end{align}
+
+\subsubsection{Results}
+
+\textbf{True $\alpha$:} $1.2 \times 10^{-5}$ m$^2$/s
+
+\textbf{Identified $\alpha$:} $1.18 \times 10^{-5}$ m$^2$/s (1.7\% error)
+
+\textbf{Internal temperature:} RMSE = 0.34 K (validated against FEM simulation)
+
+%-------------------------------------------------------------------------------
+\subsection{Example 9: Neural Lyapunov for Polynomial Systems}
+\label{ex:neural_lyapunov_polynomial}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+Find a Lyapunov function for a 3D polynomial system where SOS (sum-of-squares) methods struggle due to high polynomial degree.
+
+\subsubsection{System}
+
+\begin{align}
+\dot{x}_1 &= -x_1^3 + x_2 \\
+\dot{x}_2 &= -x_1 - x_2^3 + x_3 \\
+\dot{x}_3 &= -x_1 x_2 - x_3^3
+\end{align}
+
+This system is stable at the origin, but finding a polynomial Lyapunov function of low degree is difficult.
+
+\subsubsection{Neural Lyapunov Function}
+
+\textbf{Architecture:} ICNN (Input Convex Neural Network) with 3 layers of 64 units
+
+\textbf{Training:} Lyapunov loss with $\alpha = 0.1$ margin
+
+\textbf{Domain:} $\|\vect{x}\| \leq 2$
+
+\subsubsection{Results}
+
+\textbf{Verification:} Sampling-based verification with $10^6$ points found no violations.
+
+\textbf{Comparison:}
+\begin{itemize}
+    \item SOS with degree-4 polynomials: Cannot find valid Lyapunov function
+    \item SOS with degree-6 polynomials: Computationally intractable
+    \item Neural network: Finds valid Lyapunov function in 30 seconds
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{Example 10: Multiple CBFs for Complex Environments}
+\label{ex:multiple_cbf}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+A robot arm must avoid multiple obstacles while tracking a trajectory. We compose multiple CBFs.
+
+\subsubsection{System}
+
+2-DOF robot arm (same as Example 1) with end-effector position:
+\begin{equation}
+\vect{p}_{\text{ee}} = \begin{bmatrix} l_1 \cos q_1 + l_2 \cos(q_1 + q_2) \\ l_1 \sin q_1 + l_2 \sin(q_1 + q_2) \end{bmatrix}
+\end{equation}
+
+\subsubsection{Obstacle Constraints}
+
+Three circular obstacles at positions $\vect{p}_1, \vect{p}_2, \vect{p}_3$ with radii $r_1, r_2, r_3$.
+
+CBFs:
+\begin{equation}
+h_i(\vect{q}) = \|\vect{p}_{\text{ee}}(\vect{q}) - \vect{p}_i\|^2 - r_i^2, \quad i = 1, 2, 3
+\end{equation}
+
+\subsubsection{Multi-CBF QP}
+
+\begin{align}
+\vect{\tau}^* = \arg\min_{\vect{\tau}} \quad & \|\vect{\tau} - \vect{\tau}_{\text{nom}}\|^2 \\
+\text{s.t.} \quad & L_f h_i + L_g h_i \cdot \vect{\tau} \geq -\alpha h_i, \quad i = 1, 2, 3
+\end{align}
+
+\subsubsection{Results}
+
+The robot successfully navigates through a cluttered environment while tracking a sinusoidal end-effector trajectory. All three CBF constraints remain positive throughout.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 11: Online Adaptation of Residual Model}
+\label{ex:online_adaptation}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+A robot arm picks up payloads of varying and unknown mass. Adapt the residual model online to compensate for the changed dynamics.
+
+\subsubsection{Approach}
+
+\textbf{Initial model:} Residual model trained offline with no payload.
+
+\textbf{Online update:}
+\begin{equation}
+\theta_{t+1} = \theta_t - \eta \nabla_\theta \|\vect{\Delta}_{\text{observed}} - \vect{f}_\theta(\vect{x}_t, \vect{u}_t)\|^2
+\end{equation}
+
+\textbf{Observed residual:}
+\begin{equation}
+\vect{\Delta}_{\text{observed}} = \ddot{\vect{q}}_{\text{measured}} - \mat{M}^{-1}(\vect{\tau} - \mat{C}\dot{\vect{q}} - \vect{g})
+\end{equation}
+
+\textbf{Regularization:} L2 penalty toward initial parameters prevents catastrophic forgetting.
+
+\subsubsection{Experiment}
+
+\begin{enumerate}
+    \item Robot trained with no payload
+    \item At $t = 5$ s, 0.5 kg payload attached
+    \item Online adaptation begins
+    \item Tracking error initially spikes, then recovers
+\end{enumerate}
+
+\textbf{Results:}
+\begin{itemize}
+    \item Without adaptation: Steady-state error 8.2 mm
+    \item With online adaptation: Error recovers to 2.1 mm within 2 seconds
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{Example 12: CLF-CBF-QP for Autonomous Vehicle}
+\label{ex:clf_cbf_vehicle}
+%-------------------------------------------------------------------------------
+
+\subsubsection{Problem Statement}
+
+An autonomous vehicle must track a lane centerline (stability) while avoiding a slower vehicle ahead (safety).
+
+\subsubsection{System Model}
+
+Kinematic bicycle model:
+\begin{align}
+\dot{x} &= v\cos(\psi + \beta) \\
+\dot{y} &= v\sin(\psi + \beta) \\
+\dot{\psi} &= \frac{v}{l_r}\sin\beta \\
+\dot{v} &= a
+\end{align}
+
+where $\beta = \arctan\left(\frac{l_r}{l_f + l_r}\tan\delta\right)$ is the slip angle.
+
+Control inputs: steering angle $\delta$ and acceleration $a$.
+
+\subsubsection{CLF for Lane Tracking}
+
+Lateral error: $e_y = y - y_{\text{lane}}(x)$
+
+Heading error: $e_\psi = \psi - \psi_{\text{lane}}(x)$
+
+\textbf{CLF:}
+\begin{equation}
+V(\vect{x}) = \frac{1}{2}k_y e_y^2 + \frac{1}{2}k_\psi e_\psi^2
+\end{equation}
+
+\subsubsection{CBF for Collision Avoidance}
+
+Lead vehicle at position $(x_L, y_L)$ with velocity $v_L$.
+
+\textbf{CBF:}
+\begin{equation}
+h(\vect{x}) = (x_L - x) - d_{\min} - T_{\text{gap}} v
+\end{equation}
+
+This enforces a minimum distance plus a time-gap buffer.
+
+\subsubsection{CLF-CBF-QP}
+
+\begin{align}
+(a^*, \delta^*) = \arg\min_{a, \delta, \xi} \quad & (a - a_{\text{nom}})^2 + w_\delta (\delta - \delta_{\text{nom}})^2 + p\xi^2 \\
+\text{s.t.} \quad & \dot{V} \leq -\alpha_V V + \xi \quad &\text{(CLF, relaxable)} \\
+& \dot{h} \geq -\alpha_h h \quad &\text{(CBF, strict)}
+\end{align}
+
+\subsubsection{Simulation Results}
+
+Scenario: Ego vehicle traveling at 25 m/s approaches lead vehicle at 15 m/s.
+
+\begin{enumerate}
+    \item Initially, CLF dominates; vehicle tracks lane centerline
+    \item At 50 m separation, CBF activates, reducing acceleration
+    \item Vehicle smoothly decelerates to match lead vehicle speed
+    \item Safe following distance maintained: 22 m (requirement: 20 m)
+    \item Lane tracking error: $<0.15$ m throughout
+\end{enumerate}
+
+%===============================================================================
+\section{Algorithm Implementations}
+\label{sec:algorithm_implementations}
+%===============================================================================
+
+This section provides complete, production-ready algorithms for the key hybrid control techniques. Each algorithm includes implementation notes, complexity analysis, and practical considerations.
+
+%-------------------------------------------------------------------------------
+\subsection{Residual Learning Pipeline}
+\label{subsec:alg_residual}
+%-------------------------------------------------------------------------------
+
+\begin{algorithm}[H]
+\caption{Complete Residual Dynamics Learning Pipeline}
+\label{alg:residual_pipeline}
+\begin{algorithmic}[1]
+\REQUIRE Trajectory data $\mathcal{D} = \{(\vect{x}_i, \vect{u}_i, \vect{x}_{i+1}, \Delta t)\}_{i=1}^N$
+\REQUIRE Physics model $\vect{f}_{\text{physics}}(\vect{x}, \vect{u})$
+\REQUIRE Hyperparameters: hidden\_dims, learning\_rate, weight\_decay, epochs
+\ENSURE Trained residual network $\vect{f}_\theta$
+\STATE
+\STATE \COMMENT{Step 1: Compute state derivatives}
+\FOR{$i = 1$ \TO $N$}
+    \STATE $\dot{\vect{x}}_i \gets (\vect{x}_{i+1} - \vect{x}_i) / \Delta t$ \COMMENT{Forward difference}
+\ENDFOR
+\STATE
+\STATE \COMMENT{Step 2: Apply Savitzky-Golay smoothing (optional but recommended)}
+\STATE window\_size $\gets 11$, poly\_order $\gets 3$
+\STATE $\dot{\vect{x}} \gets \text{SavitzkyGolay}(\vect{x}, \text{window\_size}, \text{poly\_order}, \text{deriv}=1) / \Delta t$
+\STATE
+\STATE \COMMENT{Step 3: Compute residual targets}
+\FOR{$i = 1$ \TO $N$}
+    \STATE $\vect{\Delta}_i \gets \dot{\vect{x}}_i - \vect{f}_{\text{physics}}(\vect{x}_i, \vect{u}_i)$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Step 4: Compute normalization statistics}
+\STATE $\vect{\mu}_x \gets \text{mean}(\vect{x})$, $\vect{\sigma}_x \gets \text{std}(\vect{x}) + \epsilon$
+\STATE $\vect{\mu}_u \gets \text{mean}(\vect{u})$, $\vect{\sigma}_u \gets \text{std}(\vect{u}) + \epsilon$
+\STATE $\vect{\mu}_\Delta \gets \text{mean}(\vect{\Delta})$, $\vect{\sigma}_\Delta \gets \text{std}(\vect{\Delta}) + \epsilon$
+\STATE
+\STATE \COMMENT{Step 5: Normalize data}
+\STATE $\tilde{\vect{x}}_i \gets (\vect{x}_i - \vect{\mu}_x) / \vect{\sigma}_x$ for all $i$
+\STATE $\tilde{\vect{u}}_i \gets (\vect{u}_i - \vect{\mu}_u) / \vect{\sigma}_u$ for all $i$
+\STATE $\tilde{\vect{\Delta}}_i \gets (\vect{\Delta}_i - \vect{\mu}_\Delta) / \vect{\sigma}_\Delta$ for all $i$
+\STATE
+\STATE \COMMENT{Step 6: Train/validation split}
+\STATE $\mathcal{D}_{\text{train}}, \mathcal{D}_{\text{val}} \gets \text{split}(\mathcal{D}, \text{ratio}=0.8)$
+\STATE
+\STATE \COMMENT{Step 7: Initialize network}
+\STATE $\vect{f}_\theta \gets \text{MLP}(\text{input\_dim}=n+m, \text{hidden\_dims}, \text{output\_dim}=n)$
+\STATE Scale output layer weights by $0.01$
+\STATE
+\STATE \COMMENT{Step 8: Training loop}
+\STATE optimizer $\gets \text{Adam}(\theta, \text{lr}=\text{learning\_rate}, \text{weight\_decay})$
+\STATE best\_val\_loss $\gets \infty$, patience\_counter $\gets 0$
+\FOR{epoch $= 1$ \TO epochs}
+    \STATE Shuffle $\mathcal{D}_{\text{train}}$ into minibatches
+    \FOR{each minibatch}
+        \STATE $\hat{\vect{\Delta}} \gets \vect{f}_\theta([\tilde{\vect{x}}, \tilde{\vect{u}}])$
+        \STATE $\mathcal{L} \gets \text{MSE}(\hat{\vect{\Delta}}, \tilde{\vect{\Delta}})$
+        \STATE $\theta \gets \theta - \text{optimizer.step}(\nabla_\theta \mathcal{L})$
+    \ENDFOR
+    \STATE
+    \STATE \COMMENT{Validation}
+    \STATE val\_loss $\gets$ evaluate on $\mathcal{D}_{\text{val}}$
+    \IF{val\_loss $<$ best\_val\_loss}
+        \STATE best\_val\_loss $\gets$ val\_loss
+        \STATE Save $\theta_{\text{best}}$
+        \STATE patience\_counter $\gets 0$
+    \ELSE
+        \STATE patience\_counter $\gets$ patience\_counter $+ 1$
+    \ENDIF
+    \IF{patience\_counter $\geq$ patience}
+        \STATE \textbf{break} \COMMENT{Early stopping}
+    \ENDIF
+\ENDFOR
+\STATE
+\STATE \COMMENT{Step 9: Create wrapped model with normalization}
+\STATE $\theta \gets \theta_{\text{best}}$
+\STATE Store normalization parameters with model
+\RETURN $\vect{f}_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes:}
+\begin{itemize}
+    \item \textbf{Complexity:} Training is $O(\text{epochs} \cdot N \cdot d)$ where $d$ is network depth
+    \item \textbf{Memory:} Store all data in memory for random batching; for very large datasets, use data loaders
+    \item \textbf{GPU:} Batch matrix operations benefit from GPU acceleration for networks $>$1000 parameters
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{PINN Training with Adaptive Weights}
+\label{subsec:alg_pinn}
+%-------------------------------------------------------------------------------
+
+\begin{algorithm}[H]
+\caption{Physics-Informed Neural Network with Adaptive Loss Balancing}
+\label{alg:pinn_adaptive}
+\begin{algorithmic}[1]
+\REQUIRE Data points $\{(t_j, \vect{x}_j)\}_{j=1}^{N_d}$, PDE operator $\mathcal{N}$, BCs/ICs
+\REQUIRE Domain bounds, collocation density, learning rate
+\ENSURE Trained solution network $\vect{x}_\theta(t)$, identified parameters $\vect{\lambda}$
+\STATE
+\STATE \COMMENT{Initialize}
+\STATE $\vect{x}_\theta \gets$ SIREN or MLP with smooth activations
+\STATE $\vect{\lambda} \gets$ initial guess for physical parameters
+\STATE $\lambda_d, \lambda_p, \lambda_b \gets 1.0, 1.0, 1.0$ \COMMENT{Loss weights}
+\STATE
+\STATE \COMMENT{Generate collocation points}
+\STATE $\{t_i^c\}_{i=1}^{N_c} \gets$ Latin hypercube sampling over domain
+\STATE
+\STATE optimizer $\gets$ Adam($[\theta, \vect{\lambda}]$, lr)
+\STATE
+\FOR{epoch $= 1$ \TO max\_epochs}
+    \STATE
+    \STATE \COMMENT{Compute data loss}
+    \STATE $\mathcal{L}_d \gets \frac{1}{N_d}\sum_j \|\vect{x}_\theta(t_j) - \vect{x}_j\|^2$
+    \STATE
+    \STATE \COMMENT{Compute physics loss (requires AD)}
+    \FOR{$i = 1$ \TO $N_c$}
+        \STATE $\vect{x}_i \gets \vect{x}_\theta(t_i^c)$
+        \STATE $\dot{\vect{x}}_i \gets \frac{\partial \vect{x}_\theta}{\partial t}(t_i^c)$ via AD
+        \STATE $r_i \gets \mathcal{N}[\vect{x}_i, \dot{\vect{x}}_i; \vect{\lambda}]$
+    \ENDFOR
+    \STATE $\mathcal{L}_p \gets \frac{1}{N_c}\sum_i \|r_i\|^2$
+    \STATE
+    \STATE \COMMENT{Compute boundary/initial condition loss}
+    \STATE $\mathcal{L}_b \gets \|\vect{x}_\theta(t_0) - \vect{x}_0\|^2 + \|\dot{\vect{x}}_\theta(t_0) - \dot{\vect{x}}_0\|^2$
+    \STATE
+    \STATE \COMMENT{Adaptive weight update (every K epochs)}
+    \IF{epoch mod $K = 0$}
+        \STATE $g_d \gets \|\nabla_\theta \mathcal{L}_d\|$
+        \STATE $g_p \gets \|\nabla_\theta \mathcal{L}_p\|$
+        \STATE $g_b \gets \|\nabla_\theta \mathcal{L}_b\|$
+        \STATE $\bar{g} \gets (g_d + g_p + g_b) / 3$
+        \STATE $\lambda_d \gets \lambda_d \cdot \bar{g} / (g_d + \epsilon)$
+        \STATE $\lambda_p \gets \lambda_p \cdot \bar{g} / (g_p + \epsilon)$
+        \STATE $\lambda_b \gets \lambda_b \cdot \bar{g} / (g_b + \epsilon)$
+    \ENDIF
+    \STATE
+    \STATE \COMMENT{Total loss and gradient update}
+    \STATE $\mathcal{L} \gets \lambda_d \mathcal{L}_d + \lambda_p \mathcal{L}_p + \lambda_b \mathcal{L}_b$
+    \STATE $(\theta, \vect{\lambda}) \gets (\theta, \vect{\lambda}) - \text{optimizer.step}(\nabla \mathcal{L})$
+    \STATE
+    \STATE \COMMENT{Adaptive resampling (optional)}
+    \IF{epoch mod resample\_freq $= 0$}
+        \STATE Evaluate residuals at dense grid
+        \STATE Resample $\{t_i^c\}$ proportional to $|r|^{0.5}$
+    \ENDIF
+\ENDFOR
+\STATE
+\STATE \COMMENT{L-BFGS refinement}
+\STATE $(\theta, \vect{\lambda}) \gets$ L-BFGS($\mathcal{L}$, $(\theta, \vect{\lambda})$, max\_iter=500)
+\RETURN $\vect{x}_\theta$, $\vect{\lambda}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes:}
+\begin{itemize}
+    \item \textbf{AD Backend:} Use PyTorch or JAX for efficient higher-order derivatives
+    \item \textbf{Collocation:} Start with 100--500 points; increase if residual is large
+    \item \textbf{L-BFGS:} Often provides 10x improvement in final accuracy after Adam pretraining
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{CBF-QP Safety Filter}
+\label{subsec:alg_cbf_qp}
+%-------------------------------------------------------------------------------
+
+\begin{algorithm}[H]
+\caption{CBF-QP Safety Filter for Control-Affine Systems}
+\label{alg:cbf_qp}
+\begin{algorithmic}[1]
+\REQUIRE Current state $\vect{x}$, nominal control $\vect{u}_{\text{nom}}$
+\REQUIRE CBF $h(\vect{x})$, dynamics $\vect{f}(\vect{x}), \mat{g}(\vect{x})$, class-K function $\alpha$
+\REQUIRE Control bounds $\vect{u}_{\min}, \vect{u}_{\max}$
+\ENSURE Safe control $\vect{u}^*$
+\STATE
+\STATE \COMMENT{Compute CBF value and gradients}
+\STATE $h_0 \gets h(\vect{x})$
+\STATE $\nabla h \gets \nabla_{\vect{x}} h(\vect{x})$ \COMMENT{Via AD or analytical}
+\STATE
+\STATE \COMMENT{Compute Lie derivatives}
+\STATE $L_f h \gets \nabla h^\top \vect{f}(\vect{x})$
+\STATE $L_g h \gets \nabla h^\top \mat{g}(\vect{x})$ \COMMENT{Row vector of dimension $m$}
+\STATE
+\STATE \COMMENT{Formulate QP}
+\STATE \COMMENT{$\min_{\vect{u}} \frac{1}{2}\vect{u}^\top \vect{u} - \vect{u}_{\text{nom}}^\top \vect{u}$}
+\STATE \COMMENT{s.t. $L_g h \cdot \vect{u} \geq -L_f h - \alpha(h_0)$}
+\STATE \COMMENT{\quad $\vect{u}_{\min} \leq \vect{u} \leq \vect{u}_{\max}$}
+\STATE
+\STATE $\mat{P} \gets \mat{I}_m$ \COMMENT{Quadratic cost matrix}
+\STATE $\vect{q} \gets -\vect{u}_{\text{nom}}$ \COMMENT{Linear cost vector}
+\STATE $\mat{A} \gets -L_g h$ \COMMENT{CBF constraint (inequality $\mat{A}\vect{u} \leq b$)}
+\STATE $\vect{b} \gets L_f h + \alpha(h_0)$
+\STATE
+\STATE \COMMENT{Solve QP}
+\STATE $\vect{u}^* \gets \text{solve\_qp}(\mat{P}, \vect{q}, \mat{A}, \vect{b}, \vect{u}_{\min}, \vect{u}_{\max})$
+\STATE
+\STATE \COMMENT{Fallback if infeasible}
+\IF{QP is infeasible}
+    \STATE $\vect{u}^* \gets \arg\max_{\vect{u} \in [\vect{u}_{\min}, \vect{u}_{\max}]} L_f h + L_g h \cdot \vect{u}$ \COMMENT{Maximize CBF derivative}
+    \STATE Log warning: ``CBF-QP infeasible, using fallback''
+\ENDIF
+\RETURN $\vect{u}^*$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes:}
+\begin{itemize}
+    \item \textbf{QP Solver:} Use OSQP, qpOASES, or CVXPY for real-time performance
+    \item \textbf{Warm Starting:} Initialize QP with previous solution for 2--5x speedup
+    \item \textbf{Infeasibility:} Should rarely occur if CBF is valid; indicates design problem or conflicting constraints
+    \item \textbf{Timing:} Typical solve time $<1$ ms for $m \leq 10$ controls
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{Neural CBF Training}
+\label{subsec:alg_ncbf}
+%-------------------------------------------------------------------------------
+
+\begin{algorithm}[H]
+\caption{Neural Control Barrier Function Training}
+\label{alg:ncbf_training}
+\begin{algorithmic}[1]
+\REQUIRE Safe states $\mathcal{D}_s$, unsafe states $\mathcal{D}_u$, boundary states $\mathcal{D}_b$
+\REQUIRE Dynamics $\vect{f}(\vect{x}), \mat{g}(\vect{x})$, input bounds $[\vect{u}_{\min}, \vect{u}_{\max}]$
+\REQUIRE Class-K parameter $\alpha$, margins $\epsilon_s, \epsilon_u$
+\ENSURE Trained CBF network $h_\theta$
+\STATE
+\STATE \COMMENT{Initialize network}
+\STATE $h_\theta \gets$ MLP with smooth activation (e.g., softplus)
+\STATE
+\FOR{epoch $= 1$ \TO max\_epochs}
+    \STATE Sample minibatches from $\mathcal{D}_s$, $\mathcal{D}_u$, $\mathcal{D}_b$
+    \STATE
+    \STATE \COMMENT{Safe region loss: want $h > \epsilon_s$}
+    \STATE $\mathcal{L}_s \gets \frac{1}{|\mathcal{B}_s|}\sum_{\vect{x} \in \mathcal{B}_s} \max(0, \epsilon_s - h_\theta(\vect{x}))^2$
+    \STATE
+    \STATE \COMMENT{Unsafe region loss: want $h < -\epsilon_u$}
+    \STATE $\mathcal{L}_u \gets \frac{1}{|\mathcal{B}_u|}\sum_{\vect{x} \in \mathcal{B}_u} \max(0, h_\theta(\vect{x}) + \epsilon_u)^2$
+    \STATE
+    \STATE \COMMENT{CBF condition loss on boundary}
+    \FOR{$\vect{x} \in \mathcal{B}_b$}
+        \STATE $\nabla h \gets \nabla_{\vect{x}} h_\theta(\vect{x})$
+        \STATE $L_f h \gets \nabla h^\top \vect{f}(\vect{x})$
+        \STATE $L_g h \gets \nabla h^\top \mat{g}(\vect{x})$
+        \STATE
+        \STATE \COMMENT{Compute max over input constraints}
+        \STATE $\sup L_g h \cdot \vect{u} \gets$ closed-form using $\vect{u}_{\min}, \vect{u}_{\max}$
+        \STATE margin $\gets L_f h + \sup L_g h \cdot \vect{u} + \alpha \cdot h_\theta(\vect{x})$
+        \STATE violation $\gets \max(0, -\text{margin})$
+    \ENDFOR
+    \STATE $\mathcal{L}_{\text{CBF}} \gets \frac{1}{|\mathcal{B}_b|}\sum_{\vect{x} \in \mathcal{B}_b} \text{violation}^2$
+    \STATE
+    \STATE \COMMENT{Lipschitz regularization (optional)}
+    \STATE Sample random $\vect{x}_1, \vect{x}_2$
+    \STATE $\mathcal{L}_{\text{Lip}} \gets \max\left(0, \frac{|h_\theta(\vect{x}_1) - h_\theta(\vect{x}_2)|}{\|\vect{x}_1 - \vect{x}_2\|} - L_{\max}\right)^2$
+    \STATE
+    \STATE $\mathcal{L} \gets \lambda_s \mathcal{L}_s + \lambda_u \mathcal{L}_u + \lambda_{\text{CBF}} \mathcal{L}_{\text{CBF}} + \lambda_{\text{Lip}} \mathcal{L}_{\text{Lip}}$
+    \STATE $\theta \gets \theta - \eta \nabla_\theta \mathcal{L}$
+    \STATE
+    \STATE \COMMENT{Adversarial sample mining}
+    \IF{epoch mod mining\_freq $= 0$}
+        \STATE Find $\vect{x}^* = \arg\min_{\vect{x} \in \text{boundary}} \text{margin}$
+        \IF{margin at $\vect{x}^* < 0$}
+            \STATE Add $\vect{x}^*$ to $\mathcal{D}_b$
+        \ENDIF
+    \ENDIF
+\ENDFOR
+\RETURN $h_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+%-------------------------------------------------------------------------------
+\subsection{CLF-CBF-QP Controller}
+\label{subsec:alg_clf_cbf}
+%-------------------------------------------------------------------------------
+
+\begin{algorithm}[H]
+\caption{Combined CLF-CBF-QP Controller}
+\label{alg:clf_cbf_qp_impl}
+\begin{algorithmic}[1]
+\REQUIRE State $\vect{x}$, CLF $V(\vect{x})$, CBFs $\{h_i(\vect{x})\}_{i=1}^{n_h}$
+\REQUIRE Dynamics $\vect{f}(\vect{x}), \mat{g}(\vect{x})$, nominal control $\vect{u}_{\text{nom}}$
+\REQUIRE CLF rate $\alpha_V$, CBF rates $\{\alpha_i\}$, relaxation penalty $p$
+\ENSURE Safe, stabilizing control $\vect{u}^*$
+\STATE
+\STATE \COMMENT{Compute CLF quantities}
+\STATE $V_0 \gets V(\vect{x})$, $\nabla V \gets \nabla_{\vect{x}} V(\vect{x})$
+\STATE $L_f V \gets \nabla V^\top \vect{f}(\vect{x})$
+\STATE $L_g V \gets \nabla V^\top \mat{g}(\vect{x})$
+\STATE
+\STATE \COMMENT{Compute CBF quantities}
+\FOR{$i = 1$ \TO $n_h$}
+    \STATE $h_i \gets h_i(\vect{x})$, $\nabla h_i \gets \nabla_{\vect{x}} h_i(\vect{x})$
+    \STATE $L_f h_i \gets \nabla h_i^\top \vect{f}(\vect{x})$
+    \STATE $L_g h_i \gets \nabla h_i^\top \mat{g}(\vect{x})$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Build QP}
+\STATE Decision variables: $\vect{u} \in \mathbb{R}^m$, $\xi \in \mathbb{R}$ (CLF slack)
+\STATE
+\STATE \COMMENT{Objective: $\min \frac{1}{2}\|\vect{u} - \vect{u}_{\text{nom}}\|^2 + \frac{p}{2}\xi^2$}
+\STATE $\mat{P} \gets \text{diag}([\mat{I}_m, p])$
+\STATE $\vect{q} \gets [-\vect{u}_{\text{nom}}; 0]$
+\STATE
+\STATE \COMMENT{CLF constraint (relaxable): $L_f V + L_g V \cdot \vect{u} \leq -\alpha_V V + \xi$}
+\STATE $\mat{A}_{\text{CLF}} \gets [L_g V, -1]$
+\STATE $\vect{b}_{\text{CLF}} \gets -L_f V - \alpha_V V_0$
+\STATE
+\STATE \COMMENT{CBF constraints (hard): $L_f h_i + L_g h_i \cdot \vect{u} \geq -\alpha_i h_i$}
+\FOR{$i = 1$ \TO $n_h$}
+    \STATE $\mat{A}_{\text{CBF},i} \gets [-L_g h_i, 0]$
+    \STATE $\vect{b}_{\text{CBF},i} \gets L_f h_i + \alpha_i h_i$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Stack constraints and solve}
+\STATE $\mat{A} \gets [\mat{A}_{\text{CLF}}; \mat{A}_{\text{CBF},1}; \ldots; \mat{A}_{\text{CBF},n_h}]$
+\STATE $\vect{b} \gets [\vect{b}_{\text{CLF}}; \vect{b}_{\text{CBF},1}; \ldots; \vect{b}_{\text{CBF},n_h}]$
+\STATE
+\STATE $[\vect{u}^*; \xi^*] \gets \text{solve\_qp}(\mat{P}, \vect{q}, \mat{A}, \vect{b}, [\vect{u}_{\min}; -\infty], [\vect{u}_{\max}; \infty])$
+\STATE
+\IF{$\xi^* > \epsilon$}
+    \STATE Log info: ``CLF relaxed by $\xi^*$, safety takes priority''
+\ENDIF
+\RETURN $\vect{u}^*$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Considerations:}
+\begin{itemize}
+    \item QP size: $(m+1)$ decision variables, $(1 + n_h)$ inequality constraints
+    \item Solve time: $<0.1$ ms for typical robotics problems
+    \item Warm starting from previous solution further reduces solve time
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{Hybrid MPC with Learned Dynamics}
+\label{subsec:alg_hybrid_mpc}
+%-------------------------------------------------------------------------------
+
+\begin{algorithm}[H]
+\caption{Nonlinear MPC with Hybrid Dynamics Model}
+\label{alg:hybrid_mpc_impl}
+\begin{algorithmic}[1]
+\REQUIRE Current state $\vect{x}_0$, reference trajectory $\{\vect{x}_k^{\text{ref}}\}_{k=0}^{N}$
+\REQUIRE Physics model $\vect{f}_{\text{phys}}$, learned residual $\vect{f}_\theta$, sampling time $\Delta t$
+\REQUIRE Stage cost $\ell$, terminal cost $V_f$, constraints $\mathcal{X}, \mathcal{U}$
+\REQUIRE Horizon $N$, max iterations, tolerance
+\ENSURE Optimal control $\vect{u}_0^*$
+\STATE
+\STATE \COMMENT{Warm start from previous solution (shifted)}
+\STATE $\bar{\vect{u}}_{0:N-2} \gets \vect{u}_{1:N-1}^{\text{prev}}$
+\STATE $\bar{\vect{u}}_{N-1} \gets \vect{u}_{N-1}^{\text{prev}}$ \COMMENT{Extend with last input}
+\STATE
+\STATE \COMMENT{Forward simulate to get nominal trajectory}
+\STATE $\bar{\vect{x}}_0 \gets \vect{x}_0$
+\FOR{$k = 0$ \TO $N-1$}
+    \STATE $\bar{\vect{x}}_{k+1} \gets \bar{\vect{x}}_k + \Delta t \cdot (\vect{f}_{\text{phys}}(\bar{\vect{x}}_k, \bar{\vect{u}}_k) + \vect{f}_\theta(\bar{\vect{x}}_k, \bar{\vect{u}}_k))$
+\ENDFOR
+\STATE
+\FOR{iter $= 1$ \TO max\_iterations}
+    \STATE \COMMENT{Linearize dynamics around nominal}
+    \FOR{$k = 0$ \TO $N-1$}
+        \STATE $\mat{A}_k \gets \mat{I} + \Delta t \cdot \frac{\partial}{\partial \vect{x}}(\vect{f}_{\text{phys}} + \vect{f}_\theta)|_{(\bar{\vect{x}}_k, \bar{\vect{u}}_k)}$
+        \STATE $\mat{B}_k \gets \Delta t \cdot \frac{\partial}{\partial \vect{u}}(\vect{f}_{\text{phys}} + \vect{f}_\theta)|_{(\bar{\vect{x}}_k, \bar{\vect{u}}_k)}$
+    \ENDFOR
+    \STATE
+    \STATE \COMMENT{Quadratize cost around nominal}
+    \FOR{$k = 0$ \TO $N-1$}
+        \STATE $\mat{Q}_k, \vect{q}_k \gets$ Hessian, gradient of $\ell$ at $(\bar{\vect{x}}_k, \bar{\vect{u}}_k)$
+        \STATE $\mat{R}_k, \vect{r}_k \gets$ control cost Hessian, gradient
+    \ENDFOR
+    \STATE $\mat{Q}_N, \vect{q}_N \gets$ Hessian, gradient of $V_f$ at $\bar{\vect{x}}_N$
+    \STATE
+    \STATE \COMMENT{Solve QP subproblem (e.g., via Riccati recursion)}
+    \STATE $\delta\vect{u}_{0:N-1}^*, \delta\vect{x}_{0:N}^* \gets \text{solve\_LQR\_QP}(\mat{A}, \mat{B}, \mat{Q}, \mat{R}, \vect{q}, \vect{r})$
+    \STATE
+    \STATE \COMMENT{Line search}
+    \STATE $\alpha \gets 1.0$
+    \WHILE{not sufficient decrease}
+        \STATE $\vect{u}^{\text{trial}} \gets \bar{\vect{u}} + \alpha \delta\vect{u}^*$
+        \STATE Simulate $\vect{x}^{\text{trial}}$ with $\vect{u}^{\text{trial}}$
+        \STATE $J^{\text{trial}} \gets$ evaluate cost
+        \IF{$J^{\text{trial}} < J^{\text{prev}}$ and constraints satisfied}
+            \STATE \textbf{break}
+        \ENDIF
+        \STATE $\alpha \gets \alpha / 2$
+    \ENDWHILE
+    \STATE
+    \STATE $\bar{\vect{u}} \gets \vect{u}^{\text{trial}}$, $\bar{\vect{x}} \gets \vect{x}^{\text{trial}}$
+    \STATE
+    \STATE \COMMENT{Convergence check}
+    \IF{$\|\delta\vect{u}^*\| < \text{tolerance}$}
+        \STATE \textbf{break}
+    \ENDIF
+\ENDFOR
+\STATE
+\STATE $\vect{u}^* \gets \bar{\vect{u}}$
+\STATE Store $\vect{u}^*$ for next warm start
+\RETURN $\vect{u}_0^*$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes:}
+\begin{itemize}
+    \item \textbf{Jacobian computation:} Use AD for $\vect{f}_\theta$; analytical for $\vect{f}_{\text{phys}}$ if available
+    \item \textbf{Riccati vs.\ QP:} Riccati recursion is $O(N \cdot n^3)$; direct QP is $O(N^3 \cdot n^3)$ but handles general constraints
+    \item \textbf{Horizon:} $N = 10$--50 typical; longer horizons for slow dynamics
+    \item \textbf{Real-time:} For hard real-time, limit iterations and use warm starting
+\end{itemize}
+
+%===============================================================================
+\section{Chapter Summary}
+\label{sec:chapter_summary}
+%===============================================================================
+
+This chapter has presented the synthesis of model-based control with machine learning---a hybrid approach that combines the interpretability and guarantees of physics-based methods with the adaptability and expressiveness of learning. We have covered the major techniques for achieving this synthesis, from residual dynamics learning to neural certificates for stability and safety.
+
+\subsection{Key Concepts and Methods}
+
+\textbf{Residual Dynamics Learning} (Section~\ref{sec:residual_dynamics}) provides the most straightforward path to hybrid control. By learning only the error between a physics model and reality, we:
+\begin{itemize}
+    \item Reduce the learning problem's difficulty (lower variance targets)
+    \item Require less training data than end-to-end learning
+    \item Maintain interpretability of the physics component
+    \item Enable graceful degradation when the learned component fails
+\end{itemize}
+
+\textbf{Physics-Informed Neural Networks} (Section~\ref{sec:pinns}) embed physical laws directly into the learning objective. Key applications include:
+\begin{itemize}
+    \item System identification with sparse or noisy data
+    \item State estimation from partial observations
+    \item Solving forward and inverse problems simultaneously
+\end{itemize}
+
+\textbf{Neural Lyapunov Functions} (Section~\ref{sec:neural_lyapunov}) extend classical stability analysis to complex nonlinear systems. The main insights are:
+\begin{itemize}
+    \item Neural networks can represent Lyapunov functions that analytical methods cannot find
+    \item Structural constraints (ICNN, squared output) ensure positive definiteness
+    \item Verification remains challenging but sampling-based and formal methods provide confidence
+\end{itemize}
+
+\textbf{Neural Control Barrier Functions} (Section~\ref{sec:neural_cbf}) enable safety-critical learning-based control:
+\begin{itemize}
+    \item CBFs provide provable forward invariance of safe sets
+    \item The CBF-QP formulation allows real-time safety filtering
+    \item Neural CBFs extend these guarantees to systems with complex safety constraints
+\end{itemize}
+
+\textbf{Learning-Augmented MPC} (Section~\ref{sec:learning_mpc}) integrates learned models into the prediction and optimization framework:
+\begin{itemize}
+    \item Hybrid models improve prediction accuracy and tracking performance
+    \item Robust formulations handle model uncertainty
+    \item Online adaptation maintains performance under changing conditions
+\end{itemize}
+
+\textbf{Safety and Stability Guarantees} (Section~\ref{sec:safety_guarantees}) provide the theoretical foundation for deploying hybrid controllers:
+\begin{itemize}
+    \item Layered safety architecture provides defense in depth
+    \item Bounded model errors enable classical robust control analysis
+    \item Verification and validation are essential before deployment
+\end{itemize}
+
+\subsection{Design Guidelines}
+
+When designing a hybrid control system, I recommend the following workflow:
+
+\begin{enumerate}
+    \item \textbf{Start with physics.} Develop the best physics-based model you can. Even an imperfect model provides structure that learning can build upon.
+
+    \item \textbf{Identify the gaps.} Determine where the physics model fails: friction, aerodynamics, contact, flexibility, or other unmodeled effects. These are candidates for learning.
+
+    \item \textbf{Collect informative data.} Design experiments that excite the unmodeled dynamics. Random exploration is often insufficient; systematic variation across operating conditions is better.
+
+    \item \textbf{Choose the right hybrid architecture.} Residual learning works when physics captures the dominant dynamics. PINNs work when data is sparse but physics is known. Neural certificates work when stability or safety must be verified.
+
+    \item \textbf{Train with appropriate regularization.} Lipschitz constraints, spectral normalization, and weight decay improve generalization and enable theoretical analysis.
+
+    \item \textbf{Validate extensively.} Test on held-out data, in simulation, and on hardware. Compare against physics-only baselines.
+
+    \item \textbf{Layer safety mechanisms.} Even verified neural components should have backup safety layers. Defense in depth is essential.
+
+    \item \textbf{Monitor during deployment.} Track prediction errors, safety margins, and performance metrics. Adapt or fall back when needed.
+\end{enumerate}
+
+\subsection{Connections to Other Chapters}
+
+The techniques in this chapter build upon and connect to material throughout this textbook:
+
+\begin{itemize}
+    \item \textbf{Chapter 1 (Modeling):} Provides the physics-based models that form the foundation of hybrid approaches
+    \item \textbf{Chapter 6 (Stability Analysis):} Classical Lyapunov theory underlies neural Lyapunov functions
+    \item \textbf{Chapter 10 (Nonlinear Control):} Feedback linearization and sliding mode connect to CBF approaches
+    \item \textbf{Chapter 14 (Optimal and Predictive Control):} MPC provides the optimization framework for learning-augmented predictive control
+    \item \textbf{Chapter 16 (World Models):} Learned dynamics models from world models can be integrated into the hybrid architectures here
+    \item \textbf{Chapter 18 (Differentiable Control):} Automatic differentiation enables gradient-based training of all hybrid components
+    \item \textbf{Chapter 20 (Sim-to-Real):} Residual learning is a key technique for bridging simulation and reality
+\end{itemize}
+
+\subsection{Current Limitations and Future Directions}
+
+Despite significant progress, hybrid model-based and learned control faces ongoing challenges:
+
+\textbf{Scalability:} Formal verification of neural components scales poorly with network size and state dimension. Practical verification is currently limited to small systems.
+
+\textbf{Distribution shift:} Learned components may fail unpredictably when encountering states far from training data. Better uncertainty quantification is needed.
+
+\textbf{Online adaptation:} Safely updating models during operation without destabilizing the system remains difficult. Theoretical guarantees for adaptive hybrid control are limited.
+
+\textbf{Certification:} Regulatory frameworks for certifying learned controllers in safety-critical domains (aviation, medical devices) are still evolving.
+
+Future developments will likely address these limitations through:
+\begin{itemize}
+    \item Scalable verification methods exploiting neural network structure
+    \item Improved uncertainty quantification via conformal prediction and Bayesian methods
+    \item Lifelong learning approaches that maintain safety during adaptation
+    \item Standardized testing and certification frameworks for learned controllers
+\end{itemize}
+
+\subsection{Final Thoughts}
+
+The integration of learning and control represents one of the most exciting frontiers in engineering. We are moving beyond the false dichotomy of ``model-based vs.\ learning-based'' toward principled hybrid approaches that leverage the strengths of both paradigms.
+
+The techniques in this chapter are not merely theoretical---they are deployed in real systems today. Robots use residual learning to compensate for friction. Autonomous vehicles use CBFs to maintain safe following distances. Industrial processes use PINNs for system identification. The gap between academic research and practical deployment is narrowing rapidly.
+
+As a control engineer, your task is to master both the classical foundations and these modern extensions. The rigorous analysis tools developed over decades---Lyapunov theory, robust control, optimization---remain essential. They provide the language for reasoning about stability and safety. Learning provides the adaptability and flexibility that classical methods often lack. The synthesis of the two is where modern control engineering lives.
+
+I encourage you to implement these algorithms, experiment with them on your own systems, and push the boundaries of what hybrid control can achieve. The worked examples in this chapter provide starting points; the real learning comes from application to new problems. The field is young, and there is much left to discover.
+
+%-------------------------------------------------------------------------------
+% End of Chapter 17
+%-------------------------------------------------------------------------------
+
