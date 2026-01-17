@@ -1,0 +1,2520 @@
+\chapter{Diffusion Policies for Control}
+\label{ch:diffusion_policies}
+
+\whythismatters{
+Imagine a robot that can learn to perform complex manipulation tasks---folding laundry, assembling electronics, or cooking meals---not by memorizing a single optimal trajectory, but by understanding the full distribution of successful behaviors. Traditional control approaches struggle with tasks where multiple valid solutions exist, where the optimal action depends on subtle context, or where human demonstrations exhibit natural variability. Diffusion policies represent a paradigm shift: instead of learning a deterministic mapping from observations to actions, we learn to generate actions by iteratively refining random noise into coherent, task-appropriate behavior.
+
+This chapter introduces diffusion models as a foundation for robot control. We will see how the same mathematical framework that generates photorealistic images can produce smooth, multimodal action sequences that capture the richness of expert demonstrations. You will learn to implement diffusion policies that handle contact-rich manipulation, long-horizon planning, and tasks requiring diverse behavioral modes. These techniques have achieved state-of-the-art results on challenging robotics benchmarks, and understanding them is essential for modern control engineers working at the intersection of machine learning and robotics.
+
+By the end of this chapter, you will understand not just how diffusion policies work, but when they offer advantages over other approaches, how to train them effectively, and what practical considerations govern their deployment on real robotic systems.
+}
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Diffusion Models: Fundamentals}
+\label{sec:diffusion_fundamentals}
+%═══════════════════════════════════════════════════════════════════════════════
+
+Diffusion models are generative models that learn to produce data by reversing a gradual noising process. Unlike generative adversarial networks (GANs) that learn to map noise directly to data in a single step, or variational autoencoders (VAEs) that learn a compressed latent representation, diffusion models take a fundamentally different approach: they learn to denoise. This seemingly simple idea leads to remarkably stable training, high-quality generation, and---critically for control---natural handling of multimodal distributions.
+
+\subsection{The Core Intuition}
+\label{subsec:diffusion_intuition}
+
+Consider a piece of data $\mathbf{x}_0$---perhaps an image, a trajectory, or an action sequence. We can destroy the structure in this data by gradually adding noise. After enough noise addition, the data becomes indistinguishable from pure Gaussian noise. The key insight of diffusion models is that if we can learn to reverse this noising process, we gain a powerful generative model.
+
+The forward process is trivial: add noise. The reverse process---removing noise to reveal structure---is what the neural network learns. Once trained, we can generate new data by starting from pure noise and iteratively denoising.
+
+\textbf{Why does this work for control?} In robotics, we often face situations where multiple valid actions exist for a given observation. A robot reaching for an object can approach from the left or right; a manipulator can grasp an object with different hand configurations. Traditional regression-based policies struggle with this multimodality, often producing averaged, suboptimal actions. Diffusion policies naturally capture the full distribution of valid behaviors because they learn to generate samples from that distribution rather than predicting a single point estimate.
+
+\subsection{The Forward Diffusion Process}
+\label{subsec:forward_process}
+
+Let us formalize the forward diffusion process. Given a data point $\mathbf{x}_0$ drawn from the true data distribution $q(\mathbf{x}_0)$, we define a sequence of increasingly noisy versions $\mathbf{x}_1, \mathbf{x}_2, \ldots, \mathbf{x}_T$ through the Markov chain:
+
+\begin{equation}
+q(\mathbf{x}_{1:T} | \mathbf{x}_0) = \prod_{t=1}^{T} q(\mathbf{x}_t | \mathbf{x}_{t-1})
+\label{eq:forward_chain}
+\end{equation}
+
+Each step adds Gaussian noise according to a variance schedule $\{\beta_t\}_{t=1}^{T}$:
+
+\begin{equation}
+q(\mathbf{x}_t | \mathbf{x}_{t-1}) = \mathcal{N}\left(\mathbf{x}_t; \sqrt{1-\beta_t}\,\mathbf{x}_{t-1}, \beta_t \mathbf{I}\right)
+\label{eq:forward_step}
+\end{equation}
+
+Let me unpack this notation. The distribution $q(\mathbf{x}_t | \mathbf{x}_{t-1})$ is a Gaussian with:
+\begin{itemize}
+    \item Mean: $\sqrt{1-\beta_t}\,\mathbf{x}_{t-1}$ (slightly shrunk version of previous sample)
+    \item Covariance: $\beta_t \mathbf{I}$ (isotropic noise with variance $\beta_t$)
+\end{itemize}
+
+The scaling factor $\sqrt{1-\beta_t}$ ensures that the variance of the process doesn't explode. Without it, the variance would grow without bound as we add noise.
+
+\subsubsection{Closed-Form Sampling at Arbitrary Timesteps}
+
+A crucial property of Gaussian diffusion is that we can sample $\mathbf{x}_t$ directly from $\mathbf{x}_0$ without computing intermediate steps. Define:
+
+\begin{equation}
+\alpha_t = 1 - \beta_t, \qquad \bar{\alpha}_t = \prod_{s=1}^{t} \alpha_s
+\label{eq:alpha_definitions}
+\end{equation}
+
+The cumulative product $\bar{\alpha}_t$ represents how much of the original signal remains after $t$ steps. Using the reparameterization trick repeatedly, we can show:
+
+\begin{equation}
+q(\mathbf{x}_t | \mathbf{x}_0) = \mathcal{N}\left(\mathbf{x}_t; \sqrt{\bar{\alpha}_t}\,\mathbf{x}_0, (1-\bar{\alpha}_t)\mathbf{I}\right)
+\label{eq:closed_form_forward}
+\end{equation}
+
+\begin{proof}
+We prove this by induction. For $t=1$:
+\begin{equation}
+q(\mathbf{x}_1 | \mathbf{x}_0) = \mathcal{N}\left(\mathbf{x}_1; \sqrt{\alpha_1}\,\mathbf{x}_0, (1-\alpha_1)\mathbf{I}\right)
+\end{equation}
+which matches Equation~\ref{eq:closed_form_forward} since $\bar{\alpha}_1 = \alpha_1$.
+
+Assume the result holds for $t-1$:
+\begin{equation}
+q(\mathbf{x}_{t-1} | \mathbf{x}_0) = \mathcal{N}\left(\mathbf{x}_{t-1}; \sqrt{\bar{\alpha}_{t-1}}\,\mathbf{x}_0, (1-\bar{\alpha}_{t-1})\mathbf{I}\right)
+\end{equation}
+
+We can write:
+\begin{align}
+\mathbf{x}_{t-1} &= \sqrt{\bar{\alpha}_{t-1}}\,\mathbf{x}_0 + \sqrt{1-\bar{\alpha}_{t-1}}\,\boldsymbol{\epsilon}_{t-1}, \quad \boldsymbol{\epsilon}_{t-1} \sim \mathcal{N}(\mathbf{0}, \mathbf{I}) \\
+\mathbf{x}_t &= \sqrt{\alpha_t}\,\mathbf{x}_{t-1} + \sqrt{1-\alpha_t}\,\boldsymbol{\epsilon}_t, \quad \boldsymbol{\epsilon}_t \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
+\end{align}
+
+Substituting:
+\begin{align}
+\mathbf{x}_t &= \sqrt{\alpha_t}\left(\sqrt{\bar{\alpha}_{t-1}}\,\mathbf{x}_0 + \sqrt{1-\bar{\alpha}_{t-1}}\,\boldsymbol{\epsilon}_{t-1}\right) + \sqrt{1-\alpha_t}\,\boldsymbol{\epsilon}_t \\
+&= \sqrt{\alpha_t \bar{\alpha}_{t-1}}\,\mathbf{x}_0 + \sqrt{\alpha_t(1-\bar{\alpha}_{t-1})}\,\boldsymbol{\epsilon}_{t-1} + \sqrt{1-\alpha_t}\,\boldsymbol{\epsilon}_t
+\end{align}
+
+Since $\boldsymbol{\epsilon}_{t-1}$ and $\boldsymbol{\epsilon}_t$ are independent Gaussians, their weighted sum is also Gaussian with variance:
+\begin{equation}
+\alpha_t(1-\bar{\alpha}_{t-1}) + (1-\alpha_t) = \alpha_t - \alpha_t\bar{\alpha}_{t-1} + 1 - \alpha_t = 1 - \bar{\alpha}_t
+\end{equation}
+
+Therefore:
+\begin{equation}
+\mathbf{x}_t = \sqrt{\bar{\alpha}_t}\,\mathbf{x}_0 + \sqrt{1-\bar{\alpha}_t}\,\boldsymbol{\epsilon}, \quad \boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
+\end{equation}
+completing the proof.
+\end{proof}
+
+This closed-form expression is computationally essential. During training, we can directly compute $\mathbf{x}_t$ for any timestep without sequential sampling, enabling efficient batch processing.
+
+\subsubsection{Noise Schedule Design}
+
+The variance schedule $\{\beta_t\}$ controls how quickly information is destroyed. Common choices include:
+
+\textbf{Linear schedule:}
+\begin{equation}
+\beta_t = \beta_{\min} + \frac{t-1}{T-1}(\beta_{\max} - \beta_{\min})
+\label{eq:linear_schedule}
+\end{equation}
+
+Typical values: $\beta_{\min} = 10^{-4}$, $\beta_{\max} = 0.02$, $T = 1000$.
+
+\textbf{Cosine schedule:}
+\begin{equation}
+\bar{\alpha}_t = \frac{f(t)}{f(0)}, \quad f(t) = \cos^2\left(\frac{t/T + s}{1+s} \cdot \frac{\pi}{2}\right)
+\label{eq:cosine_schedule}
+\end{equation}
+
+where $s$ is a small offset (typically $s = 0.008$) to prevent $\beta_t$ from being too small near $t=0$.
+
+The cosine schedule, introduced by Nichol and Dhariwal, provides more gradual noise addition in early timesteps compared to the linear schedule. This is particularly beneficial for data with fine details that are easily destroyed.
+
+\textbf{For control applications}, the choice of noise schedule affects how well the model captures fine-grained action details versus large-scale motion patterns. I recommend starting with the cosine schedule, which tends to produce smoother action trajectories.
+
+\subsection{The Reverse Diffusion Process}
+\label{subsec:reverse_process}
+
+The reverse process is where the magic happens. We want to learn the distribution $p_\theta(\mathbf{x}_{t-1} | \mathbf{x}_t)$ that reverses the forward noising. If we had access to this, we could generate data by:
+
+\begin{enumerate}
+    \item Sample $\mathbf{x}_T \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+    \item For $t = T, T-1, \ldots, 1$: sample $\mathbf{x}_{t-1} \sim p_\theta(\mathbf{x}_{t-1} | \mathbf{x}_t)$
+    \item Return $\mathbf{x}_0$
+\end{enumerate}
+
+A remarkable result from stochastic differential equations tells us that if the forward process is Gaussian and the step size is small, the reverse process is also approximately Gaussian:
+
+\begin{equation}
+p_\theta(\mathbf{x}_{t-1} | \mathbf{x}_t) = \mathcal{N}\left(\mathbf{x}_{t-1}; \boldsymbol{\mu}_\theta(\mathbf{x}_t, t), \sigma_t^2 \mathbf{I}\right)
+\label{eq:reverse_step}
+\end{equation}
+
+The variance $\sigma_t^2$ can be set to $\beta_t$ or $(1-\bar{\alpha}_{t-1})/(1-\bar{\alpha}_t) \cdot \beta_t$. The mean $\boldsymbol{\mu}_\theta(\mathbf{x}_t, t)$ is what the neural network learns to predict.
+
+\subsubsection{Deriving the Optimal Reverse Mean}
+
+What should $\boldsymbol{\mu}_\theta$ predict? Using Bayes' rule, the true reverse distribution is:
+
+\begin{equation}
+q(\mathbf{x}_{t-1} | \mathbf{x}_t, \mathbf{x}_0) = \frac{q(\mathbf{x}_t | \mathbf{x}_{t-1}, \mathbf{x}_0) q(\mathbf{x}_{t-1} | \mathbf{x}_0)}{q(\mathbf{x}_t | \mathbf{x}_0)}
+\label{eq:bayes_reverse}
+\end{equation}
+
+Since the forward process is Markovian, $q(\mathbf{x}_t | \mathbf{x}_{t-1}, \mathbf{x}_0) = q(\mathbf{x}_t | \mathbf{x}_{t-1})$.
+
+All three distributions on the right-hand side are Gaussian. The product and ratio of Gaussians is also Gaussian. After completing the square (a calculation I will spare you the details of), we obtain:
+
+\begin{equation}
+q(\mathbf{x}_{t-1} | \mathbf{x}_t, \mathbf{x}_0) = \mathcal{N}\left(\mathbf{x}_{t-1}; \tilde{\boldsymbol{\mu}}_t(\mathbf{x}_t, \mathbf{x}_0), \tilde{\beta}_t \mathbf{I}\right)
+\label{eq:true_reverse}
+\end{equation}
+
+where:
+\begin{align}
+\tilde{\boldsymbol{\mu}}_t(\mathbf{x}_t, \mathbf{x}_0) &= \frac{\sqrt{\bar{\alpha}_{t-1}}\beta_t}{1-\bar{\alpha}_t}\mathbf{x}_0 + \frac{\sqrt{\alpha_t}(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}\mathbf{x}_t \label{eq:true_reverse_mean} \\
+\tilde{\beta}_t &= \frac{1-\bar{\alpha}_{t-1}}{1-\bar{\alpha}_t}\beta_t \label{eq:true_reverse_var}
+\end{align}
+
+This is the optimal reverse mean---but it depends on $\mathbf{x}_0$, which we don't have access to during generation! The solution is to estimate $\mathbf{x}_0$ from $\mathbf{x}_t$ using a neural network.
+
+\subsection{Three Equivalent Parameterizations}
+\label{subsec:parameterizations}
+
+There are three equivalent ways to parameterize what the neural network predicts:
+
+\subsubsection{Predicting the Clean Data ($\mathbf{x}_0$-prediction)}
+
+From Equation~\ref{eq:closed_form_forward}, we can express $\mathbf{x}_0$ in terms of $\mathbf{x}_t$:
+\begin{equation}
+\mathbf{x}_0 = \frac{1}{\sqrt{\bar{\alpha}_t}}\left(\mathbf{x}_t - \sqrt{1-\bar{\alpha}_t}\,\boldsymbol{\epsilon}\right)
+\label{eq:x0_from_xt}
+\end{equation}
+
+If we train a network $\mathbf{x}_\theta(\mathbf{x}_t, t)$ to predict $\mathbf{x}_0$ directly, we can substitute into Equation~\ref{eq:true_reverse_mean}:
+
+\begin{equation}
+\boldsymbol{\mu}_\theta(\mathbf{x}_t, t) = \frac{\sqrt{\bar{\alpha}_{t-1}}\beta_t}{1-\bar{\alpha}_t}\mathbf{x}_\theta(\mathbf{x}_t, t) + \frac{\sqrt{\alpha_t}(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}\mathbf{x}_t
+\label{eq:mu_x0_param}
+\end{equation}
+
+\subsubsection{Predicting the Noise ($\boldsymbol{\epsilon}$-prediction)}
+
+Alternatively, we can train a network $\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)$ to predict the noise $\boldsymbol{\epsilon}$ that was added. This is the approach used in the original DDPM paper.
+
+Substituting $\mathbf{x}_0 = (\mathbf{x}_t - \sqrt{1-\bar{\alpha}_t}\,\boldsymbol{\epsilon}_\theta)/\sqrt{\bar{\alpha}_t}$ into Equation~\ref{eq:true_reverse_mean}:
+
+\begin{equation}
+\boldsymbol{\mu}_\theta(\mathbf{x}_t, t) = \frac{1}{\sqrt{\alpha_t}}\left(\mathbf{x}_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)\right)
+\label{eq:mu_eps_param}
+\end{equation}
+
+\subsubsection{Predicting the Score (Score Function)}
+
+The score function is the gradient of the log probability:
+\begin{equation}
+\mathbf{s}_\theta(\mathbf{x}_t, t) = \nabla_{\mathbf{x}_t} \log p(\mathbf{x}_t)
+\label{eq:score_definition}
+\end{equation}
+
+It can be shown that:
+\begin{equation}
+\nabla_{\mathbf{x}_t} \log q(\mathbf{x}_t | \mathbf{x}_0) = -\frac{\boldsymbol{\epsilon}}{\sqrt{1-\bar{\alpha}_t}}
+\label{eq:score_noise_relation}
+\end{equation}
+
+Thus, noise prediction and score prediction are related by a simple scaling:
+\begin{equation}
+\mathbf{s}_\theta(\mathbf{x}_t, t) = -\frac{\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)}{\sqrt{1-\bar{\alpha}_t}}
+\label{eq:score_eps_relation}
+\end{equation}
+
+\textbf{Which parameterization to use?} For control applications, I recommend $\boldsymbol{\epsilon}$-prediction. It tends to be more numerically stable during training and is the most commonly used in practice. The $\mathbf{x}_0$-prediction can be useful when you want to incorporate constraints on the output space directly.
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Denoising Score Matching}
+\label{sec:score_matching}
+%═══════════════════════════════════════════════════════════════════════════════
+
+Now that we understand the forward and reverse processes, we need to derive the training objective. How do we train a neural network to denoise effectively?
+
+\subsection{The Variational Lower Bound}
+\label{subsec:vlb}
+
+We start from the standard variational inference perspective. The log-likelihood of data can be bounded using the evidence lower bound (ELBO):
+
+\begin{equation}
+\log p_\theta(\mathbf{x}_0) \geq \mathbb{E}_{q(\mathbf{x}_{1:T}|\mathbf{x}_0)}\left[\log \frac{p_\theta(\mathbf{x}_{0:T})}{q(\mathbf{x}_{1:T}|\mathbf{x}_0)}\right] = -\mathcal{L}_{\text{VLB}}
+\label{eq:elbo}
+\end{equation}
+
+After considerable algebra (expanding the joint distributions and grouping terms), the variational lower bound decomposes into:
+
+\begin{equation}
+\mathcal{L}_{\text{VLB}} = \mathcal{L}_T + \sum_{t=2}^{T} \mathcal{L}_{t-1} + \mathcal{L}_0
+\label{eq:vlb_decomposition}
+\end{equation}
+
+where:
+\begin{align}
+\mathcal{L}_T &= D_{\text{KL}}\left(q(\mathbf{x}_T | \mathbf{x}_0) \| p(\mathbf{x}_T)\right) \label{eq:L_T} \\
+\mathcal{L}_{t-1} &= D_{\text{KL}}\left(q(\mathbf{x}_{t-1} | \mathbf{x}_t, \mathbf{x}_0) \| p_\theta(\mathbf{x}_{t-1} | \mathbf{x}_t)\right) \label{eq:L_t} \\
+\mathcal{L}_0 &= -\log p_\theta(\mathbf{x}_0 | \mathbf{x}_1) \label{eq:L_0}
+\end{align}
+
+Let me explain each term:
+
+\begin{itemize}
+    \item $\mathcal{L}_T$: Measures how close the final noisy distribution is to the prior $\mathcal{N}(\mathbf{0}, \mathbf{I})$. This is constant (no learnable parameters) and typically ignored.
+
+    \item $\mathcal{L}_{t-1}$: The KL divergence between the true reverse distribution $q(\mathbf{x}_{t-1} | \mathbf{x}_t, \mathbf{x}_0)$ and our learned approximation $p_\theta(\mathbf{x}_{t-1} | \mathbf{x}_t)$. This is the main training signal.
+
+    \item $\mathcal{L}_0$: The reconstruction term at the final step.
+\end{itemize}
+
+\subsection{Simplification to Noise Prediction Loss}
+\label{subsec:simple_loss}
+
+The KL divergence between two Gaussians with the same covariance has a simple form:
+
+\begin{equation}
+D_{\text{KL}}\left(\mathcal{N}(\boldsymbol{\mu}_1, \sigma^2\mathbf{I}) \| \mathcal{N}(\boldsymbol{\mu}_2, \sigma^2\mathbf{I})\right) = \frac{1}{2\sigma^2}\|\boldsymbol{\mu}_1 - \boldsymbol{\mu}_2\|^2
+\label{eq:kl_gaussians}
+\end{equation}
+
+Substituting the true reverse mean (Equation~\ref{eq:true_reverse_mean}) and the predicted mean (Equation~\ref{eq:mu_eps_param}):
+
+\begin{equation}
+\mathcal{L}_{t-1} = \frac{1}{2\tilde{\beta}_t}\left\|\tilde{\boldsymbol{\mu}}_t(\mathbf{x}_t, \mathbf{x}_0) - \boldsymbol{\mu}_\theta(\mathbf{x}_t, t)\right\|^2
+\label{eq:L_t_expanded}
+\end{equation}
+
+After substituting and simplifying (using the $\boldsymbol{\epsilon}$-parameterization):
+
+\begin{equation}
+\mathcal{L}_{t-1} = \frac{\beta_t^2}{2\tilde{\beta}_t \alpha_t (1-\bar{\alpha}_t)}\left\|\boldsymbol{\epsilon} - \boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)\right\|^2
+\label{eq:L_t_eps}
+\end{equation}
+
+The coefficient in front varies with $t$, but Ho et al. found empirically that ignoring it and using a simple unweighted loss works well:
+
+\begin{equation}
+\boxed{\mathcal{L}_{\text{simple}} = \mathbb{E}_{t, \mathbf{x}_0, \boldsymbol{\epsilon}}\left[\left\|\boldsymbol{\epsilon} - \boldsymbol{\epsilon}_\theta\left(\sqrt{\bar{\alpha}_t}\mathbf{x}_0 + \sqrt{1-\bar{\alpha}_t}\boldsymbol{\epsilon}, t\right)\right\|^2\right]}
+\label{eq:simple_loss}
+\end{equation}
+
+This is the standard DDPM training objective. It says: given a clean sample $\mathbf{x}_0$, a random timestep $t$, and random noise $\boldsymbol{\epsilon}$, create the noisy sample $\mathbf{x}_t$ and train the network to predict the noise that was added.
+
+\subsection{Connection to Score Matching}
+\label{subsec:score_matching_connection}
+
+The diffusion model training objective is intimately connected to \textbf{denoising score matching}, a technique from the score-based generative modeling literature.
+
+The score function $\mathbf{s}(\mathbf{x}) = \nabla_\mathbf{x} \log p(\mathbf{x})$ points toward regions of higher probability density. If we knew the score at every point, we could generate samples using Langevin dynamics:
+
+\begin{equation}
+\mathbf{x}_{k+1} = \mathbf{x}_k + \frac{\eta}{2}\nabla_\mathbf{x} \log p(\mathbf{x}_k) + \sqrt{\eta}\,\mathbf{z}_k, \quad \mathbf{z}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
+\label{eq:langevin}
+\end{equation}
+
+Direct score matching (minimizing $\mathbb{E}[\|\mathbf{s}_\theta(\mathbf{x}) - \nabla_\mathbf{x} \log p(\mathbf{x})\|^2]$) is intractable because we don't know the true score. However, Vincent showed that we can equivalently minimize:
+
+\begin{equation}
+\mathbb{E}_{\mathbf{x}_0, \tilde{\mathbf{x}}}\left[\left\|\mathbf{s}_\theta(\tilde{\mathbf{x}}) - \nabla_{\tilde{\mathbf{x}}} \log q(\tilde{\mathbf{x}} | \mathbf{x}_0)\right\|^2\right]
+\label{eq:denoising_score_matching}
+\end{equation}
+
+where $\tilde{\mathbf{x}}$ is a noisy version of $\mathbf{x}_0$. For Gaussian noise with variance $\sigma^2$:
+
+\begin{equation}
+\nabla_{\tilde{\mathbf{x}}} \log q(\tilde{\mathbf{x}} | \mathbf{x}_0) = -\frac{\tilde{\mathbf{x}} - \mathbf{x}_0}{\sigma^2} = -\frac{\boldsymbol{\epsilon}}{\sigma}
+\label{eq:gaussian_score}
+\end{equation}
+
+This is exactly the noise prediction objective, scaled appropriately. Diffusion models can thus be viewed as learning the score function at multiple noise levels, enabling annealed Langevin dynamics for sampling.
+
+\subsection{The Training Algorithm}
+\label{subsec:training_algorithm}
+
+Putting it all together, the DDPM training algorithm is remarkably simple:
+
+\begin{algorithm}[H]
+\caption{DDPM Training}
+\label{alg:ddpm_training}
+\begin{algorithmic}[1]
+\REQUIRE Dataset $\mathcal{D}$, noise schedule $\{\bar{\alpha}_t\}_{t=1}^T$, neural network $\boldsymbol{\epsilon}_\theta$
+\REPEAT
+    \STATE Sample $\mathbf{x}_0 \sim \mathcal{D}$
+    \STATE Sample $t \sim \text{Uniform}(\{1, \ldots, T\})$
+    \STATE Sample $\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+    \STATE Compute noisy sample: $\mathbf{x}_t = \sqrt{\bar{\alpha}_t}\,\mathbf{x}_0 + \sqrt{1-\bar{\alpha}_t}\,\boldsymbol{\epsilon}$
+    \STATE Compute loss: $\mathcal{L} = \|\boldsymbol{\epsilon} - \boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)\|^2$
+    \STATE Update $\theta$ using gradient descent on $\mathcal{L}$
+\UNTIL{converged}
+\end{algorithmic}
+\end{algorithm}
+
+The simplicity of this algorithm belies its power. There are no adversarial training dynamics (as in GANs), no posterior collapse issues (as in VAEs), and no complex architectural constraints. The neural network simply learns to predict noise.
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Noise Schedules and Sampling}
+\label{sec:noise_schedules_sampling}
+%═══════════════════════════════════════════════════════════════════════════════
+
+The choice of noise schedule and sampling procedure significantly impacts both training efficiency and generation quality. In this section, we explore these choices in depth.
+
+\subsection{Noise Schedule Design}
+\label{subsec:noise_schedule_design}
+
+\subsubsection{Linear Schedule}
+
+The original DDPM paper used a linear schedule:
+
+\begin{equation}
+\beta_t = \beta_1 + \frac{t-1}{T-1}(\beta_T - \beta_1)
+\label{eq:linear_schedule_detailed}
+\end{equation}
+
+with $\beta_1 = 10^{-4}$ and $\beta_T = 0.02$ for $T = 1000$ steps.
+
+\textbf{Properties:}
+\begin{itemize}
+    \item Simple and interpretable
+    \item Noise increases linearly in $\beta_t$, but $\bar{\alpha}_t$ decreases roughly exponentially
+    \item May add too much noise too quickly for some data types
+\end{itemize}
+
+\subsubsection{Cosine Schedule}
+
+Nichol and Dhariwal proposed a cosine schedule that provides more gradual noise addition:
+
+\begin{equation}
+\bar{\alpha}_t = \frac{f(t)}{f(0)}, \quad f(t) = \cos^2\left(\frac{t/T + s}{1+s} \cdot \frac{\pi}{2}\right)
+\label{eq:cosine_schedule_detailed}
+\end{equation}
+
+The small offset $s = 0.008$ prevents $\beta_1$ from being too small.
+
+The resulting $\beta_t$ is computed as:
+\begin{equation}
+\beta_t = 1 - \frac{\bar{\alpha}_t}{\bar{\alpha}_{t-1}} = \text{clip}\left(1 - \frac{\bar{\alpha}_t}{\bar{\alpha}_{t-1}}, \text{max}=0.999\right)
+\label{eq:beta_from_alpha_bar}
+\end{equation}
+
+\textbf{Properties:}
+\begin{itemize}
+    \item More gradual noise addition in early steps
+    \item Preserves fine details better than linear schedule
+    \item Generally produces higher-quality samples
+    \item Recommended default for most applications
+\end{itemize}
+
+\subsubsection{Scaled Linear Schedule for Actions}
+
+For action generation in robotics, Chi et al. (Diffusion Policy) found that a scaled linear schedule works well:
+
+\begin{equation}
+\beta_t = \text{scale} \cdot \left(\beta_1 + \frac{t-1}{T-1}(\beta_T - \beta_1)\right)
+\label{eq:scaled_linear}
+\end{equation}
+
+with scale values around 1.0--2.0 depending on the action space magnitude.
+
+\textbf{For control applications:} I recommend starting with the cosine schedule, then tuning if needed. If your actions have very different scales across dimensions, consider normalizing the action space first.
+
+\subsection{Sampling Algorithms}
+\label{subsec:sampling_algorithms}
+
+\subsubsection{DDPM Sampling}
+
+The standard DDPM sampling procedure:
+
+\begin{algorithm}[H]
+\caption{DDPM Sampling}
+\label{alg:ddpm_sampling}
+\begin{algorithmic}[1]
+\REQUIRE Trained noise predictor $\boldsymbol{\epsilon}_\theta$, noise schedule $\{\alpha_t, \bar{\alpha}_t, \beta_t\}_{t=1}^T$
+\ENSURE Generated sample $\mathbf{x}_0$
+\STATE Sample $\mathbf{x}_T \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+\FOR{$t = T, T-1, \ldots, 1$}
+    \STATE $\mathbf{z} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ if $t > 1$, else $\mathbf{z} = \mathbf{0}$
+    \STATE $\boldsymbol{\mu}_t = \frac{1}{\sqrt{\alpha_t}}\left(\mathbf{x}_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)\right)$
+    \STATE $\mathbf{x}_{t-1} = \boldsymbol{\mu}_t + \sqrt{\beta_t}\,\mathbf{z}$
+\ENDFOR
+\RETURN $\mathbf{x}_0$
+\end{algorithmic}
+\end{algorithm}
+
+This requires $T$ network evaluations (typically $T = 1000$), which is computationally expensive for real-time control.
+
+\subsubsection{DDIM Sampling}
+
+Denoising Diffusion Implicit Models (DDIM) by Song et al. provide a deterministic sampling procedure that can use fewer steps:
+
+\begin{equation}
+\mathbf{x}_{t-1} = \sqrt{\bar{\alpha}_{t-1}}\underbrace{\left(\frac{\mathbf{x}_t - \sqrt{1-\bar{\alpha}_t}\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)}{\sqrt{\bar{\alpha}_t}}\right)}_{\text{predicted } \mathbf{x}_0} + \sqrt{1-\bar{\alpha}_{t-1} - \sigma_t^2}\,\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t) + \sigma_t \mathbf{z}
+\label{eq:ddim}
+\end{equation}
+
+When $\sigma_t = 0$, sampling is deterministic. When $\sigma_t = \sqrt{\beta_t}$, we recover DDPM.
+
+\textbf{Key advantage:} DDIM allows skipping timesteps. Instead of iterating through all $T$ steps, we can use a subset $\{t_1, t_2, \ldots, t_S\}$ where $S \ll T$. Typical choices: $S = 10$--$100$ for high-quality generation, $S = 4$--$10$ for real-time applications.
+
+\begin{algorithm}[H]
+\caption{DDIM Sampling with Reduced Steps}
+\label{alg:ddim_sampling}
+\begin{algorithmic}[1]
+\REQUIRE Trained $\boldsymbol{\epsilon}_\theta$, subsequence $\tau = [\tau_1, \tau_2, \ldots, \tau_S]$ with $\tau_S = T$
+\ENSURE Generated sample $\mathbf{x}_0$
+\STATE Sample $\mathbf{x}_{\tau_S} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+\FOR{$i = S, S-1, \ldots, 1$}
+    \STATE $t = \tau_i$, $t_{\text{prev}} = \tau_{i-1}$ (or $0$ if $i=1$)
+    \STATE $\hat{\mathbf{x}}_0 = \frac{\mathbf{x}_t - \sqrt{1-\bar{\alpha}_t}\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)}{\sqrt{\bar{\alpha}_t}}$
+    \STATE $\mathbf{x}_{t_{\text{prev}}} = \sqrt{\bar{\alpha}_{t_{\text{prev}}}}\hat{\mathbf{x}}_0 + \sqrt{1-\bar{\alpha}_{t_{\text{prev}}}}\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)$
+\ENDFOR
+\RETURN $\mathbf{x}_0$
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Comparison for Control Applications}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Steps} & \textbf{Quality} & \textbf{Latency} \\
+\midrule
+DDPM & 1000 & Highest & $\sim$2s \\
+DDPM (reduced) & 100 & High & $\sim$200ms \\
+DDIM & 50 & High & $\sim$100ms \\
+DDIM & 10 & Good & $\sim$20ms \\
+DDIM & 4 & Acceptable & $\sim$8ms \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For real-time control at 10--50 Hz, DDIM with 4--10 steps is typically used. The quality degradation is acceptable because we're generating action sequences, not images, and small imperfections are filtered by the robot's physical dynamics.
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Diffusion Policy Architecture}
+\label{sec:diffusion_policy_architecture}
+%═══════════════════════════════════════════════════════════════════════════════
+
+Having established the fundamentals of diffusion models, we now turn to their application in robot control. A \textbf{diffusion policy} is a policy that generates actions by denoising, conditioned on observations. This section covers the architectural choices that make diffusion policies effective for robotics.
+
+\subsection{From Unconditional to Conditional Generation}
+\label{subsec:conditional_generation}
+
+Standard diffusion models generate samples unconditionally from $p(\mathbf{x})$. For control, we need conditional generation: given an observation $\mathbf{o}$, generate an action from $p(\mathbf{a} | \mathbf{o})$.
+
+There are two main approaches to conditioning:
+
+\subsubsection{Conditioning via Concatenation}
+
+The simplest approach is to concatenate the observation with the noisy action and pass both to the denoising network:
+
+\begin{equation}
+\boldsymbol{\epsilon}_\theta(\mathbf{a}_t, t, \mathbf{o}) = \text{Network}([\mathbf{a}_t; \mathbf{o}], t)
+\label{eq:concat_conditioning}
+\end{equation}
+
+The network learns to use the observation to guide denoising. This approach is simple but may not fully leverage the observation information.
+
+\subsubsection{Conditioning via Cross-Attention}
+
+A more powerful approach uses cross-attention mechanisms, where observation features modulate the denoising process:
+
+\begin{equation}
+\text{CrossAttn}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \text{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}\right)\mathbf{V}
+\label{eq:cross_attention}
+\end{equation}
+
+Here:
+\begin{itemize}
+    \item $\mathbf{Q}$ (queries): derived from the noisy action features
+    \item $\mathbf{K}, \mathbf{V}$ (keys, values): derived from observation features
+\end{itemize}
+
+The network attends to relevant parts of the observation when denoising each part of the action. This is particularly powerful for image observations where different parts of the action may depend on different image regions.
+
+\subsection{Observation Encoders}
+\label{subsec:observation_encoders}
+
+The choice of observation encoder depends on the observation modality:
+
+\subsubsection{Proprioceptive Observations}
+
+For low-dimensional proprioceptive observations (joint positions, velocities, gripper state), a simple MLP encoder suffices:
+
+\begin{equation}
+\mathbf{z}_{\text{prop}} = \text{MLP}(\mathbf{o}_{\text{prop}}) \in \mathbb{R}^{d_z}
+\label{eq:prop_encoder}
+\end{equation}
+
+Typical architecture: 2--3 layers with 256--512 hidden units and ReLU activation.
+
+\subsubsection{Visual Observations}
+
+For image observations, convolutional networks or vision transformers extract features:
+
+\textbf{ResNet-based encoder:}
+\begin{equation}
+\mathbf{z}_{\text{vis}} = \text{ResNet}(\mathbf{I}) \in \mathbb{R}^{H' \times W' \times C'}
+\label{eq:resnet_encoder}
+\end{equation}
+
+The spatial structure is often preserved (using spatial softmax or keeping feature maps) to enable spatial attention in the policy.
+
+\textbf{Vision Transformer (ViT) encoder:}
+\begin{equation}
+\mathbf{z}_{\text{vis}} = \text{ViT}(\mathbf{I}) \in \mathbb{R}^{N_{\text{patches}} \times d_{\text{model}}}
+\label{eq:vit_encoder}
+\end{equation}
+
+ViT provides a sequence of patch embeddings that work naturally with transformer-based diffusion architectures.
+
+\subsubsection{Multi-View and Multi-Modal Fusion}
+
+Robots often have multiple cameras and additional sensors. Common fusion strategies:
+
+\textbf{Early fusion:} Concatenate observations before encoding.
+\begin{equation}
+\mathbf{z} = \text{Encoder}([\mathbf{I}_1; \mathbf{I}_2; \mathbf{o}_{\text{prop}}])
+\label{eq:early_fusion}
+\end{equation}
+
+\textbf{Late fusion:} Encode separately, then combine.
+\begin{equation}
+\mathbf{z} = \text{MLP}([\text{VisEnc}(\mathbf{I}_1); \text{VisEnc}(\mathbf{I}_2); \text{PropEnc}(\mathbf{o}_{\text{prop}})])
+\label{eq:late_fusion}
+\end{equation}
+
+\textbf{Cross-attention fusion:} Use cross-attention between modalities.
+
+Late fusion with shared visual encoders is often a good default.
+
+\subsection{Denoising Network Architectures}
+\label{subsec:denoising_architectures}
+
+\subsubsection{U-Net Architecture}
+
+The U-Net, originally developed for image segmentation, is commonly used for diffusion models:
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw=UofSCBlack, thick, fill=white, minimum width=1.5cm, minimum height=0.8cm},
+    skip/.style={->, thick, UofSCAtlantic},
+    flow/.style={->, thick, UofSCBlack}
+]
+% Encoder
+\node[block] (e1) at (0,0) {Conv};
+\node[block] (e2) at (0,-1.5) {Conv};
+\node[block] (e3) at (0,-3) {Conv};
+
+% Bottleneck
+\node[block, fill=UofSCSandstorm] (b) at (2,-3) {Bottleneck};
+
+% Decoder
+\node[block] (d3) at (4,-3) {Conv};
+\node[block] (d2) at (4,-1.5) {Conv};
+\node[block] (d1) at (4,0) {Conv};
+
+% Arrows
+\draw[flow] (e1) -- (e2);
+\draw[flow] (e2) -- (e3);
+\draw[flow] (e3) -- (b);
+\draw[flow] (b) -- (d3);
+\draw[flow] (d3) -- (d2);
+\draw[flow] (d2) -- (d1);
+
+% Skip connections
+\draw[skip] (e1.east) -- ++(0.5,0) |- (d1.west);
+\draw[skip] (e2.east) -- ++(0.3,0) |- (d2.west);
+\draw[skip] (e3.east) -- ++(0.1,0) |- (d3.west);
+
+% Labels
+\node[left=0.2cm of e1] {$\mathbf{a}_t$};
+\node[right=0.2cm of d1] {$\hat{\boldsymbol{\epsilon}}$};
+\node[below=0.5cm of b] {+ timestep embedding};
+\node[below=0.3cm of b, yshift=-0.3cm] {+ observation features};
+\end{tikzpicture}
+\caption{U-Net architecture for action denoising. Skip connections preserve fine-grained action information. Timestep and observation features are injected via addition or concatenation at each layer.}
+\label{fig:unet_architecture}
+\end{figure}
+
+For 1D action sequences, the U-Net uses 1D convolutions with residual blocks:
+
+\begin{equation}
+\text{ResBlock}(\mathbf{h}, \mathbf{e}_t) = \mathbf{h} + \text{Conv}(\text{ReLU}(\text{Conv}(\mathbf{h}) + \text{MLP}(\mathbf{e}_t)))
+\label{eq:resblock}
+\end{equation}
+
+where $\mathbf{e}_t$ is the timestep embedding (typically sinusoidal, as in transformers).
+
+\subsubsection{Transformer Architecture}
+
+Transformers have become increasingly popular for diffusion policies:
+
+\begin{equation}
+\mathbf{h}^{(l+1)} = \text{TransformerBlock}^{(l)}(\mathbf{h}^{(l)}, \mathbf{z}_{\text{obs}})
+\label{eq:transformer_block}
+\end{equation}
+
+Each transformer block contains:
+\begin{enumerate}
+    \item Self-attention over action tokens
+    \item Cross-attention to observation features
+    \item Feed-forward network
+\end{enumerate}
+
+\textbf{Advantages of transformers:}
+\begin{itemize}
+    \item Natural handling of variable-length sequences
+    \item Strong modeling of long-range dependencies in action sequences
+    \item Flexible cross-attention conditioning
+\end{itemize}
+
+\textbf{The Diffusion Policy transformer:} Chi et al. use a transformer that takes:
+\begin{itemize}
+    \item Action tokens: the noisy action sequence, each timestep as a token
+    \item Observation tokens: encoded observation features
+    \item Timestep embedding: added to all tokens
+\end{itemize}
+
+\subsubsection{Architecture Comparison}
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Architecture} & \textbf{Parameters} & \textbf{Speed} & \textbf{Long Actions} & \textbf{Complex Obs} \\
+\midrule
+MLP & 1--5M & Fast & Poor & Moderate \\
+1D U-Net & 10--50M & Moderate & Good & Good \\
+Transformer & 20--100M & Slower & Excellent & Excellent \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Recommendation:} For most robotics applications, the 1D U-Net provides a good balance. Use transformers when action sequences are long or when observations are complex (multiple views, language instructions).
+
+\subsection{Timestep Conditioning}
+\label{subsec:timestep_conditioning}
+
+The network must know which diffusion timestep it is denoising for. Common approaches:
+
+\subsubsection{Sinusoidal Embeddings}
+
+Following the positional encoding from transformers:
+
+\begin{equation}
+\mathbf{e}_t = [\sin(t/10000^{0/d}), \cos(t/10000^{0/d}), \ldots, \sin(t/10000^{(d-1)/d}), \cos(t/10000^{(d-1)/d})]
+\label{eq:sinusoidal_embedding}
+\end{equation}
+
+This provides a smooth, continuous representation of timestep.
+
+\subsubsection{Learned Embeddings}
+
+Alternatively, learn an embedding table:
+
+\begin{equation}
+\mathbf{e}_t = \mathbf{W}_{\text{embed}}[t]
+\label{eq:learned_embedding}
+\end{equation}
+
+where $\mathbf{W}_{\text{embed}} \in \mathbb{R}^{T \times d}$ is learned during training.
+
+\subsubsection{Injection Methods}
+
+The timestep embedding can be injected via:
+\begin{itemize}
+    \item \textbf{Addition:} Add to intermediate features
+    \item \textbf{Concatenation:} Concatenate with features
+    \item \textbf{FiLM conditioning:} Learn scale and shift parameters $\gamma_t, \beta_t$ applied as $\gamma_t \odot \mathbf{h} + \beta_t$
+\end{itemize}
+
+FiLM (Feature-wise Linear Modulation) is often most effective, providing expressive conditioning without increasing feature dimensions.
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Action Chunk Prediction}
+\label{sec:action_chunk_prediction}
+%═══════════════════════════════════════════════════════════════════════════════
+
+A key innovation in diffusion policies is \textbf{action chunking}---predicting a sequence of future actions rather than a single action. This section explains why action chunking is beneficial and how to implement it effectively.
+
+\subsection{Why Predict Action Sequences?}
+\label{subsec:why_action_sequences}
+
+\subsubsection{Temporal Coherence}
+
+Single-step action prediction can produce jerky, inconsistent behavior. Each prediction is made independently, without considering how it connects to past or future actions.
+
+Action chunking enforces temporal coherence by jointly generating a sequence:
+
+\begin{equation}
+\mathbf{A} = [\mathbf{a}_{t}, \mathbf{a}_{t+1}, \ldots, \mathbf{a}_{t+H-1}] \in \mathbb{R}^{H \times d_a}
+\label{eq:action_chunk}
+\end{equation}
+
+where $H$ is the prediction horizon and $d_a$ is the action dimension.
+
+The diffusion model generates the entire chunk, ensuring smooth transitions between consecutive actions.
+
+\subsubsection{Handling Multimodality}
+
+Consider a robot that can reach an object from either the left or right. A single-step policy might oscillate between these modes, producing incoherent behavior.
+
+With action chunking, the policy commits to a mode for the entire horizon. Once it starts going left, the subsequent actions in the chunk continue going left.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.8]
+% Single-step multimodal problem
+\begin{scope}[xshift=-5cm]
+    \node[circle, fill=UofSCGarnet, minimum size=0.3cm] (robot) at (0,0) {};
+    \node[rectangle, fill=UofSCAtlantic, minimum size=0.3cm] (obj) at (3,0) {};
+
+    % Multiple arrows showing oscillation
+    \draw[->, thick, UofSCGarnet] (robot) -- ++(0.8,0.5);
+    \draw[->, thick, UofSCAtlantic, dashed] (robot) -- ++(0.8,-0.5);
+    \draw[->, thick, UofSCGarnet] (1.0,0.3) -- ++(0.5,-0.6);
+    \draw[->, thick, UofSCAtlantic, dashed] (1.0,-0.3) -- ++(0.5,0.6);
+
+    \node[below=1cm] at (1.5,0) {Single-step: oscillation};
+\end{scope}
+
+% Action chunk coherent behavior
+\begin{scope}[xshift=3cm]
+    \node[circle, fill=UofSCGarnet, minimum size=0.3cm] (robot2) at (0,0) {};
+    \node[rectangle, fill=UofSCAtlantic, minimum size=0.3cm] (obj2) at (3,0) {};
+
+    % Coherent trajectory
+    \draw[->, thick, UofSCGarnet] (robot2) -- ++(0.8,0.5) -- ++(0.8,0.3) -- ++(0.8,0) -- ++(0.3,-0.3);
+
+    \node[below=1cm] at (1.5,0) {Action chunk: coherent};
+\end{scope}
+\end{tikzpicture}
+\caption{Single-step prediction can oscillate between modes (left), while action chunking produces temporally coherent behavior (right).}
+\label{fig:action_chunk_coherence}
+\end{figure}
+
+\subsubsection{Amortizing Computation}
+
+Diffusion sampling requires multiple denoising steps, which is computationally expensive. By predicting $H$ actions at once, we amortize this cost:
+
+\begin{equation}
+\text{Effective cost per action} = \frac{S \cdot T_{\text{network}}}{H}
+\label{eq:amortized_cost}
+\end{equation}
+
+where $S$ is the number of denoising steps and $T_{\text{network}}$ is the network forward pass time.
+
+With $H = 16$ and $S = 10$, we reduce the effective cost by 16x compared to single-step prediction with the same number of denoising steps.
+
+\subsection{Receding Horizon Execution}
+\label{subsec:receding_horizon}
+
+Although we predict $H$ actions, we typically don't execute all of them. Instead, we use a \textbf{receding horizon} strategy:
+
+\begin{enumerate}
+    \item Generate action chunk $\mathbf{A} = [\mathbf{a}_t, \ldots, \mathbf{a}_{t+H-1}]$
+    \item Execute only the first $H_{\text{exec}} < H$ actions
+    \item Get new observation
+    \item Generate new action chunk starting from current state
+    \item Repeat
+\end{enumerate}
+
+\begin{algorithm}[H]
+\caption{Receding Horizon Diffusion Policy Execution}
+\label{alg:receding_horizon}
+\begin{algorithmic}[1]
+\REQUIRE Diffusion policy $\pi_\theta$, prediction horizon $H$, execution horizon $H_{\text{exec}}$
+\STATE $t \gets 0$
+\WHILE{task not complete}
+    \STATE $\mathbf{o}_t \gets$ get\_observation()
+    \STATE $\mathbf{A} \gets \pi_\theta.\text{sample}(\mathbf{o}_t)$ \COMMENT{Generate $H$ actions}
+    \FOR{$k = 0$ \TO $H_{\text{exec}} - 1$}
+        \STATE execute\_action($\mathbf{A}[k]$)
+        \STATE $t \gets t + 1$
+    \ENDFOR
+\ENDWHILE
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Choosing horizons:} Typical values for manipulation:
+\begin{itemize}
+    \item Prediction horizon $H = 16$: Long enough for temporal coherence
+    \item Execution horizon $H_{\text{exec}} = 8$: Execute half, replan with fresh observation
+\end{itemize}
+
+The gap between $H$ and $H_{\text{exec}}$ provides overlap, enabling smooth transitions between consecutive chunks.
+
+\subsection{Observation History}
+\label{subsec:observation_history}
+
+To provide temporal context, diffusion policies often condition on a history of observations rather than just the current observation:
+
+\begin{equation}
+\mathbf{O} = [\mathbf{o}_{t-T_o+1}, \ldots, \mathbf{o}_{t-1}, \mathbf{o}_t] \in \mathbb{R}^{T_o \times d_o}
+\label{eq:observation_history}
+\end{equation}
+
+where $T_o$ is the observation history length.
+
+This helps the policy:
+\begin{itemize}
+    \item Infer velocities and higher-order dynamics from position sequences
+    \item Understand the context of ongoing actions
+    \item Handle partial observability by integrating information over time
+\end{itemize}
+
+\textbf{Implementation:} Stack observations along the sequence dimension and process with temporal convolutions or attention.
+
+\subsection{Training with Action Chunks}
+\label{subsec:training_action_chunks}
+
+During training, we sample action chunks from demonstration trajectories:
+
+\begin{algorithm}[H]
+\caption{Diffusion Policy Training with Action Chunks}
+\label{alg:diffusion_policy_training}
+\begin{algorithmic}[1]
+\REQUIRE Demonstrations $\mathcal{D} = \{(\mathbf{o}_i, \mathbf{a}_i)\}$, chunk length $H$, history length $T_o$
+\REPEAT
+    \STATE Sample trajectory from $\mathcal{D}$
+    \STATE Sample timestep $\tau$ such that $\tau \geq T_o - 1$ and $\tau + H \leq$ trajectory length
+    \STATE Extract observation history: $\mathbf{O} = [\mathbf{o}_{\tau-T_o+1}, \ldots, \mathbf{o}_\tau]$
+    \STATE Extract action chunk: $\mathbf{A} = [\mathbf{a}_\tau, \ldots, \mathbf{a}_{\tau+H-1}]$
+    \STATE Sample diffusion timestep $t \sim \text{Uniform}(\{1, \ldots, T\})$
+    \STATE Sample noise $\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+    \STATE $\mathbf{A}_t = \sqrt{\bar{\alpha}_t}\mathbf{A} + \sqrt{1-\bar{\alpha}_t}\boldsymbol{\epsilon}$
+    \STATE $\mathcal{L} = \|\boldsymbol{\epsilon} - \boldsymbol{\epsilon}_\theta(\mathbf{A}_t, t, \mathbf{O})\|^2$
+    \STATE Update $\theta$ via gradient descent
+\UNTIL{converged}
+\end{algorithmic}
+\end{algorithm}
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Capturing Multimodal Behaviors}
+\label{sec:multimodal_behaviors}
+%═══════════════════════════════════════════════════════════════════════════════
+
+One of the most compelling advantages of diffusion policies over traditional regression-based policies is their natural ability to capture \textbf{multimodal} behavior distributions. This section explores why multimodality matters and how diffusion policies handle it.
+
+\subsection{The Problem with Unimodal Policies}
+\label{subsec:unimodal_problem}
+
+Consider a standard behavior cloning approach that learns a policy $\pi_\theta(\mathbf{a} | \mathbf{o})$ by minimizing mean squared error:
+
+\begin{equation}
+\mathcal{L}_{\text{MSE}} = \mathbb{E}_{(\mathbf{o}, \mathbf{a}) \sim \mathcal{D}}[\|\mathbf{a} - \pi_\theta(\mathbf{o})\|^2]
+\label{eq:mse_loss}
+\end{equation}
+
+This loss is minimized when $\pi_\theta(\mathbf{o}) = \mathbb{E}[\mathbf{a} | \mathbf{o}]$---the conditional mean.
+
+\textbf{Problem:} If the demonstration distribution has multiple modes, the mean lies between them and may correspond to an invalid or dangerous action.
+
+\begin{example}[Mode Averaging Failure]
+A robot is demonstrated to push a block either left or right depending on the human demonstrator's preference. The observation (block position) is identical in both cases.
+
+Let $\mathbf{a}_{\text{left}} = -1$ and $\mathbf{a}_{\text{right}} = +1$ with equal probability.
+
+The MSE-optimal policy predicts:
+\begin{equation}
+\pi^*_{\text{MSE}}(\mathbf{o}) = \mathbb{E}[\mathbf{a} | \mathbf{o}] = 0.5 \cdot (-1) + 0.5 \cdot (+1) = 0
+\end{equation}
+
+This ``compromise'' action (don't push at all) was never demonstrated and fails to accomplish the task.
+\end{example}
+
+\subsection{How Diffusion Captures Multimodality}
+\label{subsec:diffusion_multimodality}
+
+Diffusion policies learn the full distribution $p(\mathbf{a} | \mathbf{o})$, not just its mean. During generation, samples are drawn from this distribution, naturally producing valid actions from one of the modes.
+
+\textbf{Mathematically:} The diffusion training objective (Equation~\ref{eq:simple_loss}) trains the score function:
+
+\begin{equation}
+\mathbf{s}_\theta(\mathbf{a}_t, t | \mathbf{o}) \approx \nabla_{\mathbf{a}_t} \log p(\mathbf{a}_t | \mathbf{o})
+\label{eq:conditional_score}
+\end{equation}
+
+The score function points toward high-probability regions regardless of how many modes exist. During sampling, the iterative refinement process follows the score, converging to one of the modes.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.2]
+% Bimodal distribution
+\begin{scope}
+    % Left mode
+    \draw[thick, UofSCGarnet, domain=-2:-0.5, samples=50] plot (\x, {1.5*exp(-2*(\x+1.2)^2)});
+    % Right mode
+    \draw[thick, UofSCGarnet, domain=0.5:2, samples=50] plot (\x, {1.5*exp(-2*(\x-1.2)^2)});
+
+    % Mean point (bad)
+    \draw[thick, UofSCRose, dashed] (0, 0) -- (0, 1.8);
+    \node[UofSCRose, below] at (0, -0.2) {MSE mean};
+
+    % Sample points (good)
+    \filldraw[UofSCAtlantic] (-1.2, 0) circle (2pt);
+    \filldraw[UofSCAtlantic] (1.2, 0) circle (2pt);
+    \node[UofSCAtlantic, below] at (-1.2, -0.2) {Sample 1};
+    \node[UofSCAtlantic, below] at (1.2, -0.2) {Sample 2};
+
+    \node[above] at (0, 1.8) {$p(\mathbf{a} | \mathbf{o})$};
+\end{scope}
+\end{tikzpicture}
+\caption{A bimodal action distribution. MSE regression produces the mean (red dashed), which has low probability. Diffusion sampling produces valid samples from the modes (blue dots).}
+\label{fig:multimodal_distribution}
+\end{figure}
+
+\subsection{Consistency Within Samples}
+\label{subsec:sample_consistency}
+
+An important property of diffusion sampling is \textbf{intra-sample consistency}. When generating an action chunk, the entire sequence is sampled from a consistent mode.
+
+This happens because the sampling process starts from a single noise realization and refines it. The initial noise determines which mode the sample converges to. Once the trajectory starts forming toward one mode, the score function continues to push it toward that mode.
+
+\begin{equation}
+\mathbf{A}^{(1)} \sim p(\mathbf{A} | \mathbf{o}) \quad \text{might be left-pushing}
+\end{equation}
+\begin{equation}
+\mathbf{A}^{(2)} \sim p(\mathbf{A} | \mathbf{o}) \quad \text{might be right-pushing}
+\end{equation}
+
+But within each sample, the actions are coherent.
+
+\subsection{Controlling Mode Selection}
+\label{subsec:mode_selection}
+
+Sometimes we want to control which mode the policy selects. There are several approaches:
+
+\subsubsection{Guidance}
+
+Classifier guidance or classifier-free guidance can steer generation toward desired modes:
+
+\begin{equation}
+\tilde{\boldsymbol{\epsilon}}_\theta = \boldsymbol{\epsilon}_\theta(\mathbf{a}_t, t, \mathbf{o}) - w \cdot \sigma_t \nabla_{\mathbf{a}_t} \log p(\text{mode} | \mathbf{a}_t)
+\label{eq:classifier_guidance}
+\end{equation}
+
+where $w$ is the guidance scale and $p(\text{mode} | \mathbf{a}_t)$ is a classifier.
+
+\subsubsection{Conditional Generation}
+
+Condition on additional context that disambiguates the mode:
+\begin{itemize}
+    \item Language instructions: ``Push the block left''
+    \item Goal images: Show the desired final configuration
+    \item User preferences: Encode preference as a latent variable
+\end{itemize}
+
+\subsubsection{Temperature Scaling}
+
+Adjust the noise level during sampling to control diversity:
+\begin{equation}
+\mathbf{x}_{t-1} = \boldsymbol{\mu}_\theta(\mathbf{x}_t, t) + \tau \cdot \sigma_t \mathbf{z}
+\label{eq:temperature_scaling}
+\end{equation}
+
+where $\tau < 1$ reduces randomness (concentrating samples near the highest mode) and $\tau > 1$ increases diversity.
+
+\subsection{Quantifying Multimodality}
+\label{subsec:quantifying_multimodality}
+
+To evaluate how well a policy captures multimodality, we can:
+
+\subsubsection{Sample Diversity Metrics}
+
+Generate multiple samples for the same observation and measure diversity:
+
+\begin{equation}
+\text{Diversity} = \frac{1}{N(N-1)} \sum_{i \neq j} \|\mathbf{A}^{(i)} - \mathbf{A}^{(j)}\|
+\label{eq:sample_diversity}
+\end{equation}
+
+\subsubsection{Mode Coverage}
+
+For tasks with known modes, measure what fraction are covered by generated samples.
+
+\subsubsection{Likelihood Evaluation}
+
+Evaluate the likelihood of held-out demonstration actions under the learned distribution. Diffusion models allow likelihood computation (with some approximation).
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Conditional Generation for Control}
+\label{sec:conditional_generation_control}
+%═══════════════════════════════════════════════════════════════════════════════
+
+In control applications, we need to condition action generation on various types of information: current observations, goal specifications, constraints, and more. This section covers the techniques for effective conditional generation.
+
+\subsection{Observation Conditioning}
+\label{subsec:observation_conditioning}
+
+The most fundamental conditioning is on the current observation. We've already discussed concatenation and cross-attention approaches. Here we dive deeper into best practices.
+
+\subsubsection{Observation Normalization}
+
+Normalizing observations to zero mean and unit variance improves training stability:
+
+\begin{equation}
+\tilde{\mathbf{o}} = \frac{\mathbf{o} - \boldsymbol{\mu}_{\text{obs}}}{\boldsymbol{\sigma}_{\text{obs}}}
+\label{eq:obs_normalization}
+\end{equation}
+
+where $\boldsymbol{\mu}_{\text{obs}}$ and $\boldsymbol{\sigma}_{\text{obs}}$ are computed from the training dataset.
+
+\subsubsection{Action Normalization}
+
+Similarly, normalize actions:
+
+\begin{equation}
+\tilde{\mathbf{a}} = \frac{\mathbf{a} - \boldsymbol{\mu}_{\text{act}}}{\boldsymbol{\sigma}_{\text{act}}}
+\label{eq:act_normalization}
+\end{equation}
+
+The diffusion process operates on normalized actions. Denormalize after sampling.
+
+\textbf{Important:} Use the same normalization statistics at training and inference time.
+
+\subsubsection{Observation Augmentation}
+
+Data augmentation can improve generalization:
+
+\begin{itemize}
+    \item \textbf{Image augmentation:} Random crops, color jitter, rotations (for visual policies)
+    \item \textbf{Proprioceptive augmentation:} Small Gaussian noise on joint positions
+    \item \textbf{Temporal augmentation:} Random shifts in observation-action alignment
+\end{itemize}
+
+Apply augmentation consistently to observation-action pairs to maintain their correspondence.
+
+\subsection{Goal Conditioning}
+\label{subsec:goal_conditioning}
+
+Many tasks require reaching a specified goal. Goal-conditioned diffusion policies generate actions that achieve the goal.
+
+\subsubsection{Goal Image Conditioning}
+
+For visual tasks, the goal can be specified as an image of the desired final state:
+
+\begin{equation}
+\boldsymbol{\epsilon}_\theta(\mathbf{a}_t, t, \mathbf{o}, \mathbf{g})
+\label{eq:goal_image_conditioning}
+\end{equation}
+
+where $\mathbf{g}$ is the goal image, encoded with the same (or similar) visual encoder as the observation.
+
+\subsubsection{Goal State Conditioning}
+
+For state-based tasks, the goal can be a desired state vector:
+
+\begin{equation}
+\boldsymbol{\epsilon}_\theta(\mathbf{a}_t, t, \mathbf{o}, \mathbf{x}_{\text{goal}})
+\label{eq:goal_state_conditioning}
+\end{equation}
+
+Common approaches:
+\begin{itemize}
+    \item Concatenate goal with observation
+    \item Compute goal-observation difference: $\mathbf{x}_{\text{goal}} - \mathbf{x}_{\text{current}}$
+    \item Use separate goal encoder
+\end{itemize}
+
+\subsubsection{Subgoal Generation}
+
+For long-horizon tasks, we can generate subgoals as intermediate waypoints:
+
+\begin{enumerate}
+    \item Generate subgoal: $\mathbf{g}_{\text{sub}} \sim p(\mathbf{g} | \mathbf{o}, \mathbf{g}_{\text{final}})$
+    \item Generate actions to reach subgoal: $\mathbf{A} \sim p(\mathbf{A} | \mathbf{o}, \mathbf{g}_{\text{sub}})$
+    \item Execute and repeat
+\end{enumerate}
+
+This hierarchical approach enables planning over longer horizons than a single action chunk.
+
+\subsection{Language Conditioning}
+\label{subsec:language_conditioning}
+
+Language instructions provide flexible, human-interpretable goal specification.
+
+\subsubsection{Language Encoding}
+
+Encode language instructions using pretrained language models:
+
+\begin{equation}
+\mathbf{z}_{\text{lang}} = \text{LanguageEncoder}(\text{``Pick up the red block''})
+\label{eq:language_encoding}
+\end{equation}
+
+Common choices:
+\begin{itemize}
+    \item CLIP text encoder: Good for grounding to visual concepts
+    \item T5/BERT: General language understanding
+    \item Sentence transformers: Efficient semantic embeddings
+\end{itemize}
+
+\subsubsection{Conditioning Mechanism}
+
+Inject language features via:
+\begin{itemize}
+    \item \textbf{FiLM conditioning:} Modulate intermediate features
+    \item \textbf{Cross-attention:} Attend to language tokens
+    \item \textbf{Prefix tokens:} Prepend language embedding to action sequence
+\end{itemize}
+
+Cross-attention to language tokens is often most effective for complex instructions.
+
+\subsection{Constraint Satisfaction}
+\label{subsec:constraint_satisfaction}
+
+Real control problems often have constraints: joint limits, obstacle avoidance, force limits.
+
+\subsubsection{Constraint Projection}
+
+After each denoising step, project the action onto the constraint set:
+
+\begin{equation}
+\mathbf{a}_{t-1} \gets \text{Project}_{\mathcal{C}}(\boldsymbol{\mu}_\theta(\mathbf{a}_t, t) + \sigma_t \mathbf{z})
+\label{eq:constraint_projection}
+\end{equation}
+
+For box constraints (joint limits):
+\begin{equation}
+\text{Project}_{\mathcal{C}}(\mathbf{a}) = \text{clip}(\mathbf{a}, \mathbf{a}_{\min}, \mathbf{a}_{\max})
+\label{eq:box_projection}
+\end{equation}
+
+\subsubsection{Guidance for Soft Constraints}
+
+For soft constraints or optimization objectives, use guidance:
+
+\begin{equation}
+\tilde{\mathbf{a}}_{t-1} = \mathbf{a}_{t-1} - \lambda \nabla_{\mathbf{a}} c(\mathbf{a}_{t-1})
+\label{eq:soft_constraint_guidance}
+\end{equation}
+
+where $c(\mathbf{a})$ is a constraint violation cost and $\lambda$ controls the guidance strength.
+
+\subsubsection{Training with Constraints}
+
+If constraints are known during training, we can incorporate them into the demonstration filtering:
+\begin{itemize}
+    \item Only use demonstrations that satisfy constraints
+    \item Augment loss with constraint penalty
+    \item Use constrained sampling during data generation
+\end{itemize}
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Practical Applications and Worked Examples}
+\label{sec:practical_applications}
+%═══════════════════════════════════════════════════════════════════════════════
+
+This section presents comprehensive worked examples that demonstrate diffusion policies in practice. Each example includes the complete problem setup, mathematical formulation, implementation details, and analysis.
+
+\subsection{Example 1: Simple 1D Diffusion Model}
+\label{subsec:example_1d_diffusion}
+
+We begin with the simplest possible diffusion model to build intuition before moving to control applications.
+
+\subsubsection{Problem Setup}
+
+Learn a diffusion model to generate samples from a mixture of two Gaussians:
+\begin{equation}
+p(\mathbf{x}) = 0.5 \cdot \mathcal{N}(\mathbf{x}; -2, 0.5^2) + 0.5 \cdot \mathcal{N}(\mathbf{x}; 2, 0.5^2)
+\label{eq:example1_distribution}
+\end{equation}
+
+This bimodal distribution is a good test case because simple regression would predict the mean (0), missing both modes.
+
+\subsubsection{Model Design}
+
+\textbf{Noise schedule:} Linear schedule with $\beta_1 = 10^{-4}$, $\beta_T = 0.02$, $T = 100$ steps.
+
+\textbf{Network architecture:} Simple MLP with sinusoidal timestep embedding:
+\begin{itemize}
+    \item Input: $[\mathbf{x}_t, \mathbf{e}_t] \in \mathbb{R}^{65}$ (1D data + 64D timestep embedding)
+    \item Hidden layers: 2 layers of 128 units with ReLU activation
+    \item Output: $\hat{\boldsymbol{\epsilon}} \in \mathbb{R}^1$ (predicted noise)
+\end{itemize}
+
+\subsubsection{Training Procedure}
+
+Generate training data by sampling from the mixture:
+\begin{equation}
+\mathbf{x}_0^{(i)} \sim p(\mathbf{x}), \quad i = 1, \ldots, 10000
+\label{eq:example1_data}
+\end{equation}
+
+Training loop (pseudocode):
+\begin{verbatim}
+for epoch in range(1000):
+    # Sample batch
+    x0 = sample_mixture(batch_size=256)
+
+    # Sample random timesteps
+    t = randint(1, T+1, size=batch_size)
+
+    # Sample noise
+    eps = randn(batch_size, 1)
+
+    # Create noisy samples
+    alpha_bar_t = alpha_bar[t]
+    xt = sqrt(alpha_bar_t) * x0 + sqrt(1 - alpha_bar_t) * eps
+
+    # Predict noise
+    eps_pred = model(xt, t)
+
+    # Compute loss
+    loss = mean((eps - eps_pred)**2)
+
+    # Update
+    optimizer.step(loss)
+\end{verbatim}
+
+\subsubsection{Sampling and Results}
+
+After training, we sample using DDPM:
+
+\begin{verbatim}
+# Start from noise
+x = randn(1000, 1)
+
+for t in reversed(range(1, T+1)):
+    # Predict noise
+    eps_pred = model(x, t)
+
+    # Compute mean
+    mu = (1/sqrt(alpha[t])) * (x - beta[t]/sqrt(1-alpha_bar[t]) * eps_pred)
+
+    # Add noise (except at t=1)
+    if t > 1:
+        z = randn_like(x)
+        x = mu + sqrt(beta[t]) * z
+    else:
+        x = mu
+\end{verbatim}
+
+\textbf{Results:} The histogram of 1000 generated samples shows two clear peaks at $x \approx -2$ and $x \approx 2$, matching the true distribution. The model successfully captures both modes.
+
+\subsubsection{Analysis}
+
+Key observations:
+\begin{enumerate}
+    \item The diffusion model learns both modes despite never being told they exist
+    \item Each sample is coherent (belongs to one mode, not averaged)
+    \item The spread of samples within each mode matches the true variance
+\end{enumerate}
+
+This example, while simple, demonstrates the core capability we need for control: generating valid samples from multimodal distributions.
+
+\subsection{Example 2: Diffusion Policy for 2D Point Robot Navigation}
+\label{subsec:example_point_navigation}
+
+\subsubsection{Problem Setup}
+
+A point robot must navigate from a start position to a goal while avoiding an obstacle. We have demonstrations showing both clockwise and counter-clockwise paths around the obstacle.
+
+\textbf{State space:} $\mathbf{s} = [x, y, \dot{x}, \dot{y}]^\top \in \mathbb{R}^4$
+
+\textbf{Action space:} $\mathbf{a} = [\ddot{x}, \ddot{y}]^\top \in \mathbb{R}^2$ (accelerations)
+
+\textbf{Observations:} Current state $\mathbf{o} = \mathbf{s}$
+
+\textbf{Goal:} Reach $\mathbf{g} = [5, 0]^\top$ from $\mathbf{s}_0 = [0, 0, 0, 0]^\top$
+
+\textbf{Obstacle:} Circular obstacle centered at $[2.5, 0]$ with radius 1.0
+
+\subsubsection{Demonstration Data}
+
+We collect 100 demonstrations, 50 going above the obstacle and 50 going below:
+
+\begin{verbatim}
+# Generate demonstration trajectories
+demos = []
+for i in range(100):
+    traj = []
+    if i < 50:
+        # Path above obstacle
+        waypoints = [[0,0], [1.5,1.5], [3.5,1.5], [5,0]]
+    else:
+        # Path below obstacle
+        waypoints = [[0,0], [1.5,-1.5], [3.5,-1.5], [5,0]]
+
+    # Interpolate smooth trajectory with dynamics
+    traj = interpolate_with_dynamics(waypoints, dt=0.1, T=50)
+    demos.append(traj)
+\end{verbatim}
+
+Each demonstration consists of 50 timesteps with state-action pairs.
+
+\subsubsection{Diffusion Policy Architecture}
+
+\textbf{Observation encoder:}
+\begin{equation}
+\mathbf{z}_{\text{obs}} = \text{MLP}_{\text{obs}}(\mathbf{o}) \in \mathbb{R}^{64}
+\label{eq:example2_obs_encoder}
+\end{equation}
+
+MLP with 2 hidden layers of 128 units.
+
+\textbf{Action chunk:} Predict $H = 16$ future actions:
+\begin{equation}
+\mathbf{A} = [\mathbf{a}_t, \mathbf{a}_{t+1}, \ldots, \mathbf{a}_{t+15}] \in \mathbb{R}^{16 \times 2}
+\label{eq:example2_action_chunk}
+\end{equation}
+
+\textbf{Denoising network:} 1D U-Net operating on the action sequence:
+\begin{itemize}
+    \item Input: Noisy action chunk $\mathbf{A}_\tau \in \mathbb{R}^{16 \times 2}$
+    \item Conditioning: Observation embedding $\mathbf{z}_{\text{obs}}$ injected via FiLM
+    \item Timestep: Sinusoidal embedding, also via FiLM
+    \item Architecture: Encoder [Conv1D-32, Conv1D-64] + Decoder [Conv1D-64, Conv1D-32]
+    \item Output: Predicted noise $\hat{\boldsymbol{\epsilon}} \in \mathbb{R}^{16 \times 2}$
+\end{itemize}
+
+\subsubsection{Training Details}
+
+\textbf{Noise schedule:} Cosine schedule with $T = 100$
+
+\textbf{Normalization:}
+\begin{itemize}
+    \item Observations: Normalize to $[-1, 1]$ based on workspace bounds
+    \item Actions: Normalize to $[-1, 1]$ based on acceleration limits
+\end{itemize}
+
+\textbf{Training:}
+\begin{itemize}
+    \item Batch size: 64
+    \item Learning rate: $10^{-4}$ with cosine annealing
+    \item Epochs: 500
+    \item Optimizer: AdamW with weight decay $10^{-4}$
+\end{itemize}
+
+\subsubsection{Execution and Results}
+
+We execute using receding horizon with $H_{\text{exec}} = 8$:
+
+\begin{verbatim}
+state = initial_state
+trajectory = [state]
+
+while not reached_goal(state):
+    # Get observation
+    obs = get_observation(state)
+
+    # Sample action chunk from diffusion policy
+    action_chunk = diffusion_policy.sample(obs, num_steps=10)  # DDIM
+
+    # Execute first 8 actions
+    for k in range(8):
+        action = action_chunk[k]
+        state = dynamics_step(state, action)
+        trajectory.append(state)
+        if reached_goal(state):
+            break
+\end{verbatim}
+
+\textbf{Results over 100 test rollouts:}
+\begin{itemize}
+    \item Success rate: 98\% (2 collisions due to sampling noise)
+    \item 52 trajectories went above the obstacle, 48 below
+    \item Average trajectory length: 48.3 steps (close to demonstrations)
+    \item All successful trajectories were smooth and physically plausible
+\end{itemize}
+
+The policy successfully captures both modes and generates coherent trajectories for each mode.
+
+\subsection{Example 3: Robotic Arm Pick-and-Place with Visual Observations}
+\label{subsec:example_pick_place}
+
+\subsubsection{Problem Setup}
+
+A 6-DOF robotic arm must pick up an object and place it at a target location. The robot observes the scene through a wrist-mounted camera.
+
+\textbf{State space:} Joint angles $\mathbf{q} \in \mathbb{R}^6$, joint velocities $\dot{\mathbf{q}} \in \mathbb{R}^6$, gripper state $g \in \{0, 1\}$
+
+\textbf{Action space:} Joint velocity commands $\dot{\mathbf{q}}_{\text{cmd}} \in \mathbb{R}^6$, gripper command $g_{\text{cmd}} \in \{0, 1\}$
+
+\textbf{Observations:}
+\begin{itemize}
+    \item RGB image from wrist camera: $\mathbf{I} \in \mathbb{R}^{84 \times 84 \times 3}$
+    \item Proprioception: $\mathbf{o}_{\text{prop}} = [\mathbf{q}, \dot{\mathbf{q}}, g]^\top \in \mathbb{R}^{13}$
+\end{itemize}
+
+\subsubsection{Data Collection}
+
+We collect 200 teleoperated demonstrations with varying object positions.
+
+\textbf{Demonstration statistics:}
+\begin{itemize}
+    \item Average episode length: 120 timesteps at 10 Hz
+    \item Object positions: Random within $30 \times 30$ cm workspace
+    \item Target positions: Fixed relative to base
+\end{itemize}
+
+\subsubsection{Architecture}
+
+\textbf{Visual encoder:}
+\begin{equation}
+\mathbf{z}_{\text{vis}} = \text{ResNet18}(\mathbf{I}) \in \mathbb{R}^{512}
+\label{eq:example3_visual_encoder}
+\end{equation}
+
+We use a pretrained ResNet18 with the final classification layer removed, followed by spatial softmax to extract keypoint features.
+
+\textbf{Observation fusion:}
+\begin{equation}
+\mathbf{z}_{\text{obs}} = \text{MLP}([\mathbf{z}_{\text{vis}}; \text{MLP}_{\text{prop}}(\mathbf{o}_{\text{prop}})]) \in \mathbb{R}^{256}
+\label{eq:example3_fusion}
+\end{equation}
+
+\textbf{Observation history:} Stack last $T_o = 2$ observations to capture velocity information.
+
+\textbf{Action chunk:} $H = 16$ steps, representing 1.6 seconds of motion.
+
+\textbf{Denoising network:} Transformer with:
+\begin{itemize}
+    \item 4 transformer blocks
+    \item 256-dimensional embeddings
+    \item 4 attention heads
+    \item Cross-attention to observation tokens
+\end{itemize}
+
+\subsubsection{Training Configuration}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Hyperparameter} & \textbf{Value} \\
+\midrule
+Diffusion steps $T$ & 100 \\
+Noise schedule & Cosine \\
+Batch size & 32 \\
+Learning rate & $10^{-4}$ \\
+Weight decay & $10^{-6}$ \\
+Training epochs & 1000 \\
+Image augmentation & Random crop, color jitter \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{Inference Optimization}
+
+For real-time execution at 10 Hz, we use DDIM with $S = 8$ denoising steps:
+
+\textbf{Timing breakdown (per inference):}
+\begin{itemize}
+    \item Visual encoding: 5 ms
+    \item Diffusion sampling (8 steps): 40 ms
+    \item Total: 45 ms (fits within 100 ms control period)
+\end{itemize}
+
+We further optimize by caching visual features and only recomputing every $H_{\text{exec}} = 8$ steps.
+
+\subsubsection{Results}
+
+\textbf{Success rate} (object placed within 2 cm of target):
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Training Objects} & \textbf{Novel Objects} \\
+\midrule
+Behavior Cloning (MLP) & 72\% & 45\% \\
+Behavior Cloning (Transformer) & 81\% & 58\% \\
+Diffusion Policy (ours) & 95\% & 82\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The diffusion policy shows significantly better generalization to novel objects, likely due to better handling of the multimodal grasp distribution.
+
+\subsection{Example 4: Multimodal Behavior in Block Pushing}
+\label{subsec:example_block_pushing}
+
+This example explicitly demonstrates multimodal behavior capture.
+
+\subsubsection{Problem Setup}
+
+A planar pusher must push a block to a goal position. The human demonstrators exhibit a clear preference: 60\% push from the left, 40\% push from the right. A good policy should capture this distribution.
+
+\textbf{Observation:} Block position $[x_b, y_b]$, pusher position $[x_p, y_p]$, goal position $[x_g, y_g]$
+
+\textbf{Action:} Pusher velocity $[\dot{x}_p, \dot{y}_p]$
+
+\subsubsection{Analysis of Learned Distribution}
+
+After training on 500 demonstrations, we analyze the policy:
+
+\textbf{Mode recovery:} Generate 1000 trajectories from the same initial condition. Count how many go left vs. right.
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Left \%} & \textbf{Right \%} \\
+\midrule
+Demonstration data & 60\% & 40\% \\
+Diffusion Policy & 58\% & 42\% \\
+GMM Policy (2 modes) & 55\% & 45\% \\
+Behavior Cloning & N/A (averaged) & N/A \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The diffusion policy recovers the mode frequencies well.
+
+\textbf{Intra-trajectory consistency:} For each generated trajectory, check if the pusher consistently approaches from one side.
+
+\begin{itemize}
+    \item Diffusion Policy: 97\% consistent trajectories
+    \item GMM Policy: 89\% consistent (some mode switching)
+\end{itemize}
+
+\subsubsection{Controlling Mode Selection}
+
+We can bias the policy toward a specific mode using guidance. Define a mode indicator:
+\begin{equation}
+s(\mathbf{A}) = \text{sign}\left(\frac{1}{H}\sum_{h=1}^{H} y_{p,h}\right)
+\label{eq:mode_indicator}
+\end{equation}
+
+which is positive for right-pushing and negative for left-pushing trajectories.
+
+Apply guidance:
+\begin{equation}
+\tilde{\boldsymbol{\epsilon}} = \boldsymbol{\epsilon}_\theta(\mathbf{A}_t, t, \mathbf{o}) - w \cdot \nabla_{\mathbf{A}_t} c(\mathbf{A}_t)
+\label{eq:mode_guidance}
+\end{equation}
+
+where $c(\mathbf{A}) = -s(\mathbf{A})$ to encourage left-pushing.
+
+With $w = 0.5$, mode selection becomes: 92\% left, 8\% right.
+
+\subsection{Example 5: Contact-Rich Manipulation}
+\label{subsec:example_contact_manipulation}
+
+\subsubsection{Problem Setup}
+
+A robot hand must insert a peg into a hole. This task requires:
+\begin{itemize}
+    \item Precise positioning
+    \item Contact force control
+    \item Compliance during insertion
+\end{itemize}
+
+\textbf{Observations:}
+\begin{itemize}
+    \item End-effector pose: $\mathbf{p} \in SE(3)$ (position + quaternion)
+    \item Force/torque sensor: $\mathbf{f} \in \mathbb{R}^6$
+    \item Proprioception: Gripper state
+\end{itemize}
+
+\textbf{Actions:} End-effector velocity twist $\boldsymbol{\xi} \in \mathbb{R}^6$
+
+\subsubsection{Demonstration Collection}
+
+We collect 150 demonstrations using:
+\begin{itemize}
+    \item Teleoperation with force feedback
+    \item Varying initial peg positions (within 1 cm of hole)
+    \item Varying hole tolerances (tight to loose fit)
+\end{itemize}
+
+The demonstrations show natural human compliance strategies: gentle probing, tilting to find the hole, smooth insertion.
+
+\subsubsection{Architecture Modifications}
+
+\textbf{Force conditioning:} The force/torque signal is critical for contact-rich tasks. We process it with:
+\begin{equation}
+\mathbf{z}_{\text{force}} = \text{MLP}(\mathbf{f}) \in \mathbb{R}^{32}
+\label{eq:force_embedding}
+\end{equation}
+
+and fuse with other observations.
+
+\textbf{Observation history:} Use $T_o = 4$ to capture force transients during contact.
+
+\textbf{Action smoothness:} Add velocity penalty to the loss:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{diffusion}} + \lambda_{\text{smooth}} \sum_{h=1}^{H-1} \|\mathbf{a}_{h+1} - \mathbf{a}_h\|^2
+\label{eq:smoothness_loss}
+\end{equation}
+
+\subsubsection{Results}
+
+\textbf{Success rate} (peg fully inserted):
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Method} & \textbf{Success \%} \\
+\midrule
+Position control only & 23\% \\
+Force-based spiral search & 67\% \\
+Behavior cloning & 71\% \\
+Diffusion Policy & 89\% \\
+Diffusion Policy + force conditioning & 94\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The diffusion policy learns to generate compliant, probing behaviors that adapt to contact feedback.
+
+\subsection{Example 6: Long-Horizon Task with Subgoal Generation}
+\label{subsec:example_long_horizon}
+
+\subsubsection{Problem Setup}
+
+A mobile manipulator must navigate to a table, pick up an object, navigate to a shelf, and place the object. This requires planning over hundreds of timesteps.
+
+\textbf{Challenge:} Single action chunk ($H = 16$) cannot span the entire task.
+
+\subsubsection{Hierarchical Approach}
+
+We use a two-level hierarchy:
+
+\textbf{High-level policy} (subgoal generator):
+\begin{equation}
+\mathbf{g}_{\text{sub}} \sim p_{\theta_{\text{high}}}(\mathbf{g} | \mathbf{o}, \mathbf{g}_{\text{final}})
+\label{eq:subgoal_policy}
+\end{equation}
+
+Generates intermediate goal states (e.g., ``robot at table'', ``object grasped'').
+
+\textbf{Low-level policy} (action generator):
+\begin{equation}
+\mathbf{A} \sim p_{\theta_{\text{low}}}(\mathbf{A} | \mathbf{o}, \mathbf{g}_{\text{sub}})
+\label{eq:low_level_policy}
+\end{equation}
+
+Generates action chunks to reach the current subgoal.
+
+Both policies are diffusion models.
+
+\subsubsection{Training}
+
+\textbf{High-level training:}
+\begin{itemize}
+    \item Extract subgoals from demonstrations (every 50 timesteps)
+    \item Train diffusion model to generate subgoal sequences
+    \item Horizon: 5 subgoals
+\end{itemize}
+
+\textbf{Low-level training:}
+\begin{itemize}
+    \item Segment demonstrations by subgoals
+    \item Train goal-conditioned diffusion policy
+    \item Action horizon: 16 steps
+\end{itemize}
+
+\subsubsection{Execution}
+
+\begin{verbatim}
+# Generate subgoal sequence
+subgoals = high_level_policy.sample(obs, final_goal)
+
+for subgoal in subgoals:
+    while not reached(subgoal):
+        # Generate and execute actions toward subgoal
+        obs = get_observation()
+        action_chunk = low_level_policy.sample(obs, subgoal)
+        execute(action_chunk[:8])
+\end{verbatim}
+
+\subsubsection{Results}
+
+\textbf{Task completion rate:}
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Method} & \textbf{Success \%} \\
+\midrule
+Flat diffusion policy ($H = 16$) & 12\% \\
+Flat diffusion policy ($H = 64$) & 34\% \\
+Hierarchical diffusion policy & 78\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The hierarchical approach enables effective long-horizon planning.
+
+\subsection{Example 7: Sim-to-Real Transfer}
+\label{subsec:example_sim_to_real}
+
+\subsubsection{Problem Setup}
+
+Train a diffusion policy in simulation and deploy on a real robot for a cube stacking task.
+
+\subsubsection{Domain Randomization}
+
+During simulation training, randomize:
+\begin{itemize}
+    \item Cube positions: $\pm 3$ cm
+    \item Cube sizes: $\pm 10\%$
+    \item Friction coefficients: $[0.3, 1.0]$
+    \item Camera pose: $\pm 5°$ rotation, $\pm 2$ cm translation
+    \item Lighting: Intensity, color temperature, shadows
+\end{itemize}
+
+\subsubsection{Action Space Design}
+
+Use delta end-effector positions rather than absolute positions:
+\begin{equation}
+\mathbf{p}_{t+1} = \mathbf{p}_t + \Delta\mathbf{p}
+\label{eq:delta_actions}
+\end{equation}
+
+This makes the policy less sensitive to calibration errors.
+
+\subsubsection{Real Robot Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Sim Success} & \textbf{Real Success} \\
+\midrule
+BC (no randomization) & 95\% & 15\% \\
+BC (with randomization) & 88\% & 52\% \\
+Diffusion (no randomization) & 97\% & 31\% \\
+Diffusion (with randomization) & 91\% & 73\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The diffusion policy shows better sim-to-real transfer, likely due to:
+\begin{enumerate}
+    \item Multimodal action distribution provides robustness
+    \item Action chunking produces smoother, more physical trajectories
+    \item Denoising acts as implicit regularization
+\end{enumerate}
+
+\subsection{Example 8: Language-Conditioned Manipulation}
+\label{subsec:example_language}
+
+\subsubsection{Problem Setup}
+
+A robot arm must follow natural language instructions like ``Pick up the red cube'' or ``Move the blue cylinder to the left.''
+
+\textbf{Observations:}
+\begin{itemize}
+    \item RGB image: $\mathbf{I} \in \mathbb{R}^{224 \times 224 \times 3}$
+    \item Language instruction: text string
+    \item Proprioception: joint states
+\end{itemize}
+
+\subsubsection{Architecture}
+
+\textbf{Visual encoder:} CLIP ViT-B/16 (frozen)
+\begin{equation}
+\mathbf{z}_{\text{vis}} = \text{CLIP}_{\text{vision}}(\mathbf{I}) \in \mathbb{R}^{512}
+\label{eq:clip_visual}
+\end{equation}
+
+\textbf{Language encoder:} CLIP text encoder (frozen)
+\begin{equation}
+\mathbf{z}_{\text{lang}} = \text{CLIP}_{\text{text}}(\text{instruction}) \in \mathbb{R}^{512}
+\label{eq:clip_text}
+\end{equation}
+
+\textbf{Conditioning:} Cross-attention between action tokens and language tokens.
+
+\subsubsection{Dataset}
+
+Collect 1000 demonstrations across 50 instruction templates:
+\begin{itemize}
+    \item ``Pick up the [color] [object]''
+    \item ``Place the [object] [location]''
+    \item ``Push the [object] [direction]''
+\end{itemize}
+
+With 4 colors, 3 objects, and 4 locations/directions.
+
+\subsubsection{Results}
+
+\textbf{Instruction following accuracy:}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Instruction Type} & \textbf{Seen} & \textbf{Novel Composition} \\
+\midrule
+Pick up [color] [object] & 91\% & 78\% \\
+Place [object] [location] & 88\% & 71\% \\
+Push [object] [direction] & 85\% & 65\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The model generalizes to novel color-object-action compositions not seen during training.
+
+\subsection{Example 9: Trajectory Generation for Motion Planning}
+\label{subsec:example_trajectory_generation}
+
+\subsubsection{Problem Setup}
+
+Generate collision-free trajectories for a 7-DOF robot arm in cluttered environments.
+
+\textbf{Input:} Start configuration $\mathbf{q}_{\text{start}}$, goal configuration $\mathbf{q}_{\text{goal}}$, obstacle point cloud
+
+\textbf{Output:} Trajectory $\boldsymbol{\tau} = [\mathbf{q}_0, \mathbf{q}_1, \ldots, \mathbf{q}_N]$
+
+\subsubsection{Diffusion Formulation}
+
+Treat the entire trajectory as the data to be generated:
+\begin{equation}
+\boldsymbol{\tau} \in \mathbb{R}^{N \times 7}
+\label{eq:trajectory_data}
+\end{equation}
+
+\textbf{Conditioning:}
+\begin{itemize}
+    \item Start/goal: Concatenate with noisy trajectory
+    \item Environment: Encode point cloud with PointNet, cross-attend
+\end{itemize}
+
+\textbf{Constraint handling:}
+\begin{itemize}
+    \item Start constraint: Replace $\mathbf{q}_0$ with $\mathbf{q}_{\text{start}}$ after each denoising step
+    \item Goal constraint: Replace $\mathbf{q}_N$ with $\mathbf{q}_{\text{goal}}$ after each denoising step
+    \item Collision avoidance: Apply guidance using signed distance function
+\end{itemize}
+
+\subsubsection{Training Data}
+
+Generate 50,000 trajectories using RRT* in random environments, then smooth with trajectory optimization.
+
+\subsubsection{Results}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Success \%} & \textbf{Path Length} & \textbf{Time (ms)} \\
+\midrule
+RRT & 92\% & 1.45 & 850 \\
+RRT* & 95\% & 1.12 & 2100 \\
+Diffusion (ours) & 89\% & 1.08 & 120 \\
+Diffusion + collision guidance & 93\% & 1.15 & 180 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The diffusion planner is significantly faster while producing near-optimal paths. It learns the structure of good trajectories from the training data.
+
+\subsection{Example 10: Bimanual Coordination}
+\label{subsec:example_bimanual}
+
+\subsubsection{Problem Setup}
+
+Two robot arms must coordinate to fold a piece of fabric.
+
+\textbf{Action space:} Joint velocities for both arms, $\mathbf{a} \in \mathbb{R}^{14}$
+
+\textbf{Challenge:} Actions must be tightly coordinated; independent arm policies fail.
+
+\subsubsection{Architecture Design}
+
+Model joint action distribution:
+\begin{equation}
+p(\mathbf{a}_{\text{left}}, \mathbf{a}_{\text{right}} | \mathbf{o})
+\label{eq:bimanual_distribution}
+\end{equation}
+
+\textbf{Key insight:} The diffusion model naturally captures correlations between left and right arm actions because it generates them jointly.
+
+\textbf{Observation:} Two wrist cameras + proprioception from both arms.
+
+\textbf{Action chunk:} $H = 32$ steps (3.2 seconds) to capture the full folding motion.
+
+\subsubsection{Results}
+
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Method} & \textbf{Success \%} \\
+\midrule
+Independent arm policies & 12\% \\
+Shared-trunk MLP & 45\% \\
+Transformer BC & 58\% \\
+Diffusion Policy (joint) & 81\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The diffusion policy's ability to model joint distributions is critical for coordination.
+
+\subsection{Example 11: Dexterous Hand Manipulation}
+\label{subsec:example_dexterous}
+
+\subsubsection{Problem Setup}
+
+A 16-DOF dexterous hand must reorient a cube to a target orientation.
+
+\textbf{State:} Hand joint angles (16), cube pose (7)
+
+\textbf{Action:} Joint position targets (16)
+
+\textbf{Observation:} Proprioception + tactile sensing (fingertip forces)
+
+\subsubsection{Multimodality in Grasps}
+
+The same reorientation can be achieved with different grasp strategies:
+\begin{itemize}
+    \item Power grasp + wrist rotation
+    \item Finger gaiting
+    \item Rolling on palm
+\end{itemize}
+
+The diffusion policy captures this distribution.
+
+\subsubsection{Tactile Conditioning}
+
+Tactile signals are processed with a temporal convolution:
+\begin{equation}
+\mathbf{z}_{\text{tactile}} = \text{Conv1D}(\mathbf{F}_{\text{tactile}})
+\label{eq:tactile_encoding}
+\end{equation}
+
+where $\mathbf{F}_{\text{tactile}} \in \mathbb{R}^{T_o \times 5 \times 3}$ is the history of 5 fingertip forces.
+
+\subsubsection{Results}
+
+\textbf{Reorientation success} (within 15° of target):
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Vision Only} & \textbf{Vision + Tactile} \\
+\midrule
+Behavior Cloning & 42\% & 51\% \\
+Diffusion Policy & 67\% & 82\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Tactile feedback provides crucial information during contact, and the diffusion policy effectively uses it.
+
+\subsection{Example 12: Real-Time Collision Avoidance with Dynamic Obstacles}
+\label{subsec:example_dynamic_obstacles}
+
+\subsubsection{Problem Setup}
+
+A robot arm must reach a goal while avoiding a human who moves unpredictably.
+
+\textbf{Key requirements:}
+\begin{itemize}
+    \item Real-time replanning (10 Hz minimum)
+    \item Safe stopping if human gets too close
+    \item Smooth trajectories (no jerky avoidance)
+\end{itemize}
+
+\subsubsection{Fast Inference}
+
+Use aggressive DDIM with only 4 denoising steps.
+
+\textbf{Timing:}
+\begin{itemize}
+    \item Human tracking: 10 ms
+    \item Diffusion sampling (4 steps): 25 ms
+    \item Total: 35 ms (enables 25 Hz control)
+\end{itemize}
+
+\subsubsection{Safety Layer}
+
+Apply a safety filter after diffusion sampling:
+\begin{equation}
+\mathbf{a}_{\text{safe}} = \min\left(1, \frac{d_{\text{human}} - d_{\text{stop}}}{d_{\text{slow}} - d_{\text{stop}}}\right) \cdot \mathbf{a}_{\text{diffusion}}
+\label{eq:safety_filter}
+\end{equation}
+
+where $d_{\text{human}}$ is the distance to the human, $d_{\text{stop}} = 0.2$ m, and $d_{\text{slow}} = 0.5$ m.
+
+\subsubsection{Results}
+
+Over 500 test interactions:
+\begin{itemize}
+    \item Task completion: 92\%
+    \item Safety violations: 0
+    \item Average time to goal: 4.2 s (vs. 3.1 s without human)
+    \item Human comfort rating: 4.2/5 (``robot moved smoothly and predictably'')
+\end{itemize}
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Algorithm Implementations}
+\label{sec:algorithm_implementations}
+%═══════════════════════════════════════════════════════════════════════════════
+
+This section provides production-ready algorithms for implementing diffusion policies. Each algorithm includes complexity analysis, numerical considerations, and implementation guidance.
+
+\subsection{Core DDPM Algorithms}
+\label{subsec:ddpm_algorithms}
+
+\subsubsection{Noise Schedule Computation}
+
+\begin{algorithm}[H]
+\caption{Compute Noise Schedule}
+\label{alg:noise_schedule}
+\begin{algorithmic}[1]
+\REQUIRE Number of timesteps $T$, schedule type (``linear'' or ``cosine'')
+\ENSURE Arrays $\beta$, $\alpha$, $\bar{\alpha}$, $\sqrt{\bar{\alpha}}$, $\sqrt{1-\bar{\alpha}}$
+\IF{schedule type = ``linear''}
+    \STATE $\beta_{\min} \gets 10^{-4}$, $\beta_{\max} \gets 0.02$
+    \STATE $\beta \gets \text{linspace}(\beta_{\min}, \beta_{\max}, T)$
+\ELSIF{schedule type = ``cosine''}
+    \STATE $s \gets 0.008$ \COMMENT{Small offset}
+    \FOR{$t = 0$ \TO $T$}
+        \STATE $f_t \gets \cos^2\left(\frac{t/T + s}{1+s} \cdot \frac{\pi}{2}\right)$
+    \ENDFOR
+    \STATE $\bar{\alpha}_t \gets f_t / f_0$ for $t = 1, \ldots, T$
+    \STATE $\beta_t \gets 1 - \bar{\alpha}_t / \bar{\alpha}_{t-1}$ for $t = 1, \ldots, T$
+    \STATE $\beta \gets \text{clip}(\beta, \text{max}=0.999)$
+\ENDIF
+\STATE $\alpha \gets 1 - \beta$
+\STATE $\bar{\alpha} \gets \text{cumprod}(\alpha)$
+\STATE $\sqrt{\bar{\alpha}} \gets \sqrt{\bar{\alpha}}$
+\STATE $\sqrt{1-\bar{\alpha}} \gets \sqrt{1 - \bar{\alpha}}$
+\RETURN $\beta$, $\alpha$, $\bar{\alpha}$, $\sqrt{\bar{\alpha}}$, $\sqrt{1-\bar{\alpha}}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity:} $\mathcal{O}(T)$ time and space.
+
+\textbf{Numerical note:} Precompute and store all schedule values to avoid recomputation during training and sampling.
+
+\subsubsection{Forward Diffusion (Adding Noise)}
+
+\begin{algorithm}[H]
+\caption{Forward Diffusion: Sample $\mathbf{x}_t$ from $\mathbf{x}_0$}
+\label{alg:forward_diffusion}
+\begin{algorithmic}[1]
+\REQUIRE Clean sample $\mathbf{x}_0 \in \mathbb{R}^d$, timestep $t$, schedule values $\sqrt{\bar{\alpha}_t}$, $\sqrt{1-\bar{\alpha}_t}$
+\ENSURE Noisy sample $\mathbf{x}_t$, noise $\boldsymbol{\epsilon}$
+\STATE $\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_d)$
+\STATE $\mathbf{x}_t \gets \sqrt{\bar{\alpha}_t} \cdot \mathbf{x}_0 + \sqrt{1-\bar{\alpha}_t} \cdot \boldsymbol{\epsilon}$
+\RETURN $\mathbf{x}_t$, $\boldsymbol{\epsilon}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity:} $\mathcal{O}(d)$ for dimension $d$.
+
+\subsubsection{DDPM Training Step}
+
+\begin{algorithm}[H]
+\caption{DDPM Training Step}
+\label{alg:ddpm_training_step}
+\begin{algorithmic}[1]
+\REQUIRE Batch of clean samples $\{\mathbf{x}_0^{(i)}\}_{i=1}^B$, noise predictor $\boldsymbol{\epsilon}_\theta$, schedule values
+\ENSURE Loss value $\mathcal{L}$
+\STATE Sample timesteps: $t^{(i)} \sim \text{Uniform}(\{1, \ldots, T\})$ for $i = 1, \ldots, B$
+\STATE Sample noise: $\boldsymbol{\epsilon}^{(i)} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ for $i = 1, \ldots, B$
+\STATE Compute noisy samples: $\mathbf{x}_t^{(i)} \gets \sqrt{\bar{\alpha}_{t^{(i)}}} \mathbf{x}_0^{(i)} + \sqrt{1-\bar{\alpha}_{t^{(i)}}} \boldsymbol{\epsilon}^{(i)}$
+\STATE Predict noise: $\hat{\boldsymbol{\epsilon}}^{(i)} \gets \boldsymbol{\epsilon}_\theta(\mathbf{x}_t^{(i)}, t^{(i)})$
+\STATE Compute loss: $\mathcal{L} \gets \frac{1}{B}\sum_{i=1}^B \|\boldsymbol{\epsilon}^{(i)} - \hat{\boldsymbol{\epsilon}}^{(i)}\|^2$
+\RETURN $\mathcal{L}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity:} $\mathcal{O}(B \cdot C_{\text{network}})$ where $C_{\text{network}}$ is the cost of one network forward pass.
+
+\subsubsection{DDPM Sampling}
+
+\begin{algorithm}[H]
+\caption{DDPM Sampling}
+\label{alg:ddpm_sampling_full}
+\begin{algorithmic}[1]
+\REQUIRE Trained noise predictor $\boldsymbol{\epsilon}_\theta$, number of samples $N$, dimension $d$
+\ENSURE Generated samples $\{\mathbf{x}_0^{(i)}\}_{i=1}^N$
+\STATE Initialize: $\mathbf{x}_T^{(i)} \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_d)$ for $i = 1, \ldots, N$
+\FOR{$t = T$ \textbf{down to} $1$}
+    \STATE Predict noise: $\hat{\boldsymbol{\epsilon}}^{(i)} \gets \boldsymbol{\epsilon}_\theta(\mathbf{x}_t^{(i)}, t)$ for all $i$
+    \STATE Compute mean: $\boldsymbol{\mu}_t^{(i)} \gets \frac{1}{\sqrt{\alpha_t}}\left(\mathbf{x}_t^{(i)} - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\hat{\boldsymbol{\epsilon}}^{(i)}\right)$
+    \IF{$t > 1$}
+        \STATE Sample noise: $\mathbf{z}^{(i)} \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_d)$
+        \STATE Update: $\mathbf{x}_{t-1}^{(i)} \gets \boldsymbol{\mu}_t^{(i)} + \sqrt{\beta_t} \cdot \mathbf{z}^{(i)}$
+    \ELSE
+        \STATE $\mathbf{x}_0^{(i)} \gets \boldsymbol{\mu}_1^{(i)}$
+    \ENDIF
+\ENDFOR
+\RETURN $\{\mathbf{x}_0^{(i)}\}_{i=1}^N$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity:} $\mathcal{O}(T \cdot N \cdot C_{\text{network}})$. This is the main bottleneck for real-time control.
+
+\subsection{DDIM Sampling}
+\label{subsec:ddim_algorithm}
+
+\begin{algorithm}[H]
+\caption{DDIM Sampling with Reduced Steps}
+\label{alg:ddim_sampling_full}
+\begin{algorithmic}[1]
+\REQUIRE Trained $\boldsymbol{\epsilon}_\theta$, number of DDIM steps $S$, total timesteps $T$, $\eta$ (0 for deterministic)
+\ENSURE Generated sample $\mathbf{x}_0$
+\STATE Compute timestep subsequence: $\tau \gets [T \cdot S/S, T \cdot (S-1)/S, \ldots, T \cdot 1/S]$ (equally spaced)
+\STATE $\tau \gets$ round to integers
+\STATE Initialize: $\mathbf{x}_{\tau_S} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+\FOR{$i = S$ \textbf{down to} $1$}
+    \STATE $t \gets \tau_i$
+    \STATE $t_{\text{prev}} \gets \tau_{i-1}$ if $i > 1$ else $0$
+    \STATE Predict noise: $\hat{\boldsymbol{\epsilon}} \gets \boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)$
+    \STATE Predict $\mathbf{x}_0$: $\hat{\mathbf{x}}_0 \gets \frac{\mathbf{x}_t - \sqrt{1-\bar{\alpha}_t}\hat{\boldsymbol{\epsilon}}}{\sqrt{\bar{\alpha}_t}}$
+    \STATE Compute variance: $\sigma_t \gets \eta \cdot \sqrt{\frac{1-\bar{\alpha}_{t_{\text{prev}}}}{1-\bar{\alpha}_t}} \cdot \sqrt{1 - \frac{\bar{\alpha}_t}{\bar{\alpha}_{t_{\text{prev}}}}}$
+    \STATE Direction pointing to $\mathbf{x}_t$: $\text{dir} \gets \sqrt{1-\bar{\alpha}_{t_{\text{prev}}} - \sigma_t^2} \cdot \hat{\boldsymbol{\epsilon}}$
+    \STATE Sample noise: $\mathbf{z} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ if $t_{\text{prev}} > 0$ else $\mathbf{z} \gets \mathbf{0}$
+    \STATE Update: $\mathbf{x}_{t_{\text{prev}}} \gets \sqrt{\bar{\alpha}_{t_{\text{prev}}}} \cdot \hat{\mathbf{x}}_0 + \text{dir} + \sigma_t \cdot \mathbf{z}$
+\ENDFOR
+\RETURN $\mathbf{x}_0$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity:} $\mathcal{O}(S \cdot C_{\text{network}})$ with $S \ll T$.
+
+\textbf{Key parameters:}
+\begin{itemize}
+    \item $\eta = 0$: Fully deterministic (same noise $\to$ same output)
+    \item $\eta = 1$: Equivalent to DDPM (full stochasticity)
+    \item $\eta \in (0, 1)$: Interpolation between deterministic and stochastic
+\end{itemize}
+
+\subsection{Diffusion Policy Algorithms}
+\label{subsec:diffusion_policy_algorithms}
+
+\subsubsection{Conditional Diffusion Policy Training}
+
+\begin{algorithm}[H]
+\caption{Diffusion Policy Training}
+\label{alg:diffusion_policy_training_full}
+\begin{algorithmic}[1]
+\REQUIRE Demonstration dataset $\mathcal{D}$, observation encoder $\phi_\psi$, noise predictor $\boldsymbol{\epsilon}_\theta$
+\REQUIRE Prediction horizon $H$, observation history $T_o$, diffusion timesteps $T$
+\REPEAT
+    \STATE Sample trajectory $\boldsymbol{\tau} = \{(\mathbf{o}_k, \mathbf{a}_k)\}_{k=1}^{K}$ from $\mathcal{D}$
+    \STATE Sample start index $j \sim \text{Uniform}(\{T_o, \ldots, K-H\})$
+    \STATE Extract observation history: $\mathbf{O} \gets [\mathbf{o}_{j-T_o+1}, \ldots, \mathbf{o}_j]$
+    \STATE Extract action chunk: $\mathbf{A} \gets [\mathbf{a}_j, \ldots, \mathbf{a}_{j+H-1}]$
+    \STATE Normalize: $\tilde{\mathbf{O}} \gets \text{normalize}(\mathbf{O})$, $\tilde{\mathbf{A}} \gets \text{normalize}(\mathbf{A})$
+    \STATE Encode observation: $\mathbf{z} \gets \phi_\psi(\tilde{\mathbf{O}})$
+    \STATE Sample diffusion timestep: $t \sim \text{Uniform}(\{1, \ldots, T\})$
+    \STATE Sample noise: $\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+    \STATE Add noise: $\tilde{\mathbf{A}}_t \gets \sqrt{\bar{\alpha}_t} \tilde{\mathbf{A}} + \sqrt{1-\bar{\alpha}_t} \boldsymbol{\epsilon}$
+    \STATE Predict noise: $\hat{\boldsymbol{\epsilon}} \gets \boldsymbol{\epsilon}_\theta(\tilde{\mathbf{A}}_t, t, \mathbf{z})$
+    \STATE Compute loss: $\mathcal{L} \gets \|\boldsymbol{\epsilon} - \hat{\boldsymbol{\epsilon}}\|^2$
+    \STATE Update $\theta, \psi$ via gradient descent on $\mathcal{L}$
+\UNTIL{converged}
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Diffusion Policy Inference}
+
+\begin{algorithm}[H]
+\caption{Diffusion Policy Inference (DDIM)}
+\label{alg:diffusion_policy_inference}
+\begin{algorithmic}[1]
+\REQUIRE Observation history $\mathbf{O}$, trained encoder $\phi_\psi$, noise predictor $\boldsymbol{\epsilon}_\theta$
+\REQUIRE DDIM steps $S$, action dimension $d_a$, horizon $H$
+\ENSURE Action chunk $\mathbf{A} \in \mathbb{R}^{H \times d_a}$
+\STATE Normalize observation: $\tilde{\mathbf{O}} \gets \text{normalize}(\mathbf{O})$
+\STATE Encode: $\mathbf{z} \gets \phi_\psi(\tilde{\mathbf{O}})$
+\STATE Initialize noisy actions: $\tilde{\mathbf{A}}_T \sim \mathcal{N}(\mathbf{0}, \mathbf{I}_{H \times d_a})$
+\STATE Compute timestep sequence: $\tau \gets \text{ddim\_timesteps}(T, S)$
+\FOR{$i = S$ \textbf{down to} $1$}
+    \STATE $t \gets \tau_i$, $t_{\text{prev}} \gets \tau_{i-1}$ if $i > 1$ else $0$
+    \STATE $\hat{\boldsymbol{\epsilon}} \gets \boldsymbol{\epsilon}_\theta(\tilde{\mathbf{A}}_t, t, \mathbf{z})$
+    \STATE $\hat{\tilde{\mathbf{A}}}_0 \gets (\tilde{\mathbf{A}}_t - \sqrt{1-\bar{\alpha}_t}\hat{\boldsymbol{\epsilon}}) / \sqrt{\bar{\alpha}_t}$
+    \STATE $\tilde{\mathbf{A}}_{t_{\text{prev}}} \gets \sqrt{\bar{\alpha}_{t_{\text{prev}}}} \hat{\tilde{\mathbf{A}}}_0 + \sqrt{1-\bar{\alpha}_{t_{\text{prev}}}} \hat{\boldsymbol{\epsilon}}$
+\ENDFOR
+\STATE Denormalize: $\mathbf{A} \gets \text{denormalize}(\tilde{\mathbf{A}}_0)$
+\RETURN $\mathbf{A}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Latency:} $S$ network forward passes. With $S = 8$ and 5ms per forward pass, total latency is 40ms.
+
+\subsubsection{Receding Horizon Execution}
+
+\begin{algorithm}[H]
+\caption{Receding Horizon Diffusion Policy Control}
+\label{alg:receding_horizon_full}
+\begin{algorithmic}[1]
+\REQUIRE Diffusion policy $\pi$, prediction horizon $H$, execution horizon $H_{\text{exec}}$
+\REQUIRE Observation history length $T_o$, control frequency $f_{\text{ctrl}}$
+\STATE Initialize observation buffer: $\text{obs\_buffer} \gets []$
+\STATE $k \gets 0$ \COMMENT{Action chunk index}
+\STATE $\mathbf{A} \gets \text{None}$ \COMMENT{Current action chunk}
+\WHILE{task not complete}
+    \STATE $\mathbf{o} \gets \text{get\_observation}()$
+    \STATE Append to buffer: $\text{obs\_buffer}.\text{append}(\mathbf{o})$
+    \STATE Keep last $T_o$: $\text{obs\_buffer} \gets \text{obs\_buffer}[-T_o:]$
+    \IF{$k = 0$ or $k \geq H_{\text{exec}}$}
+        \STATE $\mathbf{O} \gets \text{stack}(\text{obs\_buffer})$
+        \STATE $\mathbf{A} \gets \pi.\text{sample}(\mathbf{O})$ \COMMENT{Generate new chunk}
+        \STATE $k \gets 0$
+    \ENDIF
+    \STATE $\mathbf{a} \gets \mathbf{A}[k]$ \COMMENT{Get action from chunk}
+    \STATE $\text{execute\_action}(\mathbf{a})$
+    \STATE $k \gets k + 1$
+    \STATE Wait for next control period: $1/f_{\text{ctrl}}$
+\ENDWHILE
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Sinusoidal Timestep Embedding}
+\label{subsec:timestep_embedding_algorithm}
+
+\begin{algorithm}[H]
+\caption{Sinusoidal Timestep Embedding}
+\label{alg:timestep_embedding}
+\begin{algorithmic}[1]
+\REQUIRE Timestep $t$, embedding dimension $d$ (must be even)
+\ENSURE Embedding $\mathbf{e}_t \in \mathbb{R}^d$
+\STATE $\mathbf{e}_t \gets \text{zeros}(d)$
+\FOR{$i = 0$ \TO $d/2 - 1$}
+    \STATE $\omega_i \gets 1 / 10000^{2i/d}$
+    \STATE $\mathbf{e}_t[2i] \gets \sin(t \cdot \omega_i)$
+    \STATE $\mathbf{e}_t[2i+1] \gets \cos(t \cdot \omega_i)$
+\ENDFOR
+\RETURN $\mathbf{e}_t$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Properties:}
+\begin{itemize}
+    \item Continuous representation of discrete timesteps
+    \item Low frequencies capture coarse timestep differences
+    \item High frequencies capture fine timestep differences
+    \item Bounded values in $[-1, 1]$
+\end{itemize}
+
+\subsection{1D U-Net for Action Denoising}
+\label{subsec:unet_algorithm}
+
+\begin{algorithm}[H]
+\caption{1D U-Net Forward Pass (Simplified)}
+\label{alg:unet_forward}
+\begin{algorithmic}[1]
+\REQUIRE Noisy actions $\mathbf{A}_t \in \mathbb{R}^{H \times d_a}$, timestep $t$, condition $\mathbf{z}$
+\ENSURE Predicted noise $\hat{\boldsymbol{\epsilon}} \in \mathbb{R}^{H \times d_a}$
+\STATE Compute timestep embedding: $\mathbf{e}_t \gets \text{SinusoidalEmbed}(t)$
+\STATE Project timestep: $\mathbf{t}_{\text{emb}} \gets \text{MLP}_t(\mathbf{e}_t)$
+\STATE
+\COMMENT{Encoder path}
+\STATE $\mathbf{h}_1 \gets \text{ResBlock}_1(\mathbf{A}_t, \mathbf{t}_{\text{emb}}, \mathbf{z})$ \COMMENT{$H \times c_1$}
+\STATE $\mathbf{h}_2 \gets \text{Downsample}(\mathbf{h}_1)$ \COMMENT{$H/2 \times c_1$}
+\STATE $\mathbf{h}_2 \gets \text{ResBlock}_2(\mathbf{h}_2, \mathbf{t}_{\text{emb}}, \mathbf{z})$ \COMMENT{$H/2 \times c_2$}
+\STATE $\mathbf{h}_3 \gets \text{Downsample}(\mathbf{h}_2)$ \COMMENT{$H/4 \times c_2$}
+\STATE
+\COMMENT{Bottleneck}
+\STATE $\mathbf{h}_{\text{mid}} \gets \text{ResBlock}_{\text{mid}}(\mathbf{h}_3, \mathbf{t}_{\text{emb}}, \mathbf{z})$
+\STATE
+\COMMENT{Decoder path with skip connections}
+\STATE $\mathbf{h}_3' \gets \text{Upsample}(\mathbf{h}_{\text{mid}})$ \COMMENT{$H/2 \times c_2$}
+\STATE $\mathbf{h}_3' \gets \text{Concat}(\mathbf{h}_3', \mathbf{h}_2)$ \COMMENT{Skip connection}
+\STATE $\mathbf{h}_3' \gets \text{ResBlock}_3(\mathbf{h}_3', \mathbf{t}_{\text{emb}}, \mathbf{z})$
+\STATE $\mathbf{h}_4 \gets \text{Upsample}(\mathbf{h}_3')$ \COMMENT{$H \times c_1$}
+\STATE $\mathbf{h}_4 \gets \text{Concat}(\mathbf{h}_4, \mathbf{h}_1)$ \COMMENT{Skip connection}
+\STATE $\mathbf{h}_4 \gets \text{ResBlock}_4(\mathbf{h}_4, \mathbf{t}_{\text{emb}}, \mathbf{z})$
+\STATE
+\COMMENT{Output projection}
+\STATE $\hat{\boldsymbol{\epsilon}} \gets \text{Conv1D}_{\text{out}}(\mathbf{h}_4)$ \COMMENT{$H \times d_a$}
+\RETURN $\hat{\boldsymbol{\epsilon}}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{ResBlock with FiLM conditioning:}
+\begin{equation}
+\text{ResBlock}(\mathbf{h}, \mathbf{t}, \mathbf{z}) = \mathbf{h} + \text{Conv}(\text{ReLU}(\gamma \odot \text{Conv}(\mathbf{h}) + \beta))
+\label{eq:resblock_film}
+\end{equation}
+where $[\gamma, \beta] = \text{MLP}([\mathbf{t}; \mathbf{z}])$.
+
+\subsection{Guidance for Constrained Generation}
+\label{subsec:guidance_algorithm}
+
+\begin{algorithm}[H]
+\caption{Classifier-Free Guidance for Diffusion Policy}
+\label{alg:cfg_sampling}
+\begin{algorithmic}[1]
+\REQUIRE Conditional model $\boldsymbol{\epsilon}_\theta(\mathbf{A}_t, t, \mathbf{z})$, guidance scale $w$
+\REQUIRE Noisy actions $\mathbf{A}_t$, timestep $t$, condition $\mathbf{z}$
+\ENSURE Guided noise prediction $\tilde{\boldsymbol{\epsilon}}$
+\STATE Conditional prediction: $\boldsymbol{\epsilon}_{\text{cond}} \gets \boldsymbol{\epsilon}_\theta(\mathbf{A}_t, t, \mathbf{z})$
+\STATE Unconditional prediction: $\boldsymbol{\epsilon}_{\text{uncond}} \gets \boldsymbol{\epsilon}_\theta(\mathbf{A}_t, t, \varnothing)$
+\STATE Guided prediction: $\tilde{\boldsymbol{\epsilon}} \gets \boldsymbol{\epsilon}_{\text{uncond}} + w \cdot (\boldsymbol{\epsilon}_{\text{cond}} - \boldsymbol{\epsilon}_{\text{uncond}})$
+\RETURN $\tilde{\boldsymbol{\epsilon}}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Training for classifier-free guidance:} During training, randomly replace the condition with a null token (e.g., zeros) with probability $p_{\text{uncond}} = 0.1$. This trains the model to make both conditional and unconditional predictions.
+
+\textbf{Guidance scale:}
+\begin{itemize}
+    \item $w = 1$: No guidance (standard conditional sampling)
+    \item $w > 1$: Amplified conditioning (stronger adherence to condition)
+    \item $w < 1$: Weakened conditioning (more diversity)
+\end{itemize}
+
+Typical values for control: $w \in [1.0, 2.0]$.
+
+\begin{algorithm}[H]
+\caption{Constraint Guidance via Gradient}
+\label{alg:constraint_guidance}
+\begin{algorithmic}[1]
+\REQUIRE Predicted noise $\hat{\boldsymbol{\epsilon}}$, predicted $\hat{\mathbf{A}}_0$, constraint cost $c(\cdot)$, guidance weight $\lambda$
+\ENSURE Guided noise prediction $\tilde{\boldsymbol{\epsilon}}$
+\STATE Compute constraint gradient: $\mathbf{g} \gets \nabla_{\hat{\mathbf{A}}_0} c(\hat{\mathbf{A}}_0)$
+\STATE Scale by noise level: $\mathbf{g}_{\text{scaled}} \gets \mathbf{g} \cdot \sqrt{1-\bar{\alpha}_t}$
+\STATE Apply guidance: $\tilde{\boldsymbol{\epsilon}} \gets \hat{\boldsymbol{\epsilon}} + \lambda \cdot \mathbf{g}_{\text{scaled}}$
+\RETURN $\tilde{\boldsymbol{\epsilon}}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Common constraint costs:}
+\begin{itemize}
+    \item Joint limits: $c(\mathbf{A}) = \sum_h \max(0, \mathbf{a}_h - \mathbf{a}_{\max})^2 + \max(0, \mathbf{a}_{\min} - \mathbf{a}_h)^2$
+    \item Smoothness: $c(\mathbf{A}) = \sum_{h=1}^{H-1} \|\mathbf{a}_{h+1} - \mathbf{a}_h\|^2$
+    \item Goal reaching: $c(\mathbf{A}) = \|\mathbf{a}_H - \mathbf{a}_{\text{goal}}\|^2$
+\end{itemize}
+
+\subsection{Normalization Utilities}
+\label{subsec:normalization_utilities}
+
+\begin{algorithm}[H]
+\caption{Compute Normalization Statistics}
+\label{alg:compute_normalization}
+\begin{algorithmic}[1]
+\REQUIRE Dataset $\mathcal{D} = \{(\mathbf{o}_i, \mathbf{a}_i)\}_{i=1}^N$
+\ENSURE Mean and std for observations and actions
+\STATE Collect all observations: $\mathbf{O}_{\text{all}} \gets \text{stack}([\mathbf{o}_i])$
+\STATE Collect all actions: $\mathbf{A}_{\text{all}} \gets \text{stack}([\mathbf{a}_i])$
+\STATE $\boldsymbol{\mu}_{\text{obs}} \gets \text{mean}(\mathbf{O}_{\text{all}}, \text{axis}=0)$
+\STATE $\boldsymbol{\sigma}_{\text{obs}} \gets \text{std}(\mathbf{O}_{\text{all}}, \text{axis}=0) + 10^{-6}$ \COMMENT{Avoid division by zero}
+\STATE $\boldsymbol{\mu}_{\text{act}} \gets \text{mean}(\mathbf{A}_{\text{all}}, \text{axis}=0)$
+\STATE $\boldsymbol{\sigma}_{\text{act}} \gets \text{std}(\mathbf{A}_{\text{all}}, \text{axis}=0) + 10^{-6}$
+\RETURN $\boldsymbol{\mu}_{\text{obs}}$, $\boldsymbol{\sigma}_{\text{obs}}$, $\boldsymbol{\mu}_{\text{act}}$, $\boldsymbol{\sigma}_{\text{act}}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Important:} Save normalization statistics with the model checkpoint and use the same values during inference.
+
+%═══════════════════════════════════════════════════════════════════════════════
+\section{Chapter Summary}
+\label{sec:chapter_summary}
+%═══════════════════════════════════════════════════════════════════════════════
+
+This chapter has introduced diffusion policies as a powerful paradigm for learning robot control from demonstrations. We have covered the mathematical foundations of diffusion models, their adaptation for control, and practical implementation strategies.
+
+\subsection{Key Concepts}
+
+\begin{enumerate}
+    \item \textbf{Diffusion models} learn to generate data by reversing a gradual noising process. The forward process adds Gaussian noise; the reverse process (learned by a neural network) removes it.
+
+    \item \textbf{The training objective} is remarkably simple: predict the noise that was added to a clean sample. This leads to stable training without adversarial dynamics.
+
+    \item \textbf{Three equivalent parameterizations} exist: predicting noise ($\boldsymbol{\epsilon}$-prediction), predicting clean data ($\mathbf{x}_0$-prediction), or predicting the score function. Noise prediction is most common in practice.
+
+    \item \textbf{Noise schedules} control how quickly information is destroyed. The cosine schedule provides more gradual noise addition and is recommended for most applications.
+
+    \item \textbf{DDIM sampling} enables faster generation by skipping timesteps, making diffusion policies practical for real-time control with 4--10 denoising steps.
+
+    \item \textbf{Conditional generation} allows diffusion policies to generate actions appropriate for the current observation. Cross-attention and FiLM conditioning are effective mechanisms.
+
+    \item \textbf{Action chunking} predicts sequences of future actions, providing temporal coherence and amortizing the computational cost of denoising.
+
+    \item \textbf{Multimodal behavior} is naturally captured because diffusion models learn the full distribution of demonstrations rather than a single mean.
+
+    \item \textbf{Receding horizon execution} generates new action chunks periodically while executing portions of previously generated chunks.
+\end{enumerate}
+
+\subsection{When to Use Diffusion Policies}
+
+Diffusion policies are particularly well-suited for:
+
+\begin{itemize}
+    \item \textbf{Multimodal tasks:} When multiple valid solutions exist (different grasp strategies, alternative paths)
+
+    \item \textbf{Contact-rich manipulation:} The stochastic sampling provides natural exploration of contact modes
+
+    \item \textbf{Learning from diverse demonstrations:} Human teleoperators naturally exhibit behavioral diversity
+
+    \item \textbf{Tasks requiring smooth trajectories:} Action chunking enforces temporal consistency
+
+    \item \textbf{High-dimensional action spaces:} Diffusion handles high-dimensional outputs better than alternatives like GMMs
+\end{itemize}
+
+Consider alternatives when:
+
+\begin{itemize}
+    \item \textbf{Real-time constraints are extreme:} If sub-5ms latency is required, simpler policies may be necessary
+
+    \item \textbf{The task is unimodal:} Simple behavior cloning may suffice
+
+    \item \textbf{Interpretability is critical:} Diffusion policies are less interpretable than explicit planners
+
+    \item \textbf{Computational resources are limited:} Diffusion requires GPU acceleration for practical speeds
+\end{itemize}
+
+\subsection{Practical Guidelines}
+
+Based on the examples and analysis in this chapter:
+
+\begin{enumerate}
+    \item \textbf{Start with defaults:} Cosine schedule, $T = 100$, DDIM with $S = 10$ steps, prediction horizon $H = 16$, execution horizon $H_{\text{exec}} = 8$.
+
+    \item \textbf{Normalize everything:} Both observations and actions should be normalized to approximately $[-1, 1]$.
+
+    \item \textbf{Use observation history:} $T_o = 2$--$4$ helps capture dynamics and handle partial observability.
+
+    \item \textbf{Tune DDIM steps for your application:} More steps = better quality but higher latency. Find the minimum steps that achieve acceptable performance.
+
+    \item \textbf{Apply domain randomization} for sim-to-real transfer. Diffusion policies benefit from diverse training data.
+
+    \item \textbf{Add safety layers} for real robot deployment. Diffusion sampling can occasionally produce outliers.
+
+    \item \textbf{Monitor diversity:} If generated actions are too similar, the model may not be capturing multimodality. Check temperature and guidance settings.
+\end{enumerate}
+
+\subsection{Connections to Other Chapters}
+
+\begin{itemize}
+    \item \textbf{Chapter 15 (Learned Perception):} Diffusion policies often use learned visual encoders. The perception architectures from Chapter 15 can be integrated as observation encoders.
+
+    \item \textbf{Chapter 16 (World Models):} Diffusion models can serve as world models, predicting future states. The trajectory generation example in this chapter is related.
+
+    \item \textbf{Chapter 17 (Hybrid Control):} Diffusion policies can be combined with traditional controllers. Use diffusion for high-level action generation, classical control for low-level tracking.
+
+    \item \textbf{Chapter 18 (Differentiable Control):} The gradient-based guidance techniques connect to differentiable control. Both use gradients through the control pipeline.
+
+    \item \textbf{Chapter 20 (Sim-to-Real):} Transferring diffusion policies from simulation to reality requires the domain adaptation techniques covered in Chapter 20.
+\end{itemize}
+
+\subsection{Open Research Directions}
+
+Diffusion policies are an active area of research. Key open problems include:
+
+\begin{enumerate}
+    \item \textbf{Faster sampling:} Can we achieve high-quality generation in 1--2 denoising steps? Recent distillation techniques show promise.
+
+    \item \textbf{Better guidance:} How can we incorporate complex constraints (collision avoidance, energy limits) more effectively?
+
+    \item \textbf{Online learning:} Can diffusion policies be adapted online from robot experience, not just offline demonstrations?
+
+    \item \textbf{Hierarchical policies:} What is the best way to combine diffusion models at multiple abstraction levels?
+
+    \item \textbf{Uncertainty quantification:} How can we use the distributional nature of diffusion for safety and exploration?
+\end{enumerate}
+
+\subsection{Summary of Algorithms}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Algorithm} & \textbf{Complexity} & \textbf{Use} \\
+\midrule
+Noise Schedule & $\mathcal{O}(T)$ & Precompute once \\
+Forward Diffusion & $\mathcal{O}(d)$ & Training \\
+DDPM Training Step & $\mathcal{O}(B \cdot C_{\text{net}})$ & Training \\
+DDPM Sampling & $\mathcal{O}(T \cdot C_{\text{net}})$ & High-quality generation \\
+DDIM Sampling & $\mathcal{O}(S \cdot C_{\text{net}})$ & Fast generation \\
+Receding Horizon & $\mathcal{O}(S \cdot C_{\text{net}} / H_{\text{exec}})$ & Real-time control \\
+Classifier-Free Guidance & $2 \times \mathcal{O}(C_{\text{net}})$ & Controlled generation \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{1em}
+
+Diffusion policies represent a significant advance in learning-based robot control. By treating action generation as iterative refinement from noise, they naturally handle the multimodality and complexity of real-world manipulation tasks. As the field continues to develop faster sampling techniques and better conditioning mechanisms, diffusion policies will likely become an increasingly important tool in the modern control engineer's toolkit.
+
