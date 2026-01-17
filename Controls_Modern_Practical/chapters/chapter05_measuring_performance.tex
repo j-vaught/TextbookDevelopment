@@ -1,0 +1,2200 @@
+\chapter{Performance Metrics and Specifications}
+\label{ch:performance_metrics}
+
+\whythismatters{
+How do we know if a control system is ``good enough''? In previous chapters, we developed models of physical systems, actuators, and sensors. Now we face a critical question: what does it mean for a controller to perform well, and how do we quantify that performance?
+
+Performance metrics are the language we use to communicate control system requirements between engineers, customers, and stakeholders. When an aerospace engineer specifies that an autopilot must achieve ``less than 5\% overshoot with settling time under 2 seconds,'' or when a process engineer requires ``zero steady-state error for ramp setpoint changes,'' they are speaking in the vocabulary of performance specifications.
+
+This chapter develops both time-domain and frequency-domain performance metrics. You will learn to translate intuitive requirements (``respond quickly,'' ``don't oscillate too much,'' ``track accurately'') into precise mathematical specifications. More importantly, you will understand the fundamental connections between these specifications---how pole locations determine transient behavior, how bandwidth relates to speed, and how stability margins quantify robustness. These connections are not merely theoretical curiosities; they are the foundation of systematic control design.
+
+By mastering performance metrics, you gain the ability to specify what you want, verify whether you achieved it, and understand why certain trade-offs are unavoidable. This knowledge transforms control design from trial-and-error into principled engineering.
+}
+
+\section{Time-Domain Specifications}
+\label{sec:time_domain_specs}
+
+When we apply a step input to a control system and observe the output response, we can characterize the behavior using several key metrics. These \textbf{time-domain specifications} provide intuitive measures of how quickly the system responds, how much it oscillates, and how accurately it tracks the reference.
+
+I find time-domain specifications particularly valuable because they directly describe what we observe when testing real systems. When you step on the accelerator of a car, you experience the rise time as the lag before the car starts accelerating, the overshoot as the momentary surge past your desired speed, and the settling time as the period of adjustment before reaching steady cruise. These are tangible, measurable quantities.
+
+\subsection{Rise Time}
+\label{subsec:rise_time}
+
+\textbf{Rise time} $t_r$ quantifies how quickly the system output initially responds to a change in reference input.
+
+\begin{definition}[Rise Time]
+The \textbf{rise time} $t_r$ is the time required for the system response to rise from a specified lower threshold to an upper threshold of its final steady-state value.
+\end{definition}
+
+Two conventions are commonly used:
+\begin{itemize}
+    \item \textbf{10\%-90\% rise time}: Time to go from 10\% to 90\% of final value. This is the most common definition, particularly for overdamped or critically damped systems.
+    \item \textbf{0\%-100\% rise time}: Time to go from 0\% to 100\% of final value. This is often used for underdamped systems where the response overshoots.
+\end{itemize}
+
+For a step input of magnitude $A$ with final value $y_{ss}$, the 10\%-90\% rise time is found by solving:
+\begin{align}
+    y(t_{10\%}) &= 0.1 \cdot y_{ss} \\
+    y(t_{90\%}) &= 0.9 \cdot y_{ss} \\
+    t_r &= t_{90\%} - t_{10\%}
+\end{align}
+
+\textbf{Physical interpretation}: Rise time indicates the ``responsiveness'' of the system. A smaller rise time means the system reacts more quickly to commands. However, achieving very small rise times typically requires high gain or aggressive control action, which can lead to increased overshoot and noise sensitivity.
+
+\textbf{Design trade-off}: Rise time and overshoot are typically in conflict. Reducing rise time often increases overshoot, and vice versa. This is one of the fundamental trade-offs in control system design.
+
+\subsection{Peak Time}
+\label{subsec:peak_time}
+
+For underdamped systems that exhibit overshoot, the \textbf{peak time} identifies when the maximum deviation occurs.
+
+\begin{definition}[Peak Time]
+The \textbf{peak time} $t_p$ is the time required for the system response to reach its first (and largest) peak value.
+\end{definition}
+
+For a standard second-order underdamped system with transfer function:
+\begin{equation}
+    T(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+the peak time is given by:
+\begin{equation}
+    \boxed{t_p = \frac{\pi}{\omega_d} = \frac{\pi}{\omega_n\sqrt{1-\zeta^2}}}
+    \label{eq:peak_time}
+\end{equation}
+
+where $\omega_d = \omega_n\sqrt{1-\zeta^2}$ is the \textbf{damped natural frequency}.
+
+\textbf{Derivation}: The step response of the standard second-order system is:
+\begin{equation}
+    y(t) = 1 - \frac{e^{-\zeta\omega_n t}}{\sqrt{1-\zeta^2}} \sin(\omega_d t + \phi)
+\end{equation}
+where $\phi = \cos^{-1}(\zeta)$. Setting $\dot{y}(t_p) = 0$ and solving for the first positive root yields Equation~\eqref{eq:peak_time}.
+
+\textbf{Key insight}: Peak time is inversely proportional to the damped natural frequency $\omega_d$, which is the imaginary part of the complex poles. To reduce peak time, the poles must have larger imaginary components, meaning they must be farther from the real axis or have higher natural frequency.
+
+\subsection{Percent Overshoot}
+\label{subsec:overshoot}
+
+\textbf{Percent overshoot} quantifies how much the response exceeds its final value.
+
+\begin{definition}[Percent Overshoot]
+The \textbf{percent overshoot} $\%OS$ (also denoted $M_p$) is the maximum deviation above the final steady-state value, expressed as a percentage of that final value:
+\begin{equation}
+    \%OS = \frac{y_{max} - y_{ss}}{y_{ss}} \times 100\%
+\end{equation}
+\end{definition}
+
+For the standard second-order underdamped system, percent overshoot depends \textbf{only on the damping ratio}:
+\begin{equation}
+    \boxed{\%OS = e^{-\pi\zeta/\sqrt{1-\zeta^2}} \times 100\%}
+    \label{eq:overshoot}
+\end{equation}
+
+This remarkable result means that overshoot is independent of natural frequency $\omega_n$. Two systems with the same damping ratio will have identical overshoot, regardless of how fast they respond.
+
+\textbf{Inverse relationship}: Given a desired overshoot, we can solve for the required damping ratio:
+\begin{equation}
+    \zeta = \frac{-\ln(\%OS/100)}{\sqrt{\pi^2 + \ln^2(\%OS/100)}}
+    \label{eq:zeta_from_overshoot}
+\end{equation}
+
+\textbf{Common values}:
+\begin{center}
+\begin{tabular}{cc}
+\toprule
+Damping Ratio $\zeta$ & Percent Overshoot $\%OS$ \\
+\midrule
+0.4 & 25.4\% \\
+0.5 & 16.3\% \\
+0.6 & 9.5\% \\
+0.7 & 4.6\% \\
+0.707 & 4.3\% \\
+0.8 & 1.5\% \\
+0.9 & 0.2\% \\
+1.0 & 0\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The damping ratio $\zeta = 0.707$ is particularly notable because it corresponds to the second-order Butterworth response, which provides the flattest passband in the frequency domain while remaining underdamped.
+
+\keypoint{Percent overshoot depends only on damping ratio $\zeta$, not on natural frequency $\omega_n$. This allows us to specify overshoot independently of speed requirements.}
+
+\subsection{Settling Time}
+\label{subsec:settling_time}
+
+\textbf{Settling time} quantifies how long the system takes to reach and remain within an acceptable tolerance of its final value.
+
+\begin{definition}[Settling Time]
+The \textbf{settling time} $t_s$ is the time required for the response to enter and remain within a specified percentage band around the steady-state value.
+\end{definition}
+
+Two common criteria are used:
+\begin{itemize}
+    \item \textbf{2\% criterion}: Response stays within $\pm 2\%$ of final value
+    \item \textbf{5\% criterion}: Response stays within $\pm 5\%$ of final value
+\end{itemize}
+
+For the standard second-order system, the settling time approximations are:
+\begin{align}
+    t_s &\approx \frac{4}{\zeta\omega_n} \quad \text{(2\% criterion)} \label{eq:settling_2pct} \\
+    t_s &\approx \frac{3}{\zeta\omega_n} \quad \text{(5\% criterion)} \label{eq:settling_5pct}
+\end{align}
+
+These formulas arise from the exponential decay envelope $e^{-\zeta\omega_n t}$ of the oscillatory response. The factor 4 corresponds to approximately $e^{-4} \approx 0.018$, ensuring the envelope has decayed to less than 2\% of its initial amplitude.
+
+\textbf{Key insight}: Settling time is inversely proportional to $\zeta\omega_n = \sigma$, which is the \textbf{real part} of the complex poles. The product $\zeta\omega_n$ is also called the \textbf{exponential decay rate} or \textbf{time constant reciprocal}.
+
+The time constant of the exponential envelope is:
+\begin{equation}
+    \tau = \frac{1}{\zeta\omega_n} = \frac{1}{\sigma}
+\end{equation}
+
+so the 2\% settling time is approximately $4\tau$ (four time constants).
+
+\warningbox{The settling time formulas are approximations that assume the system is underdamped and that higher-order effects are negligible. For systems with zeros or additional poles, the actual settling time may differ significantly.}
+
+\subsection{Steady-State Error}
+\label{subsec:steady_state_error}
+
+While transient specifications describe dynamic behavior during transitions, \textbf{steady-state error} characterizes the final tracking accuracy.
+
+\begin{definition}[Steady-State Error]
+The \textbf{steady-state error} $e_{ss}$ is the difference between the desired reference input and the actual system output after all transients have died out:
+\begin{equation}
+    e_{ss} = \lim_{t \to \infty} [r(t) - y(t)]
+\end{equation}
+\end{definition}
+
+Using the Final Value Theorem, we can compute steady-state error directly from the Laplace domain:
+\begin{equation}
+    e_{ss} = \lim_{s \to 0} s \cdot E(s)
+\end{equation}
+where $E(s)$ is the error signal in the Laplace domain.
+
+For a unity feedback system with open-loop transfer function $G(s)$ and reference input $R(s)$:
+\begin{equation}
+    E(s) = \frac{R(s)}{1 + G(s)}
+\end{equation}
+
+The steady-state error depends critically on both the \textbf{system type} (number of integrators) and the \textbf{input type} (step, ramp, or parabolic). We will analyze this relationship in detail in Section~\ref{sec:steady_state_error_analysis}.
+
+\subsection{Summary of Time-Domain Specifications}
+
+Table~\ref{tab:time_domain_specs} summarizes the key time-domain specifications for a standard second-order system.
+
+\begin{table}[htbp]
+\centering
+\caption{Time-Domain Specifications for Second-Order Systems}
+\label{tab:time_domain_specs}
+\begin{tabular}{llll}
+\toprule
+\textbf{Specification} & \textbf{Symbol} & \textbf{Formula} & \textbf{Depends On} \\
+\midrule
+Rise time (0-100\%) & $t_r$ & $\approx \dfrac{1.8}{\omega_n}$ & $\omega_n$ \\[1em]
+Peak time & $t_p$ & $\dfrac{\pi}{\omega_n\sqrt{1-\zeta^2}}$ & $\omega_d$ (imaginary part) \\[1em]
+Percent overshoot & $\%OS$ & $e^{-\pi\zeta/\sqrt{1-\zeta^2}} \times 100\%$ & $\zeta$ only \\[1em]
+Settling time (2\%) & $t_s$ & $\dfrac{4}{\zeta\omega_n}$ & $\sigma$ (real part) \\[1em]
+Settling time (5\%) & $t_s$ & $\dfrac{3}{\zeta\omega_n}$ & $\sigma$ (real part) \\[1em]
+Steady-state error & $e_{ss}$ & Depends on system type & System type, gain \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+%===============================================================================
+\section{Relating Specifications to Pole Locations}
+\label{sec:pole_locations}
+%===============================================================================
+
+One of the most powerful concepts in control design is the direct relationship between \textbf{closed-loop pole locations} and \textbf{time-domain performance}. Understanding this relationship allows us to translate performance specifications into geometric constraints in the $s$-plane, which then guides controller design.
+
+\subsection{Second-Order System Pole Geometry}
+
+Consider the standard second-order transfer function:
+\begin{equation}
+    T(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+The poles are located at:
+\begin{equation}
+    s_{1,2} = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2} = -\sigma \pm j\omega_d
+    \label{eq:pole_locations}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\sigma = \zeta\omega_n$ is the \textbf{real part} (exponential decay rate)
+    \item $\omega_d = \omega_n\sqrt{1-\zeta^2}$ is the \textbf{imaginary part} (damped natural frequency)
+\end{itemize}
+
+These poles lie at a distance $\omega_n$ from the origin at an angle $\theta = \cos^{-1}(\zeta)$ from the negative real axis, as shown in Figure~\ref{fig:pole_geometry}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.2]
+    % Axes
+    \draw[->] (-4,0) -- (1,0) node[right] {$\text{Re}(s)$};
+    \draw[->] (0,-3) -- (0,3) node[above] {$\text{Im}(s)$};
+
+    % Pole locations
+    \coordinate (pole1) at (-2,1.732);
+    \coordinate (pole2) at (-2,-1.732);
+    \coordinate (origin) at (0,0);
+
+    % Draw radius line
+    \draw[thick,UofSCGarnet] (origin) -- (pole1);
+    \draw[thick,UofSCGarnet] (origin) -- (pole2);
+
+    % Poles
+    \fill[UofSCGarnet] (pole1) circle (3pt) node[above right] {$s_1 = -\sigma + j\omega_d$};
+    \fill[UofSCGarnet] (pole2) circle (3pt) node[below right] {$s_2 = -\sigma - j\omega_d$};
+
+    % Angle arc
+    \draw[thick,UofSCAtlantic] (-0.8,0) arc (180:150:0.8);
+    \node[UofSCAtlantic] at (-0.6,0.4) {$\theta$};
+
+    % Dimension lines
+    \draw[<->,UofSCCongaree] (-2,-2.5) -- (0,-2.5) node[midway,below] {$\sigma = \zeta\omega_n$};
+    \draw[<->,UofSCCongaree] (0.3,0) -- (0.3,1.732) node[midway,right] {$\omega_d$};
+
+    % Natural frequency
+    \node[UofSCGarnet] at (-1.3,1.2) {$\omega_n$};
+
+    % Vertical line for settling time
+    \draw[dashed,UofSCGrey50] (-2,-2.8) -- (-2,2.8);
+\end{tikzpicture}
+\caption{Pole geometry for a second-order underdamped system. The distance from the origin is $\omega_n$, and the angle from the negative real axis is $\theta = \cos^{-1}(\zeta)$.}
+\label{fig:pole_geometry}
+\end{figure}
+
+\subsection{Geometric Relationships}
+
+From the pole locations, we can extract:
+\begin{align}
+    \omega_n &= \sqrt{\sigma^2 + \omega_d^2} = |s| \quad \text{(distance from origin)} \\
+    \zeta &= \cos(\theta) = \frac{\sigma}{\omega_n} \quad \text{(cosine of angle)} \\
+    \sigma &= \zeta\omega_n \quad \text{(real part)} \\
+    \omega_d &= \omega_n\sqrt{1-\zeta^2} \quad \text{(imaginary part)}
+\end{align}
+
+These geometric relationships provide powerful insights:
+\begin{itemize}
+    \item \textbf{Moving poles radially outward} (constant $\zeta$): Increases $\omega_n$, decreases rise time and settling time, maintains overshoot
+    \item \textbf{Moving poles toward real axis} (constant $\omega_n$): Increases $\zeta$, decreases overshoot, increases rise time
+    \item \textbf{Moving poles left} (increasing $\sigma$): Decreases settling time
+\end{itemize}
+
+\subsection{Mapping Specifications to $s$-Plane Regions}
+
+Each performance specification translates to a constraint on where poles can be located in the $s$-plane.
+
+\subsubsection{Overshoot Constraint}
+
+Since $\%OS$ depends only on $\zeta$, and $\zeta = \cos(\theta)$, an overshoot constraint defines a \textbf{sector} in the $s$-plane.
+
+For $\%OS \leq \%OS_{max}$:
+\begin{enumerate}
+    \item Compute required damping ratio from Equation~\eqref{eq:zeta_from_overshoot}: $\zeta \geq \zeta_{min}$
+    \item Compute maximum angle: $\theta_{max} = \cos^{-1}(\zeta_{min})$
+    \item Poles must lie within sector: $|\theta| \leq \theta_{max}$ from negative real axis
+\end{enumerate}
+
+\textbf{Example}: For $\%OS \leq 10\%$, we need $\zeta \geq 0.59$, so $\theta_{max} \approx 54°$. Poles must lie within $\pm 54°$ of the negative real axis.
+
+\subsubsection{Settling Time Constraint}
+
+Since $t_s \approx 4/(\zeta\omega_n) = 4/\sigma$ for the 2\% criterion, a settling time constraint defines a \textbf{vertical line} in the $s$-plane.
+
+For $t_s \leq t_{s,max}$:
+\begin{equation}
+    \sigma \geq \frac{4}{t_{s,max}}
+\end{equation}
+
+Poles must lie to the \textbf{left of the vertical line} at $s = -4/t_{s,max}$.
+
+\textbf{Example}: For $t_s \leq 2$ seconds, poles must satisfy $\sigma \geq 2$, meaning they must be left of the line $\text{Re}(s) = -2$.
+
+\subsubsection{Natural Frequency (Speed) Constraint}
+
+Since rise time is approximately inversely proportional to $\omega_n$, a rise time constraint can be expressed as a minimum natural frequency:
+\begin{equation}
+    \omega_n \geq \omega_{n,min} \approx \frac{1.8}{t_{r,max}}
+\end{equation}
+
+This defines a \textbf{circle} in the $s$-plane---poles must lie \textbf{outside} a circle of radius $\omega_{n,min}$ centered at the origin.
+
+\subsubsection{Combined Design Region}
+
+The intersection of all constraints defines the \textbf{acceptable pole region}. A successful design places closed-loop poles within this region.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.9]
+    % Axes
+    \draw[->] (-6,0) -- (1,0) node[right] {$\text{Re}(s)$};
+    \draw[->] (0,-4) -- (0,4) node[above] {$\text{Im}(s)$};
+
+    % Settling time line
+    \draw[thick,UofSCAtlantic,dashed] (-2,-4) -- (-2,4);
+    \node[UofSCAtlantic,left] at (-2,-3.5) {$t_s$ constraint};
+
+    % Damping ratio lines (sector)
+    \draw[thick,UofSCGarnet] (0,0) -- (-5,3.5);
+    \draw[thick,UofSCGarnet] (0,0) -- (-5,-3.5);
+    \node[UofSCGarnet] at (-4,2) {$\%OS$ constraint};
+
+    % Natural frequency circle
+    \draw[thick,UofSCCongaree,dashed] (0,0) circle (1.5);
+    \node[UofSCCongaree] at (1.2,1.2) {$\omega_n$ constraint};
+
+    % Shade acceptable region
+    \begin{scope}
+        \clip (-6,-4) rectangle (0,4);
+        \clip (-5,3.5) -- (0,0) -- (-5,-3.5) -- cycle;
+        \clip (-6,-4) rectangle (-2,4);
+        \fill[UofSCHorseshoe,opacity=0.2] (0,0) circle (6);
+        \fill[white] (0,0) circle (1.5);
+    \end{scope}
+
+    % Label acceptable region
+    \node at (-3.5,0) {\textbf{Acceptable}};
+    \node at (-3.5,-0.5) {\textbf{Region}};
+
+    % Target poles
+    \fill[UofSCGarnet] (-3,2) circle (4pt);
+    \fill[UofSCGarnet] (-3,-2) circle (4pt);
+    \node[right] at (-2.9,2.2) {Target poles};
+\end{tikzpicture}
+\caption{Combined design region in the $s$-plane. The shaded area represents pole locations that satisfy all three constraints: settling time (left of vertical line), overshoot (within sector), and minimum speed (outside circle).}
+\label{fig:design_region}
+\end{figure}
+
+\subsection{Design Procedure Using Pole Placement}
+
+Given performance specifications, the design procedure is:
+
+\begin{enumerate}
+    \item \textbf{Translate specifications to $s$-plane constraints}:
+    \begin{itemize}
+        \item $\%OS \leq X\%$ $\Rightarrow$ Find $\zeta_{min}$, draw sector lines
+        \item $t_s \leq Y$ seconds $\Rightarrow$ Draw vertical line at $\sigma = 4/Y$
+        \item $t_r \leq Z$ seconds $\Rightarrow$ Draw circle at $\omega_n = 1.8/Z$
+    \end{itemize}
+
+    \item \textbf{Identify acceptable region}: Intersection of all constraints
+
+    \item \textbf{Select target pole locations}: Choose poles within the acceptable region, typically with some margin
+
+    \item \textbf{Design controller}: Use root locus, pole placement, or other techniques to achieve the desired poles
+
+    \item \textbf{Verify performance}: Simulate the closed-loop response and measure actual specifications
+\end{enumerate}
+
+\keypoint{Performance specifications translate directly to geometric constraints in the $s$-plane. Overshoot defines a sector, settling time defines a vertical line, and speed defines a circle. Successful designs place poles within the intersection of all constraints.}
+
+
+%===============================================================================
+\section{Second-Order System Approximations}
+\label{sec:second_order_approx}
+%===============================================================================
+
+The formulas we have developed assume a pure second-order system. Real systems are often higher-order, containing additional poles and zeros. When can we use the simpler second-order formulas, and how accurate are they?
+
+\subsection{Dominant Pole Approximation}
+
+The \textbf{dominant pole approximation} states that if certain poles are located much farther from the imaginary axis than others, the system's response is primarily determined by the poles closest to the imaginary axis.
+
+\begin{definition}[Dominant Poles]
+Poles are considered \textbf{dominant} if all other poles are located at least 5-10 times farther from the imaginary axis (in terms of real part magnitude).
+\end{definition}
+
+\textbf{Physical interpretation}: Poles farther left in the $s$-plane correspond to faster decaying modes. If a mode decays 5-10 times faster than another, its effect on the response dies out quickly, and the slower mode dominates the observable behavior.
+
+\textbf{Example}: Consider a third-order system with poles at:
+\begin{itemize}
+    \item $s_{1,2} = -2 \pm j3$ (complex pair)
+    \item $s_3 = -20$ (real pole)
+\end{itemize}
+
+The real pole at $s = -20$ is 10 times farther left than the real part of the complex pair ($\sigma = 2$). The mode corresponding to $s_3$ has time constant $\tau_3 = 1/20 = 0.05$ seconds, while the dominant mode has time constant $\tau = 1/2 = 0.5$ seconds. After about $5\tau_3 = 0.25$ seconds, the fast mode has decayed to less than 1\% of its initial value, leaving only the dominant second-order behavior.
+
+\subsection{When the Approximation Fails}
+
+The second-order approximation can be inaccurate when:
+
+\begin{enumerate}
+    \item \textbf{Additional poles are not far enough away}: If the ratio of real parts is less than 5, the ``non-dominant'' poles still contribute significantly to the response.
+
+    \item \textbf{Zeros are present near dominant poles}: A zero near a pole can partially cancel the pole's effect, changing the effective system order and modifying overshoot and rise time.
+
+    \item \textbf{Multiple pole pairs with similar time constants}: When two complex pairs have comparable decay rates, both contribute to the response, and the simple formulas fail.
+
+    \item \textbf{Right-half plane zeros}: Non-minimum phase zeros cause initial undershoot before overshoot, which the second-order model cannot capture.
+\end{enumerate}
+
+\subsection{Effect of Additional Poles}
+
+An additional real pole at $s = -p$ modifies the step response. The modified transfer function is:
+\begin{equation}
+    T(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2} \cdot \frac{p}{s + p}
+\end{equation}
+
+The additional pole has these effects:
+\begin{itemize}
+    \item \textbf{Increases rise time}: The additional lag slows the initial response
+    \item \textbf{May increase or decrease overshoot}: Depends on relative pole locations
+    \item \textbf{Increases settling time}: Additional mode must decay
+\end{itemize}
+
+\textbf{Rule of thumb}: If the additional pole satisfies $p \geq 5\zeta\omega_n$, the second-order approximation remains reasonably accurate (within about 10\% error on key specifications).
+
+\subsection{Effect of Zeros}
+
+Zeros have a significant impact on transient response, often more than additional poles.
+
+\subsubsection{Left-Half Plane Zeros}
+
+A zero at $s = -z$ (in the left half-plane) modifies the transfer function:
+\begin{equation}
+    T(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2} \cdot \frac{s + z}{z}
+\end{equation}
+
+Effects of LHP zeros:
+\begin{itemize}
+    \item \textbf{Decrease rise time}: The zero adds a derivative-like action that speeds up the initial response
+    \item \textbf{Increase overshoot}: The added ``anticipation'' causes the response to overshoot more
+    \item \textbf{May decrease settling time}: Faster initial response, but increased oscillation can offset this
+\end{itemize}
+
+\textbf{Rule of thumb}: A zero at $z = 4\zeta\omega_n$ (at the settling time pole location) approximately doubles the overshoot compared to the pure second-order system.
+
+\subsubsection{Right-Half Plane Zeros (Non-Minimum Phase)}
+
+A zero at $s = +z$ (in the right half-plane) creates fundamentally different behavior:
+\begin{equation}
+    T(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2} \cdot \frac{-s + z}{z}
+\end{equation}
+
+Effects of RHP zeros:
+\begin{itemize}
+    \item \textbf{Initial undershoot}: The response initially moves in the wrong direction before correcting
+    \item \textbf{Increased overshoot}: After the undershoot, the response overshoots more than predicted
+    \item \textbf{Longer settling time}: The complex dynamics take longer to settle
+    \item \textbf{Fundamental bandwidth limitation}: RHP zeros impose a maximum achievable bandwidth
+\end{itemize}
+
+RHP zeros arise in physical systems such as:
+\begin{itemize}
+    \item Flexible structures (non-collocated sensors and actuators)
+    \item Systems with parallel fast and slow paths (e.g., heating through convection and radiation)
+    \item Boiler level control (shrink-swell phenomenon)
+    \item Bicycle steering at low speed
+\end{itemize}
+
+\warningbox{Non-minimum phase systems (those with right-half plane zeros) have fundamental performance limitations that cannot be overcome by any controller. The maximum achievable bandwidth is approximately $\omega_{BW} < z/2$ where $z$ is the RHP zero location.}
+
+\subsection{Validation Through Simulation}
+
+Given the limitations of analytical approximations, I strongly recommend validating performance through simulation:
+
+\begin{enumerate}
+    \item Design using second-order approximations to get initial pole locations
+    \item Simulate the full system (including all poles and zeros)
+    \item Measure actual $t_r$, $t_p$, $\%OS$, $t_s$ from the simulation
+    \item Adjust design if specifications are not met
+    \item Iterate as needed
+\end{enumerate}
+
+This iterative approach combines the intuition provided by second-order analysis with the accuracy of full simulation.
+
+
+%===============================================================================
+\section{Frequency-Domain Specifications}
+\label{sec:freq_domain_specs}
+%===============================================================================
+
+While time-domain specifications describe what we observe directly, frequency-domain specifications provide complementary insights into system behavior. Frequency-domain metrics are particularly valuable for understanding robustness, noise sensitivity, and the fundamental trade-offs in control design.
+
+\subsection{Closed-Loop Bandwidth}
+\label{subsec:bandwidth}
+
+The \textbf{bandwidth} characterizes the range of frequencies over which the closed-loop system effectively tracks reference inputs.
+
+\begin{definition}[Bandwidth]
+The \textbf{closed-loop bandwidth} $\omega_{BW}$ is the frequency at which the closed-loop magnitude drops to $-3$ dB (factor of $1/\sqrt{2} \approx 0.707$) below its DC value:
+\begin{equation}
+    |T(j\omega_{BW})| = \frac{|T(0)|}{\sqrt{2}}
+\end{equation}
+\end{definition}
+
+\textbf{Physical interpretation}: For frequencies below the bandwidth, the system tracks reference inputs with minimal attenuation. For frequencies above the bandwidth, the system increasingly attenuates the input signal. The bandwidth therefore determines the ``speed'' of the system in the frequency domain.
+
+\textbf{Relationship to rise time}: Bandwidth and rise time are inversely related:
+\begin{equation}
+    \omega_{BW} \cdot t_r \approx 1.8 \text{ to } 2.2
+\end{equation}
+
+for well-damped systems. A higher bandwidth means faster response (smaller rise time).
+
+For the standard second-order system, the exact bandwidth formula is:
+\begin{equation}
+    \omega_{BW} = \omega_n \sqrt{(1 - 2\zeta^2) + \sqrt{4\zeta^4 - 4\zeta^2 + 2}}
+    \label{eq:bandwidth_exact}
+\end{equation}
+
+For $\zeta = 0.707$ (Butterworth response), this simplifies to $\omega_{BW} = \omega_n$.
+
+\subsection{Resonant Peak}
+\label{subsec:resonant_peak}
+
+The \textbf{resonant peak} $M_r$ quantifies the maximum amplification in the frequency response.
+
+\begin{definition}[Resonant Peak]
+The \textbf{resonant peak} $M_r$ is the maximum value of the closed-loop frequency response magnitude:
+\begin{equation}
+    M_r = \max_{\omega} |T(j\omega)|
+\end{equation}
+\end{definition}
+
+For the standard second-order system:
+\begin{equation}
+    M_r = \frac{1}{2\zeta\sqrt{1-\zeta^2}}
+    \label{eq:resonant_peak}
+\end{equation}
+
+This formula is valid for $\zeta < 0.707$. For $\zeta \geq 0.707$, the frequency response is monotonically decreasing and $M_r = 1$ (at DC).
+
+The peak occurs at the \textbf{resonant frequency}:
+\begin{equation}
+    \omega_r = \omega_n\sqrt{1 - 2\zeta^2}
+\end{equation}
+
+which exists only for $\zeta < 0.707$.
+
+\textbf{Relationship to overshoot}: The resonant peak $M_r$ is related to time-domain overshoot. Higher $M_r$ indicates more oscillatory behavior and larger overshoot. Approximate relationships:
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+Damping Ratio $\zeta$ & Resonant Peak $M_r$ & Overshoot $\%OS$ \\
+\midrule
+0.3 & 1.75 & 37\% \\
+0.4 & 1.36 & 25\% \\
+0.5 & 1.15 & 16\% \\
+0.6 & 1.04 & 10\% \\
+0.707 & 1.00 & 4\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Design guideline}: For well-damped responses, aim for $M_r \leq 1.3$ (corresponding to $\zeta \geq 0.4$).
+
+\subsection{Gain Margin}
+\label{subsec:gain_margin}
+
+\textbf{Gain margin} quantifies robustness to gain variations in the loop.
+
+\begin{definition}[Gain Margin]
+The \textbf{gain margin} $GM$ is the factor by which the open-loop gain can increase before the closed-loop system becomes unstable:
+\begin{equation}
+    GM = \frac{1}{|L(j\omega_{pc})|}
+\end{equation}
+where $\omega_{pc}$ is the \textbf{phase crossover frequency}---the frequency where $\angle L(j\omega_{pc}) = -180°$.
+\end{definition}
+
+In decibels:
+\begin{equation}
+    GM_{dB} = -20\log_{10}|L(j\omega_{pc})| = 20\log_{10}\left(\frac{1}{|L(j\omega_{pc})|}\right)
+\end{equation}
+
+\textbf{Interpretation}: If $GM = 3$ (or $GM_{dB} = 9.5$ dB), the loop gain can triple before the system goes unstable. This provides a safety margin against:
+\begin{itemize}
+    \item Component tolerance variations
+    \item Actuator gain changes
+    \item Modeling errors
+    \item Environmental effects
+\end{itemize}
+
+\textbf{Design guidelines}:
+\begin{itemize}
+    \item \textbf{Minimum acceptable}: $GM \geq 2$ ($GM_{dB} \geq 6$ dB)
+    \item \textbf{Good design}: $GM = 3$ to 10 ($GM_{dB} = 10$ to 20 dB)
+    \item \textbf{Infinite $GM$}: Phase never crosses $-180°$ (e.g., first-order systems)
+\end{itemize}
+
+\subsection{Phase Margin}
+\label{subsec:phase_margin}
+
+\textbf{Phase margin} quantifies robustness to phase lag, which is especially important for handling time delays and unmodeled high-frequency dynamics.
+
+\begin{definition}[Phase Margin]
+The \textbf{phase margin} $PM$ is the additional phase lag required to make the system unstable:
+\begin{equation}
+    PM = 180° + \angle L(j\omega_{gc})
+\end{equation}
+where $\omega_{gc}$ is the \textbf{gain crossover frequency}---the frequency where $|L(j\omega_{gc})| = 1$ (0 dB).
+\end{definition}
+
+\textbf{Relationship to damping ratio}: For second-order systems, phase margin and damping ratio are approximately related by:
+\begin{equation}
+    PM \approx 100\zeta \text{ (degrees)} \quad \text{for } 0.4 < \zeta < 0.7
+\end{equation}
+
+\textbf{Relationship to time delay tolerance}: Phase margin directly determines the maximum time delay the system can tolerate:
+\begin{equation}
+    \tau_{max} = \frac{PM \text{ (radians)}}{\omega_{gc}} = \frac{PM \text{ (degrees)}}{57.3 \cdot \omega_{gc}}
+    \label{eq:delay_tolerance}
+\end{equation}
+
+\textbf{Example}: For $PM = 60°$ and $\omega_{gc} = 10$ rad/s:
+\begin{equation}
+    \tau_{max} = \frac{60}{57.3 \times 10} = 0.105 \text{ seconds} = 105 \text{ ms}
+\end{equation}
+
+This is critical for digital control systems where computational and sampling delays accumulate.
+
+\textbf{Design guidelines}:
+\begin{itemize}
+    \item \textbf{Minimum acceptable}: $PM \geq 30°$
+    \item \textbf{Good design}: $PM = 45°$ to $60°$
+    \item \textbf{Conservative}: $PM > 60°$ (slower response but very robust)
+\end{itemize}
+
+\keypoint{Gain margin protects against gain variations; phase margin protects against phase lag and time delays. Both are essential for robust control design. A well-designed system typically has $GM \geq 6$ dB and $PM \geq 45°$.}
+
+\subsection{Crossover Frequencies}
+\label{subsec:crossover_freqs}
+
+Two crossover frequencies are central to frequency-domain analysis:
+
+\begin{definition}[Gain Crossover Frequency]
+The \textbf{gain crossover frequency} $\omega_{gc}$ is the frequency where the open-loop magnitude equals unity:
+\begin{equation}
+    |L(j\omega_{gc})| = 1 \quad \text{or} \quad 20\log_{10}|L(j\omega_{gc})| = 0 \text{ dB}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Phase Crossover Frequency]
+The \textbf{phase crossover frequency} $\omega_{pc}$ is the frequency where the open-loop phase equals $-180°$:
+\begin{equation}
+    \angle L(j\omega_{pc}) = -180°
+\end{equation}
+\end{definition}
+
+For a stable closed-loop system with adequate margins, we require:
+\begin{equation}
+    \omega_{gc} < \omega_{pc}
+\end{equation}
+
+This ensures that when the loop gain is unity (the critical point for stability), the phase is still greater than $-180°$, providing a margin before instability.
+
+The gain crossover frequency $\omega_{gc}$ is particularly important because:
+\begin{itemize}
+    \item It approximately equals the closed-loop bandwidth: $\omega_{BW} \approx \omega_{gc}$
+    \item Phase margin is evaluated at $\omega_{gc}$
+    \item It determines the system's speed of response
+\end{itemize}
+
+\subsection{Summary: Connecting Time and Frequency Domains}
+
+The following relationships connect time-domain and frequency-domain specifications:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Time Domain} & \textbf{Frequency Domain} \\
+\midrule
+Rise time $t_r$ & Bandwidth $\omega_{BW} \approx 2/t_r$ \\
+Overshoot $\%OS$ & Resonant peak $M_r$, Phase margin $PM$ \\
+Settling time $t_s$ & Low-frequency gain, pole locations \\
+Steady-state error $e_{ss}$ & Low-frequency loop gain $|L(j0)|$ \\
+Damping ratio $\zeta$ & Phase margin $PM \approx 100\zeta$ (degrees) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+These relationships allow designers to work in whichever domain is more convenient or provides better insight for the specific problem at hand.
+
+
+%===============================================================================
+\section{Steady-State Error Analysis}
+\label{sec:steady_state_error_analysis}
+%===============================================================================
+
+Steady-state error is perhaps the most practically important performance metric. A control system that cannot track the reference accurately in steady state fails at its most basic purpose.
+
+\subsection{System Type Classification}
+
+The steady-state error capability of a feedback system is characterized by its \textbf{type number}.
+
+\begin{definition}[System Type]
+The \textbf{type} of a feedback control system is the number of pure integrators ($1/s$ factors) in the open-loop transfer function $L(s) = G(s)H(s)$.
+\end{definition}
+
+For unity feedback with forward path transfer function:
+\begin{equation}
+    G(s) = \frac{K \prod_{i=1}^{m}(s + z_i)}{s^N \prod_{j=1}^{n}(s + p_j)}
+\end{equation}
+
+the system is \textbf{Type $N$}, where $N$ is the number of poles at the origin.
+
+\textbf{Physical interpretation}:
+\begin{itemize}
+    \item \textbf{Type 0}: No integrators---proportional control only
+    \item \textbf{Type 1}: One integrator---integral action (like PI control)
+    \item \textbf{Type 2}: Two integrators---double integral action
+\end{itemize}
+
+\subsection{Static Error Constants}
+
+Three static error constants characterize steady-state performance for different input types:
+
+\subsubsection{Position Error Constant $K_p$}
+
+\begin{equation}
+    K_p = \lim_{s \to 0} G(s)
+\end{equation}
+
+\textbf{Interpretation}: $K_p$ determines the steady-state error for step inputs.
+
+\subsubsection{Velocity Error Constant $K_v$}
+
+\begin{equation}
+    K_v = \lim_{s \to 0} s \cdot G(s)
+\end{equation}
+
+\textbf{Interpretation}: $K_v$ determines the steady-state error for ramp inputs (constant velocity references).
+
+\subsubsection{Acceleration Error Constant $K_a$}
+
+\begin{equation}
+    K_a = \lim_{s \to 0} s^2 \cdot G(s)
+\end{equation}
+
+\textbf{Interpretation}: $K_a$ determines the steady-state error for parabolic inputs (constant acceleration references).
+
+\subsection{Steady-State Error Formulas}
+
+For a unity feedback system with reference input $R(s)$, the steady-state error is:
+
+\subsubsection{Step Input: $r(t) = A \cdot u(t)$, $R(s) = A/s$}
+
+\begin{equation}
+    \boxed{e_{ss} = \frac{A}{1 + K_p}}
+\end{equation}
+
+\begin{itemize}
+    \item \textbf{Type 0}: $e_{ss} = A/(1 + K)$ (finite, non-zero error)
+    \item \textbf{Type 1+}: $e_{ss} = 0$ (zero error)
+\end{itemize}
+
+\subsubsection{Ramp Input: $r(t) = A \cdot t \cdot u(t)$, $R(s) = A/s^2$}
+
+\begin{equation}
+    \boxed{e_{ss} = \frac{A}{K_v}}
+\end{equation}
+
+\begin{itemize}
+    \item \textbf{Type 0}: $e_{ss} = \infty$ (cannot track)
+    \item \textbf{Type 1}: $e_{ss} = A/K$ (finite, non-zero error)
+    \item \textbf{Type 2+}: $e_{ss} = 0$ (zero error)
+\end{itemize}
+
+\subsubsection{Parabolic Input: $r(t) = \frac{A}{2} t^2 \cdot u(t)$, $R(s) = A/s^3$}
+
+\begin{equation}
+    \boxed{e_{ss} = \frac{A}{K_a}}
+\end{equation}
+
+\begin{itemize}
+    \item \textbf{Type 0, 1}: $e_{ss} = \infty$ (cannot track)
+    \item \textbf{Type 2}: $e_{ss} = A/K$ (finite, non-zero error)
+    \item \textbf{Type 3+}: $e_{ss} = 0$ (zero error)
+\end{itemize}
+
+\subsection{Summary Table}
+
+\begin{table}[htbp]
+\centering
+\caption{Steady-State Error by System Type and Input Type}
+\label{tab:steady_state_error}
+\begin{tabular}{lccc}
+\toprule
+\textbf{System Type} & \textbf{Step Error} & \textbf{Ramp Error} & \textbf{Parabolic Error} \\
+\midrule
+Type 0 ($K_p = K$) & $\dfrac{A}{1+K}$ & $\infty$ & $\infty$ \\[1em]
+Type 1 ($K_v = K$) & $0$ & $\dfrac{A}{K}$ & $\infty$ \\[1em]
+Type 2 ($K_a = K$) & $0$ & $0$ & $\dfrac{A}{K}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\keypoint{To achieve zero steady-state error for a given input type, the system type must be at least as large as the order of the input polynomial. Step requires Type 1+, ramp requires Type 2+, parabolic requires Type 3+.}
+
+\subsection{Design Implications}
+
+\subsubsection{Adding Integrators}
+
+To reduce steady-state error, we can increase the system type by adding integrators to the controller:
+\begin{itemize}
+    \item PI controller adds one integrator
+    \item PII controller (double integral) adds two integrators
+\end{itemize}
+
+However, adding integrators has trade-offs:
+\begin{itemize}
+    \item \textbf{Reduces stability margins}: Each integrator adds $-90°$ phase at low frequencies
+    \item \textbf{Increases system order}: More complex dynamics
+    \item \textbf{Can cause windup}: Integrators accumulate during saturation
+    \item \textbf{Amplifies low-frequency noise}: Integrators emphasize low frequencies
+\end{itemize}
+
+\subsubsection{Increasing Gain}
+
+For a given system type, increasing the loop gain $K$ reduces the steady-state error:
+\begin{equation}
+    e_{ss} = \frac{A}{K} \quad \Rightarrow \quad K \uparrow \;\; \Rightarrow \;\; e_{ss} \downarrow
+\end{equation}
+
+However, high gain also has trade-offs:
+\begin{itemize}
+    \item \textbf{Reduces stability margins}: Higher gain moves crossover frequency toward phase crossover
+    \item \textbf{Increases sensitivity to noise}: High-frequency noise is amplified
+    \item \textbf{May saturate actuators}: Large control signals can exceed actuator limits
+\end{itemize}
+
+\subsubsection{Practical Recommendations}
+
+\begin{enumerate}
+    \item Identify the input types the system must track (step, ramp, etc.)
+    \item Choose the minimum system type to achieve zero steady-state error for those inputs
+    \item Use the lowest gain that meets the error specification
+    \item Verify that stability margins remain adequate
+    \item Implement anti-windup if integrators are used
+\end{enumerate}
+
+
+%===============================================================================
+\section{Sensitivity and Robustness Measures}
+\label{sec:sensitivity}
+%===============================================================================
+
+Real systems never exactly match their mathematical models. Components have tolerances, operating conditions vary, and our models are always simplified representations of physical reality. \textbf{Sensitivity analysis} and \textbf{robustness measures} quantify how control system performance degrades when the actual plant differs from the nominal model.
+
+\subsection{Sensitivity Function}
+
+The \textbf{sensitivity function} $S(s)$ characterizes how disturbances and modeling errors affect the output.
+
+\begin{definition}[Sensitivity Function]
+For a unity feedback system with open-loop transfer function $L(s) = G(s)C(s)$, the \textbf{sensitivity function} is:
+\begin{equation}
+    S(s) = \frac{1}{1 + L(s)}
+\end{equation}
+\end{definition}
+
+The sensitivity function has several important interpretations:
+
+\subsubsection{Disturbance Transfer Function}
+
+For disturbance $d$ entering at the plant output:
+\begin{equation}
+    Y(s) = S(s) \cdot D(s)
+\end{equation}
+
+Low $|S(j\omega)|$ means good disturbance rejection at frequency $\omega$.
+
+\subsubsection{Error Transfer Function}
+
+For reference input $r$:
+\begin{equation}
+    E(s) = R(s) - Y(s) = S(s) \cdot R(s)
+\end{equation}
+
+Low $|S(j\omega)|$ means good tracking at frequency $\omega$.
+
+\subsubsection{Plant Variation Sensitivity}
+
+If the plant $G$ changes by a small amount $\delta G$, the relative change in closed-loop transfer function $T$ is:
+\begin{equation}
+    \frac{\delta T / T}{\delta G / G} = S
+\end{equation}
+
+Low $|S|$ means the closed-loop is insensitive to plant variations.
+
+\subsection{Complementary Sensitivity Function}
+
+The \textbf{complementary sensitivity function} $T(s)$ is the closed-loop transfer function itself.
+
+\begin{definition}[Complementary Sensitivity Function]
+\begin{equation}
+    T(s) = \frac{L(s)}{1 + L(s)}
+\end{equation}
+\end{definition}
+
+The name ``complementary'' comes from the fundamental relationship:
+\begin{equation}
+    \boxed{S(s) + T(s) = 1}
+    \label{eq:S_plus_T}
+\end{equation}
+
+This relationship has profound implications: we cannot make both $S$ and $T$ small at the same frequency. At any frequency, if we improve disturbance rejection (reduce $|S|$), we worsen noise transmission (increase $|T|$), and vice versa.
+
+\subsection{The Fundamental Trade-off}
+
+Equation~\eqref{eq:S_plus_T} represents a fundamental trade-off in feedback design:
+
+\begin{itemize}
+    \item \textbf{Low frequencies}: We want $|S| \ll 1$ for disturbance rejection and tracking, which requires $|T| \approx 1$
+    \item \textbf{High frequencies}: We want $|T| \ll 1$ for noise attenuation, which requires $|S| \approx 1$
+    \item \textbf{Crossover region}: Neither can be small, which is why this region requires careful design
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    \begin{semilogxaxis}[
+        width=12cm, height=7cm,
+        xlabel={Frequency $\omega$ (rad/s)},
+        ylabel={Magnitude (dB)},
+        xmin=0.01, xmax=100,
+        ymin=-40, ymax=20,
+        grid=major,
+        legend pos=south west,
+        legend style={font=\small}
+    ]
+    % Sensitivity function (approximate shape)
+    \addplot[thick, UofSCGarnet, domain=0.01:100, samples=200]
+        {20*log10(abs(x/10 / (1 + x/10 * (1 + 0.1*x)^(-1))))};
+    \addlegendentry{$|S(j\omega)|$}
+
+    % Complementary sensitivity (approximate shape)
+    \addplot[thick, UofSCAtlantic, domain=0.01:100, samples=200]
+        {20*log10(abs(1 / (1 + 0.1*x + 0.01*x^2)))};
+    \addlegendentry{$|T(j\omega)|$}
+
+    % 0 dB line
+    \addplot[dashed, UofSCGrey50] coordinates {(0.01,0) (100,0)};
+
+    % Annotations
+    \node[UofSCGarnet] at (axis cs:0.05,-25) {Disturbance rejection};
+    \node[UofSCAtlantic] at (axis cs:50,-25) {Noise attenuation};
+    \end{semilogxaxis}
+\end{tikzpicture}
+\caption{Typical sensitivity $S$ and complementary sensitivity $T$ functions. At low frequencies, $|S| \ll 1$ for good disturbance rejection. At high frequencies, $|T| \ll 1$ for noise attenuation. Near the crossover frequency, neither can be small.}
+\label{fig:sensitivity_functions}
+\end{figure}
+
+\subsection{Maximum Sensitivity $M_s$}
+
+The \textbf{maximum sensitivity} $M_s$ is a key robustness metric.
+
+\begin{definition}[Maximum Sensitivity]
+\begin{equation}
+    M_s = \max_{\omega} |S(j\omega)| = \left\| S \right\|_\infty
+\end{equation}
+\end{definition}
+
+\textbf{Interpretation}: $M_s$ is the maximum amplification of disturbances at any frequency. It also relates to the distance from the Nyquist curve to the critical point $-1$:
+\begin{equation}
+    M_s = \frac{1}{\min_{\omega} |1 + L(j\omega)|} = \frac{1}{d_{min}}
+\end{equation}
+
+where $d_{min}$ is the shortest distance from the Nyquist plot to $-1 + j0$.
+
+\textbf{Relationship to stability margins}: A large $M_s$ indicates poor robustness:
+\begin{equation}
+    M_s > \frac{1}{\sin(PM)} \quad \text{and} \quad M_s > \frac{GM}{GM - 1}
+\end{equation}
+
+\textbf{Design guidelines}:
+\begin{itemize}
+    \item $M_s \leq 1.5$: Excellent robustness (rare in practice)
+    \item $M_s \leq 2.0$: Good robustness ($\approx 6$ dB)
+    \item $M_s \leq 2.5$: Acceptable robustness
+    \item $M_s > 3.0$: Poor robustness, redesign recommended
+\end{itemize}
+
+\subsection{Maximum Complementary Sensitivity $M_t$}
+
+Similarly, the \textbf{maximum complementary sensitivity} is:
+\begin{equation}
+    M_t = \max_{\omega} |T(j\omega)| = \left\| T \right\|_\infty
+\end{equation}
+
+For stable systems, $M_t$ equals the resonant peak $M_r$ discussed earlier. High $M_t$ indicates:
+\begin{itemize}
+    \item Oscillatory response (high overshoot)
+    \item Noise amplification at resonant frequency
+    \item Sensitivity to high-frequency unmodeled dynamics
+\end{itemize}
+
+\textbf{Design guideline}: $M_t \leq 1.5$ for well-damped behavior.
+
+\subsection{Robust Stability}
+
+A control system has \textbf{robust stability} if it remains stable despite bounded uncertainties in the plant model.
+
+For multiplicative uncertainty, where the actual plant is:
+\begin{equation}
+    G_{actual}(s) = G_{nominal}(s) \cdot (1 + \Delta(s) \cdot W(s))
+\end{equation}
+
+with $|\Delta(j\omega)| \leq 1$ and $W(s)$ describing the uncertainty magnitude, the robust stability condition is:
+\begin{equation}
+    \boxed{|T(j\omega)| < \frac{1}{|W(j\omega)|} \quad \forall \omega}
+\end{equation}
+
+This means the complementary sensitivity must be smaller than the inverse of the uncertainty magnitude at all frequencies.
+
+
+%===============================================================================
+\section{Disturbance Rejection Metrics}
+\label{sec:disturbance_rejection}
+%===============================================================================
+
+Control systems must reject disturbances, not just track references. Different disturbances enter the system at different points, and the system's ability to reject them depends on the loop transfer function characteristics.
+
+\subsection{Output Disturbance Rejection}
+
+For disturbances entering at the plant output:
+\begin{equation}
+    Y(s) = T(s) R(s) + S(s) D_o(s)
+\end{equation}
+
+The transfer function from output disturbance to output is the sensitivity function $S(s)$.
+
+\textbf{Low-frequency disturbance rejection}: For slowly varying disturbances (low frequency), we need:
+\begin{equation}
+    |S(j\omega)| \ll 1 \quad \text{for small } \omega
+\end{equation}
+
+This requires high loop gain at low frequencies:
+\begin{equation}
+    |L(j\omega)| \gg 1 \quad \Rightarrow \quad |S(j\omega)| = \frac{1}{|1 + L|} \approx \frac{1}{|L|} \ll 1
+\end{equation}
+
+\textbf{Integral action}: Adding an integrator to the controller ensures $|L(j0)| = \infty$, giving:
+\begin{equation}
+    |S(j0)| = 0
+\end{equation}
+
+This is why integral control is essential for rejecting constant (step) disturbances with zero steady-state error.
+
+\subsection{Input Disturbance Rejection}
+
+For disturbances entering at the plant input (before the plant):
+\begin{equation}
+    Y(s) = T(s) R(s) + G(s) S(s) D_i(s)
+\end{equation}
+
+The transfer function from input disturbance to output is $G(s) S(s)$.
+
+Since $G(s)$ typically rolls off at high frequencies, input disturbances are often naturally attenuated at high frequencies by the plant dynamics. The controller's main job is to ensure $S(s)$ is small at frequencies where $G(s)$ is not.
+
+\subsection{Measurement Noise Rejection}
+
+Sensor noise $n$ typically enters at the feedback path:
+\begin{equation}
+    Y(s) = T(s) R(s) - T(s) N(s)
+\end{equation}
+
+The transfer function from noise to output is $-T(s)$ (the negative sign indicates the noise subtracts from the measurement).
+
+\textbf{High-frequency noise rejection}: Since sensor noise is typically high frequency, we need:
+\begin{equation}
+    |T(j\omega)| \ll 1 \quad \text{for large } \omega
+\end{equation}
+
+This requires low loop gain at high frequencies and fast roll-off of the closed-loop transfer function.
+
+\subsection{Trade-off Summary}
+
+The fundamental trade-off in disturbance rejection is:
+\begin{itemize}
+    \item \textbf{High loop gain at low frequencies}: Rejects low-frequency disturbances, ensures good tracking
+    \item \textbf{Low loop gain at high frequencies}: Rejects sensor noise, prevents exciting unmodeled dynamics
+    \item \textbf{Moderate gain near crossover}: Cannot avoid some sensitivity, careful design needed
+\end{itemize}
+
+This is often called the ``loop shaping'' approach to control design, where we shape the magnitude of $L(j\omega)$ to achieve desired $S$ and $T$ characteristics.
+
+
+%===============================================================================
+\section{Practical Applications}
+\label{sec:practical_applications}
+%===============================================================================
+
+This section presents fully worked examples that demonstrate how to apply performance metrics in realistic control design scenarios.
+
+\subsection{Example 1: Computing Time-Domain Specs from Step Response}
+
+\textbf{Problem}: A control system produces the following step response data. Compute the rise time, peak time, percent overshoot, and settling time (2\% criterion).
+
+\begin{center}
+\begin{tabular}{cc|cc|cc}
+\toprule
+$t$ (s) & $y(t)$ & $t$ (s) & $y(t)$ & $t$ (s) & $y(t)$ \\
+\midrule
+0.0 & 0.000 & 0.5 & 0.923 & 1.0 & 1.089 \\
+0.1 & 0.095 & 0.6 & 1.047 & 1.5 & 1.012 \\
+0.2 & 0.345 & 0.7 & 1.105 & 2.0 & 0.997 \\
+0.3 & 0.590 & 0.8 & 1.110 & 2.5 & 1.002 \\
+0.4 & 0.785 & 0.9 & 1.086 & 3.0 & 1.000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Solution}:
+
+\textbf{Step 1: Determine steady-state value}
+
+From the data, the response appears to settle around $y_{ss} = 1.0$.
+
+\textbf{Step 2: Calculate rise time (10\%-90\%)}
+
+We need to find when $y(t) = 0.1$ and when $y(t) = 0.9$.
+\begin{itemize}
+    \item $y = 0.1$: By interpolation between $t = 0$ and $t = 0.1$: $t_{10\%} \approx 0.105$ s
+    \item $y = 0.9$: By interpolation between $t = 0.4$ and $t = 0.5$: $t_{90\%} \approx 0.48$ s
+\end{itemize}
+
+\begin{equation}
+    t_r = t_{90\%} - t_{10\%} = 0.48 - 0.105 = \boxed{0.375 \text{ s}}
+\end{equation}
+
+\textbf{Step 3: Identify peak time and maximum value}
+
+From the table, the maximum value is $y_{max} = 1.110$ at $t = 0.8$ s.
+
+\begin{equation}
+    t_p = \boxed{0.8 \text{ s}}
+\end{equation}
+
+\textbf{Step 4: Calculate percent overshoot}
+
+\begin{equation}
+    \%OS = \frac{y_{max} - y_{ss}}{y_{ss}} \times 100\% = \frac{1.110 - 1.0}{1.0} \times 100\% = \boxed{11.0\%}
+\end{equation}
+
+\textbf{Step 5: Determine settling time (2\% criterion)}
+
+The 2\% band is $[0.98, 1.02]$. Examining the data backward from $t = 3.0$ s:
+\begin{itemize}
+    \item At $t = 3.0$: $y = 1.000$ (within band)
+    \item At $t = 2.5$: $y = 1.002$ (within band)
+    \item At $t = 2.0$: $y = 0.997$ (within band)
+    \item At $t = 1.5$: $y = 1.012$ (within band)
+    \item At $t = 1.0$: $y = 1.089$ (outside band!)
+\end{itemize}
+
+By interpolation, the response enters the 2\% band for the last time around $t \approx 1.3$ s.
+
+\begin{equation}
+    t_s = \boxed{1.3 \text{ s}}
+\end{equation}
+
+\textbf{Step 6: Estimate system parameters}
+
+From the overshoot, we can estimate the damping ratio using Equation~\eqref{eq:zeta_from_overshoot}:
+\begin{equation}
+    \zeta = \frac{-\ln(0.11)}{\sqrt{\pi^2 + \ln^2(0.11)}} = \frac{2.207}{\sqrt{9.87 + 4.87}} = \frac{2.207}{3.84} \approx 0.575
+\end{equation}
+
+From the settling time formula:
+\begin{equation}
+    \omega_n = \frac{4}{\zeta t_s} = \frac{4}{0.575 \times 1.3} \approx 5.35 \text{ rad/s}
+\end{equation}
+
+We can verify using the peak time formula:
+\begin{equation}
+    t_p = \frac{\pi}{\omega_n\sqrt{1-\zeta^2}} = \frac{\pi}{5.35 \times 0.818} = 0.72 \text{ s}
+\end{equation}
+
+This is close to the measured $t_p = 0.8$ s, confirming our estimates are reasonable.
+
+\subsection{Example 2: Pole Placement for Desired Overshoot and Settling Time}
+
+\textbf{Problem}: Design a controller for the plant $G(s) = \dfrac{1}{s(s+4)}$ to achieve:
+\begin{itemize}
+    \item Percent overshoot $\leq 10\%$
+    \item Settling time $\leq 1.5$ s (2\% criterion)
+    \item Zero steady-state error for step input
+\end{itemize}
+
+\textbf{Solution}:
+
+\textbf{Step 1: Translate specifications to pole location requirements}
+
+From overshoot constraint:
+\begin{equation}
+    \%OS \leq 10\% \quad \Rightarrow \quad \zeta \geq 0.59
+\end{equation}
+
+From settling time constraint:
+\begin{equation}
+    t_s = \frac{4}{\zeta\omega_n} \leq 1.5 \quad \Rightarrow \quad \zeta\omega_n \geq \frac{4}{1.5} = 2.67
+\end{equation}
+
+For zero steady-state error to step, the plant already has one integrator (Type 1), so this is automatically satisfied.
+
+\textbf{Step 2: Select target pole locations}
+
+Using $\zeta = 0.6$ (with some margin) and $\zeta\omega_n = 3$ (with some margin):
+\begin{equation}
+    \omega_n = \frac{3}{0.6} = 5 \text{ rad/s}
+\end{equation}
+
+Target poles:
+\begin{equation}
+    s_{1,2} = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2} = -3 \pm j4
+\end{equation}
+
+\textbf{Step 3: Verify specifications}
+
+With these poles:
+\begin{itemize}
+    \item $\%OS = e^{-\pi(0.6)/\sqrt{1-0.36}} \times 100\% = e^{-2.356} \times 100\% = 9.5\%$ (meets spec)
+    \item $t_s = 4/3 = 1.33$ s (meets spec)
+\end{itemize}
+
+\textbf{Step 4: Design controller using pole placement}
+
+The desired characteristic equation is:
+\begin{equation}
+    (s + 3 - j4)(s + 3 + j4) = s^2 + 6s + 25
+\end{equation}
+
+But the plant has three states (order 2 + 1 from controller), so we need a third pole. Place it at $s = -15$ (5 times farther left than $\sigma = 3$) to minimize its effect:
+\begin{equation}
+    \text{Desired: } (s^2 + 6s + 25)(s + 15) = s^3 + 21s^2 + 115s + 375
+\end{equation}
+
+Using a PD controller $C(s) = K_p + K_d s$:
+\begin{equation}
+    G_c(s)G(s) = \frac{K_p + K_d s}{s(s+4)} = \frac{K_d s + K_p}{s^2 + 4s}
+\end{equation}
+
+Closed-loop characteristic equation:
+\begin{equation}
+    s^2 + 4s + K_d s + K_p = s^2 + (4 + K_d)s + K_p
+\end{equation}
+
+This is only second-order, insufficient for three pole placement. We need a higher-order controller.
+
+Using PID: $C(s) = K_p + K_i/s + K_d s$:
+\begin{equation}
+    L(s) = \frac{K_d s^2 + K_p s + K_i}{s^2(s+4)}
+\end{equation}
+
+Characteristic equation:
+\begin{equation}
+    s^3 + 4s^2 + K_d s^2 + K_p s + K_i = s^3 + (4 + K_d)s^2 + K_p s + K_i
+\end{equation}
+
+Matching coefficients with $s^3 + 21s^2 + 115s + 375$:
+\begin{align}
+    4 + K_d &= 21 \quad \Rightarrow \quad K_d = 17 \\
+    K_p &= 115 \\
+    K_i &= 375
+\end{align}
+
+\textbf{Final controller}:
+\begin{equation}
+    \boxed{C(s) = 115 + \frac{375}{s} + 17s}
+\end{equation}
+
+\subsection{Example 3: Second-Order Approximation Accuracy}
+
+\textbf{Problem}: A third-order system has transfer function:
+\begin{equation}
+    T(s) = \frac{100}{(s^2 + 4s + 25)(s + 10)}
+\end{equation}
+
+Determine whether the second-order approximation is valid and compare predicted vs. actual performance.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Identify poles}
+
+The complex poles are at $s_{1,2} = -2 \pm j\sqrt{21} \approx -2 \pm j4.58$.
+
+The real pole is at $s_3 = -10$.
+
+\textbf{Step 2: Check dominant pole criterion}
+
+The real part of the complex poles is $\sigma_1 = 2$.
+The real pole has $\sigma_3 = 10$.
+
+Ratio: $\sigma_3/\sigma_1 = 10/2 = 5$.
+
+This is exactly at the borderline of the ``5-10 times'' rule, so we expect moderate accuracy.
+
+\textbf{Step 3: Calculate second-order approximation parameters}
+
+From the complex poles:
+\begin{align}
+    \omega_n &= \sqrt{4 + 21} = 5 \text{ rad/s} \\
+    \zeta &= \frac{2}{5} = 0.4
+\end{align}
+
+\textbf{Step 4: Predict specifications using second-order formulas}
+
+\begin{align}
+    \%OS_{predicted} &= e^{-\pi(0.4)/\sqrt{1-0.16}} \times 100\% = e^{-1.37} \times 100\% = 25.4\% \\
+    t_p^{predicted} &= \frac{\pi}{\omega_n\sqrt{1-\zeta^2}} = \frac{\pi}{5 \times 0.917} = 0.69 \text{ s} \\
+    t_s^{predicted} &= \frac{4}{\zeta\omega_n} = \frac{4}{2} = 2.0 \text{ s}
+\end{align}
+
+\textbf{Step 5: Compute actual specifications (via simulation or exact analysis)}
+
+Simulating the full third-order system yields:
+\begin{align}
+    \%OS_{actual} &\approx 21\% \\
+    t_p^{actual} &\approx 0.73 \text{ s} \\
+    t_s^{actual} &\approx 2.3 \text{ s}
+\end{align}
+
+\textbf{Step 6: Compare and assess accuracy}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Predicted} & \textbf{Actual} & \textbf{Error} \\
+\midrule
+Overshoot & 25.4\% & 21\% & -17\% \\
+Peak time & 0.69 s & 0.73 s & +6\% \\
+Settling time & 2.0 s & 2.3 s & +15\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Conclusion}: The second-order approximation is reasonably accurate (errors within 20\%) because the additional pole is 5 times farther left. The approximation slightly overestimates overshoot and underestimates settling time. For preliminary design, this accuracy is acceptable, but final verification should use the full model.
+
+\subsection{Example 4: Bandwidth from Bode Plot}
+
+\textbf{Problem}: Given the closed-loop frequency response data below, determine the bandwidth.
+
+\begin{center}
+\begin{tabular}{cc|cc}
+\toprule
+$\omega$ (rad/s) & $|T(j\omega)|$ (dB) & $\omega$ (rad/s) & $|T(j\omega)|$ (dB) \\
+\midrule
+0.1 & 0.0 & 5 & -1.5 \\
+0.5 & 0.0 & 10 & -3.0 \\
+1 & 0.0 & 15 & -5.2 \\
+2 & -0.2 & 20 & -7.5 \\
+3 & -0.5 & 50 & -17.0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Solution}:
+
+The bandwidth is the frequency where $|T(j\omega)|$ drops to $-3$ dB below the DC value.
+
+From the data:
+\begin{itemize}
+    \item DC gain: $|T(j0)| = 0$ dB
+    \item $-3$ dB point: $|T(j\omega_{BW})| = -3$ dB
+\end{itemize}
+
+Looking at the data, at $\omega = 10$ rad/s, $|T| = -3.0$ dB.
+
+\begin{equation}
+    \boxed{\omega_{BW} = 10 \text{ rad/s}}
+\end{equation}
+
+To convert to Hz:
+\begin{equation}
+    f_{BW} = \frac{\omega_{BW}}{2\pi} = \frac{10}{2\pi} = 1.59 \text{ Hz}
+\end{equation}
+
+\textbf{Interpretation}: The system effectively tracks sinusoidal inputs up to about 10 rad/s (1.6 Hz). Above this frequency, the tracking accuracy degrades significantly.
+
+From the bandwidth, we can estimate the rise time:
+\begin{equation}
+    t_r \approx \frac{2}{\omega_{BW}} = \frac{2}{10} = 0.2 \text{ s}
+\end{equation}
+
+\subsection{Example 5: Steady-State Error for Different Inputs}
+
+\textbf{Problem}: A unity feedback system has open-loop transfer function:
+\begin{equation}
+    G(s) = \frac{50(s+2)}{s(s+5)(s+10)}
+\end{equation}
+
+Find the steady-state error for:
+\begin{enumerate}[(a)]
+    \item Unit step input
+    \item Unit ramp input
+    \item Unit parabolic input
+\end{enumerate}
+
+\textbf{Solution}:
+
+\textbf{Step 1: Determine system type}
+
+The open-loop transfer function has one pole at $s = 0$, so this is a \textbf{Type 1} system.
+
+\textbf{Step 2: Calculate error constants}
+
+\textbf{Position constant}:
+\begin{equation}
+    K_p = \lim_{s \to 0} G(s) = \lim_{s \to 0} \frac{50(s+2)}{s(s+5)(s+10)} = \infty
+\end{equation}
+
+\textbf{Velocity constant}:
+\begin{equation}
+    K_v = \lim_{s \to 0} sG(s) = \lim_{s \to 0} \frac{50(s+2)}{(s+5)(s+10)} = \frac{50(2)}{(5)(10)} = 2 \text{ s}^{-1}
+\end{equation}
+
+\textbf{Acceleration constant}:
+\begin{equation}
+    K_a = \lim_{s \to 0} s^2 G(s) = \lim_{s \to 0} \frac{50s(s+2)}{(s+5)(s+10)} = 0
+\end{equation}
+
+\textbf{Step 3: Calculate steady-state errors}
+
+\textbf{(a) Unit step input} ($A = 1$):
+\begin{equation}
+    e_{ss} = \frac{A}{1 + K_p} = \frac{1}{1 + \infty} = \boxed{0}
+\end{equation}
+
+\textbf{(b) Unit ramp input} ($A = 1$):
+\begin{equation}
+    e_{ss} = \frac{A}{K_v} = \frac{1}{2} = \boxed{0.5}
+\end{equation}
+
+\textbf{(c) Unit parabolic input} ($A = 1$):
+\begin{equation}
+    e_{ss} = \frac{A}{K_a} = \frac{1}{0} = \boxed{\infty}
+\end{equation}
+
+\textbf{Interpretation}: This Type 1 system:
+\begin{itemize}
+    \item Perfectly tracks step inputs (zero steady-state error)
+    \item Tracks ramp inputs with constant error of 0.5 units
+    \item Cannot track parabolic inputs (error grows without bound)
+\end{itemize}
+
+To achieve zero error for ramp inputs, we would need to add another integrator (making it Type 2).
+
+\subsection{Example 6: Sensitivity Function Analysis}
+
+\textbf{Problem}: For the system with loop transfer function:
+\begin{equation}
+    L(s) = \frac{100}{s(s+10)}
+\end{equation}
+
+\begin{enumerate}[(a)]
+    \item Compute the sensitivity function $S(s)$
+    \item Find the maximum sensitivity $M_s$
+    \item Determine the frequency at which $|S(j\omega)| = 1$ (0 dB)
+\end{enumerate}
+
+\textbf{Solution}:
+
+\textbf{(a) Sensitivity function}:
+\begin{align}
+    S(s) &= \frac{1}{1 + L(s)} = \frac{1}{1 + \frac{100}{s(s+10)}} \\
+    &= \frac{s(s+10)}{s(s+10) + 100} = \frac{s^2 + 10s}{s^2 + 10s + 100}
+\end{align}
+
+\textbf{(b) Maximum sensitivity}:
+
+The closed-loop poles are found from $s^2 + 10s + 100 = 0$:
+\begin{equation}
+    s = \frac{-10 \pm \sqrt{100 - 400}}{2} = -5 \pm j8.66
+\end{equation}
+
+So $\omega_n = 10$ rad/s and $\zeta = 0.5$.
+
+For this second-order system, the maximum sensitivity can be approximated. We compute $|S(j\omega)|$:
+\begin{equation}
+    |S(j\omega)| = \frac{|j\omega(j\omega + 10)|}{|(j\omega)^2 + 10(j\omega) + 100|}
+\end{equation}
+
+At the natural frequency $\omega = 10$:
+\begin{align}
+    |S(j10)| &= \frac{|j10(j10 + 10)|}{|-100 + j100 + 100|} = \frac{|j10 \cdot (10 + j10)|}{|j100|} \\
+    &= \frac{10 \cdot \sqrt{200}}{100} = \frac{10 \cdot 14.14}{100} = 1.414
+\end{align}
+
+The maximum occurs near $\omega_n$. More precisely, for a second-order system:
+\begin{equation}
+    M_s = \frac{1}{2\zeta\sqrt{1-\zeta^2}} = \frac{1}{2(0.5)\sqrt{1-0.25}} = \frac{1}{0.866} = \boxed{1.15}
+\end{equation}
+
+Wait, this formula is for $M_r$ (complementary sensitivity). For $M_s$, we need to evaluate numerically or use the relationship with stability margins.
+
+Using the gain margin and phase margin approach:
+\begin{equation}
+    M_s \approx \frac{1}{\sin(PM)}
+\end{equation}
+
+From earlier analysis of this system, $PM \approx 50°$, so:
+\begin{equation}
+    M_s \approx \frac{1}{\sin(50°)} = \frac{1}{0.766} = \boxed{1.31}
+\end{equation}
+
+\textbf{(c) Frequency where $|S| = 1$}:
+
+At very low frequencies:
+\begin{equation}
+    |S(j\omega)| \approx \frac{\omega \cdot 10}{100} = 0.1\omega \quad \text{for small } \omega
+\end{equation}
+
+Setting $|S| = 1$: $0.1\omega = 1$, so $\omega \approx 10$ rad/s.
+
+At high frequencies:
+\begin{equation}
+    |S(j\omega)| \approx 1 \quad \text{for large } \omega
+\end{equation}
+
+So the sensitivity crosses 0 dB near $\omega = 10$ rad/s and remains there for higher frequencies.
+
+\begin{equation}
+    \boxed{\omega_{0dB} \approx 10 \text{ rad/s}}
+\end{equation}
+
+\subsection{Example 7: Disturbance Rejection Design}
+
+\textbf{Problem}: A motor position control system experiences a constant torque disturbance at the motor shaft. Design a controller to:
+\begin{itemize}
+    \item Reject constant disturbances with zero steady-state error
+    \item Achieve settling time $\leq 0.5$ s
+    \item Limit overshoot to $\leq 5\%$
+\end{itemize}
+
+The motor transfer function (from voltage to position) is:
+\begin{equation}
+    G(s) = \frac{10}{s(s+5)}
+\end{equation}
+
+\textbf{Solution}:
+
+\textbf{Step 1: Analyze disturbance rejection requirement}
+
+For a disturbance $D$ entering at the plant input, the transfer to output is:
+\begin{equation}
+    Y_d(s) = \frac{G(s)}{1 + C(s)G(s)} D(s) = G(s) S(s) D(s)
+\end{equation}
+
+For constant disturbance rejection with zero steady-state error:
+\begin{equation}
+    \lim_{s \to 0} s \cdot G(s) S(s) \cdot \frac{1}{s} = \lim_{s \to 0} G(s) S(s) = 0
+\end{equation}
+
+Since $G(0) = \infty$ (plant has integrator), we need $S(0) = 0$, which requires the controller to also have an integrator. A PI or PID controller will satisfy this.
+
+\textbf{Step 2: Determine required pole locations}
+
+For $\%OS \leq 5\%$: $\zeta \geq 0.69$ (use $\zeta = 0.7$)
+
+For $t_s \leq 0.5$ s: $\zeta\omega_n \geq 4/0.5 = 8$, so $\omega_n \geq 8/0.7 = 11.4$ rad/s
+
+Use $\omega_n = 12$ rad/s for margin.
+
+Desired poles: $s = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2} = -8.4 \pm j8.57$
+
+\textbf{Step 3: Design PI controller}
+
+With PI controller $C(s) = K_p + K_i/s = (K_p s + K_i)/s$:
+\begin{equation}
+    L(s) = C(s)G(s) = \frac{(K_p s + K_i) \cdot 10}{s \cdot s(s+5)} = \frac{10K_p s + 10K_i}{s^2(s+5)}
+\end{equation}
+
+This gives a Type 2 system (good for disturbance rejection).
+
+Closed-loop characteristic equation:
+\begin{equation}
+    s^3 + 5s^2 + 10K_p s + 10K_i = 0
+\end{equation}
+
+We have 3 parameters to place (with PI, we have 2 gains), so we can only place 2 of the 3 poles. We'll aim to place the dominant pair and accept the third pole where it falls.
+
+For dominant poles at $s = -8.4 \pm j8.57$:
+\begin{equation}
+    s^2 + 16.8s + 144 = 0
+\end{equation}
+
+Expanding with a third pole at $s = -p$:
+\begin{equation}
+    (s^2 + 16.8s + 144)(s + p) = s^3 + (16.8+p)s^2 + (144 + 16.8p)s + 144p
+\end{equation}
+
+Matching $s^2$ coefficient: $16.8 + p = 5$ gives $p = -11.8$, which is unstable!
+
+This indicates PI control alone cannot achieve the desired specifications. We need PID.
+
+\textbf{Step 4: Design PID controller}
+
+With PID: $C(s) = K_p + K_i/s + K_d s$:
+\begin{equation}
+    L(s) = \frac{10(K_d s^2 + K_p s + K_i)}{s^2(s+5)}
+\end{equation}
+
+Characteristic equation:
+\begin{equation}
+    s^3 + 5s^2 + 10K_d s^2 + 10K_p s + 10K_i = s^3 + (5+10K_d)s^2 + 10K_p s + 10K_i
+\end{equation}
+
+Place third pole at $s = -40$ (5× the real part of dominant poles):
+\begin{equation}
+    (s^2 + 16.8s + 144)(s + 40) = s^3 + 56.8s^2 + 816s + 5760
+\end{equation}
+
+Matching coefficients:
+\begin{align}
+    5 + 10K_d &= 56.8 \quad \Rightarrow \quad K_d = 5.18 \\
+    10K_p &= 816 \quad \Rightarrow \quad K_p = 81.6 \\
+    10K_i &= 5760 \quad \Rightarrow \quad K_i = 576
+\end{align}
+
+\textbf{Final controller}:
+\begin{equation}
+    \boxed{C(s) = 81.6 + \frac{576}{s} + 5.18s}
+\end{equation}
+
+\textbf{Verification}: The system is Type 2, ensuring zero steady-state error for both step reference and constant disturbance inputs.
+
+\subsection{Example 8: Trade-offs Between Specifications}
+
+\textbf{Problem}: Analyze the trade-offs when designing a controller for:
+\begin{equation}
+    G(s) = \frac{1}{s(s+1)(s+2)}
+\end{equation}
+
+Consider three designs with different bandwidth targets: low ($\omega_{gc} = 0.5$), medium ($\omega_{gc} = 2$), and high ($\omega_{gc} = 5$).
+
+\textbf{Solution}:
+
+For each design, we'll use proportional control $C(s) = K$ and analyze the resulting trade-offs.
+
+\textbf{Low bandwidth design} ($\omega_{gc} = 0.5$ rad/s):
+
+At $\omega = 0.5$:
+\begin{equation}
+    |G(j0.5)| = \frac{1}{0.5 \cdot \sqrt{1.25} \cdot \sqrt{4.25}} = \frac{1}{0.5 \cdot 1.12 \cdot 2.06} = 0.87
+\end{equation}
+
+Need $K = 1/0.87 = 1.15$ for $|KG| = 1$ at $\omega = 0.5$.
+
+Phase at crossover:
+\begin{equation}
+    \angle G(j0.5) = -90° - \tan^{-1}(0.5) - \tan^{-1}(0.25) = -90° - 26.6° - 14.0° = -130.6°
+\end{equation}
+
+$PM = 180° - 130.6° = 49.4°$ (good)
+
+Rise time estimate: $t_r \approx 2/0.5 = 4$ s (slow)
+
+\textbf{Medium bandwidth design} ($\omega_{gc} = 2$ rad/s):
+
+At $\omega = 2$:
+\begin{equation}
+    |G(j2)| = \frac{1}{2 \cdot \sqrt{5} \cdot \sqrt{8}} = \frac{1}{2 \cdot 2.24 \cdot 2.83} = 0.079
+\end{equation}
+
+Need $K = 12.7$ for crossover at $\omega = 2$.
+
+Phase at crossover:
+\begin{equation}
+    \angle G(j2) = -90° - \tan^{-1}(2) - \tan^{-1}(1) = -90° - 63.4° - 45° = -198.4°
+\end{equation}
+
+$PM = 180° - 198.4° = -18.4°$ (unstable!)
+
+This design is unstable with proportional control alone.
+
+\textbf{High bandwidth design} ($\omega_{gc} = 5$ rad/s):
+
+This would be even more unstable. The phase at high frequencies approaches $-270°$, far beyond stability.
+
+\textbf{Trade-off analysis}:
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Design} & \textbf{$K$} & \textbf{$PM$} & \textbf{Rise time} \\
+\midrule
+Low BW ($\omega_{gc}=0.5$) & 1.15 & 49° & 4 s \\
+Medium BW ($\omega_{gc}=2$) & 12.7 & Unstable & N/A \\
+High BW ($\omega_{gc}=5$) & Large & Unstable & N/A \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Conclusion}: With proportional control, this plant cannot achieve high bandwidth while maintaining stability. The triple lag (three poles) creates too much phase loss. To achieve higher bandwidth, we need:
+\begin{itemize}
+    \item Lead compensation to add phase near crossover
+    \item Careful placement of crossover below the frequency where phase reaches $-180°$
+    \item Acceptance of lower phase margin with higher bandwidth
+\end{itemize}
+
+This illustrates the fundamental trade-off: \textbf{higher bandwidth requires more sophisticated compensation and often results in reduced robustness}.
+
+\subsection{Example 9: Gain and Phase Margin Calculation}
+
+\textbf{Problem}: For the loop transfer function:
+\begin{equation}
+    L(s) = \frac{20}{s(s+2)(s+5)}
+\end{equation}
+
+Calculate the gain margin and phase margin.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Find phase crossover frequency} ($\angle L = -180°$)
+
+\begin{equation}
+    \angle L(j\omega) = -90° - \tan^{-1}(\omega/2) - \tan^{-1}(\omega/5)
+\end{equation}
+
+Setting this equal to $-180°$:
+\begin{equation}
+    \tan^{-1}(\omega/2) + \tan^{-1}(\omega/5) = 90°
+\end{equation}
+
+Using the identity $\tan^{-1}(a) + \tan^{-1}(b) = \tan^{-1}\left(\frac{a+b}{1-ab}\right)$ when $ab < 1$:
+\begin{equation}
+    \tan^{-1}\left(\frac{\omega/2 + \omega/5}{1 - \omega^2/10}\right) = 90°
+\end{equation}
+
+This equals $90°$ when the argument goes to infinity, i.e., when $1 - \omega^2/10 = 0$:
+\begin{equation}
+    \omega_{pc} = \sqrt{10} = 3.16 \text{ rad/s}
+\end{equation}
+
+\textbf{Step 2: Calculate gain margin}
+
+\begin{equation}
+    |L(j3.16)| = \frac{20}{3.16 \cdot \sqrt{3.16^2 + 4} \cdot \sqrt{3.16^2 + 25}}
+\end{equation}
+\begin{equation}
+    = \frac{20}{3.16 \cdot \sqrt{14} \cdot \sqrt{35}} = \frac{20}{3.16 \cdot 3.74 \cdot 5.92} = \frac{20}{70} = 0.286
+\end{equation}
+
+\begin{equation}
+    GM = \frac{1}{0.286} = \boxed{3.5} \quad \text{or} \quad GM_{dB} = 20\log_{10}(3.5) = \boxed{10.9 \text{ dB}}
+\end{equation}
+
+\textbf{Step 3: Find gain crossover frequency} ($|L| = 1$)
+
+We need to solve:
+\begin{equation}
+    \frac{20}{\omega\sqrt{\omega^2+4}\sqrt{\omega^2+25}} = 1
+\end{equation}
+
+This is equivalent to:
+\begin{equation}
+    \omega^2(\omega^2+4)(\omega^2+25) = 400
+\end{equation}
+
+Let $x = \omega^2$:
+\begin{equation}
+    x(x+4)(x+25) = x^3 + 29x^2 + 100x = 400
+\end{equation}
+
+By numerical solution or trial: $x \approx 2.9$, so $\omega_{gc} \approx 1.7$ rad/s.
+
+\textbf{Step 4: Calculate phase margin}
+
+\begin{align}
+    \angle L(j1.7) &= -90° - \tan^{-1}(1.7/2) - \tan^{-1}(1.7/5) \\
+    &= -90° - \tan^{-1}(0.85) - \tan^{-1}(0.34) \\
+    &= -90° - 40.4° - 18.8° = -149.2°
+\end{align}
+
+\begin{equation}
+    PM = 180° + (-149.2°) = \boxed{30.8°}
+\end{equation}
+
+\textbf{Interpretation}: The system has adequate gain margin (10.9 dB $>$ 6 dB) but marginal phase margin (30.8° is at the lower acceptable limit). The system will be stable but may exhibit noticeable overshoot (approximately 35\% based on $PM \approx 30°$).
+
+\subsection{Example 10: Maximum Sensitivity Computation}
+
+\textbf{Problem}: For the system in Example 9, compute the maximum sensitivity $M_s$ and verify it's consistent with the stability margins.
+
+\textbf{Solution}:
+
+From Example 9: $GM = 3.5$ and $PM = 30.8°$.
+
+\textbf{Lower bound on $M_s$ from gain margin}:
+\begin{equation}
+    M_s > \frac{GM}{GM - 1} = \frac{3.5}{3.5 - 1} = \frac{3.5}{2.5} = 1.4
+\end{equation}
+
+\textbf{Lower bound on $M_s$ from phase margin}:
+\begin{equation}
+    M_s > \frac{1}{\sin(PM)} = \frac{1}{\sin(30.8°)} = \frac{1}{0.512} = 1.95
+\end{equation}
+
+The larger bound applies, so $M_s \geq 1.95$.
+
+\textbf{Direct computation}:
+
+The sensitivity function is:
+\begin{equation}
+    S(s) = \frac{1}{1 + L(s)} = \frac{s(s+2)(s+5)}{s(s+2)(s+5) + 20} = \frac{s^3 + 7s^2 + 10s}{s^3 + 7s^2 + 10s + 20}
+\end{equation}
+
+To find $M_s = \max_\omega |S(j\omega)|$, we evaluate $|S(j\omega)|$ at various frequencies. The maximum typically occurs near the gain crossover frequency.
+
+At $\omega = 1.7$ rad/s (near $\omega_{gc}$):
+\begin{equation}
+    S(j1.7) = \frac{(j1.7)^3 + 7(j1.7)^2 + 10(j1.7)}{(j1.7)^3 + 7(j1.7)^2 + 10(j1.7) + 20}
+\end{equation}
+
+Numerator: $-j4.91 - 20.23 + j17 = -20.23 + j12.09$, magnitude = 23.6
+
+Denominator: $-20.23 + j12.09 + 20 = -0.23 + j12.09$, magnitude = 12.09
+
+\begin{equation}
+    |S(j1.7)| = \frac{23.6}{12.09} = 1.95
+\end{equation}
+
+This matches our lower bound from phase margin, confirming:
+\begin{equation}
+    \boxed{M_s \approx 2.0}
+\end{equation}
+
+\textbf{Interpretation}: $M_s = 2$ corresponds to 6 dB, which indicates acceptable but not excellent robustness. Disturbances at frequencies near 1.7 rad/s could be amplified by a factor of 2 in the output.
+
+
+%===============================================================================
+\section{Algorithm Implementations}
+\label{sec:algorithms}
+%===============================================================================
+
+This section provides algorithmic implementations for computing performance metrics from step response data and frequency response data.
+
+\subsection{Step Response Analysis Algorithm}
+
+\begin{algorithm}[htbp]
+\caption{Compute Time-Domain Performance Metrics from Step Response}
+\label{alg:step_response}
+\begin{algorithmic}[1]
+\REQUIRE Time vector $t$, output vector $y$, step magnitude $A$, tolerance $\epsilon$ (default 0.02)
+\ENSURE Rise time $t_r$, peak time $t_p$, overshoot $\%OS$, settling time $t_s$, steady-state value $y_{ss}$
+
+\STATE \textbf{// Compute steady-state value}
+\STATE $y_{ss} \leftarrow \text{mean}(y[\text{last 10\% of samples}])$
+
+\STATE \textbf{// Compute rise time (10\%-90\%)}
+\STATE $t_{10} \leftarrow$ first time where $y \geq 0.1 \cdot y_{ss}$
+\STATE $t_{90} \leftarrow$ first time where $y \geq 0.9 \cdot y_{ss}$
+\STATE $t_r \leftarrow t_{90} - t_{10}$
+
+\STATE \textbf{// Compute peak time and maximum value}
+\STATE $[y_{max}, idx] \leftarrow \max(y)$
+\STATE $t_p \leftarrow t[idx]$
+
+\STATE \textbf{// Compute percent overshoot}
+\IF{$y_{max} > y_{ss}$}
+    \STATE $\%OS \leftarrow (y_{max} - y_{ss}) / y_{ss} \times 100$
+\ELSE
+    \STATE $\%OS \leftarrow 0$
+\ENDIF
+
+\STATE \textbf{// Compute settling time}
+\STATE $\text{band}_{low} \leftarrow (1 - \epsilon) \cdot y_{ss}$
+\STATE $\text{band}_{high} \leftarrow (1 + \epsilon) \cdot y_{ss}$
+\FOR{$i = \text{length}(y)$ down to $1$}
+    \IF{$y[i] < \text{band}_{low}$ \OR $y[i] > \text{band}_{high}$}
+        \STATE $t_s \leftarrow t[i]$
+        \STATE \textbf{break}
+    \ENDIF
+\ENDFOR
+
+\STATE \textbf{// Compute steady-state error}
+\STATE $e_{ss} \leftarrow A - y_{ss}$
+
+\RETURN $t_r, t_p, \%OS, t_s, y_{ss}, e_{ss}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Frequency Response Analysis Algorithm}
+
+\begin{algorithm}[htbp]
+\caption{Compute Frequency-Domain Metrics from Bode Data}
+\label{alg:freq_response}
+\begin{algorithmic}[1]
+\REQUIRE Frequency vector $\omega$, magnitude vector $|L|$ (linear), phase vector $\angle L$ (degrees)
+\ENSURE Bandwidth $\omega_{BW}$, gain margin $GM$, phase margin $PM$, crossover frequencies
+
+\STATE \textbf{// Find gain crossover frequency (where $|L| = 1$)}
+\FOR{$i = 1$ to $\text{length}(\omega) - 1$}
+    \IF{$(|L[i]| - 1)(|L[i+1]| - 1) < 0$}
+        \STATE $\omega_{gc} \leftarrow$ interpolate between $\omega[i]$ and $\omega[i+1]$
+        \STATE \textbf{break}
+    \ENDIF
+\ENDFOR
+
+\STATE \textbf{// Find phase crossover frequency (where phase $= -180°$)}
+\FOR{$i = 1$ to $\text{length}(\omega) - 1$}
+    \IF{$(\angle L[i] + 180)(\angle L[i+1] + 180) < 0$}
+        \STATE $\omega_{pc} \leftarrow$ interpolate between $\omega[i]$ and $\omega[i+1]$
+        \STATE $|L_{pc}| \leftarrow$ interpolate magnitude at $\omega_{pc}$
+        \STATE \textbf{break}
+    \ENDIF
+\ENDFOR
+
+\STATE \textbf{// Compute gain margin}
+\IF{$\omega_{pc}$ exists}
+    \STATE $GM \leftarrow 1 / |L_{pc}|$
+    \STATE $GM_{dB} \leftarrow 20 \log_{10}(GM)$
+\ELSE
+    \STATE $GM \leftarrow \infty$ \COMMENT{Phase never crosses $-180°$}
+\ENDIF
+
+\STATE \textbf{// Compute phase margin}
+\IF{$\omega_{gc}$ exists}
+    \STATE $\angle L_{gc} \leftarrow$ interpolate phase at $\omega_{gc}$
+    \STATE $PM \leftarrow 180 + \angle L_{gc}$
+\ELSE
+    \STATE $PM \leftarrow \infty$ \COMMENT{Gain never crosses 0 dB}
+\ENDIF
+
+\STATE \textbf{// Estimate bandwidth from closed-loop response}
+\STATE Compute $|T| = |L| / |1 + L|$ for each frequency
+\STATE $\omega_{BW} \leftarrow$ frequency where $|T| = 0.707 \times |T(0)|$
+
+\RETURN $\omega_{BW}, GM, GM_{dB}, PM, \omega_{gc}, \omega_{pc}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Steady-State Error Computation}
+
+\begin{algorithm}[htbp]
+\caption{Compute System Type and Error Constants}
+\label{alg:error_constants}
+\begin{algorithmic}[1]
+\REQUIRE Open-loop transfer function numerator $N(s)$ and denominator $D(s)$ as coefficient arrays
+\ENSURE System type $N$, error constants $K_p$, $K_v$, $K_a$
+
+\STATE \textbf{// Determine system type (count poles at origin)}
+\STATE $N \leftarrow 0$
+\WHILE{$D[\text{end}] = 0$}
+    \STATE $N \leftarrow N + 1$
+    \STATE Remove last element from $D$
+\ENDWHILE
+
+\STATE \textbf{// Compute DC gain of remaining transfer function}
+\STATE $K \leftarrow N[end] / D[end]$ \COMMENT{Ratio of constant terms}
+
+\STATE \textbf{// Compute error constants based on system type}
+\IF{$N = 0$}
+    \STATE $K_p \leftarrow K$
+    \STATE $K_v \leftarrow 0$
+    \STATE $K_a \leftarrow 0$
+\ELSIF{$N = 1$}
+    \STATE $K_p \leftarrow \infty$
+    \STATE $K_v \leftarrow K$
+    \STATE $K_a \leftarrow 0$
+\ELSIF{$N = 2$}
+    \STATE $K_p \leftarrow \infty$
+    \STATE $K_v \leftarrow \infty$
+    \STATE $K_a \leftarrow K$
+\ELSE
+    \STATE $K_p, K_v, K_a \leftarrow \infty$
+\ENDIF
+
+\RETURN $N, K_p, K_v, K_a$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{MATLAB Implementation}
+
+The following MATLAB code implements the step response analysis:
+
+\begin{verbatim}
+function [tr, tp, OS, ts, yss, ess] = stepMetrics(t, y, A, tol)
+    % STEPMETRICS Compute time-domain performance metrics
+    % Inputs:
+    %   t   - time vector
+    %   y   - output vector
+    %   A   - step magnitude (default = 1)
+    %   tol - settling tolerance (default = 0.02)
+
+    if nargin < 3, A = 1; end
+    if nargin < 4, tol = 0.02; end
+
+    % Steady-state value (average last 10% of data)
+    n = length(y);
+    yss = mean(y(round(0.9*n):n));
+
+    % Rise time (10% to 90%)
+    t10 = t(find(y >= 0.1*yss, 1, 'first'));
+    t90 = t(find(y >= 0.9*yss, 1, 'first'));
+    tr = t90 - t10;
+
+    % Peak time and overshoot
+    [ymax, idx] = max(y);
+    tp = t(idx);
+    if ymax > yss
+        OS = (ymax - yss)/yss * 100;
+    else
+        OS = 0;
+    end
+
+    % Settling time (search backward)
+    band = tol * yss;
+    idx_out = find(abs(y - yss) > band, 1, 'last');
+    if isempty(idx_out)
+        ts = 0;
+    else
+        ts = t(idx_out);
+    end
+
+    % Steady-state error
+    ess = A - yss;
+end
+\end{verbatim}
+
+\subsection{Python Implementation}
+
+The following Python code provides equivalent functionality:
+
+\begin{verbatim}
+import numpy as np
+
+def step_metrics(t, y, A=1.0, tol=0.02):
+    """
+    Compute time-domain performance metrics from step response.
+
+    Parameters:
+        t: array of time values
+        y: array of output values
+        A: step magnitude
+        tol: settling time tolerance
+
+    Returns:
+        dict with keys: rise_time, peak_time, overshoot,
+                        settling_time, steady_state, error
+    """
+    n = len(y)
+
+    # Steady-state value
+    yss = np.mean(y[int(0.9*n):])
+
+    # Rise time (10% to 90%)
+    idx_10 = np.where(y >= 0.1*yss)[0]
+    idx_90 = np.where(y >= 0.9*yss)[0]
+    t_rise = t[idx_90[0]] - t[idx_10[0]] if len(idx_10) > 0 \
+             and len(idx_90) > 0 else np.nan
+
+    # Peak time and overshoot
+    idx_peak = np.argmax(y)
+    t_peak = t[idx_peak]
+    ymax = y[idx_peak]
+    overshoot = max(0, (ymax - yss)/yss * 100)
+
+    # Settling time
+    outside = np.where(np.abs(y - yss) > tol*yss)[0]
+    t_settle = t[outside[-1]] if len(outside) > 0 else 0
+
+    return {
+        'rise_time': t_rise,
+        'peak_time': t_peak,
+        'overshoot': overshoot,
+        'settling_time': t_settle,
+        'steady_state': yss,
+        'error': A - yss
+    }
+\end{verbatim}
+
+
+%===============================================================================
+\section{Chapter Summary}
+\label{sec:ch5_summary}
+%===============================================================================
+
+This chapter developed a comprehensive framework for specifying and measuring control system performance. The key concepts are:
+
+\subsection{Time-Domain Specifications}
+
+\begin{itemize}
+    \item \textbf{Rise time} $t_r$: Speed of initial response (10\%-90\% of final value)
+    \item \textbf{Peak time} $t_p$: Time to first overshoot peak ($t_p = \pi/\omega_d$)
+    \item \textbf{Percent overshoot} $\%OS$: Maximum deviation above final value (depends only on $\zeta$)
+    \item \textbf{Settling time} $t_s$: Time to remain within tolerance band ($t_s \approx 4/\sigma$)
+    \item \textbf{Steady-state error} $e_{ss}$: Final tracking accuracy (depends on system type)
+\end{itemize}
+
+\subsection{Pole Location Relationships}
+
+\begin{itemize}
+    \item Poles at $s = -\sigma \pm j\omega_d$ determine transient behavior
+    \item \textbf{Real part $\sigma$}: Controls exponential decay rate (settling time)
+    \item \textbf{Imaginary part $\omega_d$}: Controls oscillation frequency (peak time)
+    \item \textbf{Angle from real axis}: Determines damping ratio (overshoot)
+    \item \textbf{Distance from origin}: Determines natural frequency (overall speed)
+\end{itemize}
+
+\subsection{Frequency-Domain Specifications}
+
+\begin{itemize}
+    \item \textbf{Bandwidth} $\omega_{BW}$: Range of effective tracking ($-3$ dB point)
+    \item \textbf{Gain margin} $GM$: Robustness to gain variations
+    \item \textbf{Phase margin} $PM$: Robustness to phase lag and time delays
+    \item \textbf{Resonant peak} $M_r$: Maximum frequency response amplification
+    \item \textbf{Crossover frequencies}: Where magnitude crosses 0 dB or phase crosses $-180°$
+\end{itemize}
+
+\subsection{Steady-State Error}
+
+\begin{itemize}
+    \item \textbf{System type}: Number of integrators in forward path
+    \item \textbf{Error constants} $K_p$, $K_v$, $K_a$: Characterize tracking ability
+    \item Type 0: Finite step error, infinite ramp error
+    \item Type 1: Zero step error, finite ramp error
+    \item Type 2: Zero step and ramp error, finite parabolic error
+\end{itemize}
+
+\subsection{Sensitivity and Robustness}
+
+\begin{itemize}
+    \item \textbf{Sensitivity function} $S(s) = 1/(1+L)$: Disturbance rejection
+    \item \textbf{Complementary sensitivity} $T(s) = L/(1+L)$: Closed-loop transfer
+    \item \textbf{Fundamental constraint}: $S + T = 1$ (cannot minimize both)
+    \item \textbf{Maximum sensitivity} $M_s$: Worst-case disturbance amplification
+\end{itemize}
+
+\subsection{Design Trade-offs}
+
+The fundamental trade-offs in control design include:
+\begin{itemize}
+    \item \textbf{Speed vs. overshoot}: Faster response often means more oscillation
+    \item \textbf{Tracking vs. noise rejection}: High bandwidth improves tracking but amplifies noise
+    \item \textbf{Steady-state accuracy vs. stability}: Adding integrators reduces error but degrades margins
+    \item \textbf{Performance vs. robustness}: Aggressive tuning achieves better nominal performance but is sensitive to model errors
+\end{itemize}
+
+\subsection{Key Formulas Summary}
+
+\begin{table}[htbp]
+\centering
+\caption{Essential Performance Metric Formulas}
+\begin{tabular}{ll}
+\toprule
+\textbf{Metric} & \textbf{Formula} \\
+\midrule
+Peak time & $t_p = \dfrac{\pi}{\omega_n\sqrt{1-\zeta^2}}$ \\[1em]
+Percent overshoot & $\%OS = e^{-\pi\zeta/\sqrt{1-\zeta^2}} \times 100\%$ \\[1em]
+Settling time (2\%) & $t_s \approx \dfrac{4}{\zeta\omega_n}$ \\[1em]
+Damping ratio from $\%OS$ & $\zeta = \dfrac{-\ln(\%OS/100)}{\sqrt{\pi^2 + \ln^2(\%OS/100)}}$ \\[1em]
+Gain margin & $GM = \dfrac{1}{|L(j\omega_{pc})|}$ \\[1em]
+Phase margin & $PM = 180° + \angle L(j\omega_{gc})$ \\[1em]
+Delay tolerance & $\tau_{max} = \dfrac{PM}{\omega_{gc}}$ (radians) \\[1em]
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What's Next}
+
+With a solid understanding of performance metrics, we are now equipped to design controllers that meet specific requirements. In the next chapter, we will explore systematic design methods including root locus, Bode plot shaping, and state-space techniques. These methods will allow us to place poles, shape frequency responses, and achieve the performance specifications developed in this chapter.
+
+The metrics and specifications from this chapter will serve as our design targets and verification criteria throughout the remainder of the book. Whether we are tuning a PID controller, designing a lead-lag compensator, or implementing state feedback, the goal is always to achieve satisfactory values for rise time, overshoot, settling time, steady-state error, and stability margins.
