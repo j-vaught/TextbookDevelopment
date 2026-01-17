@@ -1,0 +1,2243 @@
+\chapter{Differentiable Predictive Control}
+\label{ch:differentiable_control}
+
+\whythismatters{
+Modern control systems increasingly blend optimization-based controllers with machine learning. The key enabler is \textbf{differentiability}---the ability to compute gradients through every component of the control pipeline, from sensing through dynamics simulation to control output. Differentiable predictive control allows us to learn cost functions from demonstrations, tune controller parameters end-to-end, and backpropagate through physics simulators to optimize policies. This chapter bridges classical model predictive control with modern deep learning, showing how automatic differentiation transforms what we can optimize and how we can learn controllers directly from data. Whether you are tuning MPC weights, learning dynamics models, or training neural network policies, understanding differentiable control is essential for next-generation autonomous systems.
+}
+
+\section{Introduction: Why Differentiability Changes Everything}
+\label{sec:diff_intro}
+
+Throughout this book, we have designed controllers by specifying objectives and constraints, then solving optimization problems to find optimal control actions. In Model Predictive Control (Chapter~14), we repeatedly solve finite-horizon optimal control problems online. In LQR, we minimize quadratic costs subject to linear dynamics. These approaches work beautifully when we know the dynamics model and can specify appropriate cost functions.
+
+But what if we don't know the right cost function? What if we have demonstrations of expert behavior and want to learn a controller that replicates it? What if we want to tune controller parameters to optimize closed-loop performance across many scenarios? What if we want to train a neural network policy using a physics simulator?
+
+The answer to all these questions involves \textbf{differentiability}. If we can compute gradients of performance metrics with respect to controller parameters, we can use gradient-based optimization to learn those parameters. This is the same principle that powers deep learning: define a loss function, compute gradients via backpropagation, and update parameters to minimize the loss.
+
+The challenge is that control systems involve components that seem non-differentiable: physical simulators with contact dynamics, optimization solvers that produce discrete solutions, and discontinuous phenomena like friction and saturation. The remarkable development of the past decade is that we can make all of these differentiable, enabling end-to-end learning through the entire control pipeline.
+
+\subsection{The Differentiable Control Pipeline}
+
+Consider a typical learning-based control pipeline:
+
+\begin{enumerate}
+    \item \textbf{Observation}: Sensors measure the state (possibly through a learned perception module)
+    \item \textbf{Policy}: A controller (neural network, MPC, or hybrid) computes control actions
+    \item \textbf{Dynamics}: A simulator or the real world applies actions and evolves the state
+    \item \textbf{Evaluation}: A loss function measures performance
+\end{enumerate}
+
+For gradient-based learning, we need gradients of the loss with respect to policy parameters. This requires differentiating through the entire pipeline:
+
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \theta} = \frac{\partial \mathcal{L}}{\partial \mathbf{x}_T} \cdot \frac{\partial \mathbf{x}_T}{\partial \mathbf{u}_{T-1}} \cdot \frac{\partial \mathbf{u}_{T-1}}{\partial \theta} + \cdots
+\label{eq:chain_rule_control}
+\end{equation}
+
+where $\theta$ represents policy parameters, $\mathbf{u}_t$ are control actions, $\mathbf{x}_t$ are states, and $\mathcal{L}$ is the loss.
+
+This chain rule computation is exactly what automatic differentiation provides. The key insight is that if each component in the pipeline is differentiable, the entire pipeline is differentiable via the chain rule.
+
+\subsection{What This Chapter Covers}
+
+We will develop differentiable control from foundations to applications:
+
+\begin{itemize}
+    \item \textbf{Automatic differentiation}: Forward and reverse mode, computational graphs
+    \item \textbf{Differentiable simulation}: Making physics simulators differentiable
+    \item \textbf{Differentiable MPC}: Unrolling optimization as differentiable layers
+    \item \textbf{Implicit differentiation}: Differentiating through optimization without unrolling
+    \item \textbf{End-to-end learning}: Training perception and control jointly
+    \item \textbf{Gradient-based policy optimization}: Learning policies through differentiable dynamics
+    \item \textbf{Practical applications}: Worked examples across robotics and control
+\end{itemize}
+
+By the end of this chapter, you will understand how to make control pipelines differentiable and use this capability to learn controllers, tune parameters, and optimize policies in ways that were impossible with traditional methods.
+
+%==============================================================================
+\section{Automatic Differentiation Fundamentals}
+\label{sec:autodiff}
+%==============================================================================
+
+Automatic differentiation (AD) is the computational foundation of differentiable control. Unlike symbolic differentiation (which manipulates mathematical expressions) or numerical differentiation (which uses finite differences), AD computes exact derivatives by systematically applying the chain rule to elementary operations.
+
+\subsection{The Problem with Alternatives}
+
+Before diving into AD, let us understand why we need it.
+
+\subsubsection{Symbolic Differentiation}
+
+Symbolic differentiation, as implemented in computer algebra systems like Mathematica or SymPy, computes derivatives by applying differentiation rules to mathematical expressions. For example:
+
+\begin{align}
+f(x) &= x^2 \sin(x) \\
+f'(x) &= 2x \sin(x) + x^2 \cos(x)
+\end{align}
+
+This works perfectly for simple functions but has severe limitations:
+
+\begin{enumerate}
+    \item \textbf{Expression swell}: Derivatives can be exponentially larger than original expressions
+    \item \textbf{No control flow}: Cannot handle if-statements, loops, or function calls
+    \item \textbf{Computational overhead}: Must simplify large expressions before evaluation
+\end{enumerate}
+
+For a neural network with millions of parameters or a physics simulator with complex logic, symbolic differentiation is infeasible.
+
+\subsubsection{Numerical Differentiation}
+
+Numerical differentiation approximates derivatives using finite differences:
+
+\begin{equation}
+\frac{\partial f}{\partial x_i} \approx \frac{f(\mathbf{x} + h\mathbf{e}_i) - f(\mathbf{x})}{h}
+\label{eq:forward_diff}
+\end{equation}
+
+where $\mathbf{e}_i$ is the $i$-th unit vector and $h$ is a small step size.
+
+This approach is simple and works for any function, but has critical problems:
+
+\begin{enumerate}
+    \item \textbf{Truncation error}: Finite $h$ introduces $\mathcal{O}(h)$ error (or $\mathcal{O}(h^2)$ for central differences)
+    \item \textbf{Roundoff error}: Small $h$ amplifies floating-point errors
+    \item \textbf{Computational cost}: Computing a gradient with $n$ inputs requires $n+1$ function evaluations
+\end{enumerate}
+
+For a neural network with millions of parameters, numerical differentiation would require millions of forward passes per gradient computation---completely impractical.
+
+\subsection{Automatic Differentiation: The Best of Both Worlds}
+
+Automatic differentiation computes exact derivatives (to machine precision) with computational cost proportional to the original function evaluation. It achieves this by:
+
+\begin{enumerate}
+    \item Decomposing the function into elementary operations
+    \item Applying the chain rule systematically to these operations
+    \item Accumulating derivatives either forward or backward through the computation
+\end{enumerate}
+
+\subsubsection{Computational Graphs}
+
+Any computer program that computes a function $f: \mathbb{R}^n \to \mathbb{R}^m$ can be represented as a \textbf{computational graph}---a directed acyclic graph where:
+
+\begin{itemize}
+    \item Input nodes represent input variables $x_1, \ldots, x_n$
+    \item Intermediate nodes represent intermediate computations
+    \item Output nodes represent output values $y_1, \ldots, y_m$
+    \item Edges represent data flow between operations
+\end{itemize}
+
+\begin{example}[Computational Graph]
+\label{ex:comp_graph}
+Consider the function:
+\begin{equation}
+f(x_1, x_2) = \sin(x_1 x_2) + x_2^2
+\end{equation}
+
+We decompose this into elementary operations:
+\begin{align}
+v_1 &= x_1 \\
+v_2 &= x_2 \\
+v_3 &= v_1 \cdot v_2 \quad \text{(multiplication)} \\
+v_4 &= \sin(v_3) \quad \text{(sine)} \\
+v_5 &= v_2^2 \quad \text{(square)} \\
+v_6 &= v_4 + v_5 \quad \text{(addition)} \\
+y &= v_6
+\end{align}
+
+Each operation has a known derivative. The chain rule connects them to compute $\partial y / \partial x_1$ and $\partial y / \partial x_2$.
+\end{example}
+
+\subsection{Forward Mode Automatic Differentiation}
+
+Forward mode AD computes derivatives by propagating \textbf{tangent vectors} forward through the computational graph, alongside the original computation.
+
+\subsubsection{Dual Numbers}
+
+The cleanest way to understand forward mode is through \textbf{dual numbers}. A dual number has the form:
+\begin{equation}
+\tilde{x} = x + \epsilon \dot{x}
+\end{equation}
+where $\epsilon$ is an infinitesimal satisfying $\epsilon^2 = 0$ (but $\epsilon \neq 0$).
+
+Arithmetic with dual numbers automatically propagates derivatives:
+\begin{align}
+\tilde{x} + \tilde{y} &= (x + y) + \epsilon(\dot{x} + \dot{y}) \\
+\tilde{x} \cdot \tilde{y} &= xy + \epsilon(x\dot{y} + y\dot{x}) \\
+\sin(\tilde{x}) &= \sin(x) + \epsilon \cos(x) \dot{x}
+\end{align}
+
+The $\dot{x}$ component propagates exactly according to the chain rule.
+
+\subsubsection{Forward Mode Algorithm}
+
+To compute the derivative of $y = f(\mathbf{x})$ with respect to a specific input direction $\mathbf{v}$:
+
+\begin{enumerate}
+    \item Initialize: Set $\dot{x}_i = v_i$ for each input
+    \item Forward sweep: For each operation $v_j = g(v_{i_1}, \ldots, v_{i_k})$, compute both:
+    \begin{itemize}
+        \item The value: $v_j = g(v_{i_1}, \ldots, v_{i_k})$
+        \item The tangent: $\dot{v}_j = \sum_{\ell} \frac{\partial g}{\partial v_{i_\ell}} \dot{v}_{i_\ell}$
+    \end{itemize}
+    \item Output: $\dot{y} = \nabla f(\mathbf{x})^T \mathbf{v}$ (directional derivative)
+\end{enumerate}
+
+\begin{example}[Forward Mode Computation]
+\label{ex:forward_mode}
+For $f(x_1, x_2) = \sin(x_1 x_2) + x_2^2$ at $(x_1, x_2) = (2, 3)$, compute $\partial f / \partial x_1$.
+
+Set $\dot{x}_1 = 1$, $\dot{x}_2 = 0$ (direction of $x_1$):
+\begin{align}
+v_1 &= 2, \quad \dot{v}_1 = 1 \\
+v_2 &= 3, \quad \dot{v}_2 = 0 \\
+v_3 &= v_1 v_2 = 6, \quad \dot{v}_3 = v_1 \dot{v}_2 + v_2 \dot{v}_1 = 2(0) + 3(1) = 3 \\
+v_4 &= \sin(6) \approx -0.279, \quad \dot{v}_4 = \cos(6) \cdot \dot{v}_3 = 0.960 \cdot 3 = 2.880 \\
+v_5 &= 9, \quad \dot{v}_5 = 2 v_2 \dot{v}_2 = 0 \\
+v_6 &= v_4 + v_5 = 8.721, \quad \dot{v}_6 = \dot{v}_4 + \dot{v}_5 = 2.880
+\end{align}
+
+Thus $\frac{\partial f}{\partial x_1}(2,3) = 2.880$.
+\end{example}
+
+\subsubsection{Complexity of Forward Mode}
+
+Forward mode computes one directional derivative per forward pass. The cost is:
+\begin{equation}
+\text{Cost(forward mode)} = \mathcal{O}(n \cdot T_f)
+\end{equation}
+where $n$ is the number of inputs and $T_f$ is the cost of evaluating $f$.
+
+This is efficient when $n$ is small (few inputs, many outputs), but expensive for functions with many inputs---exactly the case in deep learning and control, where we have millions of parameters.
+
+\subsection{Reverse Mode Automatic Differentiation (Backpropagation)}
+
+Reverse mode AD, also known as \textbf{backpropagation} in the neural network literature, computes gradients by propagating \textbf{adjoints} backward through the computational graph.
+
+\subsubsection{The Adjoint (Sensitivity)}
+
+For each intermediate variable $v_j$, define its \textbf{adjoint}:
+\begin{equation}
+\bar{v}_j = \frac{\partial y}{\partial v_j}
+\end{equation}
+
+This represents how much the final output $y$ changes when $v_j$ changes---the sensitivity of the output to that intermediate value.
+
+\subsubsection{Reverse Mode Algorithm}
+
+To compute the gradient $\nabla f(\mathbf{x})$ where $f: \mathbb{R}^n \to \mathbb{R}$:
+
+\begin{enumerate}
+    \item \textbf{Forward sweep}: Evaluate $f(\mathbf{x})$, storing all intermediate values
+    \item \textbf{Initialize}: Set $\bar{y} = 1$ (sensitivity of output to itself)
+    \item \textbf{Backward sweep}: For each operation in reverse order, propagate adjoints:
+    \begin{equation}
+    \bar{v}_i \mathrel{+}= \bar{v}_j \frac{\partial v_j}{\partial v_i}
+    \end{equation}
+    for each variable $v_i$ that $v_j$ depends on
+    \item \textbf{Output}: $\bar{x}_i = \frac{\partial f}{\partial x_i}$ for all inputs
+\end{enumerate}
+
+The key insight is that we accumulate contributions to each adjoint from all downstream operations that use that variable.
+
+\begin{example}[Reverse Mode Computation]
+\label{ex:reverse_mode}
+For the same $f(x_1, x_2) = \sin(x_1 x_2) + x_2^2$ at $(2, 3)$:
+
+\textbf{Forward sweep} (store values):
+\begin{align}
+v_1 = 2, \quad v_2 = 3, \quad v_3 = 6, \quad v_4 = \sin(6), \quad v_5 = 9, \quad v_6 = v_4 + v_5
+\end{align}
+
+\textbf{Backward sweep}:
+\begin{align}
+\bar{v}_6 &= 1 \quad \text{(initialize)} \\
+\bar{v}_5 &= \bar{v}_6 \cdot \frac{\partial v_6}{\partial v_5} = 1 \cdot 1 = 1 \\
+\bar{v}_4 &= \bar{v}_6 \cdot \frac{\partial v_6}{\partial v_4} = 1 \cdot 1 = 1 \\
+\bar{v}_3 &= \bar{v}_4 \cdot \frac{\partial v_4}{\partial v_3} = 1 \cdot \cos(6) = 0.960 \\
+\bar{v}_2 &= \bar{v}_5 \cdot \frac{\partial v_5}{\partial v_2} + \bar{v}_3 \cdot \frac{\partial v_3}{\partial v_2} = 1 \cdot 6 + 0.960 \cdot 2 = 7.920 \\
+\bar{v}_1 &= \bar{v}_3 \cdot \frac{\partial v_3}{\partial v_1} = 0.960 \cdot 3 = 2.880
+\end{align}
+
+Thus $\nabla f(2,3) = (2.880, 7.920)^T$.
+\end{example}
+
+\subsubsection{Complexity of Reverse Mode}
+
+Reverse mode computes the \textit{entire} gradient in one backward pass:
+\begin{equation}
+\text{Cost(reverse mode)} = \mathcal{O}(T_f)
+\end{equation}
+
+This is independent of $n$, making reverse mode dramatically more efficient for functions with many inputs and few outputs---exactly the case for loss functions in machine learning and control.
+
+\subsection{Forward vs. Reverse Mode: When to Use Each}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Forward and Reverse Mode AD}
+\label{tab:ad_comparison}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Characteristic} & \textbf{Forward Mode} & \textbf{Reverse Mode} \\
+\midrule
+Computes & Jacobian-vector product $J\mathbf{v}$ & Vector-Jacobian product $\mathbf{v}^T J$ \\
+Cost for full Jacobian & $\mathcal{O}(n \cdot T_f)$ & $\mathcal{O}(m \cdot T_f)$ \\
+Best when & $n \ll m$ (few inputs) & $m \ll n$ (few outputs) \\
+Memory & $\mathcal{O}(1)$ extra & $\mathcal{O}(T_f)$ (store forward pass) \\
+Example use & Sensitivity analysis & Training neural networks \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For control applications:
+\begin{itemize}
+    \item \textbf{Policy optimization} (loss $\to$ parameters): Use reverse mode. We have one scalar loss and many parameters.
+    \item \textbf{Sensitivity analysis} (parameter $\to$ trajectory): Use forward mode. We vary one parameter and observe effects on many states.
+    \item \textbf{Full Jacobians} (e.g., dynamics linearization): Use forward mode for small state dimension, reverse mode for small output dimension, or mixed-mode for intermediate cases.
+\end{itemize}
+
+\subsection{Implementing Automatic Differentiation}
+
+Modern AD frameworks handle the bookkeeping automatically. The two main implementation strategies are:
+
+\subsubsection{Operator Overloading}
+
+Override arithmetic operators to track computations and derivatives. Used by PyTorch, JAX, and most modern frameworks.
+
+\begin{verbatim}
+# PyTorch example
+import torch
+
+x = torch.tensor([2.0, 3.0], requires_grad=True)
+y = torch.sin(x[0] * x[1]) + x[1]**2
+y.backward()  # Reverse mode AD
+print(x.grad)  # Gradient
+\end{verbatim}
+
+\subsubsection{Source Transformation}
+
+Transform the source code to generate derivative code. Used by some specialized AD tools.
+
+\subsubsection{Practical Considerations}
+
+When using AD in control applications:
+
+\begin{enumerate}
+    \item \textbf{In-place operations}: Avoid modifying tensors in-place; this breaks the computational graph
+    \item \textbf{Control flow}: Modern frameworks handle if-statements and loops, but the graph is traced for specific input values
+    \item \textbf{Non-differentiable operations}: Some operations (argmax, discrete sampling) are not differentiable; we will discuss workarounds later
+    \item \textbf{Numerical stability}: Gradients can explode or vanish in deep computations; normalization and careful architecture help
+\end{enumerate}
+
+\keypoint{Automatic differentiation computes exact gradients efficiently by applying the chain rule to elementary operations. Reverse mode (backpropagation) is preferred for optimizing scalar objectives with many parameters, which is the typical case in learning-based control.}
+
+%==============================================================================
+\section{Differentiable Simulation}
+\label{sec:diff_sim}
+%==============================================================================
+
+Physics simulators are central to control system design. We use simulators to test controllers before deploying on hardware, to generate training data for learning, and to predict system behavior. Making simulators differentiable enables gradient-based optimization through the dynamics.
+
+\subsection{Why Differentiable Simulation?}
+
+Traditional simulators compute the forward dynamics: given state $\mathbf{x}_t$ and action $\mathbf{u}_t$, compute next state $\mathbf{x}_{t+1}$. A differentiable simulator additionally computes:
+\begin{equation}
+\frac{\partial \mathbf{x}_{t+1}}{\partial \mathbf{x}_t}, \quad \frac{\partial \mathbf{x}_{t+1}}{\partial \mathbf{u}_t}, \quad \frac{\partial \mathbf{x}_{t+1}}{\partial \theta}
+\end{equation}
+where $\theta$ represents simulator parameters (masses, friction coefficients, etc.).
+
+These gradients enable:
+
+\begin{itemize}
+    \item \textbf{Trajectory optimization}: Gradient descent on control sequences
+    \item \textbf{Policy learning}: Backpropagation through rollouts to train policies
+    \item \textbf{System identification}: Gradient-based fitting of dynamics parameters
+    \item \textbf{Inverse problems}: Finding initial conditions or parameters that produce desired behavior
+\end{itemize}
+
+\subsection{Making Dynamics Differentiable}
+
+\subsubsection{Smooth Dynamics}
+
+For smooth dynamics $\mathbf{x}_{t+1} = f(\mathbf{x}_t, \mathbf{u}_t)$, differentiability is straightforward. Implement the dynamics using differentiable operations in an AD framework, and gradients flow automatically.
+
+\begin{example}[Differentiable Pendulum Dynamics]
+\label{ex:diff_pendulum}
+Consider the discretized pendulum dynamics:
+\begin{align}
+\theta_{t+1} &= \theta_t + \Delta t \cdot \omega_t \\
+\omega_{t+1} &= \omega_t + \Delta t \left( -\frac{g}{\ell} \sin(\theta_t) - \frac{b}{m\ell^2} \omega_t + \frac{1}{m\ell^2} u_t \right)
+\end{align}
+
+In PyTorch:
+\begin{verbatim}
+def pendulum_step(state, u, params):
+    theta, omega = state[0], state[1]
+    g, l, b, m = params['g'], params['l'], params['b'], params['m']
+    dt = params['dt']
+
+    theta_new = theta + dt * omega
+    omega_new = omega + dt * (-g/l * torch.sin(theta)
+                              - b/(m*l**2) * omega
+                              + u/(m*l**2))
+    return torch.stack([theta_new, omega_new])
+\end{verbatim}
+
+Because all operations (addition, multiplication, sin) are differentiable, gradients flow through this function automatically.
+\end{example}
+
+\subsubsection{Challenges: Contact and Discontinuities}
+
+Real physical systems involve phenomena that are inherently non-smooth:
+
+\begin{itemize}
+    \item \textbf{Contact}: Objects collide and separate; contact forces are discontinuous
+    \item \textbf{Friction}: Coulomb friction has a discontinuity at zero velocity
+    \item \textbf{Constraints}: Inequality constraints create non-smooth feasibility boundaries
+    \item \textbf{Mode switching}: Hybrid systems switch between discrete modes
+\end{itemize}
+
+Naive differentiation through these discontinuities produces zero or undefined gradients, which are useless for optimization.
+
+\subsection{Techniques for Differentiable Contact}
+
+Several approaches make contact dynamics differentiable:
+
+\subsubsection{Soft Contact Models}
+
+Replace hard contact constraints with soft penalty forces:
+\begin{equation}
+f_{\text{contact}} = k \cdot \text{ReLU}(-d)^\alpha
+\end{equation}
+where $d$ is penetration depth, $k$ is stiffness, and $\alpha > 1$ for smooth gradients.
+
+Soft contact is differentiable but introduces artificial compliance and can require small time steps for stability.
+
+\subsubsection{Randomized Smoothing}
+
+Add noise to the simulation and differentiate through the expected dynamics:
+\begin{equation}
+\nabla \mathbb{E}_{\epsilon}[f(\mathbf{x} + \epsilon)] \approx \mathbb{E}_{\epsilon}\left[ \frac{\epsilon}{\sigma^2} f(\mathbf{x} + \epsilon) \right]
+\end{equation}
+
+This provides gradient estimates even through discontinuities, at the cost of variance in the gradient.
+
+\subsubsection{Time-of-Impact Gradients}
+
+For collisions, explicitly compute when contact occurs and differentiate the time-of-impact:
+\begin{equation}
+\frac{\partial \mathbf{x}_{\text{post}}}{\partial \mathbf{x}_{\text{pre}}} = \frac{\partial \mathbf{x}_{\text{post}}}{\partial t_{\text{impact}}} \frac{\partial t_{\text{impact}}}{\partial \mathbf{x}_{\text{pre}}} + \frac{\partial \mathbf{x}_{\text{post}}}{\partial \mathbf{x}(t_{\text{impact}})}
+\end{equation}
+
+This approach, used in systems like DiffTaichi, provides accurate gradients by treating collision times as differentiable functions of initial conditions.
+
+\subsubsection{Complementarity-Based Formulations}
+
+Model contact as a Linear Complementarity Problem (LCP) or Nonlinear Complementarity Problem (NCP), then use implicit differentiation (covered in Section~\ref{sec:implicit_diff}) to differentiate through the solution.
+
+\subsection{Differentiable Simulation Frameworks}
+
+Several modern frameworks provide differentiable simulation:
+
+\subsubsection{DiffTaichi}
+
+DiffTaichi extends the Taichi programming language with automatic differentiation. Key features:
+\begin{itemize}
+    \item Differentiable through contact and collision
+    \item GPU acceleration for parallel simulation
+    \item Supports custom physics kernels
+\end{itemize}
+
+\subsubsection{Brax}
+
+Brax is a differentiable physics engine built on JAX:
+\begin{itemize}
+    \item Designed for reinforcement learning and robotics
+    \item Massively parallel simulation on accelerators
+    \item Soft contact for differentiability
+\end{itemize}
+
+\subsubsection{Nimble/DiffPhysics}
+
+Nimble provides analytically differentiable rigid body simulation:
+\begin{itemize}
+    \item Exact gradients through contact
+    \item Designed for trajectory optimization
+    \item Supports articulated rigid bodies
+\end{itemize}
+
+\subsubsection{Drake (Differentiable Mode)}
+
+Drake, a widely-used robotics toolkit, increasingly supports differentiable simulation:
+\begin{itemize}
+    \item Automatic differentiation through dynamics
+    \item Integration with mathematical programming
+    \item Production-quality physics
+\end{itemize}
+
+\subsection{Gradient Computation Through Rollouts}
+
+When training policies or optimizing trajectories, we unroll the dynamics for multiple steps and backpropagate through the entire rollout.
+
+Consider a trajectory of length $T$:
+\begin{equation}
+\mathbf{x}_0 \xrightarrow{f} \mathbf{x}_1 \xrightarrow{f} \mathbf{x}_2 \xrightarrow{f} \cdots \xrightarrow{f} \mathbf{x}_T
+\end{equation}
+
+With a loss $\mathcal{L}(\mathbf{x}_0, \ldots, \mathbf{x}_T, \mathbf{u}_0, \ldots, \mathbf{u}_{T-1})$, the gradient with respect to initial actions is:
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \mathbf{u}_0} = \sum_{t=1}^{T} \frac{\partial \mathcal{L}}{\partial \mathbf{x}_t} \frac{\partial \mathbf{x}_t}{\partial \mathbf{u}_0}
+\end{equation}
+
+The term $\frac{\partial \mathbf{x}_t}{\partial \mathbf{u}_0}$ requires chaining through all intermediate dynamics:
+\begin{equation}
+\frac{\partial \mathbf{x}_t}{\partial \mathbf{u}_0} = \frac{\partial \mathbf{x}_t}{\partial \mathbf{x}_{t-1}} \frac{\partial \mathbf{x}_{t-1}}{\partial \mathbf{x}_{t-2}} \cdots \frac{\partial \mathbf{x}_1}{\partial \mathbf{u}_0}
+\end{equation}
+
+This product of Jacobians can exhibit:
+\begin{itemize}
+    \item \textbf{Exploding gradients}: If dynamics amplify perturbations (unstable systems)
+    \item \textbf{Vanishing gradients}: If dynamics contract perturbations (stable but dissipative systems)
+\end{itemize}
+
+Techniques to address gradient issues:
+\begin{itemize}
+    \item Gradient clipping to prevent explosions
+    \item Shorter rollout horizons
+    \item Skip connections in recurrent architectures
+    \item Normalization of intermediate states
+\end{itemize}
+
+\keypoint{Differentiable simulation enables gradient-based optimization through physics. While smooth dynamics are straightforward, contact and discontinuities require specialized techniques. Modern frameworks like Brax, DiffTaichi, and Nimble provide production-ready differentiable physics engines.}
+
+%==============================================================================
+\section{Differentiable Model Predictive Control}
+\label{sec:diff_mpc}
+%==============================================================================
+
+Model Predictive Control (MPC) is one of the most successful advanced control strategies, solving optimization problems in real-time to compute control actions. Making MPC differentiable allows us to learn MPC parameters (cost weights, constraints) from data and to use MPC as a differentiable layer in larger learning systems.
+
+\subsection{Review: Model Predictive Control}
+
+Recall the basic MPC formulation from Chapter~14. At each time step, we solve:
+\begin{equation}
+\begin{aligned}
+\min_{\mathbf{u}_0, \ldots, \mathbf{u}_{N-1}} \quad & \sum_{k=0}^{N-1} \ell(\mathbf{x}_k, \mathbf{u}_k) + \ell_f(\mathbf{x}_N) \\
+\text{subject to} \quad & \mathbf{x}_{k+1} = f(\mathbf{x}_k, \mathbf{u}_k), \quad k = 0, \ldots, N-1 \\
+& \mathbf{x}_0 = \mathbf{x}_{\text{current}} \\
+& \mathbf{g}(\mathbf{x}_k, \mathbf{u}_k) \leq 0, \quad k = 0, \ldots, N-1
+\end{aligned}
+\label{eq:mpc_basic}
+\end{equation}
+
+The solution $\mathbf{u}_0^*$ is applied to the system, and the process repeats.
+
+\subsection{Why Make MPC Differentiable?}
+
+MPC depends on many design choices:
+\begin{itemize}
+    \item Stage cost weights $\mathbf{Q}$, $\mathbf{R}$ in quadratic costs
+    \item Terminal cost weights $\mathbf{Q}_f$
+    \item Reference trajectories $\mathbf{x}_{\text{ref}}$
+    \item Constraint bounds
+    \item Prediction horizon $N$
+    \item Dynamics model parameters
+\end{itemize}
+
+Traditionally, these are tuned manually or through expensive black-box optimization. If MPC is differentiable, we can:
+\begin{enumerate}
+    \item \textbf{Learn cost functions}: From demonstrations of desired behavior
+    \item \textbf{Tune parameters end-to-end}: Optimize closed-loop performance
+    \item \textbf{Embed MPC in neural networks}: Use MPC as a structured policy layer
+\end{enumerate}
+
+\subsection{Approach 1: Unrolling the Optimization}
+
+The conceptually simplest approach to differentiable MPC is to \textbf{unroll} the optimization algorithm and differentiate through it.
+
+\subsubsection{Unrolling Gradient Descent}
+
+Consider solving the MPC problem with gradient descent. Starting from initial guess $\mathbf{u}^{(0)}$, we iterate:
+\begin{equation}
+\mathbf{u}^{(k+1)} = \mathbf{u}^{(k)} - \alpha \nabla_{\mathbf{u}} J(\mathbf{u}^{(k)})
+\end{equation}
+where $J$ is the MPC objective.
+
+After $K$ iterations, we have:
+\begin{equation}
+\mathbf{u}^{(K)} = \text{GD}_K(\mathbf{u}^{(0)}, \mathbf{x}_0, \theta)
+\end{equation}
+where $\theta$ represents cost function parameters.
+
+Since each gradient descent step involves only differentiable operations, we can backpropagate through the entire unrolled optimization:
+\begin{equation}
+\frac{\partial \mathbf{u}^{(K)}}{\partial \theta} = \frac{\partial \mathbf{u}^{(K)}}{\partial \mathbf{u}^{(K-1)}} \frac{\partial \mathbf{u}^{(K-1)}}{\partial \mathbf{u}^{(K-2)}} \cdots \frac{\partial \mathbf{u}^{(1)}}{\partial \theta}
+\end{equation}
+
+\subsubsection{Unrolling More Sophisticated Solvers}
+
+The same approach works for more sophisticated optimizers:
+\begin{itemize}
+    \item \textbf{Newton's method}: Unroll Hessian inversions and updates
+    \item \textbf{Interior point}: Unroll barrier method iterations
+    \item \textbf{ADMM}: Unroll alternating direction updates
+    \item \textbf{iLQR/DDP}: Unroll forward-backward passes
+\end{itemize}
+
+\begin{example}[Differentiable iLQR]
+\label{ex:diff_ilqr}
+Iterative LQR (iLQR) solves trajectory optimization by alternating:
+\begin{enumerate}
+    \item \textbf{Backward pass}: Compute locally-optimal feedback gains via Riccati recursion
+    \item \textbf{Forward pass}: Roll out dynamics with updated controls
+\end{enumerate}
+
+Each pass involves differentiable operations. By storing intermediate values and applying reverse-mode AD through all iterations, we obtain gradients of the iLQR solution with respect to cost parameters, dynamics parameters, or initial conditions.
+\end{example}
+
+\subsubsection{Advantages of Unrolling}
+
+\begin{itemize}
+    \item Conceptually simple: just apply AD to the algorithm
+    \item Works with any iterative solver
+    \item Provides gradients through the entire optimization path
+\end{itemize}
+
+\subsubsection{Disadvantages of Unrolling}
+
+\begin{itemize}
+    \item Memory intensive: must store all intermediate iterates
+    \item Computational cost: backprop through $K$ iterations
+    \item Gradient quality: depends on convergence of forward optimization
+    \item Hyperparameter sensitivity: learning rate, number of iterations affect gradients
+\end{itemize}
+
+\subsection{Approach 2: Implicit Differentiation}
+
+A more elegant approach avoids unrolling by differentiating the optimality conditions directly. This is covered in detail in Section~\ref{sec:implicit_diff}, but we preview the key idea here.
+
+At the optimal solution $\mathbf{u}^*$, the KKT conditions hold:
+\begin{equation}
+\nabla_{\mathbf{u}} \mathcal{L}(\mathbf{u}^*, \boldsymbol{\lambda}^*, \boldsymbol{\mu}^*; \theta) = 0
+\end{equation}
+where $\mathcal{L}$ is the Lagrangian and $\boldsymbol{\lambda}$, $\boldsymbol{\mu}$ are multipliers.
+
+Using the implicit function theorem, we can compute:
+\begin{equation}
+\frac{\partial \mathbf{u}^*}{\partial \theta} = -\left( \frac{\partial^2 \mathcal{L}}{\partial \mathbf{u}^2} \right)^{-1} \frac{\partial^2 \mathcal{L}}{\partial \mathbf{u} \partial \theta}
+\end{equation}
+
+This gives exact gradients without unrolling, requiring only one forward solve plus one linear system solve for the backward pass.
+
+\subsection{DiffMPC: A Practical Framework}
+
+The DiffMPC framework (Amos et al., 2018) implements differentiable MPC by:
+\begin{enumerate}
+    \item Solving the MPC problem to optimality in the forward pass
+    \item Using implicit differentiation for the backward pass
+\end{enumerate}
+
+For linear-quadratic MPC (linear dynamics, quadratic costs), the solution is given by a sequence of Riccati equations, and the derivatives can be computed analytically.
+
+\subsubsection{Linear-Quadratic MPC}
+
+Consider the LQ-MPC problem:
+\begin{equation}
+\begin{aligned}
+\min_{\mathbf{u}_0, \ldots, \mathbf{u}_{N-1}} \quad & \sum_{k=0}^{N-1} \left( \mathbf{x}_k^T \mathbf{Q} \mathbf{x}_k + \mathbf{u}_k^T \mathbf{R} \mathbf{u}_k \right) + \mathbf{x}_N^T \mathbf{Q}_f \mathbf{x}_N \\
+\text{subject to} \quad & \mathbf{x}_{k+1} = \mathbf{A} \mathbf{x}_k + \mathbf{B} \mathbf{u}_k
+\end{aligned}
+\end{equation}
+
+The optimal control law is:
+\begin{equation}
+\mathbf{u}_k^* = -\mathbf{K}_k \mathbf{x}_k
+\end{equation}
+where gains $\mathbf{K}_k$ come from the Riccati recursion.
+
+Differentiating through the Riccati equations gives gradients with respect to $\mathbf{Q}$, $\mathbf{R}$, $\mathbf{A}$, $\mathbf{B}$, and $\mathbf{x}_0$.
+
+\subsubsection{Box-Constrained LQ-MPC}
+
+For input constraints $\mathbf{u}_{\min} \leq \mathbf{u} \leq \mathbf{u}_{\max}$, the problem becomes a quadratic program (QP). Differentiating through the QP solution requires handling active set changes, which is done via implicit differentiation of the KKT conditions.
+
+\subsection{Learning MPC Parameters}
+
+With differentiable MPC, we can learn parameters from data.
+
+\subsubsection{Inverse Optimal Control / Inverse Reinforcement Learning}
+
+Given expert demonstrations $\{(\mathbf{x}_t^{\text{demo}}, \mathbf{u}_t^{\text{demo}})\}$, find cost weights $\theta$ such that MPC with those weights reproduces the demonstrations:
+\begin{equation}
+\min_{\theta} \sum_{\text{demos}} \| \mathbf{u}^*(\mathbf{x}; \theta) - \mathbf{u}^{\text{demo}} \|^2
+\end{equation}
+
+The gradient is:
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \theta} = 2 \sum_{\text{demos}} (\mathbf{u}^* - \mathbf{u}^{\text{demo}})^T \frac{\partial \mathbf{u}^*}{\partial \theta}
+\end{equation}
+
+This requires differentiating MPC output with respect to cost weights---exactly what differentiable MPC provides.
+
+\subsubsection{End-to-End Tuning}
+
+Instead of matching individual actions, we can optimize closed-loop performance:
+\begin{equation}
+\min_{\theta} \mathbb{E}\left[ \sum_{t=0}^{T} c(\mathbf{x}_t, \mathbf{u}_t) \right]
+\end{equation}
+where states evolve under MPC with parameters $\theta$.
+
+This requires differentiating through both MPC and dynamics simulation, combining the techniques of Sections~\ref{sec:autodiff}, \ref{sec:diff_sim}, and this section.
+
+\begin{example}[Learning Quadratic Cost Weights]
+\label{ex:learn_cost_weights}
+Consider a quadrotor stabilization task. The true optimal behavior trades off position tracking against control effort in a specific way determined by the vehicle's capabilities and the task requirements.
+
+\textbf{Setup}:
+\begin{itemize}
+    \item Demonstration: Expert pilot stabilizing the quadrotor
+    \item MPC structure: Quadratic cost with diagonal $\mathbf{Q}$ and $\mathbf{R}$
+    \item Goal: Learn $\mathbf{Q}$, $\mathbf{R}$ that make MPC match the expert
+\end{itemize}
+
+\textbf{Algorithm}:
+\begin{enumerate}
+    \item Initialize $\mathbf{Q}$, $\mathbf{R}$ with reasonable guesses
+    \item For each demonstration trajectory:
+    \begin{enumerate}
+        \item Run MPC with current $\mathbf{Q}$, $\mathbf{R}$ from each demonstrated state
+        \item Compute loss: deviation of MPC output from demonstrated action
+        \item Backpropagate through MPC to get $\frac{\partial \mathcal{L}}{\partial \mathbf{Q}}$, $\frac{\partial \mathcal{L}}{\partial \mathbf{R}}$
+    \end{enumerate}
+    \item Update $\mathbf{Q}$, $\mathbf{R}$ via gradient descent
+    \item Repeat until convergence
+\end{enumerate}
+
+The learned weights encode the expert's implicit preferences, which can then be used for autonomous operation.
+\end{example}
+
+\keypoint{Differentiable MPC enables learning cost functions from demonstrations and end-to-end tuning of controller parameters. Two approaches are unrolling (simple but memory-intensive) and implicit differentiation (efficient but requires solving linear systems). Libraries like DiffMPC provide practical implementations.}
+
+%==============================================================================
+\section{Implicit Differentiation for Optimization Layers}
+\label{sec:implicit_diff}
+%==============================================================================
+
+Many control and learning systems include optimization problems as components: MPC solves trajectory optimization, convex layers in neural networks solve quadratic programs, and physics engines solve contact problems. Implicit differentiation provides a principled, efficient way to differentiate through these optimization layers without unrolling.
+
+\subsection{The Implicit Function Theorem}
+
+The foundation is the \textbf{implicit function theorem} from calculus.
+
+\begin{theorem}[Implicit Function Theorem]
+Let $F: \mathbb{R}^n \times \mathbb{R}^m \to \mathbb{R}^n$ be continuously differentiable. Suppose $F(\mathbf{z}^*, \theta^*) = 0$ and the Jacobian $\frac{\partial F}{\partial \mathbf{z}}|_{(\mathbf{z}^*, \theta^*)}$ is invertible. Then there exists a neighborhood of $\theta^*$ and a unique continuously differentiable function $\mathbf{z}(\theta)$ such that $F(\mathbf{z}(\theta), \theta) = 0$.
+
+Moreover, the derivative is:
+\begin{equation}
+\frac{\partial \mathbf{z}}{\partial \theta} = -\left( \frac{\partial F}{\partial \mathbf{z}} \right)^{-1} \frac{\partial F}{\partial \theta}
+\label{eq:ift}
+\end{equation}
+\end{theorem}
+
+The key insight is that we don't need to know \textit{how} $\mathbf{z}$ was computed---only that it satisfies $F(\mathbf{z}, \theta) = 0$. This applies directly to optimization problems where $F$ encodes optimality conditions.
+
+\subsection{Differentiating Through Unconstrained Optimization}
+
+Consider an unconstrained optimization problem:
+\begin{equation}
+\mathbf{z}^*(\theta) = \arg\min_{\mathbf{z}} f(\mathbf{z}; \theta)
+\end{equation}
+
+At the optimum, the gradient vanishes:
+\begin{equation}
+\nabla_{\mathbf{z}} f(\mathbf{z}^*, \theta) = 0
+\end{equation}
+
+This is our implicit equation $F(\mathbf{z}, \theta) = \nabla_{\mathbf{z}} f(\mathbf{z}, \theta) = 0$.
+
+Applying the implicit function theorem:
+\begin{equation}
+\frac{\partial \mathbf{z}^*}{\partial \theta} = -\left( \nabla^2_{\mathbf{z}\mathbf{z}} f \right)^{-1} \nabla^2_{\mathbf{z}\theta} f
+\label{eq:unconstrained_implicit}
+\end{equation}
+
+where both Hessians are evaluated at $(\mathbf{z}^*, \theta)$.
+
+\begin{example}[Implicit Differentiation of Least Squares]
+\label{ex:implicit_least_squares}
+Consider the least squares problem:
+\begin{equation}
+\mathbf{z}^*(\mathbf{A}, \mathbf{b}) = \arg\min_{\mathbf{z}} \| \mathbf{A} \mathbf{z} - \mathbf{b} \|^2
+\end{equation}
+
+The optimality condition is:
+\begin{equation}
+\mathbf{A}^T (\mathbf{A} \mathbf{z}^* - \mathbf{b}) = 0 \implies \mathbf{z}^* = (\mathbf{A}^T \mathbf{A})^{-1} \mathbf{A}^T \mathbf{b}
+\end{equation}
+
+To differentiate $\mathbf{z}^*$ with respect to $\mathbf{b}$:
+\begin{align}
+f(\mathbf{z}; \mathbf{b}) &= \mathbf{z}^T \mathbf{A}^T \mathbf{A} \mathbf{z} - 2 \mathbf{b}^T \mathbf{A} \mathbf{z} + \mathbf{b}^T \mathbf{b} \\
+\nabla^2_{\mathbf{z}\mathbf{z}} f &= 2 \mathbf{A}^T \mathbf{A} \\
+\nabla^2_{\mathbf{z}\mathbf{b}} f &= -2 \mathbf{A}^T
+\end{align}
+
+Therefore:
+\begin{equation}
+\frac{\partial \mathbf{z}^*}{\partial \mathbf{b}} = -\frac{1}{2} (\mathbf{A}^T \mathbf{A})^{-1} (-2 \mathbf{A}^T) = (\mathbf{A}^T \mathbf{A})^{-1} \mathbf{A}^T
+\end{equation}
+
+This is exactly the pseudo-inverse, as expected from direct differentiation.
+\end{example}
+
+\subsection{Differentiating Through Constrained Optimization}
+
+For constrained problems, we differentiate through the KKT conditions.
+
+Consider:
+\begin{equation}
+\begin{aligned}
+\mathbf{z}^*(\theta) = \arg\min_{\mathbf{z}} \quad & f(\mathbf{z}; \theta) \\
+\text{subject to} \quad & g_i(\mathbf{z}; \theta) = 0, \quad i = 1, \ldots, p \\
+& h_j(\mathbf{z}; \theta) \leq 0, \quad j = 1, \ldots, q
+\end{aligned}
+\end{equation}
+
+The KKT conditions are:
+\begin{align}
+\nabla_{\mathbf{z}} f + \sum_i \lambda_i \nabla_{\mathbf{z}} g_i + \sum_j \mu_j \nabla_{\mathbf{z}} h_j &= 0 \label{eq:kkt_stationarity} \\
+g_i(\mathbf{z}) &= 0, \quad i = 1, \ldots, p \\
+h_j(\mathbf{z}) &\leq 0, \quad \mu_j \geq 0, \quad \mu_j h_j = 0, \quad j = 1, \ldots, q
+\end{align}
+
+The complementarity condition $\mu_j h_j = 0$ is non-smooth, but at a regular solution with strict complementarity (active constraints have $\mu_j > 0$, inactive have $\mu_j = 0$), we can identify the active set and treat active inequalities as equalities.
+
+Let $\mathcal{A} = \{j : h_j(\mathbf{z}^*) = 0\}$ be the active set. The reduced KKT system is:
+\begin{equation}
+F(\mathbf{z}, \boldsymbol{\lambda}, \boldsymbol{\mu}_{\mathcal{A}}; \theta) = \begin{pmatrix}
+\nabla_{\mathbf{z}} \mathcal{L} \\
+\mathbf{g}(\mathbf{z}) \\
+\mathbf{h}_{\mathcal{A}}(\mathbf{z})
+\end{pmatrix} = 0
+\end{equation}
+
+where $\mathcal{L}$ is the Lagrangian. Applying the implicit function theorem gives the sensitivity of the primal-dual solution to $\theta$.
+
+\subsubsection{Practical Computation}
+
+The backward pass involves solving:
+\begin{equation}
+\begin{pmatrix}
+\nabla^2_{\mathbf{z}\mathbf{z}} \mathcal{L} & \mathbf{G}^T & \mathbf{H}_{\mathcal{A}}^T \\
+\mathbf{G} & 0 & 0 \\
+\mathbf{H}_{\mathcal{A}} & 0 & 0
+\end{pmatrix}
+\begin{pmatrix}
+\frac{\partial \mathbf{z}^*}{\partial \theta} \\
+\frac{\partial \boldsymbol{\lambda}^*}{\partial \theta} \\
+\frac{\partial \boldsymbol{\mu}_{\mathcal{A}}^*}{\partial \theta}
+\end{pmatrix}
+= -\begin{pmatrix}
+\nabla^2_{\mathbf{z}\theta} \mathcal{L} \\
+\frac{\partial \mathbf{g}}{\partial \theta} \\
+\frac{\partial \mathbf{h}_{\mathcal{A}}}{\partial \theta}
+\end{pmatrix}
+\label{eq:kkt_sensitivity}
+\end{equation}
+
+where $\mathbf{G} = \nabla_{\mathbf{z}} \mathbf{g}^T$ and $\mathbf{H}_{\mathcal{A}} = \nabla_{\mathbf{z}} \mathbf{h}_{\mathcal{A}}^T$.
+
+The matrix on the left is the KKT matrix, which is already factored by most QP solvers. The backward pass reuses this factorization.
+
+\subsection{Quadratic Programs as Differentiable Layers}
+
+Quadratic programs (QPs) are particularly important because they appear in:
+\begin{itemize}
+    \item Linear MPC
+    \item Convex optimization layers
+    \item Contact dynamics
+    \item Safety filters
+\end{itemize}
+
+A QP has the form:
+\begin{equation}
+\begin{aligned}
+\mathbf{z}^* = \arg\min_{\mathbf{z}} \quad & \frac{1}{2} \mathbf{z}^T \mathbf{P} \mathbf{z} + \mathbf{q}^T \mathbf{z} \\
+\text{subject to} \quad & \mathbf{A} \mathbf{z} = \mathbf{b} \\
+& \mathbf{G} \mathbf{z} \leq \mathbf{h}
+\end{aligned}
+\end{equation}
+
+The KKT conditions are linear, so implicit differentiation gives closed-form sensitivities.
+
+\subsubsection{OptNet and CvxpyLayers}
+
+OptNet (Amos \& Kolter, 2017) introduced differentiable QP layers for neural networks. Given a QP parameterized by network outputs, it:
+\begin{enumerate}
+    \item Solves the QP in the forward pass
+    \item Computes gradients via KKT differentiation in the backward pass
+\end{enumerate}
+
+CvxpyLayers extends this to general disciplined convex programs (DCPs), automatically deriving the implicit differentiation equations from the problem structure.
+
+\begin{example}[Safety Filter as Differentiable Layer]
+\label{ex:safety_filter}
+Consider a Control Barrier Function (CBF) safety filter that projects an unsafe action to the nearest safe action:
+\begin{equation}
+\begin{aligned}
+\mathbf{u}^*(\mathbf{u}_{\text{nom}}, \mathbf{x}) = \arg\min_{\mathbf{u}} \quad & \frac{1}{2} \| \mathbf{u} - \mathbf{u}_{\text{nom}} \|^2 \\
+\text{subject to} \quad & \dot{h}(\mathbf{x}, \mathbf{u}) \geq -\alpha h(\mathbf{x})
+\end{aligned}
+\end{equation}
+
+where $h(\mathbf{x}) \geq 0$ defines the safe set.
+
+This is a QP in $\mathbf{u}$ (if $\dot{h}$ is affine in $\mathbf{u}$). Making it differentiable allows:
+\begin{itemize}
+    \item Learning the nominal policy $\mathbf{u}_{\text{nom}}$ end-to-end through the filter
+    \item Learning the barrier function $h$ from demonstrations
+    \item Tuning the aggressiveness parameter $\alpha$
+\end{itemize}
+\end{example}
+
+\subsection{Handling Non-Differentiable Cases}
+
+Implicit differentiation fails when:
+\begin{itemize}
+    \item The KKT matrix is singular (degenerate constraints)
+    \item The active set is ambiguous (multiple optimal solutions)
+    \item Strict complementarity fails
+\end{itemize}
+
+\subsubsection{Regularization}
+
+Adding small regularization terms resolves many degeneracies:
+\begin{equation}
+\mathbf{z}^* = \arg\min_{\mathbf{z}} f(\mathbf{z}; \theta) + \frac{\epsilon}{2} \| \mathbf{z} \|^2
+\end{equation}
+
+The regularization makes the Hessian positive definite, ensuring a unique solution and well-defined gradients.
+
+\subsubsection{Smoothing}
+
+Replace hard constraints with soft penalties:
+\begin{equation}
+h(\mathbf{z}) \leq 0 \quad \to \quad \min(h(\mathbf{z}), 0)^2 \text{ penalty}
+\end{equation}
+
+Or use log-barrier approximations:
+\begin{equation}
+h(\mathbf{z}) \leq 0 \quad \to \quad -\epsilon \log(-h(\mathbf{z}))
+\end{equation}
+
+These smooth approximations have well-defined gradients everywhere.
+
+\subsubsection{Subgradients and Generalized Derivatives}
+
+For truly non-smooth problems, we can use subgradients or Clarke generalized gradients, though these may introduce difficulties in gradient-based optimization.
+
+\keypoint{Implicit differentiation allows efficient gradient computation through optimization layers by differentiating the optimality conditions rather than unrolling the solver. This is the foundation for differentiable convex layers, differentiable physics, and efficient differentiable MPC implementations.}
+
+%==============================================================================
+\section{End-to-End Learning Through Control}
+\label{sec:e2e_learning}
+%==============================================================================
+
+End-to-end learning trains all components of a system jointly to optimize a final objective, rather than training each component separately. In robotics and control, this means jointly learning perception, planning, and control to optimize task performance.
+
+\subsection{The End-to-End Philosophy}
+
+Traditional robotics pipelines are modular:
+\begin{enumerate}
+    \item \textbf{Perception}: Process sensors to estimate state
+    \item \textbf{Planning}: Compute desired trajectory
+    \item \textbf{Control}: Track the trajectory
+\end{enumerate}
+
+Each module is designed and tuned separately, with hand-crafted interfaces between them. This has advantages (interpretability, debuggability) but also limitations:
+\begin{itemize}
+    \item Information loss at interfaces (perception discards potentially useful information)
+    \item Suboptimal global performance (each module optimizes its own objective)
+    \item Manual feature engineering (what state representation to use?)
+\end{itemize}
+
+End-to-end learning addresses these by training the entire pipeline to optimize task performance:
+\begin{equation}
+\min_{\theta} \mathbb{E}\left[ \sum_t c(\mathbf{x}_t, \mathbf{u}_t) \right]
+\end{equation}
+where $\theta$ includes parameters of perception networks, planning modules, and control policies.
+
+\subsection{Architecture: Perception to Action}
+
+A typical end-to-end control system has the structure:
+\begin{equation}
+\mathbf{o}_t \xrightarrow{\text{Encoder}} \mathbf{z}_t \xrightarrow{\text{Policy}} \mathbf{u}_t \xrightarrow{\text{Dynamics}} \mathbf{o}_{t+1}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\mathbf{o}_t$: Raw observation (images, point clouds, etc.)
+    \item $\mathbf{z}_t$: Learned latent state representation
+    \item $\mathbf{u}_t$: Control action
+    \item Encoder, Policy: Parameterized by $\theta$
+\end{itemize}
+
+\subsubsection{Encoder Networks}
+
+The encoder maps raw observations to a latent state:
+\begin{equation}
+\mathbf{z}_t = \text{Encoder}_\theta(\mathbf{o}_t)
+\end{equation}
+
+Common architectures:
+\begin{itemize}
+    \item Convolutional networks for images
+    \item PointNet for point clouds
+    \item Transformers for sequences
+    \item ResNets for deep feature extraction
+\end{itemize}
+
+The encoder learns what information from the observation is relevant for control---a form of automatic feature engineering.
+
+\subsubsection{Policy Networks}
+
+The policy maps latent state to action:
+\begin{equation}
+\mathbf{u}_t = \pi_\theta(\mathbf{z}_t)
+\end{equation}
+
+Options include:
+\begin{itemize}
+    \item Feedforward networks: Simple, fast, but limited memory
+    \item Recurrent networks (LSTM, GRU): Handle partial observability
+    \item Transformers: Capture long-range dependencies
+    \item Structured policies (MPC layers): Incorporate physics knowledge
+\end{itemize}
+
+\subsection{Training End-to-End Systems}
+
+\subsubsection{Supervised Learning (Imitation)}
+
+Given expert demonstrations $\{(\mathbf{o}_t, \mathbf{u}_t^{\text{expert}})\}$:
+\begin{equation}
+\min_\theta \sum_t \| \pi_\theta(\text{Encoder}_\theta(\mathbf{o}_t)) - \mathbf{u}_t^{\text{expert}} \|^2
+\end{equation}
+
+This is behavioral cloning---simple but suffers from distribution shift (the learned policy visits states not seen in demonstrations).
+
+\subsubsection{DAgger: Dataset Aggregation}
+
+DAgger addresses distribution shift by iteratively:
+\begin{enumerate}
+    \item Run the current policy to collect observations
+    \item Query the expert for labels on these observations
+    \item Add to the training dataset
+    \item Retrain
+\end{enumerate}
+
+This exposes the learner to states it actually encounters.
+
+\subsubsection{Reinforcement Learning}
+
+With a differentiable simulator, we can directly optimize the expected cost:
+\begin{equation}
+\min_\theta \mathbb{E}_{\mathbf{x}_0}\left[ \sum_{t=0}^{T} c(\mathbf{x}_t, \pi_\theta(\mathbf{x}_t)) \right]
+\end{equation}
+
+Backpropagating through the dynamics gives:
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \theta} = \sum_t \frac{\partial c_t}{\partial \mathbf{u}_t} \frac{\partial \pi_\theta}{\partial \theta} + \sum_t \frac{\partial c_t}{\partial \mathbf{x}_t} \frac{\partial \mathbf{x}_t}{\partial \theta}
+\end{equation}
+
+where the state gradients $\frac{\partial \mathbf{x}_t}{\partial \theta}$ require differentiating through the dynamics.
+
+\subsection{Challenges in End-to-End Learning}
+
+\subsubsection{Sample Efficiency}
+
+End-to-end learning requires many samples because it must learn both perception and control. Techniques to improve efficiency:
+\begin{itemize}
+    \item Pretraining perception on auxiliary tasks
+    \item Transfer learning from simulation
+    \item Data augmentation
+\end{itemize}
+
+\subsubsection{Credit Assignment}
+
+When something goes wrong, was it the perception or the control? Gradients must propagate through the entire system to assign credit. This can be helped by:
+\begin{itemize}
+    \item Intermediate losses (supervise perception separately)
+    \item Attention mechanisms to focus on relevant features
+    \item Interpretable intermediate representations
+\end{itemize}
+
+\subsubsection{Safety}
+
+End-to-end policies are black boxes. Ensuring safety requires:
+\begin{itemize}
+    \item Safety filters that override dangerous actions
+    \item Verification of learned components
+    \item Runtime monitoring
+\end{itemize}
+
+\subsubsection{Sim-to-Real Transfer}
+
+Policies trained in simulation may fail in the real world due to:
+\begin{itemize}
+    \item Visual differences (textures, lighting)
+    \item Dynamics differences (friction, delays)
+    \item Unmodeled phenomena
+\end{itemize}
+
+Domain randomization and domain adaptation (Chapter 20) address these challenges.
+
+\subsection{Hybrid Architectures: Combining Learning and Structure}
+
+Pure end-to-end learning can be sample-inefficient and hard to trust. Hybrid architectures combine learned components with structured modules:
+
+\subsubsection{Learned Perception + Classical Control}
+
+\begin{equation}
+\mathbf{o}_t \xrightarrow{\text{Neural Net}} \hat{\mathbf{x}}_t \xrightarrow{\text{MPC}} \mathbf{u}_t
+\end{equation}
+
+The perception network learns to estimate state; classical MPC handles control. This is more interpretable and can reuse validated control designs.
+
+\subsubsection{Classical Perception + Learned Residuals}
+
+\begin{equation}
+\mathbf{u}_t = \mathbf{u}_{\text{classical}}(\mathbf{x}_t) + \pi_\theta(\mathbf{x}_t)
+\end{equation}
+
+A classical controller provides a baseline; the learned residual corrects for model errors and improves performance.
+
+\subsubsection{Neural Network + Differentiable MPC}
+
+\begin{equation}
+\mathbf{o}_t \xrightarrow{\text{Neural Net}} \text{(cost params)} \xrightarrow{\text{Diff MPC}} \mathbf{u}_t
+\end{equation}
+
+The neural network learns to set MPC parameters based on observations; MPC provides structured, constraint-respecting control. This combines learning's adaptability with MPC's guarantees.
+
+\keypoint{End-to-end learning jointly optimizes all components of a control system, from perception to action. While powerful, it requires careful attention to sample efficiency, credit assignment, and safety. Hybrid architectures that combine learning with structured control modules often provide the best of both worlds.}
+
+%==============================================================================
+\section{Gradient-Based Policy Optimization}
+\label{sec:policy_optimization}
+%==============================================================================
+
+Policy optimization is the core problem in learning-based control: finding policy parameters that minimize expected cost over trajectories. When the dynamics are differentiable, we can use gradient descent directly on the policy objective.
+
+\subsection{Problem Formulation}
+
+We seek a policy $\pi_\theta: \mathcal{X} \to \mathcal{U}$ that minimizes expected cumulative cost:
+\begin{equation}
+J(\theta) = \mathbb{E}_{\mathbf{x}_0 \sim p_0}\left[ \sum_{t=0}^{T-1} c(\mathbf{x}_t, \mathbf{u}_t) + c_f(\mathbf{x}_T) \right]
+\label{eq:policy_objective}
+\end{equation}
+where:
+\begin{itemize}
+    \item $\mathbf{u}_t = \pi_\theta(\mathbf{x}_t)$
+    \item $\mathbf{x}_{t+1} = f(\mathbf{x}_t, \mathbf{u}_t)$ (deterministic dynamics)
+    \item $p_0$ is the initial state distribution
+\end{itemize}
+
+\subsection{Policy Gradient via Backpropagation}
+
+With differentiable dynamics and a differentiable policy, we can compute $\nabla_\theta J$ directly:
+\begin{equation}
+\nabla_\theta J = \mathbb{E}_{\mathbf{x}_0}\left[ \sum_{t=0}^{T} \nabla_\theta c_t \right]
+\label{eq:policy_gradient_direct}
+\end{equation}
+
+Expanding via the chain rule:
+\begin{equation}
+\nabla_\theta c_t = \frac{\partial c_t}{\partial \mathbf{x}_t} \frac{\partial \mathbf{x}_t}{\partial \theta} + \frac{\partial c_t}{\partial \mathbf{u}_t} \frac{\partial \mathbf{u}_t}{\partial \theta}
+\end{equation}
+
+The state gradient $\frac{\partial \mathbf{x}_t}{\partial \theta}$ satisfies the recursion:
+\begin{equation}
+\frac{\partial \mathbf{x}_{t+1}}{\partial \theta} = \frac{\partial f}{\partial \mathbf{x}_t} \frac{\partial \mathbf{x}_t}{\partial \theta} + \frac{\partial f}{\partial \mathbf{u}_t} \frac{\partial \mathbf{u}_t}{\partial \theta}
+\end{equation}
+
+This can be computed via forward-mode AD (propagating tangents alongside the trajectory) or reverse-mode AD (backpropagating adjoints through the recorded trajectory).
+
+\subsection{Algorithm: Backpropagation Through Time for Control}
+
+\begin{algorithm}[H]
+\caption{Policy Gradient via Differentiable Simulation}
+\label{alg:bptt_control}
+\begin{algorithmic}[1]
+\REQUIRE Policy $\pi_\theta$, dynamics $f$, cost $c$, horizon $T$, initial states $\{\mathbf{x}_0^{(i)}\}$
+\ENSURE Gradient $\nabla_\theta J$
+\STATE $\nabla_\theta J \gets 0$
+\FOR{each initial state $\mathbf{x}_0^{(i)}$}
+    \STATE // Forward pass: simulate trajectory
+    \STATE $\mathbf{x} \gets \mathbf{x}_0^{(i)}$
+    \STATE $L \gets 0$
+    \FOR{$t = 0$ \TO $T-1$}
+        \STATE $\mathbf{u}_t \gets \pi_\theta(\mathbf{x}_t)$
+        \STATE $L \gets L + c(\mathbf{x}_t, \mathbf{u}_t)$
+        \STATE $\mathbf{x}_{t+1} \gets f(\mathbf{x}_t, \mathbf{u}_t)$
+    \ENDFOR
+    \STATE $L \gets L + c_f(\mathbf{x}_T)$
+    \STATE // Backward pass: compute gradients
+    \STATE $\nabla_\theta J \gets \nabla_\theta J + \nabla_\theta L$ \COMMENT{via AD}
+\ENDFOR
+\STATE $\nabla_\theta J \gets \nabla_\theta J / \text{num\_samples}$
+\RETURN $\nabla_\theta J$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Comparison with Reinforcement Learning Policy Gradients}
+
+Traditional RL policy gradients (REINFORCE, PPO, etc.) do not require differentiable dynamics. They estimate gradients via:
+\begin{equation}
+\nabla_\theta J \approx \mathbb{E}\left[ \sum_t R_t \nabla_\theta \log \pi_\theta(\mathbf{u}_t | \mathbf{x}_t) \right]
+\label{eq:reinforce}
+\end{equation}
+where $R_t$ is the return (cumulative future reward).
+
+\textbf{Advantages of differentiable dynamics gradients:}
+\begin{itemize}
+    \item Lower variance: Exact gradients vs. Monte Carlo estimates
+    \item Faster convergence: More informative gradient signal
+    \item Works with deterministic policies directly
+\end{itemize}
+
+\textbf{Advantages of RL policy gradients:}
+\begin{itemize}
+    \item No differentiable simulator required
+    \item Handles stochastic dynamics naturally
+    \item Can learn from real-world experience
+\end{itemize}
+
+The choice depends on whether you have a differentiable simulator and whether simulation accuracy justifies the additional complexity.
+
+\subsection{Challenges in Gradient-Based Policy Optimization}
+
+\subsubsection{Long Horizons and Gradient Issues}
+
+For long trajectories, gradients must propagate through many dynamics steps:
+\begin{equation}
+\frac{\partial \mathbf{x}_T}{\partial \theta} = \prod_{t=0}^{T-1} \frac{\partial \mathbf{x}_{t+1}}{\partial \mathbf{x}_t} \cdot \ldots
+\end{equation}
+
+If the dynamics are:
+\begin{itemize}
+    \item \textbf{Contractive}: Gradients vanish (stable systems)
+    \item \textbf{Expansive}: Gradients explode (unstable systems)
+\end{itemize}
+
+\textbf{Mitigation strategies:}
+\begin{itemize}
+    \item Truncated backpropagation (limit gradient horizon)
+    \item Gradient clipping
+    \item Normalized gradient descent
+    \item Shorter prediction horizons with receding-horizon training
+\end{itemize}
+
+\subsubsection{Local Minima}
+
+The policy optimization landscape is generally non-convex. Gradient descent may find local minima rather than global optima.
+
+\textbf{Mitigation strategies:}
+\begin{itemize}
+    \item Multiple random restarts
+    \item Curriculum learning (start with easier tasks)
+    \item Warm-starting from demonstrations
+    \item Adding exploration noise during training
+\end{itemize}
+
+\subsubsection{Contact and Discontinuities}
+
+Hard contacts create discontinuous dynamics. Gradients at discontinuities may be:
+\begin{itemize}
+    \item Zero (uninformative)
+    \item Undefined (not differentiable)
+    \item Misleading (pointing in wrong direction)
+\end{itemize}
+
+\textbf{Mitigation strategies:}
+\begin{itemize}
+    \item Soft contact models (Section~\ref{sec:diff_sim})
+    \item Randomized smoothing
+    \item Time-of-impact differentiation
+\end{itemize}
+
+\subsection{Practical Algorithm: Short Horizon Rollout Policy Optimization}
+
+A practical approach combines short differentiable rollouts with longer non-differentiable evaluation:
+
+\begin{algorithm}[H]
+\caption{Short Horizon Rollout Policy Optimization (SHAC-style)}
+\label{alg:short_horizon}
+\begin{algorithmic}[1]
+\REQUIRE Policy $\pi_\theta$, differentiable dynamics $f$, short horizon $H$, value function $V_\phi$
+\STATE Initialize $\theta$, $\phi$
+\REPEAT
+    \STATE Sample initial states $\{\mathbf{x}_0^{(i)}\}$
+    \STATE // Short differentiable rollouts
+    \FOR{each $\mathbf{x}_0^{(i)}$}
+        \STATE Rollout $H$ steps: $\mathbf{x}_0 \to \mathbf{x}_1 \to \ldots \to \mathbf{x}_H$
+        \STATE Compute loss: $L = \sum_{t=0}^{H-1} c_t + V_\phi(\mathbf{x}_H)$
+        \STATE Backpropagate: $\nabla_\theta L$
+    \ENDFOR
+    \STATE Update $\theta$ using aggregated gradients
+    \STATE // Update value function
+    \STATE Rollout longer episodes to estimate returns
+    \STATE Fit $V_\phi$ to observed returns via regression
+\UNTIL{convergence}
+\end{algorithmic}
+\end{algorithm}
+
+The value function $V_\phi$ estimates the cost-to-go from $\mathbf{x}_H$, allowing short differentiable rollouts while accounting for long-term consequences.
+
+\subsection{Combining Differentiable and Non-Differentiable Components}
+
+Real systems often have both differentiable and non-differentiable components:
+\begin{itemize}
+    \item Differentiable: Smooth dynamics, neural network policies
+    \item Non-differentiable: Hard contacts, discrete decisions, real-world execution
+\end{itemize}
+
+\subsubsection{Reparameterization Trick}
+
+For stochastic policies $\pi_\theta(\mathbf{u} | \mathbf{x})$, reparameterize:
+\begin{equation}
+\mathbf{u} = \mu_\theta(\mathbf{x}) + \sigma_\theta(\mathbf{x}) \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)
+\end{equation}
+
+Gradients flow through $\mu_\theta$ and $\sigma_\theta$ without requiring differentiation through sampling.
+
+\subsubsection{Straight-Through Estimators}
+
+For discrete decisions, use continuous approximations in the forward pass but straight-through gradients in the backward pass:
+\begin{equation}
+\text{Forward: } \hat{\mathbf{u}} = \text{softmax}(\mathbf{z}_\theta / \tau), \quad \text{Backward: } \nabla_\theta \approx \nabla_\theta \mathbf{z}_\theta
+\end{equation}
+
+\subsubsection{Mixed-Mode Training}
+
+Combine differentiable gradients (where available) with RL gradients (where not):
+\begin{equation}
+\nabla_\theta J \approx \nabla_\theta^{\text{diff}} J_{\text{diff}} + \nabla_\theta^{\text{RL}} J_{\text{non-diff}}
+\end{equation}
+
+This leverages the efficiency of differentiable gradients while handling non-differentiable components.
+
+\keypoint{Gradient-based policy optimization uses differentiable dynamics to compute exact policy gradients via backpropagation. This is more sample-efficient than RL policy gradients but requires a differentiable simulator. Challenges include gradient explosion/vanishing over long horizons, local minima, and handling discontinuities.}
+
+%==============================================================================
+\section{Practical Applications and Worked Examples}
+\label{sec:applications}
+%==============================================================================
+
+This section presents detailed worked examples demonstrating differentiable control techniques. Each example includes problem formulation, implementation details, and analysis.
+
+\subsection{Example 1: Differentiable Pendulum Simulation and Control}
+
+\subsubsection{Problem Description}
+
+We implement a differentiable pendulum simulator and use it to learn a swing-up policy via gradient descent.
+
+\subsubsection{Dynamics}
+
+The pendulum dynamics are:
+\begin{align}
+\dot{\theta} &= \omega \\
+\dot{\omega} &= -\frac{g}{\ell} \sin(\theta) - \frac{b}{m\ell^2} \omega + \frac{1}{m\ell^2} u
+\end{align}
+
+Discretized with Euler integration at step size $\Delta t$:
+\begin{align}
+\theta_{k+1} &= \theta_k + \Delta t \cdot \omega_k \\
+\omega_{k+1} &= \omega_k + \Delta t \left( -\frac{g}{\ell} \sin(\theta_k) - \frac{b}{m\ell^2} \omega_k + \frac{1}{m\ell^2} u_k \right)
+\end{align}
+
+\subsubsection{Cost Function}
+
+For swing-up, we want to reach the upright position $\theta = \pi$ with zero velocity:
+\begin{equation}
+c(\theta, \omega, u) = (\cos(\theta) + 1)^2 + 0.1 \omega^2 + 0.01 u^2
+\end{equation}
+
+The term $(\cos(\theta) + 1)^2$ is zero at $\theta = \pi$ and maximum at $\theta = 0$.
+
+\subsubsection{Policy}
+
+We use a simple feedforward neural network:
+\begin{equation}
+\pi_\theta(\mathbf{x}) = W_2 \cdot \tanh(W_1 \mathbf{x} + b_1) + b_2
+\end{equation}
+
+where $\mathbf{x} = [\sin(\theta), \cos(\theta), \omega]^T$ (we use $\sin$, $\cos$ to avoid angle wrapping issues).
+
+\subsubsection{Training}
+
+We optimize the policy by:
+\begin{enumerate}
+    \item Sampling initial states (random angles, zero velocity)
+    \item Rolling out trajectories with the current policy
+    \item Computing total cost
+    \item Backpropagating through the rollout to get $\nabla_\theta J$
+    \item Updating policy parameters via Adam optimizer
+\end{enumerate}
+
+\subsubsection{Implementation}
+
+\begin{verbatim}
+import torch
+import torch.nn as nn
+
+class DifferentiablePendulum:
+    def __init__(self, m=1.0, l=1.0, b=0.1, g=9.81, dt=0.02):
+        self.m, self.l, self.b, self.g, self.dt = m, l, b, g, dt
+
+    def step(self, state, u):
+        theta, omega = state[..., 0], state[..., 1]
+        u = torch.clamp(u, -5, 5)  # Torque limit
+
+        omega_dot = (-self.g/self.l * torch.sin(theta)
+                     - self.b/(self.m*self.l**2) * omega
+                     + u.squeeze(-1)/(self.m*self.l**2))
+
+        theta_new = theta + self.dt * omega
+        omega_new = omega + self.dt * omega_dot
+
+        return torch.stack([theta_new, omega_new], dim=-1)
+
+class SwingUpPolicy(nn.Module):
+    def __init__(self, hidden_size=32):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(3, hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size, 1)
+        )
+
+    def forward(self, state):
+        theta, omega = state[..., 0], state[..., 1]
+        x = torch.stack([torch.sin(theta), torch.cos(theta), omega], dim=-1)
+        return self.net(x)
+
+def cost(state, u):
+    theta, omega = state[..., 0], state[..., 1]
+    return (torch.cos(theta) + 1)**2 + 0.1*omega**2 + 0.01*u.squeeze(-1)**2
+
+def train_policy(policy, env, epochs=1000, horizon=200, batch_size=32):
+    optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
+
+    for epoch in range(epochs):
+        # Sample random initial states
+        theta0 = torch.rand(batch_size) * 2 * 3.14159 - 3.14159
+        omega0 = torch.zeros(batch_size)
+        state = torch.stack([theta0, omega0], dim=-1)
+
+        total_cost = 0
+        for t in range(horizon):
+            u = policy(state)
+            total_cost = total_cost + cost(state, u).mean()
+            state = env.step(state, u)
+
+        # Backpropagate through entire trajectory
+        optimizer.zero_grad()
+        total_cost.backward()
+        optimizer.step()
+
+        if epoch % 100 == 0:
+            print(f"Epoch {epoch}, Cost: {total_cost.item():.2f}")
+
+    return policy
+\end{verbatim}
+
+\subsubsection{Results and Analysis}
+
+After training, the policy learns to:
+\begin{enumerate}
+    \item Pump energy into the pendulum by applying torque in the direction of motion
+    \item Slow down as the pendulum approaches upright
+    \item Stabilize at the upright position
+\end{enumerate}
+
+The key advantage of differentiable simulation is that gradients flow through the entire swing-up trajectory, providing a strong learning signal. Compare this to RL, which would receive sparse reward only when near the goal.
+
+\subsection{Example 2: Learning Cost Function Weights from Demonstrations}
+
+\subsubsection{Problem Description}
+
+Given expert demonstrations of a linear system, we learn the quadratic cost function weights that explain the expert's behavior.
+
+\subsubsection{Setup}
+
+Consider the double integrator:
+\begin{equation}
+\mathbf{x}_{k+1} = \begin{bmatrix} 1 & \Delta t \\ 0 & 1 \end{bmatrix} \mathbf{x}_k + \begin{bmatrix} 0 \\ \Delta t \end{bmatrix} u_k
+\end{equation}
+
+The expert uses LQR with true cost weights $Q_{\text{true}} = \text{diag}(1, 0.1)$, $R_{\text{true}} = 0.1$.
+
+\subsubsection{Method}
+
+We parameterize the cost weights and solve for the optimal policy as a function of those weights. The loss is the mismatch between the predicted policy and demonstrated actions.
+
+Using differentiable LQR (via Riccati equation differentiation):
+\begin{equation}
+\mathcal{L}(\mathbf{Q}, R) = \sum_{i} \| \mathbf{K}(\mathbf{Q}, R) \mathbf{x}_i - u_i^{\text{demo}} \|^2
+\end{equation}
+
+\subsubsection{Implementation}
+
+\begin{verbatim}
+import torch
+import numpy as np
+from scipy.linalg import solve_discrete_are
+
+def differentiable_lqr_gain(A, B, Q, R, max_iter=100):
+    """Compute LQR gain K with gradients."""
+    # Iterative Riccati solution for differentiability
+    n = A.shape[0]
+    P = Q.clone()
+
+    for _ in range(max_iter):
+        K = torch.linalg.solve(
+            R + B.T @ P @ B,
+            B.T @ P @ A
+        )
+        P_new = Q + A.T @ P @ A - A.T @ P @ B @ K
+        P = P_new
+
+    return K
+
+def learn_cost_weights(demos_x, demos_u, A, B, lr=0.01, epochs=1000):
+    # Initialize cost weights (learnable)
+    Q_diag = torch.tensor([0.5, 0.5], requires_grad=True)
+    R = torch.tensor([[0.5]], requires_grad=True)
+
+    A_t = torch.tensor(A, dtype=torch.float32)
+    B_t = torch.tensor(B, dtype=torch.float32)
+
+    optimizer = torch.optim.Adam([Q_diag, R], lr=lr)
+
+    for epoch in range(epochs):
+        Q = torch.diag(torch.abs(Q_diag))  # Ensure positive
+        R_pos = torch.abs(R)
+
+        K = differentiable_lqr_gain(A_t, B_t, Q, R_pos)
+
+        # Compute predicted actions
+        u_pred = -K @ demos_x.T
+
+        # Loss: match demonstrations
+        loss = ((u_pred.T - demos_u)**2).mean()
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if epoch % 100 == 0:
+            print(f"Epoch {epoch}, Loss: {loss.item():.6f}")
+            print(f"  Q_diag: {torch.abs(Q_diag).detach().numpy()}")
+            print(f"  R: {torch.abs(R).detach().item():.4f}")
+
+    return torch.abs(Q_diag).detach(), torch.abs(R).detach()
+\end{verbatim}
+
+\subsubsection{Results}
+
+Starting from initial guesses $\mathbf{Q} = \text{diag}(0.5, 0.5)$, $R = 0.5$, the algorithm converges to:
+\begin{itemize}
+    \item Learned $\mathbf{Q} \approx \text{diag}(1.0, 0.1)$
+    \item Learned $R \approx 0.1$
+\end{itemize}
+
+These match the true expert weights. The differentiable LQR solver enables gradient-based recovery of cost function parameters from demonstrations.
+
+\subsection{Example 3: Differentiable MPC for Trajectory Optimization}
+
+\subsubsection{Problem Description}
+
+We use differentiable MPC to learn reference trajectory parameters that minimize tracking error over multiple scenarios.
+
+\subsubsection{Setup}
+
+A vehicle must navigate through a set of waypoints. The reference trajectory is parameterized by waypoint positions. We want to find waypoint positions that minimize the actual tracking cost when using MPC to follow the reference.
+
+\subsubsection{Vehicle Model}
+
+Bicycle model dynamics:
+\begin{align}
+\dot{x} &= v \cos(\psi) \\
+\dot{y} &= v \sin(\psi) \\
+\dot{\psi} &= \frac{v}{L} \tan(\delta) \\
+\dot{v} &= a
+\end{align}
+
+where $(x, y)$ is position, $\psi$ is heading, $v$ is speed, $\delta$ is steering, $a$ is acceleration, and $L$ is wheelbase.
+
+\subsubsection{MPC Formulation}
+
+\begin{equation}
+\begin{aligned}
+\min_{\delta, a} \quad & \sum_{k=0}^{N-1} \| \mathbf{p}_k - \mathbf{p}_k^{\text{ref}}(\theta) \|^2_Q + \| \mathbf{u}_k \|^2_R \\
+\text{s.t.} \quad & \text{dynamics constraints} \\
+& |\delta| \leq \delta_{\max}, \quad |a| \leq a_{\max}
+\end{aligned}
+\end{equation}
+
+where $\theta$ parameterizes the reference trajectory (waypoint positions).
+
+\subsubsection{Optimization}
+
+We optimize waypoint positions $\theta$ to minimize closed-loop cost:
+\begin{equation}
+\min_\theta \sum_{\text{scenarios}} \sum_{t} c(\mathbf{x}_t, \mathbf{u}_t^{\text{MPC}}(\mathbf{x}_t; \theta))
+\end{equation}
+
+This requires differentiating through MPC, which we do via implicit differentiation of the QP.
+
+\subsubsection{Results}
+
+The learned waypoints differ from naive straight-line paths:
+\begin{itemize}
+    \item Waypoints are shifted to account for vehicle dynamics
+    \item Curves are smoothed to reduce control effort
+    \item Speed-dependent paths emerge (faster approach requires earlier turn initiation)
+\end{itemize}
+
+\subsection{Example 4: End-to-End Learning for Robotic Manipulation}
+
+\subsubsection{Problem Description}
+
+Train a vision-based policy to pick up objects using end-to-end learning through a differentiable simulator.
+
+\subsubsection{Architecture}
+
+\begin{equation}
+\text{Image} \xrightarrow{\text{CNN}} \text{Features} \xrightarrow{\text{MLP}} \text{End-effector velocity}
+\end{equation}
+
+\subsubsection{Differentiable Components}
+
+\begin{itemize}
+    \item \textbf{Rendering}: Differentiable renderer produces images from scene state
+    \item \textbf{Dynamics}: Differentiable rigid body simulation with soft contact
+    \item \textbf{Policy}: Standard differentiable neural network
+\end{itemize}
+
+\subsubsection{Loss Function}
+
+\begin{equation}
+\mathcal{L} = \| \mathbf{p}_{\text{object}} - \mathbf{p}_{\text{target}} \|^2 + \lambda_{\text{effort}} \| \mathbf{u} \|^2
+\end{equation}
+
+\subsubsection{Training Procedure}
+
+\begin{enumerate}
+    \item Randomize object positions and orientations
+    \item Render current scene
+    \item Forward pass through policy to get actions
+    \item Simulate dynamics for one step
+    \item Repeat for trajectory length
+    \item Compute loss and backpropagate through entire pipeline
+    \item Update CNN and MLP weights
+\end{enumerate}
+
+\subsubsection{Key Insights}
+
+\begin{itemize}
+    \item Gradients from the final object position propagate through dynamics, through actions, through the policy, through features, all the way to the CNN weights
+    \item The CNN learns to extract task-relevant features (object location, orientation) without explicit supervision
+    \item Training is more sample-efficient than RL because gradients are exact
+\end{itemize}
+
+\subsection{Example 5: Comparing Differentiable vs. Non-Differentiable Optimization}
+
+\subsubsection{Problem Description}
+
+Compare gradient-based optimization (using differentiable simulation) with derivative-free optimization (CMA-ES, random search) for learning a locomotion controller.
+
+\subsubsection{Task}
+
+Train a simulated ant robot to walk forward as fast as possible.
+
+\subsubsection{Methods Compared}
+
+\begin{enumerate}
+    \item \textbf{Differentiable}: Backpropagate through Brax dynamics
+    \item \textbf{CMA-ES}: Evolutionary strategy without gradients
+    \item \textbf{PPO}: Reinforcement learning with estimated gradients
+    \item \textbf{Random Search}: Sample random policies, keep best
+\end{enumerate}
+
+\subsubsection{Results}
+
+After fixed wall-clock time:
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Optimization Methods}
+\label{tab:opt_comparison}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Final Speed} & \textbf{Samples} & \textbf{Time (min)} \\
+\midrule
+Differentiable & 4.2 m/s & 50K & 10 \\
+PPO & 3.8 m/s & 10M & 60 \\
+CMA-ES & 3.5 m/s & 500K & 30 \\
+Random Search & 2.1 m/s & 1M & 20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Analysis}
+
+\begin{itemize}
+    \item Differentiable optimization achieves best performance with fewest samples
+    \item The ~200x sample efficiency over PPO comes from exact vs. estimated gradients
+    \item CMA-ES is competitive but scales poorly with parameter count
+    \item Random search establishes a baseline but cannot find good solutions
+\end{itemize}
+
+\subsubsection{When to Use Each}
+
+\begin{itemize}
+    \item \textbf{Differentiable}: When simulator is differentiable and accurate
+    \item \textbf{PPO/RL}: When training in real world or non-differentiable simulation
+    \item \textbf{CMA-ES}: Low-dimensional parameter spaces, noisy objectives
+    \item \textbf{Random Search}: Quick baseline, parallelizable
+\end{itemize}
+
+\subsection{Example 6: System Identification via Differentiable Simulation}
+
+\subsubsection{Problem Description}
+
+Identify unknown physical parameters (mass, friction, inertia) by matching simulated trajectories to observed data.
+
+\subsubsection{Setup}
+
+We observe a trajectory $\{(\mathbf{x}_t^{\text{obs}}, \mathbf{u}_t)\}_{t=0}^{T}$ from a real system. We want to find simulation parameters $\phi$ such that the simulated trajectory matches:
+
+\begin{equation}
+\min_\phi \sum_t \| \mathbf{x}_t^{\text{sim}}(\phi) - \mathbf{x}_t^{\text{obs}} \|^2
+\end{equation}
+
+\subsubsection{Method}
+
+\begin{enumerate}
+    \item Initialize parameters with rough estimates
+    \item Simulate trajectory with current parameters
+    \item Compute loss (trajectory mismatch)
+    \item Backpropagate through simulation to get $\nabla_\phi \mathcal{L}$
+    \item Update parameters via gradient descent
+\end{enumerate}
+
+\subsubsection{Implementation}
+
+\begin{verbatim}
+def system_identification(observed_traj, observed_actions,
+                          initial_state, env_fn,
+                          initial_params, lr=0.01, epochs=500):
+    """
+    Identify system parameters from observed trajectory.
+
+    Args:
+        observed_traj: [T, state_dim] observed states
+        observed_actions: [T, action_dim] applied actions
+        initial_state: initial state for simulation
+        env_fn: function that creates env given parameters
+        initial_params: dict of initial parameter guesses
+    """
+    # Make parameters learnable
+    params = {k: torch.tensor(v, requires_grad=True)
+              for k, v in initial_params.items()}
+
+    optimizer = torch.optim.Adam(params.values(), lr=lr)
+
+    for epoch in range(epochs):
+        # Create environment with current parameters
+        env = env_fn(**{k: v.item() for k, v in params.items()})
+
+        # Simulate trajectory
+        state = initial_state.clone()
+        sim_traj = [state]
+
+        for t in range(len(observed_actions)):
+            # Differentiable dynamics step
+            state = env.step(state, observed_actions[t])
+            sim_traj.append(state)
+
+        sim_traj = torch.stack(sim_traj)
+
+        # Trajectory matching loss
+        loss = ((sim_traj - observed_traj)**2).mean()
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # Enforce physical constraints (e.g., positive mass)
+        with torch.no_grad():
+            for k, v in params.items():
+                if k in ['mass', 'friction']:
+                    params[k].clamp_(min=0.01)
+
+        if epoch % 50 == 0:
+            print(f"Epoch {epoch}, Loss: {loss.item():.6f}")
+            for k, v in params.items():
+                print(f"  {k}: {v.item():.4f}")
+
+    return {k: v.item() for k, v in params.items()}
+\end{verbatim}
+
+\subsubsection{Results}
+
+For a cart-pole system with unknown mass and friction:
+
+\begin{table}[htbp]
+\centering
+\caption{System Identification Results}
+\label{tab:sysid_results}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Parameter} & \textbf{True Value} & \textbf{Initial Guess} & \textbf{Identified} \\
+\midrule
+Cart mass & 1.0 kg & 0.5 kg & 0.98 kg \\
+Pole mass & 0.1 kg & 0.2 kg & 0.11 kg \\
+Friction & 0.01 & 0.05 & 0.012 \\
+Pole length & 0.5 m & 0.4 m & 0.49 m \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The gradient-based approach converges quickly (< 1 second) with accurate parameter recovery. Compare to black-box optimization which might require thousands of simulations.
+
+\subsection{Example 7: Learning Contact-Rich Manipulation}
+
+\subsubsection{Problem Description}
+
+Learn a policy for in-hand manipulation (rotating an object within the gripper) using differentiable contact simulation.
+
+\subsubsection{Challenges}
+
+\begin{itemize}
+    \item Contacts create discontinuities in dynamics
+    \item Must learn to exploit friction for manipulation
+    \item High-dimensional action space (finger positions)
+\end{itemize}
+
+\subsubsection{Approach}
+
+Use a differentiable contact simulator (e.g., Brax or Nimble) with:
+\begin{itemize}
+    \item Soft contact model for differentiability
+    \item Curriculum learning (start with easy rotations, increase difficulty)
+    \item Action smoothness penalty to avoid chattering
+\end{itemize}
+
+\subsubsection{Policy Architecture}
+
+\begin{equation}
+\pi_\theta(\mathbf{x}) = \mathbf{K}_p (\mathbf{q}_{\text{target}}(\mathbf{x}) - \mathbf{q}) + \mathbf{K}_d (\dot{\mathbf{q}}_{\text{target}} - \dot{\mathbf{q}})
+\end{equation}
+
+where $\mathbf{q}_{\text{target}}(\mathbf{x}) = \text{NN}_\theta(\mathbf{x})$ is a neural network that outputs target finger positions.
+
+This structured policy (NN + PD control) is easier to train than a raw action network.
+
+\subsubsection{Results}
+
+The learned policy:
+\begin{itemize}
+    \item Achieves 90\% success rate on object rotation
+    \item Generalizes to objects with different sizes and shapes
+    \item Transfers to real robot with domain randomization
+\end{itemize}
+
+\subsection{Example 8: Differentiable Rendering for Visual Servoing}
+
+\subsubsection{Problem Description}
+
+Use differentiable rendering to learn a visual servoing policy that moves a camera to achieve a desired view.
+
+\subsubsection{Setup}
+
+\begin{itemize}
+    \item Current image $I_{\text{current}}$ from camera at pose $\mathbf{T}$
+    \item Target image $I_{\text{target}}$ from desired pose $\mathbf{T}^*$
+    \item Goal: Find velocity commands to move from current to target
+\end{itemize}
+
+\subsubsection{Differentiable Pipeline}
+
+\begin{equation}
+\mathbf{T} \xrightarrow{\text{Diff. Render}} I \xrightarrow{\text{Loss}} \| I - I_{\text{target}} \|^2
+\end{equation}
+
+Differentiable rendering (e.g., PyTorch3D, Mitsuba 3) provides $\frac{\partial I}{\partial \mathbf{T}}$.
+
+\subsubsection{Controller}
+
+\begin{equation}
+\mathbf{v} = -K \nabla_{\mathbf{T}} \| I(\mathbf{T}) - I_{\text{target}} \|^2
+\end{equation}
+
+This gradient descent in pose space drives the camera toward the target view.
+
+\subsubsection{Advantages Over Classical Visual Servoing}
+
+\begin{itemize}
+    \item No need to extract and match features
+    \item Works with arbitrary scenes (no markers needed)
+    \item Automatically handles occlusions via differentiable rendering
+\end{itemize}
+
+\subsection{Example 9: Meta-Learning MPC Parameters}
+
+\subsubsection{Problem Description}
+
+Learn MPC parameters that work well across a distribution of tasks, enabling rapid adaptation to new tasks.
+
+\subsubsection{Setup}
+
+\begin{itemize}
+    \item Task distribution: Different goal positions, obstacle configurations
+    \item Shared MPC structure with learnable cost weights
+    \item Goal: Find initial weights that adapt quickly to new tasks
+\end{itemize}
+
+\subsubsection{MAML-Style Meta-Learning}
+
+\begin{equation}
+\theta^* = \arg\min_\theta \sum_{\text{tasks } i} \mathcal{L}_i(\theta - \alpha \nabla \mathcal{L}_i(\theta))
+\end{equation}
+
+This finds $\theta$ such that one gradient step on any task produces good performance.
+
+\subsubsection{Implementation with Differentiable MPC}
+
+\begin{enumerate}
+    \item Sample batch of tasks
+    \item For each task:
+    \begin{enumerate}
+        \item Compute loss with current $\theta$
+        \item Take one gradient step: $\theta' = \theta - \alpha \nabla \mathcal{L}$
+        \item Compute loss with adapted $\theta'$
+    \end{enumerate}
+    \item Backpropagate through inner loop to update $\theta$
+\end{enumerate}
+
+\subsubsection{Results}
+
+\begin{itemize}
+    \item Meta-learned MPC adapts in 5-10 gradient steps vs. 100+ for random initialization
+    \item Generalizes to tasks outside training distribution
+    \item Maintains MPC's constraint satisfaction guarantees
+\end{itemize}
+
+\subsection{Example 10: Gradient-Based Model Predictive Path Integral Control}
+
+\subsubsection{Problem Description}
+
+Combine sampling-based MPC (MPPI) with gradient information from differentiable dynamics.
+
+\subsubsection{MPPI Review}
+
+MPPI samples control sequences, weights them by exponentiated cost, and computes a weighted average:
+\begin{equation}
+\mathbf{U}^* \approx \frac{\sum_i \exp(-\frac{1}{\lambda} S_i) \mathbf{U}_i}{\sum_i \exp(-\frac{1}{\lambda} S_i)}
+\end{equation}
+
+where $S_i$ is the cost of sample $i$.
+
+\subsubsection{Adding Gradient Information}
+
+With differentiable dynamics, we can:
+\begin{enumerate}
+    \item Initialize samples from previous solution
+    \item Compute gradient $\nabla_{\mathbf{U}} J$ via backpropagation
+    \item Bias sampling toward gradient descent direction
+    \item Use MPPI weighting for final solution
+\end{enumerate}
+
+This combines the exploration of sampling with the efficiency of gradients.
+
+\subsubsection{Algorithm}
+
+\begin{algorithm}[H]
+\caption{Gradient-Enhanced MPPI}
+\label{alg:grad_mppi}
+\begin{algorithmic}[1]
+\REQUIRE Current state $\mathbf{x}$, previous solution $\bar{\mathbf{U}}$
+\STATE // Gradient step
+\STATE Compute $\nabla_{\bar{\mathbf{U}}} J$ via differentiable rollout
+\STATE $\bar{\mathbf{U}}_{\text{grad}} \gets \bar{\mathbf{U}} - \alpha \nabla J$
+\STATE // MPPI sampling around gradient-improved mean
+\FOR{$i = 1$ \TO $K$}
+    \STATE $\mathbf{U}_i \gets \bar{\mathbf{U}}_{\text{grad}} + \epsilon_i$, where $\epsilon_i \sim \mathcal{N}(0, \Sigma)$
+    \STATE $S_i \gets \text{RolloutCost}(\mathbf{x}, \mathbf{U}_i)$
+\ENDFOR
+\STATE // Weighted average
+\STATE $\mathbf{U}^* \gets \sum_i w_i \mathbf{U}_i$ where $w_i \propto \exp(-S_i / \lambda)$
+\RETURN $\mathbf{U}^*$
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Results}
+
+\begin{itemize}
+    \item 3-5x fewer samples needed compared to standard MPPI
+    \item Better local optima due to gradient guidance
+    \item Maintains robustness of sampling methods
+\end{itemize}
+
+%==============================================================================
+\section{Algorithm Implementations}
+\label{sec:algorithms}
+%==============================================================================
+
+This section provides complete, production-ready algorithm implementations for the key techniques in differentiable control.
+
+\subsection{Algorithm: Automatic Differentiation Building Blocks}
+
+\begin{algorithm}[H]
+\caption{Forward Mode AD for Control Sensitivity}
+\label{alg:forward_ad}
+\begin{algorithmic}[1]
+\REQUIRE Dynamics $f(\mathbf{x}, \mathbf{u}; \theta)$, trajectory $\{\mathbf{x}_t, \mathbf{u}_t\}_{t=0}^{T}$, parameter $\theta$
+\ENSURE Sensitivity $\frac{\partial \mathbf{x}_T}{\partial \theta}$
+\STATE Initialize $\dot{\mathbf{x}}_0 \gets \mathbf{0}$ \COMMENT{Initial state independent of $\theta$}
+\FOR{$t = 0$ \TO $T-1$}
+    \STATE Compute Jacobians: $\mathbf{A}_t = \frac{\partial f}{\partial \mathbf{x}}$, $\mathbf{B}_t = \frac{\partial f}{\partial \theta}$
+    \STATE Propagate tangent: $\dot{\mathbf{x}}_{t+1} = \mathbf{A}_t \dot{\mathbf{x}}_t + \mathbf{B}_t$
+\ENDFOR
+\RETURN $\dot{\mathbf{x}}_T$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Reverse Mode AD for Policy Gradient}
+\label{alg:reverse_ad}
+\begin{algorithmic}[1]
+\REQUIRE Dynamics $f$, policy $\pi_\theta$, cost $c$, trajectory $\{\mathbf{x}_t\}_{t=0}^{T}$
+\ENSURE Gradient $\nabla_\theta J$
+\STATE // Forward pass: compute and store trajectory
+\FOR{$t = 0$ \TO $T-1$}
+    \STATE $\mathbf{u}_t = \pi_\theta(\mathbf{x}_t)$
+    \STATE $\mathbf{x}_{t+1} = f(\mathbf{x}_t, \mathbf{u}_t)$
+    \STATE Store $(\mathbf{x}_t, \mathbf{u}_t)$
+\ENDFOR
+\STATE // Backward pass: propagate adjoints
+\STATE Initialize $\bar{\mathbf{x}}_T \gets \nabla_{\mathbf{x}} c_f(\mathbf{x}_T)$
+\STATE Initialize $\nabla_\theta J \gets \mathbf{0}$
+\FOR{$t = T-1$ \textbf{downto} $0$}
+    \STATE $\bar{\mathbf{u}}_t \gets \bar{\mathbf{x}}_{t+1}^T \frac{\partial f}{\partial \mathbf{u}} + \frac{\partial c_t}{\partial \mathbf{u}}$
+    \STATE $\bar{\mathbf{x}}_t \gets \bar{\mathbf{x}}_{t+1}^T \frac{\partial f}{\partial \mathbf{x}} + \frac{\partial c_t}{\partial \mathbf{x}}$
+    \STATE $\nabla_\theta J \gets \nabla_\theta J + \bar{\mathbf{u}}_t^T \frac{\partial \pi_\theta}{\partial \theta}$
+\ENDFOR
+\RETURN $\nabla_\theta J$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Algorithm: Differentiable Dynamics Rollout}
+
+\begin{algorithm}[H]
+\caption{Differentiable Trajectory Rollout}
+\label{alg:diff_rollout}
+\begin{algorithmic}[1]
+\REQUIRE Initial state $\mathbf{x}_0$, policy $\pi_\theta$, dynamics $f$, horizon $T$
+\ENSURE Total cost $J$, with gradients tracked
+\STATE $J \gets 0$
+\STATE $\mathbf{x} \gets \mathbf{x}_0$
+\FOR{$t = 0$ \TO $T-1$}
+    \STATE $\mathbf{u} \gets \pi_\theta(\mathbf{x})$ \COMMENT{Differentiable policy}
+    \STATE $J \gets J + c(\mathbf{x}, \mathbf{u})$ \COMMENT{Accumulate cost}
+    \STATE $\mathbf{x} \gets f(\mathbf{x}, \mathbf{u})$ \COMMENT{Differentiable dynamics}
+\ENDFOR
+\STATE $J \gets J + c_f(\mathbf{x})$ \COMMENT{Terminal cost}
+\RETURN $J$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Algorithm: Differentiable MPC via Implicit Differentiation}
+
+\begin{algorithm}[H]
+\caption{Differentiable MPC Layer}
+\label{alg:diff_mpc}
+\begin{algorithmic}[1]
+\REQUIRE State $\mathbf{x}$, cost parameters $\theta = (\mathbf{Q}, \mathbf{R}, \mathbf{x}_{\text{ref}})$, dynamics $(\mathbf{A}, \mathbf{B})$
+\ENSURE Optimal action $\mathbf{u}^*$ with gradients w.r.t. $\theta$
+\STATE // Forward pass: Solve MPC QP
+\STATE Formulate QP: $\min_{\mathbf{U}} \mathbf{U}^T \mathbf{H} \mathbf{U} + \mathbf{f}^T \mathbf{U}$ s.t. constraints
+\STATE Solve QP to get $(\mathbf{U}^*, \boldsymbol{\lambda}^*, \boldsymbol{\mu}^*)$
+\STATE $\mathbf{u}^* \gets \mathbf{U}^*[0:m]$ \COMMENT{First action}
+\STATE // Backward pass: Implicit differentiation
+\STATE Identify active constraints $\mathcal{A}$
+\STATE Form KKT matrix $\mathbf{M}$ (already factored from QP solve)
+\STATE Given upstream gradient $\bar{\mathbf{u}}^*$:
+\STATE Solve: $\mathbf{M}^T \mathbf{d} = [\bar{\mathbf{u}}^*, \mathbf{0}, \mathbf{0}]^T$
+\STATE Extract: $\bar{\theta} = -\mathbf{d}^T \frac{\partial \text{KKT}}{\partial \theta}$
+\RETURN $\mathbf{u}^*$, $\bar{\theta}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Algorithm: Learning Cost Function from Demonstrations}
+
+\begin{algorithm}[H]
+\caption{Inverse Optimal Control via Differentiable MPC}
+\label{alg:inverse_oc}
+\begin{algorithmic}[1]
+\REQUIRE Demonstrations $\mathcal{D} = \{(\mathbf{x}_i, \mathbf{u}_i^{\text{demo}})\}$, MPC structure
+\ENSURE Learned cost parameters $\theta^*$
+\STATE Initialize $\theta$ (e.g., identity $\mathbf{Q}$, $\mathbf{R}$)
+\REPEAT
+    \STATE $\mathcal{L} \gets 0$
+    \STATE $\nabla \mathcal{L} \gets \mathbf{0}$
+    \FOR{each $(\mathbf{x}_i, \mathbf{u}_i^{\text{demo}}) \in \mathcal{D}$}
+        \STATE $\mathbf{u}_i^* \gets \text{MPC}(\mathbf{x}_i; \theta)$ \COMMENT{Forward pass}
+        \STATE $\mathcal{L} \gets \mathcal{L} + \| \mathbf{u}_i^* - \mathbf{u}_i^{\text{demo}} \|^2$
+        \STATE $\nabla \mathcal{L} \gets \nabla \mathcal{L} + 2(\mathbf{u}_i^* - \mathbf{u}_i^{\text{demo}})^T \frac{\partial \mathbf{u}^*}{\partial \theta}$ \COMMENT{Backward pass}
+    \ENDFOR
+    \STATE $\theta \gets \theta - \alpha \nabla \mathcal{L}$
+    \STATE Project $\theta$ to valid range (e.g., positive definite $\mathbf{Q}$)
+\UNTIL{$\mathcal{L}$ converges}
+\RETURN $\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Algorithm: Short-Horizon Actor-Critic with Differentiable Dynamics}
+
+\begin{algorithm}[H]
+\caption{SHAC: Short-Horizon Actor-Critic}
+\label{alg:shac}
+\begin{algorithmic}[1]
+\REQUIRE Policy $\pi_\theta$, value function $V_\phi$, differentiable dynamics $f$
+\REQUIRE Short horizon $H$, discount $\gamma$, learning rates $\alpha_\pi$, $\alpha_V$
+\STATE Initialize $\theta$, $\phi$ randomly
+\REPEAT
+    \STATE Sample initial states $\{\mathbf{x}_0^{(i)}\}_{i=1}^{B}$
+    \STATE // Policy update via short differentiable rollouts
+    \FOR{each $\mathbf{x}_0^{(i)}$}
+        \STATE $\mathbf{x} \gets \mathbf{x}_0^{(i)}$
+        \STATE $J_i \gets 0$
+        \FOR{$t = 0$ \TO $H-1$}
+            \STATE $\mathbf{u} \gets \pi_\theta(\mathbf{x})$
+            \STATE $J_i \gets J_i + \gamma^t c(\mathbf{x}, \mathbf{u})$
+            \STATE $\mathbf{x} \gets f(\mathbf{x}, \mathbf{u})$
+        \ENDFOR
+        \STATE $J_i \gets J_i + \gamma^H V_\phi(\mathbf{x})$ \COMMENT{Bootstrap from value}
+    \ENDFOR
+    \STATE $\nabla_\theta J \gets \frac{1}{B} \sum_i \nabla_\theta J_i$ \COMMENT{via backprop}
+    \STATE $\theta \gets \theta - \alpha_\pi \nabla_\theta J$
+    \STATE // Value function update
+    \STATE Collect longer rollouts with current policy
+    \STATE Compute returns $G_t$ from rollouts
+    \STATE $\mathcal{L}_V \gets \mathbb{E}[(V_\phi(\mathbf{x}_t) - G_t)^2]$
+    \STATE $\phi \gets \phi - \alpha_V \nabla_\phi \mathcal{L}_V$
+\UNTIL{convergence}
+\RETURN $\pi_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+%==============================================================================
+\section{Chapter Summary}
+\label{sec:summary}
+%==============================================================================
+
+This chapter has introduced differentiable predictive control, a paradigm that unifies classical control with modern machine learning through automatic differentiation. We have covered the foundations, key techniques, and practical applications.
+
+\subsection{Key Concepts}
+
+\begin{enumerate}
+    \item \textbf{Automatic Differentiation}: Forward mode propagates tangents forward (efficient for few inputs); reverse mode propagates adjoints backward (efficient for few outputs, i.e., scalar losses). This is the computational foundation enabling gradient-based learning.
+
+    \item \textbf{Differentiable Simulation}: Physics simulators can be made differentiable, enabling backpropagation through dynamics. Challenges include contact discontinuities, which can be handled via soft contact, randomized smoothing, or time-of-impact differentiation.
+
+    \item \textbf{Differentiable MPC}: MPC can be made differentiable via unrolling (simple but memory-intensive) or implicit differentiation (efficient by differentiating KKT conditions). This enables learning cost functions from demonstrations and end-to-end controller tuning.
+
+    \item \textbf{Implicit Differentiation}: The implicit function theorem allows differentiating through optimization layers without unrolling, by solving linear systems involving the KKT matrix. This is the key to efficient differentiable optimization.
+
+    \item \textbf{End-to-End Learning}: Joint training of perception and control optimizes task performance directly, but requires attention to sample efficiency, credit assignment, and safety. Hybrid architectures combining learning with structured control often work best.
+
+    \item \textbf{Policy Optimization}: With differentiable dynamics, policy gradients can be computed exactly via backpropagation, offering dramatic sample efficiency improvements over RL methods that estimate gradients.
+\end{enumerate}
+
+\subsection{Practical Guidelines}
+
+\begin{enumerate}
+    \item \textbf{When to use differentiable control}:
+    \begin{itemize}
+        \item You have access to a differentiable simulator
+        \item Sample efficiency is important
+        \item You need to learn from demonstrations
+        \item You want to tune controller parameters end-to-end
+    \end{itemize}
+
+    \item \textbf{When differentiable control may not be best}:
+    \begin{itemize}
+        \item Training on real hardware (gradients not available)
+        \item Highly discontinuous dynamics that resist smoothing
+        \item Very long horizons where gradients explode/vanish
+        \item When RL infrastructure already exists and works well
+    \end{itemize}
+
+    \item \textbf{Implementation tips}:
+    \begin{itemize}
+        \item Start with short rollout horizons and extend
+        \item Use gradient clipping to prevent explosions
+        \item Validate gradients with finite differences on small problems
+        \item Leverage existing libraries (JAX, PyTorch, Brax, DiffMPC)
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Connections to Other Chapters}
+
+\begin{itemize}
+    \item \textbf{Chapter 14 (Optimal and Predictive Control)}: Differentiable MPC builds directly on MPC theory, adding learning capabilities
+
+    \item \textbf{Chapter 16 (World Models)}: Learned dynamics models can be made differentiable, enabling gradient-based planning
+
+    \item \textbf{Chapter 17 (Hybrid Control)}: Differentiable components can be combined with classical controllers in hybrid architectures
+
+    \item \textbf{Chapter 19 (Diffusion Policies)}: Diffusion models provide an alternative learned policy representation with different differentiability properties
+
+    \item \textbf{Chapter 20 (Sim-to-Real)}: Differentiable simulation enables domain randomization and system identification for sim-to-real transfer
+\end{itemize}
+
+\subsection{Future Directions}
+
+Differentiable control is an active research area with several exciting directions:
+
+\begin{itemize}
+    \item \textbf{Differentiable everything}: Extending differentiability to more complex phenomena (soft bodies, fluids, deformable objects)
+
+    \item \textbf{Scaling}: Handling larger state/action spaces and longer horizons
+
+    \item \textbf{Safety and verification}: Providing guarantees for learned differentiable controllers
+
+    \item \textbf{Real-world deployment}: Bridging the gap between differentiable simulation and physical systems
+
+    \item \textbf{Integration with foundation models}: Combining differentiable control with large pretrained models
+\end{itemize}
+
+\subsection{Summary of Algorithms}
+
+\begin{table}[htbp]
+\centering
+\caption{Summary of Algorithms in This Chapter}
+\label{tab:algorithm_summary}
+\begin{tabular}{lll}
+\toprule
+\textbf{Algorithm} & \textbf{Purpose} & \textbf{Key Idea} \\
+\midrule
+Forward Mode AD & Sensitivity analysis & Propagate tangents forward \\
+Reverse Mode AD & Policy gradients & Propagate adjoints backward \\
+Diff. Rollout & Trajectory optimization & Backprop through dynamics \\
+Implicit Diff. & Efficient optimization layers & Differentiate KKT conditions \\
+Inverse OC & Learn costs from demos & Gradient descent on MPC params \\
+SHAC & Policy optimization & Short horizons + value bootstrap \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\keypoint{Differentiable predictive control enables gradient-based learning of controllers, cost functions, and system parameters. By making all components differentiable---from simulation to optimization---we can train end-to-end systems that optimize task performance directly. This paradigm bridges classical control theory with modern machine learning, opening new possibilities for learning-based autonomous systems.}
