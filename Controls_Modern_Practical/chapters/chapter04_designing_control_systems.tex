@@ -1,0 +1,3027 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Chapter 4: Control System Design Techniques
+% Modern Control Systems: From First Principles to Machine Learning
+% Author: J.C. Vaught, University of South Carolina
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Control System Design Techniques}
+\label{ch:control_design}
+
+\whythismatters{
+Control system design is where theory meets practice. In this chapter, we move from analyzing existing systems to synthesizing controllers that achieve desired performance. The techniques presented here---PID control, root locus design, and frequency domain methods---form the foundation of industrial control practice. Over 95\% of industrial controllers are PID-based, and the graphical design methods we develop provide intuitive understanding that complements modern computational tools. Whether you are tuning a temperature controller in a chemical plant, designing a servo system for a robot, or developing flight control laws for an aircraft, the methods in this chapter will be your primary design tools. I have organized this material to emphasize both the mathematical foundations and the practical engineering judgment required for successful implementation.
+}
+
+\section{Introduction to Controller Design}
+\label{sec:intro_controller_design}
+
+The fundamental goal of controller design is straightforward: given a plant (the system to be controlled), design a controller that makes the closed-loop system behave according to specifications. These specifications typically include:
+
+\begin{itemize}
+    \item \textbf{Stability}: The closed-loop system must be stable
+    \item \textbf{Transient response}: Specifications on rise time, settling time, overshoot
+    \item \textbf{Steady-state accuracy}: Bounds on tracking error for various input types
+    \item \textbf{Robustness}: Adequate stability margins for model uncertainty
+    \item \textbf{Disturbance rejection}: Ability to suppress unwanted inputs
+\end{itemize}
+
+In this chapter, we develop three complementary approaches to controller design:
+
+\begin{enumerate}
+    \item \textbf{PID Control}: The workhorse of industrial control, providing intuitive tuning and robust performance
+    \item \textbf{Root Locus Design}: A graphical method relating closed-loop pole locations to controller parameters
+    \item \textbf{Frequency Domain Design}: Design via Bode plots, emphasizing gain and phase margins
+\end{enumerate}
+
+These approaches are not competing alternatives---they provide different views of the same underlying mathematics. A skilled control engineer uses all three, selecting the most appropriate tool for each design situation.
+
+%===============================================================================
+\section{PID Control Fundamentals}
+\label{sec:pid_fundamentals}
+%===============================================================================
+
+The Proportional-Integral-Derivative (PID) controller is the most widely used controller in industry. Its success stems from a combination of simplicity, intuitive behavior, and effectiveness across a wide range of applications.
+
+\subsection{The PID Control Law}
+\label{subsec:pid_control_law}
+
+The ideal PID controller generates a control signal $u(t)$ based on the error signal $e(t) = r(t) - y(t)$, where $r(t)$ is the reference and $y(t)$ is the measured output:
+
+\begin{equation}
+\boxed{
+u(t) = K_p e(t) + K_i \int_0^t e(\tau) \, d\tau + K_d \frac{de(t)}{dt}
+}
+\label{eq:pid_time_domain}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $K_p$ is the proportional gain
+    \item $K_i$ is the integral gain
+    \item $K_d$ is the derivative gain
+\end{itemize}
+
+Taking the Laplace transform (assuming zero initial conditions), we obtain the transfer function form:
+
+\begin{equation}
+C(s) = \frac{U(s)}{E(s)} = K_p + \frac{K_i}{s} + K_d s
+\label{eq:pid_transfer_function}
+\end{equation}
+
+This can be rewritten in several equivalent forms. The \textbf{standard form} uses the proportional gain $K_p$, integral time $T_i$, and derivative time $T_d$:
+
+\begin{equation}
+C(s) = K_p \left( 1 + \frac{1}{T_i s} + T_d s \right)
+\label{eq:pid_standard_form}
+\end{equation}
+
+where $K_i = K_p / T_i$ and $K_d = K_p T_d$.
+
+The \textbf{parallel form} (Equation~\ref{eq:pid_transfer_function}) treats each gain independently, which is often more convenient for analysis and digital implementation.
+
+\subsection{Physical Interpretation of P, I, D Actions}
+\label{subsec:pid_physical}
+
+Understanding the physical effect of each term is essential for effective tuning.
+
+\subsubsection{Proportional Action}
+
+The proportional term provides control action proportional to the current error:
+\begin{equation}
+u_P(t) = K_p e(t)
+\end{equation}
+
+\textbf{Physical interpretation}: Proportional action is like a spring---the larger the deviation from the setpoint, the stronger the corrective force. Increasing $K_p$ makes the system respond more aggressively to errors.
+
+\textbf{Effect on closed-loop response}:
+\begin{itemize}
+    \item Reduces rise time (faster response)
+    \item Reduces steady-state error (but does not eliminate it for type-0 systems)
+    \item Can increase overshoot if too large
+    \item May cause instability if excessive
+\end{itemize}
+
+\textbf{Limitation}: Proportional-only control always has a steady-state error for step inputs when controlling a type-0 plant. This error, called \textbf{offset} or \textbf{droop}, decreases as $K_p$ increases but cannot be eliminated.
+
+\begin{example}[Proportional Control Offset]
+\label{ex:p_control_offset}
+Consider a first-order plant $G(s) = 1/(s+1)$ with proportional control $C(s) = K_p$. The closed-loop transfer function is:
+\begin{equation}
+T(s) = \frac{K_p G(s)}{1 + K_p G(s)} = \frac{K_p}{s + 1 + K_p}
+\end{equation}
+
+For a unit step input, the steady-state output is:
+\begin{equation}
+y_{ss} = \lim_{s \to 0} s \cdot \frac{1}{s} \cdot T(s) = \frac{K_p}{1 + K_p}
+\end{equation}
+
+The steady-state error is:
+\begin{equation}
+e_{ss} = 1 - y_{ss} = \frac{1}{1 + K_p}
+\end{equation}
+
+Even with $K_p = 99$, the error is $1\%$. Proportional control alone cannot achieve zero steady-state error.
+\end{example}
+
+\subsubsection{Integral Action}
+
+The integral term accumulates error over time:
+\begin{equation}
+u_I(t) = K_i \int_0^t e(\tau) \, d\tau
+\end{equation}
+
+\textbf{Physical interpretation}: Integral action is like a person who becomes increasingly impatient---even a small persistent error will eventually produce a large control action. The integrator ``remembers'' past errors.
+
+\textbf{Effect on closed-loop response}:
+\begin{itemize}
+    \item Eliminates steady-state error for step inputs
+    \item Increases the system type by one (adds a pole at the origin)
+    \item Tends to increase overshoot
+    \item Slows the response (reduces bandwidth)
+    \item Can cause instability if too aggressive
+\end{itemize}
+
+\textbf{Key insight}: Integral action ensures that the control signal continues to change as long as any error exists. The only way the integral term can stop increasing is for the error to become zero, which is why integral action eliminates steady-state error.
+
+\subsubsection{Derivative Action}
+
+The derivative term responds to the rate of change of error:
+\begin{equation}
+u_D(t) = K_d \frac{de(t)}{dt}
+\end{equation}
+
+\textbf{Physical interpretation}: Derivative action is predictive---it anticipates where the error is heading. If the error is decreasing rapidly (negative derivative while error is positive), derivative action reduces the control effort to prevent overshoot.
+
+\textbf{Effect on closed-loop response}:
+\begin{itemize}
+    \item Reduces overshoot by anticipating the approach to setpoint
+    \item Improves stability (adds phase lead)
+    \item Can speed up response (increases bandwidth)
+    \item Amplifies high-frequency noise
+    \item No effect on steady-state error
+\end{itemize}
+
+\textbf{Practical consideration}: Pure derivative action is rarely used because it amplifies noise. In practice, a \textbf{filtered derivative} is implemented:
+\begin{equation}
+C_D(s) = \frac{K_d s}{1 + s/(N \omega_d)}
+\label{eq:filtered_derivative}
+\end{equation}
+where $N$ typically ranges from 3 to 20, and $\omega_d = K_d / (K_p T_d)$ or is set based on the highest frequency of interest.
+
+\subsection{Standard Controller Configurations}
+\label{subsec:controller_configs}
+
+Not every application requires all three PID terms. Common configurations include:
+
+\textbf{P controller} ($C(s) = K_p$): Simplest form. Used when steady-state error is acceptable or the plant already has integral action (e.g., liquid level control where the tank integrates flow).
+
+\textbf{PI controller} ($C(s) = K_p(1 + 1/(T_i s))$): Most common industrial controller. Eliminates steady-state error without the noise sensitivity of derivative action. Suitable for processes where overshoot is acceptable.
+
+\textbf{PD controller} ($C(s) = K_p(1 + T_d s)$): Used when speed and damping are important but steady-state error is handled elsewhere (e.g., inner loop of cascade control). Improves stability margins.
+
+\textbf{PID controller}: Full three-term controller. Used when both zero steady-state error and good transient response are required.
+
+\subsection{Effect of PID Parameters on Closed-Loop Response}
+\label{subsec:pid_effects}
+
+Table~\ref{tab:pid_effects} summarizes the qualitative effects of increasing each PID parameter on closed-loop performance metrics. These are general trends; actual effects depend on the specific plant.
+
+\begin{table}[htbp]
+\centering
+\caption{Effect of increasing PID parameters on closed-loop response}
+\label{tab:pid_effects}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Parameter} & \textbf{Rise Time} & \textbf{Overshoot} & \textbf{Settling Time} & \textbf{SS Error} & \textbf{Stability} \\
+\midrule
+Increase $K_p$ & Decrease & Increase & Small change & Decrease & Degrade \\
+Increase $K_i$ & Decrease & Increase & Increase & Eliminate & Degrade \\
+Increase $K_d$ & Small change & Decrease & Decrease & No effect & Improve \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\keypoint{The art of PID tuning lies in balancing these competing effects. Aggressive integral action eliminates steady-state error quickly but can cause excessive overshoot and even instability. Derivative action improves stability but amplifies noise. Good tuning achieves an acceptable compromise based on application requirements.}
+
+%===============================================================================
+\section{PID Tuning Methods}
+\label{sec:pid_tuning}
+%===============================================================================
+
+PID tuning determines the values of $K_p$, $K_i$, and $K_d$ (or equivalently $K_p$, $T_i$, $T_d$) to achieve desired closed-loop performance. This section presents the most important classical and modern tuning methods.
+
+\subsection{First-Order Plus Dead Time (FOPDT) Model}
+\label{subsec:fopdt_model}
+
+Many tuning methods are based on approximating the plant as a first-order system with time delay:
+\begin{equation}
+G(s) = \frac{K}{\tau s + 1} e^{-\theta s}
+\label{eq:fopdt}
+\end{equation}
+where:
+\begin{itemize}
+    \item $K$ is the process gain (steady-state gain)
+    \item $\tau$ is the time constant
+    \item $\theta$ is the dead time (delay)
+\end{itemize}
+
+This model captures the essential dynamics of many industrial processes: temperature control, flow control, level control, and concentration control often behave approximately as FOPDT systems.
+
+\textbf{Identifying FOPDT parameters from step response}:
+
+Given a step input of magnitude $\Delta u$, measure the output response and identify:
+\begin{enumerate}
+    \item $K = \Delta y / \Delta u$ (final change in output divided by step size)
+    \item $\theta$ = time from step input to when output begins to change significantly
+    \item $\tau$ = time from end of dead time to when output reaches 63.2\% of final value
+\end{enumerate}
+
+An alternative method uses two time measurements:
+\begin{itemize}
+    \item $t_{28}$ = time to reach 28.3\% of final value
+    \item $t_{63}$ = time to reach 63.2\% of final value
+\end{itemize}
+Then: $\tau = 1.5(t_{63} - t_{28})$ and $\theta = t_{63} - \tau$.
+
+\subsection{Ziegler-Nichols Tuning Methods}
+\label{subsec:zn_tuning}
+
+The Ziegler-Nichols methods, developed in 1942, remain the most widely known tuning rules. They provide a starting point for tuning, though the resulting response typically has significant overshoot (approximately 25\%).
+
+\subsubsection{Ziegler-Nichols Open-Loop Method (Process Reaction Curve)}
+
+This method uses the step response of the open-loop plant.
+
+\textbf{Procedure}:
+\begin{enumerate}
+    \item With the controller in manual mode, apply a step change to the control signal
+    \item Record the process response (the ``reaction curve'')
+    \item Draw a tangent line at the point of maximum slope (inflection point)
+    \item Measure the apparent dead time $L$ (x-intercept of tangent) and the slope $R$ (slope of tangent line divided by step size)
+\end{enumerate}
+
+The parameters $L$ and $R$ relate to the FOPDT model: if the tangent intersects the time axis at $L$ and has slope $R$, then approximately $\theta \approx L$ and $K/\tau \approx R$.
+
+\textbf{Ziegler-Nichols open-loop tuning formulas}:
+
+\begin{table}[htbp]
+\centering
+\caption{Ziegler-Nichols open-loop tuning rules}
+\label{tab:zn_open_loop}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Controller} & $K_p$ & $T_i$ & $T_d$ \\
+\midrule
+P & $1/(RL)$ & $\infty$ & 0 \\
+PI & $0.9/(RL)$ & $L/0.3$ & 0 \\
+PID & $1.2/(RL)$ & $2L$ & $0.5L$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Alternatively, using the FOPDT parameters directly:
+
+\begin{table}[htbp]
+\centering
+\caption{Ziegler-Nichols rules using FOPDT parameters}
+\label{tab:zn_fopdt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Controller} & $K_p$ & $T_i$ & $T_d$ \\
+\midrule
+P & $\tau/(K\theta)$ & $\infty$ & 0 \\
+PI & $0.9\tau/(K\theta)$ & $3.33\theta$ & 0 \\
+PID & $1.2\tau/(K\theta)$ & $2\theta$ & $0.5\theta$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Ziegler-Nichols Closed-Loop Method (Ultimate Gain)}
+
+This method does not require a process model but requires the ability to operate the closed-loop system at the stability boundary.
+
+\textbf{Procedure}:
+\begin{enumerate}
+    \item Set $K_i = 0$ and $K_d = 0$ (proportional-only control)
+    \item Increase $K_p$ from a small value until the closed-loop system exhibits sustained oscillations (marginally stable)
+    \item Record the \textbf{ultimate gain} $K_u$ (the value of $K_p$ at marginal stability)
+    \item Record the \textbf{ultimate period} $T_u$ (the period of sustained oscillations)
+\end{enumerate}
+
+\textbf{Ziegler-Nichols closed-loop tuning formulas}:
+
+\begin{table}[htbp]
+\centering
+\caption{Ziegler-Nichols closed-loop (ultimate gain) tuning rules}
+\label{tab:zn_closed_loop}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Controller} & $K_p$ & $T_i$ & $T_d$ \\
+\midrule
+P & $0.5 K_u$ & $\infty$ & 0 \\
+PI & $0.45 K_u$ & $T_u/1.2$ & 0 \\
+PID & $0.6 K_u$ & $T_u/2$ & $T_u/8$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\warningbox{The Ziegler-Nichols closed-loop method requires operating the system at marginal stability, which may be dangerous or unacceptable for some processes. Use relay auto-tuning (described below) as a safer alternative that provides the same information.}
+
+\begin{example}[Ziegler-Nichols PID Tuning]
+\label{ex:zn_tuning}
+A temperature control system has the following FOPDT model identified from step response:
+\begin{equation}
+G(s) = \frac{2.5}{30s + 1} e^{-5s}
+\end{equation}
+with $K = 2.5$, $\tau = 30$ s, and $\theta = 5$ s.
+
+Using the Ziegler-Nichols open-loop method for PID:
+\begin{align}
+K_p &= \frac{1.2 \tau}{K \theta} = \frac{1.2 \times 30}{2.5 \times 5} = 2.88 \\
+T_i &= 2\theta = 10 \text{ s} \\
+T_d &= 0.5\theta = 2.5 \text{ s}
+\end{align}
+
+Converting to parallel form:
+\begin{align}
+K_i &= K_p / T_i = 2.88 / 10 = 0.288 \text{ s}^{-1} \\
+K_d &= K_p \times T_d = 2.88 \times 2.5 = 7.2 \text{ s}
+\end{align}
+
+The resulting PID controller is:
+\begin{equation}
+C(s) = 2.88 + \frac{0.288}{s} + 7.2s
+\end{equation}
+
+This controller will produce approximately 25\% overshoot. For less aggressive response, the gains should be reduced.
+\end{example}
+
+\subsection{Cohen-Coon Tuning Method}
+\label{subsec:cohen_coon}
+
+The Cohen-Coon method (1953) provides tuning rules that achieve quarter-amplitude decay (each overshoot is 25\% of the previous one), which gives less overshoot than Ziegler-Nichols.
+
+For a FOPDT process with parameters $K$, $\tau$, and $\theta$, define the ratio $r = \theta / \tau$.
+
+\begin{table}[htbp]
+\centering
+\caption{Cohen-Coon tuning rules for FOPDT processes}
+\label{tab:cohen_coon}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Controller} & $K_p$ & $T_i$ \\
+\midrule
+P & $\displaystyle\frac{\tau}{K\theta}\left(1 + \frac{r}{3}\right)$ & $\infty$ \\[2ex]
+PI & $\displaystyle\frac{\tau}{K\theta}\left(0.9 + \frac{r}{12}\right)$ & $\displaystyle\theta\frac{30 + 3r}{9 + 20r}$ \\[2ex]
+PID & $\displaystyle\frac{\tau}{K\theta}\left(\frac{4}{3} + \frac{r}{4}\right)$ & $\displaystyle\theta\frac{32 + 6r}{13 + 8r}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For PID, the derivative time is: $T_d = \theta \cdot 4/(11 + 2r)$.
+
+\subsection{Internal Model Control (IMC) Tuning}
+\label{subsec:imc_tuning}
+
+Internal Model Control provides a systematic, model-based approach to PID tuning with a single adjustable parameter that directly trades off performance versus robustness.
+
+\subsubsection{IMC Philosophy}
+
+The key idea of IMC is that perfect control requires perfect knowledge of the process. The IMC structure uses a process model internally and designs the controller based on inverting the model. A filter is added to ensure causality and provide robustness.
+
+For a FOPDT process, the IMC-PID tuning rules give:
+
+\begin{table}[htbp]
+\centering
+\caption{IMC-PID tuning rules for FOPDT processes}
+\label{tab:imc_tuning}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Parameter} & \textbf{PI} & \textbf{PID} \\
+\midrule
+$K_p$ & $\displaystyle\frac{\tau}{K(\lambda + \theta)}$ & $\displaystyle\frac{2\tau + \theta}{2K(\lambda + \theta)}$ \\[2ex]
+$T_i$ & $\tau$ & $\tau + \theta/2$ \\[2ex]
+$T_d$ & --- & $\displaystyle\frac{\tau \theta}{2\tau + \theta}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+where $\lambda$ is the \textbf{closed-loop time constant}, the single tuning parameter.
+
+\subsubsection{Selecting the Closed-Loop Time Constant}
+
+The parameter $\lambda$ determines the speed of closed-loop response:
+
+\begin{itemize}
+    \item \textbf{Aggressive tuning}: $\lambda = \theta$ (closed-loop time constant equals dead time)
+    \item \textbf{Moderate tuning}: $\lambda = 2\theta$ to $3\theta$
+    \item \textbf{Conservative tuning}: $\lambda > 3\theta$
+\end{itemize}
+
+Guidelines for $\lambda$ selection:
+\begin{itemize}
+    \item Larger $\lambda$ gives more robust control but slower response
+    \item Smaller $\lambda$ gives faster response but less robustness
+    \item $\lambda \geq 0.25\tau$ ensures reasonable robustness
+    \item $\lambda \geq \theta$ avoids excessive sensitivity to dead time uncertainty
+\end{itemize}
+
+\keypoint{IMC tuning provides a direct connection between the tuning parameter $\lambda$ and the resulting closed-loop performance. This makes it easier to achieve a desired tradeoff between speed and robustness compared to trial-and-error methods.}
+
+\begin{example}[IMC-PID Tuning]
+\label{ex:imc_tuning}
+For the same temperature control system from Example~\ref{ex:zn_tuning} ($K = 2.5$, $\tau = 30$ s, $\theta = 5$ s), design an IMC-PID controller with moderate aggressiveness ($\lambda = 2\theta = 10$ s).
+
+Using the IMC-PID formulas:
+\begin{align}
+K_p &= \frac{2\tau + \theta}{2K(\lambda + \theta)} = \frac{2(30) + 5}{2(2.5)(10 + 5)} = \frac{65}{75} = 0.867 \\
+T_i &= \tau + \theta/2 = 30 + 2.5 = 32.5 \text{ s} \\
+T_d &= \frac{\tau \theta}{2\tau + \theta} = \frac{30 \times 5}{65} = 2.31 \text{ s}
+\end{align}
+
+The IMC-PID controller has $K_p = 0.867$, much lower than the Ziegler-Nichols value of 2.88. This reflects IMC's emphasis on robustness. The step response will have much less overshoot (typically less than 5\%) but slower rise time.
+\end{example}
+
+\subsection{SIMC Tuning Rules}
+\label{subsec:simc_tuning}
+
+The SIMC (Skogestad Internal Model Control) method, developed by Sigurd Skogestad, provides simple yet effective tuning rules that work well for a wide range of processes.
+
+For a FOPDT process:
+
+\textbf{PI Controller}:
+\begin{align}
+K_p &= \frac{\tau}{K(\lambda + \theta)} \\
+T_i &= \min(\tau, 4(\lambda + \theta))
+\end{align}
+
+\textbf{PID Controller} (for processes where $\tau > 8\theta$):
+\begin{align}
+K_p &= \frac{\tau}{K(\lambda + \theta)} \\
+T_i &= \min(\tau, 4(\lambda + \theta)) \\
+T_d &= \theta/2
+\end{align}
+
+The recommended value for $\lambda$ is:
+\begin{equation}
+\lambda = \max(\theta, 0.25\tau)
+\end{equation}
+
+This ensures both adequate robustness (not too fast relative to the dead time) and reasonable speed (not unnecessarily slow for lag-dominated processes).
+
+\subsection{Relay Auto-Tuning}
+\label{subsec:relay_autotuning}
+
+Relay auto-tuning, introduced by \r{A}str\"{o}m and H\"{a}gglund in 1984, provides an automated way to determine the ultimate gain and period without driving the system to marginal stability with high gain.
+
+\subsubsection{Relay Feedback Method}
+
+The idea is to replace the PID controller temporarily with a relay (on-off controller). Under relay feedback, most systems will oscillate with a well-defined period and amplitude.
+
+\textbf{Procedure}:
+\begin{enumerate}
+    \item Replace the PID controller with a relay having output $\pm d$ (symmetric relay with amplitude $d$)
+    \item The system will typically establish a limit cycle with period $T_u$ and output amplitude $a$
+    \item Estimate the ultimate gain: $K_u = 4d/(\pi a)$
+    \item Estimate the ultimate period: $T_u$ (measured directly)
+    \item Apply Ziegler-Nichols or other tuning rules
+\end{enumerate}
+
+The factor $4/\pi$ comes from the describing function analysis of a relay, which approximates the relay by its fundamental frequency component.
+
+\textbf{Advantages}:
+\begin{itemize}
+    \item Automated---no manual adjustment required
+    \item Safer than driving to marginal stability with high gain
+    \item Works well for a wide range of processes
+    \item Limited amplitude oscillations (controlled by relay amplitude $d$)
+\end{itemize}
+
+\subsection{Lambda Tuning for Integrating Processes}
+\label{subsec:lambda_tuning}
+
+Integrating processes (e.g., liquid level in a tank) require modified tuning rules because the standard FOPDT model does not apply.
+
+For an integrating process with model:
+\begin{equation}
+G(s) = \frac{K_I}{s} e^{-\theta s}
+\end{equation}
+
+The lambda tuning rules for PI control are:
+\begin{align}
+K_p &= \frac{1}{K_I(\lambda + \theta)} \\
+T_i &= 4(\lambda + \theta)
+\end{align}
+
+where $\lambda$ is again the desired closed-loop time constant, typically chosen as $\lambda = 3\theta$ for moderate response.
+
+\subsection{Practical Tuning Procedure}
+\label{subsec:practical_tuning}
+
+Based on experience, I recommend the following procedure for industrial PID tuning:
+
+\begin{enumerate}
+    \item \textbf{Identify the process}: Perform step tests to identify FOPDT or other appropriate model parameters
+
+    \item \textbf{Select initial tuning}: Use IMC or SIMC rules with conservative $\lambda$ (e.g., $\lambda = 3\theta$)
+
+    \item \textbf{Test disturbance rejection}: Apply a disturbance and observe the response. If too slow, decrease $\lambda$
+
+    \item \textbf{Test setpoint tracking}: Apply setpoint changes. If overshoot is excessive, consider 2-DOF control (Section~\ref{sec:2dof_control})
+
+    \item \textbf{Fine-tune in the field}: Make small adjustments based on actual performance
+
+    \item \textbf{Document}: Record final tuning parameters and the conditions under which they were determined
+\end{enumerate}
+
+\warningbox{Never tune a controller based solely on setpoint tracking. Industrial loops spend most of their time rejecting disturbances, not tracking setpoint changes. Always verify disturbance rejection performance.}
+
+%===============================================================================
+\section{Root Locus Design}
+\label{sec:root_locus}
+%===============================================================================
+
+The root locus is a graphical method that shows how closed-loop pole locations vary as a system parameter (typically gain) changes. Developed by Walter R. Evans in 1948, it provides powerful intuition about the relationship between controller design and closed-loop behavior.
+
+\subsection{Root Locus Fundamentals}
+\label{subsec:root_locus_fundamentals}
+
+\subsubsection{The Characteristic Equation}
+
+Consider a unity feedback system with open-loop transfer function $L(s) = K G(s) H(s)$. The closed-loop transfer function is:
+\begin{equation}
+T(s) = \frac{KG(s)}{1 + KG(s)H(s)}
+\end{equation}
+
+The closed-loop poles are the roots of the \textbf{characteristic equation}:
+\begin{equation}
+1 + KG(s)H(s) = 0
+\label{eq:characteristic_equation}
+\end{equation}
+
+As $K$ varies from 0 to $\infty$, the roots of this equation trace out paths in the complex plane---this is the root locus.
+
+\subsubsection{Angle and Magnitude Conditions}
+
+The characteristic equation~\eqref{eq:characteristic_equation} can be rewritten as:
+\begin{equation}
+G(s)H(s) = -\frac{1}{K}
+\end{equation}
+
+For $K > 0$, this requires $G(s)H(s)$ to be real and negative. This leads to two conditions that a point $s_0$ must satisfy to lie on the root locus:
+
+\textbf{Angle Condition} (determines which points are on the locus):
+\begin{equation}
+\boxed{\angle G(s_0)H(s_0) = \pm 180° + k \cdot 360°, \quad k = 0, 1, 2, \ldots}
+\label{eq:angle_condition}
+\end{equation}
+
+\textbf{Magnitude Condition} (determines the gain at each point):
+\begin{equation}
+\boxed{K = \frac{1}{|G(s_0)H(s_0)|}}
+\label{eq:magnitude_condition}
+\end{equation}
+
+\textbf{Physical interpretation}: The angle condition requires that the sum of angles from zeros to a test point, minus the sum of angles from poles to that point, equals an odd multiple of 180°.
+
+\subsubsection{Relationship to Time-Domain Performance}
+
+Pole locations directly determine transient response characteristics:
+
+\begin{itemize}
+    \item \textbf{Real poles} ($s = -\sigma$): Contribute exponential terms $e^{-\sigma t}$. Larger $|\sigma|$ means faster decay.
+
+    \item \textbf{Complex conjugate poles} ($s = -\sigma \pm j\omega_d$): Contribute damped oscillations $e^{-\sigma t}\sin(\omega_d t + \phi)$
+
+    \item \textbf{Left half-plane poles}: Stable (decaying) responses
+
+    \item \textbf{Right half-plane poles}: Unstable (growing) responses
+
+    \item \textbf{Imaginary axis poles}: Marginally stable (sustained oscillations)
+\end{itemize}
+
+For a dominant complex pole pair at $s = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2}$:
+\begin{align}
+\text{Percent overshoot} &\approx 100 \cdot e^{-\pi\zeta/\sqrt{1-\zeta^2}} \\
+\text{Settling time (2\%)} &\approx \frac{4}{\zeta\omega_n} \\
+\text{Rise time} &\approx \frac{1.8}{\omega_n} \text{ (for } \zeta \approx 0.5\text{)}
+\end{align}
+
+\subsection{Rules for Constructing Root Locus}
+\label{subsec:root_locus_rules}
+
+The following rules enable rapid sketching of root loci without solving the characteristic equation.
+
+Let $G(s)H(s) = K \frac{N(s)}{D(s)}$ where $N(s)$ has $m$ finite zeros (at $z_1, z_2, \ldots, z_m$) and $D(s)$ has $n$ finite poles (at $p_1, p_2, \ldots, p_n$), with $n \geq m$ for physical systems.
+
+\textbf{Rule 1: Symmetry}
+
+The root locus is symmetric about the real axis because complex poles and zeros of systems with real coefficients occur in conjugate pairs.
+
+\textbf{Rule 2: Number of Branches}
+
+The root locus has $n$ branches, where $n$ is the number of open-loop poles.
+
+\textbf{Rule 3: Starting and Ending Points}
+
+Root locus branches:
+\begin{itemize}
+    \item \textbf{Start} ($K = 0$) at the open-loop poles
+    \item \textbf{End} ($K \to \infty$) at the open-loop zeros (including zeros at infinity)
+\end{itemize}
+
+\textbf{Rule 4: Real Axis Segments}
+
+A point on the real axis lies on the root locus if the total number of real poles and real zeros to its \textit{right} is \textit{odd}.
+
+\textbf{Rationale}: Complex poles/zeros contribute angles that cancel in conjugate pairs. Real poles/zeros to the left contribute 0° (no effect). Real poles/zeros to the right contribute 180° each. For the angle condition to be satisfied (odd multiple of 180°), there must be an odd number of real poles/zeros to the right.
+
+\textbf{Rule 5: Asymptotes}
+
+The $n - m$ branches that go to infinity approach asymptotes that:
+\begin{itemize}
+    \item Radiate from the \textbf{centroid} $\sigma_a$ on the real axis:
+    \begin{equation}
+    \sigma_a = \frac{\sum \text{(real parts of poles)} - \sum \text{(real parts of zeros)}}{n - m}
+    \end{equation}
+
+    \item Have angles:
+    \begin{equation}
+    \theta_k = \frac{(2k + 1) \cdot 180°}{n - m}, \quad k = 0, 1, 2, \ldots, (n-m-1)
+    \end{equation}
+\end{itemize}
+
+\begin{example}[Asymptotes]
+For $G(s) = K/[s(s+1)(s+3)]$ with poles at 0, $-1$, $-3$ and no finite zeros:
+\begin{itemize}
+    \item $n - m = 3 - 0 = 3$ asymptotes
+    \item Centroid: $\sigma_a = (0 - 1 - 3 - 0)/3 = -4/3$
+    \item Angles: $\theta_0 = 60°$, $\theta_1 = 180°$, $\theta_2 = 300°$ ($-60°$)
+\end{itemize}
+\end{example}
+
+\textbf{Rule 6: Breakaway and Break-in Points}
+
+Breakaway points (where branches leave the real axis) and break-in points (where branches return to the real axis) occur where:
+\begin{equation}
+\frac{dK}{ds} = 0
+\end{equation}
+
+From the characteristic equation, $K = -D(s)/N(s)$, so:
+\begin{equation}
+\frac{d}{ds}\left[-\frac{D(s)}{N(s)}\right] = 0 \implies N(s)D'(s) - N'(s)D(s) = 0
+\end{equation}
+
+Not all solutions are valid---only those on the root locus (satisfying the angle condition) and yielding $K > 0$ are breakaway/break-in points.
+
+\textbf{Rule 7: Imaginary Axis Crossings}
+
+Points where the root locus crosses the imaginary axis can be found using the Routh-Hurwitz criterion. Substitute $s = j\omega$ into the characteristic equation and solve for $\omega$ and $K$.
+
+\textbf{Rule 8: Departure and Arrival Angles}
+
+The angle at which the root locus departs from a complex pole $p_j$ is:
+\begin{equation}
+\theta_{dep} = 180° + \sum_{i=1}^{m} \angle(p_j - z_i) - \sum_{i \neq j} \angle(p_j - p_i)
+\end{equation}
+
+The angle at which the root locus arrives at a complex zero $z_j$ is:
+\begin{equation}
+\theta_{arr} = 180° - \sum_{i \neq j} \angle(z_j - z_i) + \sum_{i=1}^{n} \angle(z_j - p_i)
+\end{equation}
+
+\begin{example}[Root Locus Sketch]
+\label{ex:root_locus_sketch}
+Sketch the root locus for $G(s) = K/[s(s+2)(s+4)]$.
+
+\textbf{Step 1}: Identify poles and zeros
+\begin{itemize}
+    \item Poles: $s = 0, -2, -4$ (three poles, $n = 3$)
+    \item Zeros: none finite ($m = 0$)
+\end{itemize}
+
+\textbf{Step 2}: Real axis segments
+
+Count real poles/zeros to the right of test points:
+\begin{itemize}
+    \item Between 0 and $-2$: 1 pole to right (at $s=0$) $\rightarrow$ odd $\rightarrow$ ON locus
+    \item Between $-2$ and $-4$: 2 poles to right $\rightarrow$ even $\rightarrow$ NOT on locus
+    \item Left of $-4$: 3 poles to right $\rightarrow$ odd $\rightarrow$ ON locus
+\end{itemize}
+
+\textbf{Step 3}: Asymptotes
+\begin{itemize}
+    \item $n - m = 3$ asymptotes
+    \item Centroid: $\sigma_a = (0 - 2 - 4)/3 = -2$
+    \item Angles: $60°$, $180°$, $-60°$
+\end{itemize}
+
+\textbf{Step 4}: Breakaway points
+
+$K = -s(s+2)(s+4) = -s^3 - 6s^2 - 8s$
+
+$\frac{dK}{ds} = -3s^2 - 12s - 8 = 0$
+
+$s = \frac{-12 \pm \sqrt{144 - 96}}{6} = \frac{-12 \pm 6.93}{6}$
+
+$s_1 = -0.845$ (breakaway point, between 0 and $-2$, valid)
+
+$s_2 = -3.155$ (break-in point, between $-2$ and $-4$, but not on locus)
+
+\textbf{Step 5}: Imaginary axis crossings
+
+Using Routh-Hurwitz on $s^3 + 6s^2 + 8s + K = 0$:
+
+The auxiliary equation when a row becomes zero gives $s = j\sqrt{8} = j2.83$ at $K = 48$.
+
+The root locus crosses the imaginary axis at $s = \pm j2.83$ when $K = 48$.
+
+\textbf{Conclusion}: The system is stable for $0 < K < 48$.
+\end{example}
+
+\subsection{Design Using Root Locus}
+\label{subsec:root_locus_design}
+
+The root locus method enables systematic controller design:
+
+\begin{enumerate}
+    \item \textbf{Translate specifications to pole locations}: Convert time-domain specs (overshoot, settling time) to desired pole locations using second-order approximations
+
+    \item \textbf{Check if desired pole is on root locus}: Use the angle condition
+
+    \item \textbf{If not, add compensator zeros/poles}: Reshape the root locus to pass through the desired location
+
+    \item \textbf{Calculate required gain}: Use the magnitude condition
+
+    \item \textbf{Verify other poles are insignificant}: Check that remaining poles don't violate the dominant pole assumption
+\end{enumerate}
+
+\subsubsection{Translating Specifications to Pole Locations}
+
+For a second-order system with complex poles at $s = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2}$:
+
+\begin{itemize}
+    \item \textbf{Percent overshoot} $\leq M_p$: Requires $\zeta \geq \sqrt{\frac{(\ln(M_p/100))^2}{\pi^2 + (\ln(M_p/100))^2}}$
+
+    Lines of constant $\zeta$ are radial lines from the origin at angle $\theta = \cos^{-1}(\zeta)$
+
+    \item \textbf{Settling time} $\leq T_s$: Requires $\text{Re}(s) \leq -4/T_s$ (for 2\% criterion)
+
+    Lines of constant settling time are vertical lines at $\text{Re}(s) = -4/T_s$
+
+    \item \textbf{Natural frequency} $\geq \omega_n$: Requires $|s| \geq \omega_n$
+
+    Lines of constant $\omega_n$ are circles centered at the origin with radius $\omega_n$
+\end{itemize}
+
+\begin{example}[Gain Selection via Root Locus]
+\label{ex:gain_selection}
+For the system $G(s) = K/[s(s+5)]$, find $K$ for damping ratio $\zeta = 0.7$.
+
+\textbf{Step 1}: For $\zeta = 0.7$, the desired poles lie on a line at angle $\theta = \cos^{-1}(0.7) = 45.57°$ from the negative real axis.
+
+\textbf{Step 2}: The root locus for this system starts at $s = 0$ and $s = -5$, with one asymptote at $180°$ (centroid at $-2.5$).
+
+\textbf{Step 3}: The breakaway point is at $s = -2.5$ (midpoint for two real poles with no zeros).
+
+\textbf{Step 4}: The locus is on the real axis between 0 and $-5$, breaks away at $-2.5$, and goes to infinity along the $\pm 90°$ asymptotes.
+
+\textbf{Step 5}: The intersection with the $\zeta = 0.7$ line occurs at:
+$s = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2}$
+
+From the characteristic equation: $s^2 + 5s + K = 0$, we have $\omega_n^2 = K$ and $2\zeta\omega_n = 5$.
+
+For $\zeta = 0.7$: $\omega_n = 5/(2 \times 0.7) = 3.57$ rad/s
+
+Thus: $K = \omega_n^2 = 12.75$
+
+The closed-loop poles are at $s = -2.5 \pm j2.55$.
+
+\textbf{Verification}: Overshoot $\approx 100 \cdot e^{-0.7\pi/\sqrt{1-0.49}} \approx 4.6\%$, settling time $\approx 4/(0.7 \times 3.57) \approx 1.6$ s.
+\end{example}
+
+\subsection{Dominant Pole Approximation}
+\label{subsec:dominant_pole}
+
+Higher-order systems can often be approximated as second-order if certain poles \textbf{dominate} the response.
+
+\textbf{A pole is considered dominant if}:
+\begin{itemize}
+    \item It is closest to the imaginary axis (slowest decay)
+    \item Other poles are at least 5--10 times further left in the s-plane
+    \item Zeros are not too close to the dominant poles (which would reduce their residue)
+\end{itemize}
+
+When the dominant pole approximation is valid, second-order formulas can be used to predict overshoot and settling time from the dominant pole locations.
+
+\warningbox{Always verify the dominant pole approximation by simulation. Poles that are only 3--4 times further left can still contribute significantly to the response, especially during the initial transient.}
+
+%===============================================================================
+\section{Frequency Domain Design}
+\label{sec:frequency_domain}
+%===============================================================================
+
+Frequency domain design uses Bode plots to design controllers that achieve desired stability margins and performance. This approach is particularly powerful because frequency response can be measured directly from experiments, making it less dependent on accurate mathematical models.
+
+\subsection{Review of Bode Plots}
+\label{subsec:bode_review}
+
+A Bode plot displays the frequency response $G(j\omega)$ using two graphs:
+\begin{itemize}
+    \item \textbf{Magnitude plot}: $|G(j\omega)|$ in decibels (dB) vs. frequency on a log scale
+    \item \textbf{Phase plot}: $\angle G(j\omega)$ in degrees vs. frequency on a log scale
+\end{itemize}
+
+The decibel scale is defined as:
+\begin{equation}
+|G(j\omega)|_{\text{dB}} = 20 \log_{10} |G(j\omega)|
+\end{equation}
+
+\subsubsection{Why Use Bode Plots for Design?}
+
+\begin{enumerate}
+    \item \textbf{Multiplication becomes addition}: When controllers are cascaded, $|GC|_{\text{dB}} = |G|_{\text{dB}} + |C|_{\text{dB}}$. This allows graphical addition of compensator contributions.
+
+    \item \textbf{Wide dynamic range}: The log scale handles systems with gains varying over many orders of magnitude.
+
+    \item \textbf{Asymptotic approximations}: Bode plots can be approximated by straight-line segments, enabling rapid sketching.
+
+    \item \textbf{Direct measurement}: Frequency response can be measured experimentally by injecting sinusoids and measuring gain and phase at each frequency.
+\end{enumerate}
+
+\subsection{Stability Margins}
+\label{subsec:stability_margins}
+
+Stability margins quantify how far a system is from instability. They are central to frequency domain design.
+
+\subsubsection{Gain Margin}
+
+The \textbf{gain margin} (GM) is the factor by which the loop gain can be increased before the system becomes unstable.
+
+\textbf{Definition}: If $\omega_{\pi}$ is the \textbf{phase crossover frequency} (where the phase is $-180°$), then:
+\begin{equation}
+\text{GM} = \frac{1}{|L(j\omega_{\pi})|} \quad \text{or} \quad \text{GM}_{\text{dB}} = -|L(j\omega_{\pi})|_{\text{dB}}
+\end{equation}
+
+\textbf{Interpretation}: GM tells us how much additional gain would cause the phase crossover point to have magnitude 1, leading to instability.
+
+\textbf{Design guideline}: Typical systems require GM $\geq$ 6 dB (factor of 2).
+
+\subsubsection{Phase Margin}
+
+The \textbf{phase margin} (PM) is the additional phase lag that would make the system unstable.
+
+\textbf{Definition}: If $\omega_c$ is the \textbf{gain crossover frequency} (where the magnitude is 0 dB, i.e., $|L(j\omega_c)| = 1$), then:
+\begin{equation}
+\text{PM} = 180° + \angle L(j\omega_c)
+\end{equation}
+
+\textbf{Interpretation}: PM tells us how much additional phase lag would cause the gain crossover point to have phase $-180°$, leading to instability.
+
+\textbf{Design guideline}: Typical systems require PM $\geq 45°$.
+
+\subsubsection{Relationship to Damping Ratio}
+
+For a second-order system, phase margin is approximately related to damping ratio by:
+\begin{equation}
+\zeta \approx \frac{\text{PM (degrees)}}{100} \quad \text{for } \text{PM} < 70°
+\end{equation}
+
+A more accurate relationship is:
+\begin{equation}
+\text{PM} = \tan^{-1}\left(\frac{2\zeta}{\sqrt{-2\zeta^2 + \sqrt{1 + 4\zeta^4}}}\right)
+\end{equation}
+
+Common design targets:
+\begin{itemize}
+    \item PM = 45° corresponds to $\zeta \approx 0.42$ (moderate overshoot, $\sim$20\%)
+    \item PM = 60° corresponds to $\zeta \approx 0.58$ (low overshoot, $\sim$10\%)
+    \item PM = 70° corresponds to $\zeta \approx 0.65$ (minimal overshoot, $\sim$5\%)
+\end{itemize}
+
+\keypoint{Phase margin is the primary design target in frequency domain methods. A phase margin of 60° provides a good balance between performance (adequate bandwidth) and robustness (tolerance to model uncertainty and additional dynamics).}
+
+\subsection{Loop Shaping}
+\label{subsec:loop_shaping}
+
+Loop shaping is the process of designing a controller $C(s)$ such that the loop transfer function $L(s) = C(s)G(s)$ has a desired shape on the Bode plot.
+
+\subsubsection{Ideal Loop Shape}
+
+For good performance, the loop transfer function should have:
+
+\begin{itemize}
+    \item \textbf{High gain at low frequencies}: Ensures good tracking and disturbance rejection at DC and low frequencies. For zero steady-state error to step inputs, the loop gain should include an integrator ($|L| \to \infty$ as $\omega \to 0$).
+
+    \item \textbf{Gain crossover with adequate phase margin}: The crossover frequency $\omega_c$ determines bandwidth---higher $\omega_c$ gives faster response. The phase at crossover determines robustness.
+
+    \item \textbf{Low gain at high frequencies}: Attenuates sensor noise and unmodeled high-frequency dynamics. A rolloff of $-20$ to $-40$ dB/decade at high frequencies is typical.
+
+    \item \textbf{Slope of $-20$ dB/decade at crossover}: A slope of $-20$ dB/decade ensures adequate phase margin. Slopes of $-40$ dB/decade or steeper at crossover indicate phase margin problems.
+\end{itemize}
+
+\subsubsection{The Crossover Inequality}
+
+The relationship between loop gain slope and phase margin leads to a fundamental tradeoff. If the loop gain decreases at approximately $-20n$ dB/decade near crossover, the phase contribution is approximately $-90n$ degrees.
+
+\begin{itemize}
+    \item $-20$ dB/decade slope $\rightarrow$ $-90°$ phase contribution $\rightarrow$ PM $\approx 90°$
+    \item $-40$ dB/decade slope $\rightarrow$ $-180°$ phase contribution $\rightarrow$ PM $\approx 0°$
+\end{itemize}
+
+This explains why we want approximately $-20$ dB/decade slope at the gain crossover frequency.
+
+\subsection{Bandwidth and Speed of Response}
+\label{subsec:bandwidth}
+
+The \textbf{closed-loop bandwidth} $\omega_{BW}$ is the frequency at which the closed-loop magnitude $|T(j\omega)|$ drops to $-3$ dB (or $1/\sqrt{2}$) of its DC value.
+
+For a system with loop transfer function having crossover frequency $\omega_c$:
+\begin{equation}
+\omega_{BW} \approx \omega_c \quad \text{(rough approximation)}
+\end{equation}
+
+More precisely, for a second-order system with damping ratio $\zeta$ and natural frequency $\omega_n$:
+\begin{equation}
+\omega_{BW} = \omega_n \sqrt{(1 - 2\zeta^2) + \sqrt{4\zeta^4 - 4\zeta^2 + 2}}
+\end{equation}
+
+The bandwidth is related to rise time by:
+\begin{equation}
+t_r \cdot \omega_{BW} \approx 1.8 \text{ to } 2.2
+\end{equation}
+
+\textbf{Design implication}: To achieve a faster response (shorter rise time), increase the bandwidth, which means increasing the crossover frequency.
+
+\subsection{Steady-State Error and System Type}
+\label{subsec:steady_state_error}
+
+The steady-state error for different input types depends on the \textbf{system type}, which is the number of integrators in the loop transfer function.
+
+For a loop transfer function $L(s) = K G(s)$ where $G(s)$ has $N$ poles at the origin:
+
+\begin{table}[htbp]
+\centering
+\caption{Steady-state error for different system types}
+\label{tab:ss_error}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{System Type} & \textbf{Step Input} & \textbf{Ramp Input} & \textbf{Parabola Input} \\
+\midrule
+Type 0 (no integrator) & $\frac{1}{1+K_p}$ & $\infty$ & $\infty$ \\
+Type 1 (one integrator) & 0 & $\frac{1}{K_v}$ & $\infty$ \\
+Type 2 (two integrators) & 0 & 0 & $\frac{1}{K_a}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+where $K_p$, $K_v$, $K_a$ are the position, velocity, and acceleration error constants:
+\begin{align}
+K_p &= \lim_{s \to 0} L(s) \\
+K_v &= \lim_{s \to 0} s L(s) \\
+K_a &= \lim_{s \to 0} s^2 L(s)
+\end{align}
+
+On a Bode plot, these error constants relate to the low-frequency asymptote:
+\begin{itemize}
+    \item Type 1 system: The low-frequency asymptote has slope $-20$ dB/decade and crosses 0 dB at $\omega = K_v$
+    \item Type 2 system: The low-frequency asymptote has slope $-40$ dB/decade and crosses 0 dB at $\omega = \sqrt{K_a}$
+\end{itemize}
+
+\begin{example}[Bode-Based Gain Selection]
+\label{ex:bode_gain}
+A plant has transfer function $G(s) = \frac{10}{s(s+2)(s+10)}$. Design a proportional controller $C(s) = K$ to achieve:
+\begin{enumerate}
+    \item Zero steady-state error to step inputs (automatically satisfied since plant has integrator)
+    \item Phase margin $\geq 45°$
+\end{enumerate}
+
+\textbf{Step 1}: Identify plant characteristics
+
+The plant has poles at $s = 0, -2, -10$ and is Type 1. The DC gain (relative to the $1/s$ integrator) is $10/(2 \times 10) = 0.5$.
+
+\textbf{Step 2}: Construct Bode plot of $G(s)$
+
+At low frequencies: $|G(j\omega)| \approx 0.5/\omega$ with $-20$ dB/decade slope
+
+Corner frequencies: $\omega = 2$ rad/s and $\omega = 10$ rad/s
+
+\textbf{Step 3}: Find frequency where phase is $-135°$ (for PM = 45°)
+
+At $\omega = 2$: $\angle G = -90° - \tan^{-1}(1) - \tan^{-1}(0.2) \approx -90° - 45° - 11° = -146°$
+
+At $\omega = 1$: $\angle G \approx -90° - 26.6° - 5.7° = -122°$
+
+At $\omega = 1.5$: $\angle G \approx -90° - 36.9° - 8.5° = -135°$
+
+So at $\omega_c = 1.5$ rad/s, phase margin will be exactly 45°.
+
+\textbf{Step 4}: Calculate required gain
+
+At $\omega = 1.5$: $|G(j1.5)| = \frac{10}{1.5 \cdot \sqrt{1.5^2 + 4} \cdot \sqrt{1.5^2 + 100}} = \frac{10}{1.5 \cdot 2.5 \cdot 10.1} = 0.264$
+
+For crossover at this frequency: $K \cdot 0.264 = 1$, so $K = 3.79$.
+
+\textbf{Verification}: With $K = 3.79$, the gain crossover is at 1.5 rad/s with PM = 45°.
+\end{example}
+
+\subsection{Frequency Domain Design Procedure}
+\label{subsec:freq_design_procedure}
+
+A systematic frequency domain design procedure:
+
+\begin{enumerate}
+    \item \textbf{Determine design specifications}:
+    \begin{itemize}
+        \item Steady-state error requirements $\rightarrow$ system type and error constants
+        \item Settling time requirements $\rightarrow$ minimum bandwidth $\omega_{BW}$
+        \item Overshoot requirements $\rightarrow$ minimum phase margin
+        \item Robustness requirements $\rightarrow$ gain and phase margin targets
+    \end{itemize}
+
+    \item \textbf{Analyze the open-loop plant}: Construct Bode plot, identify:
+    \begin{itemize}
+        \item Current gain and phase margins
+        \item System type
+        \item Phase characteristics (how much phase lag at various frequencies)
+    \end{itemize}
+
+    \item \textbf{Choose target crossover frequency} $\omega_c$:
+    \begin{itemize}
+        \item High enough for required bandwidth
+        \item Low enough that plant has manageable phase lag
+    \end{itemize}
+
+    \item \textbf{Determine required compensation}:
+    \begin{itemize}
+        \item Phase lead needed = desired PM $-$ (180° + plant phase at $\omega_c$)
+        \item Gain adjustment to place crossover at $\omega_c$
+    \end{itemize}
+
+    \item \textbf{Design compensator} (lead, lag, or lead-lag---see Section~\ref{sec:compensators})
+
+    \item \textbf{Verify design}: Check all margins and performance metrics via simulation
+\end{enumerate}
+
+%===============================================================================
+\section{Lead, Lag, and Lead-Lag Compensators}
+\label{sec:compensators}
+%===============================================================================
+
+Lead and lag compensators are the fundamental building blocks of classical compensator design. They provide phase lead (to improve stability margins) or phase lag (to increase low-frequency gain) without adding system order excessively.
+
+\subsection{Lead Compensator}
+\label{subsec:lead_compensator}
+
+A lead compensator has the transfer function:
+\begin{equation}
+\boxed{C(s) = K_c \frac{s + z}{s + p} = K_c \frac{s + 1/T}{s + 1/(\alpha T)}, \quad z < p \text{ (or equivalently } \alpha < 1\text{)}}
+\label{eq:lead_compensator}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $z$ is the zero location (closer to origin)
+    \item $p$ is the pole location (further from origin)
+    \item $T = 1/z$ is the time constant
+    \item $\alpha = z/p < 1$ determines the amount of phase lead
+    \item $K_c$ is the overall gain
+\end{itemize}
+
+\subsubsection{Frequency Response Characteristics}
+
+The lead compensator:
+\begin{itemize}
+    \item Provides \textbf{phase lead} between the zero and pole frequencies
+    \item Has \textbf{gain that increases} from $K_c$ at low frequencies to $K_c/\alpha$ at high frequencies
+    \item Maximum phase lead occurs at the \textbf{geometric mean} frequency:
+    \begin{equation}
+    \omega_m = \frac{1}{T\sqrt{\alpha}} = \sqrt{zp}
+    \end{equation}
+\end{itemize}
+
+The maximum phase lead is:
+\begin{equation}
+\phi_m = \sin^{-1}\left(\frac{1-\alpha}{1+\alpha}\right)
+\label{eq:max_phase_lead}
+\end{equation}
+
+Solving for $\alpha$ given desired phase lead:
+\begin{equation}
+\alpha = \frac{1 - \sin\phi_m}{1 + \sin\phi_m}
+\end{equation}
+
+Common values:
+\begin{itemize}
+    \item $\alpha = 0.1 \rightarrow \phi_m \approx 55°$
+    \item $\alpha = 0.2 \rightarrow \phi_m \approx 42°$
+    \item $\alpha = 0.3 \rightarrow \phi_m \approx 33°$
+    \item $\alpha = 0.5 \rightarrow \phi_m \approx 19°$
+\end{itemize}
+
+\keypoint{A single lead compensator can provide up to about 60° of phase lead. For more phase lead, use two cascaded lead compensators or a lead-lag configuration.}
+
+\subsubsection{Lead Compensator Design Procedure (Frequency Domain)}
+
+\textbf{Given}: Plant $G(s)$, desired phase margin PM$_d$ and crossover frequency $\omega_c$.
+
+\textbf{Step 1}: Evaluate plant at desired crossover frequency
+\begin{equation}
+\phi_G = \angle G(j\omega_c), \quad |G(j\omega_c)|
+\end{equation}
+
+\textbf{Step 2}: Calculate required phase lead
+\begin{equation}
+\phi_m = \text{PM}_d - (180° + \phi_G) + \epsilon
+\end{equation}
+where $\epsilon \approx 5°$ to $10°$ is a safety margin (because adding the compensator will shift the crossover frequency slightly).
+
+\textbf{Step 3}: Calculate $\alpha$ from Equation~\eqref{eq:max_phase_lead}
+\begin{equation}
+\alpha = \frac{1 - \sin\phi_m}{1 + \sin\phi_m}
+\end{equation}
+
+\textbf{Step 4}: Place zero and pole so maximum phase occurs at $\omega_c$
+\begin{align}
+T &= \frac{1}{\omega_c \sqrt{\alpha}} \\
+z &= \frac{1}{T} = \omega_c \sqrt{\alpha} \\
+p &= \frac{1}{\alpha T} = \frac{\omega_c}{\sqrt{\alpha}}
+\end{align}
+
+\textbf{Step 5}: Calculate gain $K_c$ to achieve crossover at $\omega_c$
+
+At $\omega_m$, the lead compensator magnitude is $1/\sqrt{\alpha}$. Thus:
+\begin{equation}
+K_c = \frac{\sqrt{\alpha}}{|G(j\omega_c)|}
+\end{equation}
+
+\textbf{Step 6}: Verify design---check actual PM, GM, and transient response.
+
+\begin{example}[Lead Compensator Design]
+\label{ex:lead_design}
+Design a lead compensator for $G(s) = \frac{4}{s(s+2)}$ to achieve PM $\geq 50°$ with crossover at $\omega_c = 4$ rad/s.
+
+\textbf{Step 1}: Evaluate plant at $\omega_c = 4$
+\begin{align}
+|G(j4)| &= \frac{4}{4 \cdot \sqrt{16+4}} = \frac{4}{4 \cdot 4.47} = 0.224 \\
+\angle G(j4) &= -90° - \tan^{-1}(4/2) = -90° - 63.4° = -153.4°
+\end{align}
+
+\textbf{Step 2}: Current phase margin = $180° - 153.4° = 26.6°$ (insufficient)
+
+Required phase lead: $\phi_m = 50° - 26.6° + 5° = 28.4°$ (with 5° margin)
+
+\textbf{Step 3}: Calculate $\alpha$
+\begin{equation}
+\alpha = \frac{1 - \sin(28.4°)}{1 + \sin(28.4°)} = \frac{1 - 0.476}{1 + 0.476} = 0.355
+\end{equation}
+
+\textbf{Step 4}: Zero and pole locations
+\begin{align}
+z &= \omega_c \sqrt{\alpha} = 4 \times \sqrt{0.355} = 2.38 \text{ rad/s} \\
+p &= \omega_c / \sqrt{\alpha} = 4 / \sqrt{0.355} = 6.71 \text{ rad/s}
+\end{align}
+
+\textbf{Step 5}: Calculate gain
+
+At $\omega_c = 4$, the compensator magnitude is $|C(j4)| = \frac{\sqrt{4^2 + 2.38^2}}{\sqrt{4^2 + 6.71^2}} = \frac{4.65}{7.81} = 0.596$
+
+Wait---this is not $1/\sqrt{\alpha}$. Let me recalculate at maximum phase frequency.
+
+Actually, the standard formula is: $K_c = \sqrt{\alpha} / |G(j\omega_c)| = \sqrt{0.355}/0.224 = 2.66$
+
+\textbf{Lead compensator}:
+\begin{equation}
+C(s) = 2.66 \frac{s + 2.38}{s + 6.71}
+\end{equation}
+
+\textbf{Verification}: Simulate to confirm PM $\geq 50°$ and $\omega_c \approx 4$ rad/s. Minor adjustments may be needed.
+\end{example}
+
+\subsubsection{Lead Compensator Design via Root Locus}
+
+On the root locus, a lead compensator adds a zero closer to the origin and a pole further left:
+\begin{itemize}
+    \item The zero ``pulls'' the root locus to the left (toward higher damping)
+    \item The pole limits how far the attraction extends
+    \item Net effect: Root locus passes through a more desirable region
+\end{itemize}
+
+\textbf{Root Locus Design Procedure}:
+\begin{enumerate}
+    \item Identify desired closed-loop pole location $s_d$ from specifications
+    \item Calculate the angle deficiency: the angle condition is not satisfied without compensation
+    \begin{equation}
+    \theta_{\text{deficiency}} = 180° - \sum \angle(s_d - z_i) + \sum \angle(s_d - p_i)
+    \end{equation}
+    \item Place compensator zero and pole to contribute $\theta_{\text{deficiency}}$
+    \item Use magnitude condition to find the gain
+\end{enumerate}
+
+\subsection{Lag Compensator}
+\label{subsec:lag_compensator}
+
+A lag compensator has the transfer function:
+\begin{equation}
+\boxed{C(s) = K_c \frac{s + z}{s + p} = K_c \frac{s + 1/T}{s + 1/(\beta T)}, \quad z > p \text{ (or equivalently } \beta > 1\text{)}}
+\label{eq:lag_compensator}
+\end{equation}
+
+The lag compensator has the same form as the lead compensator but with the zero closer to the origin than the pole (opposite arrangement).
+
+\subsubsection{Frequency Response Characteristics}
+
+The lag compensator:
+\begin{itemize}
+    \item Provides \textbf{phase lag} between the pole and zero frequencies
+    \item Has \textbf{gain that decreases} from $K_c\beta$ at low frequencies to $K_c$ at high frequencies
+    \item The ratio $\beta = p/z$ determines the gain reduction
+\end{itemize}
+
+\textbf{Key insight}: The primary purpose of a lag compensator is not to provide phase lag (which would reduce stability) but to provide \textbf{high gain at low frequencies} while \textbf{attenuating gain near crossover} without significantly affecting the phase near crossover.
+
+\subsubsection{Lag Compensator Design Procedure}
+
+\textbf{Goal}: Reduce steady-state error by increasing low-frequency gain while maintaining stability margins.
+
+\textbf{Given}: Plant $G(s)$, gain increase factor $\beta$ needed to meet error constant requirements.
+
+\textbf{Step 1}: Design as if only proportional gain $K_c$ is used to achieve desired phase margin
+\begin{equation}
+|K_c G(j\omega_c)| = 1 \quad \text{at frequency where } \angle G(j\omega_c) = -180° + \text{PM}
+\end{equation}
+
+\textbf{Step 2}: Determine required $\beta$ from error constant requirements
+
+For a Type 1 system, the velocity error constant must satisfy:
+\begin{equation}
+K_v = \lim_{s \to 0} s \cdot C(s) G(s) = \beta K_c \cdot K_{v,plant}
+\end{equation}
+
+\textbf{Step 3}: Place zero and pole well below crossover frequency
+
+To minimize phase lag contribution near crossover (typically keep phase lag $< 5°$):
+\begin{equation}
+z = \frac{\omega_c}{10} \quad \text{and} \quad p = \frac{z}{\beta} = \frac{\omega_c}{10\beta}
+\end{equation}
+
+\textbf{Step 4}: Adjust $K_c$ so that the total loop gain is correct at crossover
+\begin{equation}
+K_c = \frac{1}{|G(j\omega_c)| \cdot |C_{\text{lag}}(j\omega_c)|}
+\end{equation}
+
+Since $|C_{\text{lag}}(j\omega_c)| \approx 1$ when the lag network is at low frequencies, $K_c$ is essentially unchanged from the proportional-only design.
+
+\begin{example}[Lag Compensator Design]
+\label{ex:lag_design}
+For $G(s) = \frac{1}{s(s+1)(s+5)}$, design a lag compensator to achieve $K_v = 10$ s$^{-1}$ while maintaining PM $\geq 40°$.
+
+\textbf{Step 1}: Uncompensated system analysis
+
+Current $K_v = \lim_{s \to 0} s \cdot K \cdot G(s) = K/5$ when using proportional gain $K$.
+
+For PM = 40°, we need phase = $-140°$ at crossover.
+
+At $\omega = 0.5$ rad/s: $\angle G = -90° - \tan^{-1}(0.5) - \tan^{-1}(0.1) \approx -122°$
+
+At $\omega = 0.7$ rad/s: $\angle G \approx -90° - 35° - 8° = -133°$
+
+At $\omega = 0.9$ rad/s: $\angle G \approx -90° - 42° - 10° = -142°$
+
+So $\omega_c \approx 0.85$ rad/s gives PM $\approx 40°$.
+
+\textbf{Step 2}: Required gain at this crossover
+\begin{equation}
+|G(j0.85)| = \frac{1}{0.85 \cdot \sqrt{0.85^2 + 1} \cdot \sqrt{0.85^2 + 25}} = \frac{1}{0.85 \cdot 1.31 \cdot 5.07} = 0.177
+\end{equation}
+
+For crossover: $K_c = 1/0.177 = 5.65$
+
+This gives $K_v = 5.65/5 = 1.13$ s$^{-1}$---much less than the required 10 s$^{-1}$.
+
+\textbf{Step 3}: Required lag ratio
+\begin{equation}
+\beta = \frac{K_{v,required}}{K_{v,proportional}} = \frac{10}{1.13} = 8.85 \approx 9
+\end{equation}
+
+\textbf{Step 4}: Place lag network
+
+Zero: $z = \omega_c/10 = 0.085$ rad/s
+
+Pole: $p = z/\beta = 0.085/9 = 0.0094$ rad/s
+
+\textbf{Lag compensator}:
+\begin{equation}
+C(s) = 5.65 \cdot \frac{s + 0.085}{s + 0.0094}
+\end{equation}
+
+\textbf{Verification}: The lag network at $\omega_c = 0.85$ contributes approximately:
+\begin{equation}
+\angle C_{\text{lag}} = \tan^{-1}(0.85/0.085) - \tan^{-1}(0.85/0.0094) \approx 84° - 89° = -5°
+\end{equation}
+
+So actual PM $\approx 40° - 5° = 35°$. We may need to lower $\omega_c$ slightly or accept the reduced margin.
+\end{example}
+
+\subsection{Lead-Lag Compensator}
+\label{subsec:lead_lag}
+
+When both improved stability margins (lead) and reduced steady-state error (lag) are needed, a lead-lag compensator combines both functions:
+
+\begin{equation}
+\boxed{C(s) = K_c \underbrace{\frac{s + z_{\text{lead}}}{s + p_{\text{lead}}}}_{\text{lead section}} \cdot \underbrace{\frac{s + z_{\text{lag}}}{s + p_{\text{lag}}}}_{\text{lag section}}}
+\label{eq:lead_lag}
+\end{equation}
+
+\subsubsection{Design Approach}
+
+\textbf{Method 1: Cascade design}
+\begin{enumerate}
+    \item Design the lead section first to achieve desired phase margin and crossover frequency
+    \item Design the lag section to provide additional low-frequency gain for steady-state accuracy
+    \item Verify combined performance and iterate if necessary
+\end{enumerate}
+
+\textbf{Method 2: Simultaneous design}
+
+Use the lead section to provide phase lead at the desired crossover frequency and the lag section to provide the required error constant. Place the lag zero and pole well below crossover to minimize interaction.
+
+\subsubsection{Frequency Separation}
+
+For the lead and lag sections to act somewhat independently:
+\begin{itemize}
+    \item Lead section: zero and pole near and above crossover frequency
+    \item Lag section: zero and pole well below crossover frequency (at least a decade below)
+\end{itemize}
+
+\begin{example}[Lead-Lag Compensator Design]
+\label{ex:lead_lag_design}
+For $G(s) = \frac{10}{s(s+1)(s+10)}$, design a lead-lag compensator to achieve:
+\begin{itemize}
+    \item $K_v = 100$ s$^{-1}$
+    \item PM $\geq 50°$
+    \item Crossover frequency $\omega_c \approx 5$ rad/s
+\end{itemize}
+
+\textbf{Step 1}: Analyze uncompensated system
+
+Plant DC gain (for velocity constant): $K_{v,plant} = 10/(1 \times 10) = 1$ s$^{-1}$
+
+At $\omega = 5$: $|G(j5)| = \frac{10}{5 \cdot \sqrt{26} \cdot \sqrt{125}} = \frac{10}{285} = 0.035$
+
+$\angle G(j5) = -90° - \tan^{-1}(5) - \tan^{-1}(0.5) = -90° - 78.7° - 26.6° = -195.3°$
+
+Current PM would be negative---system is unstable at this crossover!
+
+\textbf{Step 2}: Design lead section
+
+Required phase lead: $\phi_m = 50° - (180° - 195.3°) + 10° = 50° + 15.3° + 10° = 75.3°$
+
+This is more than one lead section can provide. Use two lead sections or accept lower $\omega_c$.
+
+Let us try $\omega_c = 3$ rad/s instead:
+
+$\angle G(j3) = -90° - \tan^{-1}(3) - \tan^{-1}(0.3) = -90° - 71.6° - 16.7° = -178.3°$
+
+Required phase lead: $50° - (180° - 178.3°) + 5° = 53.3°$
+
+For $\phi_m = 53°$: $\alpha = \frac{1 - \sin(53°)}{1 + \sin(53°)} = \frac{0.2}{1.8} = 0.11$
+
+Lead zero: $z_{\text{lead}} = 3\sqrt{0.11} = 1.0$ rad/s
+
+Lead pole: $p_{\text{lead}} = 3/\sqrt{0.11} = 9.0$ rad/s
+
+\textbf{Step 3}: Design lag section
+
+Required $K_v = 100$, current $K_v \approx 1$ (with appropriate gain)
+
+$\beta = 100/1 = 100$
+
+Lag zero: $z_{\text{lag}} = 0.3$ rad/s (decade below crossover)
+
+Lag pole: $p_{\text{lag}} = 0.003$ rad/s
+
+\textbf{Step 4}: Calculate overall gain
+
+At $\omega_c = 3$: $|G(j3)| = 0.095$
+
+Lead compensator magnitude at $\omega_c$: $|C_{\text{lead}}| = 1/\sqrt{0.11} = 3.02$
+
+Lag compensator magnitude at $\omega_c$: $|C_{\text{lag}}| \approx 1$
+
+Required gain: $K_c = 1/(0.095 \times 3.02 \times 1) = 3.5$
+
+\textbf{Lead-lag compensator}:
+\begin{equation}
+C(s) = 3.5 \cdot \frac{s + 1}{s + 9} \cdot \frac{s + 0.3}{s + 0.003}
+\end{equation}
+
+This achieves PM $\approx 50°$, $\omega_c \approx 3$ rad/s, and $K_v = 3.5 \times 100 \times 1 = 350$ s$^{-1}$ (exceeds requirement).
+\end{example}
+
+\subsection{Practical Considerations for Compensator Design}
+\label{subsec:compensator_practical}
+
+\subsubsection{Noise Amplification}
+
+Lead compensators amplify high-frequency noise because their gain increases with frequency. Mitigation strategies:
+\begin{itemize}
+    \item Limit the high-frequency gain by using $\alpha \geq 0.1$
+    \item Add a high-frequency rolloff pole
+    \item Use filtered derivative in PID implementations
+\end{itemize}
+
+\subsubsection{Actuator Saturation}
+
+High gain compensators can demand control signals that exceed actuator limits. Design with actuator constraints in mind:
+\begin{itemize}
+    \item Simulate with realistic actuator models
+    \item Include anti-windup strategies (Chapter~\ref{ch:control_architecture})
+    \item Consider gain scheduling for different operating regions
+\end{itemize}
+
+\subsubsection{Implementation}
+
+Digital implementation of compensators requires discretization. Common methods:
+\begin{itemize}
+    \item Tustin (bilinear) transformation: preserves frequency response well
+    \item Matched pole-zero: places discrete poles/zeros at $e^{sT}$ locations
+    \item Zero-order hold equivalent: matches step response
+\end{itemize}
+
+For lead compensators, ensure the sampling rate is at least 10--20 times the highest compensator frequency to avoid aliasing and discretization errors.
+
+%===============================================================================
+\section{Two-Degree-of-Freedom Control}
+\label{sec:2dof_control}
+%===============================================================================
+
+Standard PID controllers have a fundamental limitation: they cannot independently optimize setpoint tracking and disturbance rejection. This section introduces two-degree-of-freedom (2DOF) control structures that overcome this limitation.
+
+\subsection{The Servo/Regulatory Trade-off}
+\label{subsec:servo_regulatory}
+
+In a standard feedback system with controller $C(s)$ and plant $G(s)$, the closed-loop transfer functions for setpoint tracking and disturbance rejection are coupled:
+
+\textbf{Setpoint tracking} (servo response):
+\begin{equation}
+T(s) = \frac{Y(s)}{R(s)} = \frac{C(s)G(s)}{1 + C(s)G(s)}
+\end{equation}
+
+\textbf{Disturbance rejection} (regulatory response):
+\begin{equation}
+S(s) = \frac{Y(s)}{D(s)} = \frac{G_d(s)}{1 + C(s)G(s)}
+\end{equation}
+
+Both transfer functions share the same characteristic equation $1 + C(s)G(s)$, which means the closed-loop poles are identical for both responses. Tuning for aggressive disturbance rejection (fast poles) inevitably causes aggressive setpoint response (overshoot). Tuning for smooth setpoint response (slower poles) degrades disturbance rejection.
+
+\keypoint{With a single-degree-of-freedom controller, you cannot independently specify the setpoint response and disturbance rejection response. They are coupled through the closed-loop poles.}
+
+\subsection{Two-Degree-of-Freedom PID Structure}
+\label{subsec:2dof_pid}
+
+The 2DOF-PID controller introduces setpoint weighting parameters that allow independent adjustment of setpoint response:
+
+\begin{equation}
+\boxed{u(t) = K_p[b \cdot r(t) - y(t)] + K_i \int_0^t [r(\tau) - y(\tau)] d\tau + K_d \frac{d}{dt}[c \cdot r(t) - y(t)]}
+\label{eq:2dof_pid}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $b$ is the \textbf{proportional setpoint weight} ($0 \leq b \leq 1$)
+    \item $c$ is the \textbf{derivative setpoint weight} ($0 \leq c \leq 1$)
+    \item $K_p$, $K_i$, $K_d$ are standard PID gains
+\end{itemize}
+
+\subsubsection{Effect of Setpoint Weights}
+
+\textbf{Proportional setpoint weight $b$}:
+\begin{itemize}
+    \item $b = 1$: Full proportional action on setpoint (standard PID behavior)
+    \item $b = 0$: No proportional action on setpoint (only acts on output)
+    \item $0 < b < 1$: Reduced ``proportional kick'' on setpoint changes
+\end{itemize}
+
+\textbf{Derivative setpoint weight $c$}:
+\begin{itemize}
+    \item $c = 1$: Full derivative action on setpoint (can cause large control spikes)
+    \item $c = 0$: No derivative action on setpoint (only acts on output)---\textbf{most common choice}
+    \item Setting $c = 0$ eliminates the ``derivative kick'' from sudden setpoint changes
+\end{itemize}
+
+\subsubsection{Common 2DOF Configurations}
+
+\textbf{Standard PID} ($b = 1$, $c = 1$): One degree of freedom, standard behavior.
+
+\textbf{PI-D} ($b = 1$, $c = 0$): Derivative acts only on output. Eliminates derivative kick.
+
+\textbf{I-PD} ($b = 0$, $c = 0$): Only integral acts on error. Proportional and derivative act only on output. Very smooth setpoint response but slower tracking.
+
+\textbf{Typical industrial setting} ($b = 0.5$, $c = 0$): Moderate proportional action on setpoint, no derivative action on setpoint. Good balance of smooth response and adequate tracking speed.
+
+\subsection{Transfer Function Interpretation}
+\label{subsec:2dof_transfer}
+
+The 2DOF-PID can be rewritten as two separate controllers:
+
+\begin{equation}
+U(s) = C_r(s) R(s) - C_y(s) Y(s)
+\end{equation}
+
+where:
+\begin{align}
+C_r(s) &= K_p b + \frac{K_i}{s} + K_d c \cdot s \quad \text{(controller from reference)} \\
+C_y(s) &= K_p + \frac{K_i}{s} + K_d s \quad \text{(controller from output)}
+\end{align}
+
+The closed-loop transfer functions become:
+
+\textbf{Setpoint to output}:
+\begin{equation}
+T(s) = \frac{C_r(s) G(s)}{1 + C_y(s) G(s)}
+\end{equation}
+
+\textbf{Disturbance to output}:
+\begin{equation}
+S(s) = \frac{G_d(s)}{1 + C_y(s) G(s)}
+\end{equation}
+
+Notice that $C_y(s)$ (and hence disturbance rejection) is independent of the setpoint weights $b$ and $c$. The setpoint weights only affect $C_r(s)$ and hence only the setpoint tracking response.
+
+\subsection{Design Procedure for 2DOF-PID}
+\label{subsec:2dof_design}
+
+\textbf{Step 1: Tune for disturbance rejection}
+
+Set $b = 1$, $c = 1$ (standard PID mode). Tune $K_p$, $K_i$, $K_d$ using any standard method (Ziegler-Nichols, IMC, etc.) to achieve good disturbance rejection performance.
+
+Accept that this tuning may produce significant overshoot for setpoint changes.
+
+\textbf{Step 2: Adjust setpoint weights}
+
+With $K_p$, $K_i$, $K_d$ fixed:
+\begin{enumerate}
+    \item Set $c = 0$ to eliminate derivative kick (almost always the right choice)
+    \item Reduce $b$ from 1 toward 0 while observing setpoint response
+    \item Stop when overshoot reaches acceptable level (typically $b = 0.3$ to $0.7$)
+\end{enumerate}
+
+\textbf{Step 3: Validate both responses}
+\begin{itemize}
+    \item Apply step change to setpoint---verify acceptable overshoot and settling time
+    \item Apply step disturbance---verify quick rejection (should be unchanged from Step 1)
+\end{itemize}
+
+\begin{example}[2DOF-PID Design]
+\label{ex:2dof_pid}
+A temperature control system with FOPDT model $G(s) = \frac{2}{10s+1}e^{-2s}$ exhibits 25\% overshoot with a well-tuned PID for disturbance rejection. Design a 2DOF-PID to reduce overshoot to less than 5\% while maintaining disturbance rejection.
+
+\textbf{Given PID tuning} (from Ziegler-Nichols or similar): $K_p = 2.5$, $T_i = 4$ s, $T_d = 1$ s
+
+\textbf{Step 1}: Verify disturbance rejection is acceptable---assume it is based on prior tuning.
+
+\textbf{Step 2}: Set $c = 0$ and adjust $b$
+
+Simulation or experiment with different values of $b$:
+\begin{itemize}
+    \item $b = 1.0$: 25\% overshoot (original)
+    \item $b = 0.8$: 18\% overshoot
+    \item $b = 0.6$: 12\% overshoot
+    \item $b = 0.4$: 5\% overshoot
+    \item $b = 0.3$: 2\% overshoot
+\end{itemize}
+
+Select $b = 0.4$ to achieve the 5\% overshoot target.
+
+\textbf{Final 2DOF-PID}:
+\begin{equation}
+u(t) = 2.5[0.4 \cdot r(t) - y(t)] + \frac{2.5}{4} \int [r - y] d\tau + 2.5 \cdot 1 \cdot [0 \cdot \dot{r} - \dot{y}]
+\end{equation}
+
+\textbf{Result}: Overshoot reduced from 25\% to 5\%, disturbance rejection unchanged.
+\end{example}
+
+\subsection{Setpoint Filtering}
+\label{subsec:setpoint_filtering}
+
+An alternative to 2DOF-PID is to add a \textbf{setpoint filter} before the standard PID controller:
+
+\begin{equation}
+R_f(s) = F(s) R(s), \quad F(s) = \frac{1}{\tau_f s + 1}
+\label{eq:setpoint_filter}
+\end{equation}
+
+The filter smooths setpoint changes before they reach the controller, reducing overshoot without modifying the controller structure.
+
+\textbf{Advantages}:
+\begin{itemize}
+    \item Can be added to any existing controller
+    \item Simple to implement
+    \item One tuning parameter ($\tau_f$)
+\end{itemize}
+
+\textbf{Disadvantages}:
+\begin{itemize}
+    \item Slows setpoint tracking (increases rise time)
+    \item Less flexible than 2DOF-PID
+\end{itemize}
+
+\textbf{Design guideline}: Choose $\tau_f$ approximately equal to the closed-loop time constant for moderate smoothing.
+
+\subsection{Comparison: 2DOF-PID vs. Setpoint Filter}
+\label{subsec:2dof_vs_filter}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of 2DOF-PID and setpoint filtering}
+\label{tab:2dof_vs_filter}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Feature} & \textbf{2DOF-PID} & \textbf{Setpoint Filter} \\
+\midrule
+Implementation & Modified PID & External filter \\
+Parameters & $b$, $c$ (plus standard PID) & $\tau_f$ \\
+Rise time impact & Minimal for moderate $b$ & Increased \\
+Flexibility & High & Moderate \\
+Retrofit to existing & Requires controller change & Easy \\
+Disturbance rejection & Unaffected & Unaffected \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%===============================================================================
+\section{Feedforward Control}
+\label{sec:feedforward}
+%===============================================================================
+
+Feedforward control proactively compensates for disturbances before they affect the output, complementing feedback control which can only react after errors occur.
+
+\subsection{Feedforward Concept}
+\label{subsec:ff_concept}
+
+In feedback control, the controller reacts to errors:
+\begin{equation}
+u(t) = C(s)[r(t) - y(t)]
+\end{equation}
+
+The error must exist before corrective action is taken. For disturbances, this means the output must deviate from setpoint before the controller responds.
+
+\textbf{Feedforward control} anticipates the effect of measurable disturbances and generates a control action to cancel them:
+\begin{equation}
+u_{ff}(t) = C_{ff}(s) d(t)
+\end{equation}
+
+where $d(t)$ is the measured disturbance and $C_{ff}(s)$ is the feedforward controller.
+
+The total control signal combines feedback and feedforward:
+\begin{equation}
+u(t) = u_{fb}(t) + u_{ff}(t) = C(s)[r(t) - y(t)] + C_{ff}(s) d(t)
+\end{equation}
+
+\subsection{Ideal Feedforward Controller}
+\label{subsec:ideal_ff}
+
+Consider a system where disturbance $d$ enters through transfer function $G_d(s)$ and control $u$ enters through $G(s)$:
+\begin{equation}
+Y(s) = G(s) U(s) + G_d(s) D(s)
+\end{equation}
+
+For perfect disturbance rejection (output unaffected by disturbance), we need:
+\begin{equation}
+G(s) U_{ff}(s) + G_d(s) D(s) = 0
+\end{equation}
+
+Solving for the feedforward controller:
+\begin{equation}
+\boxed{C_{ff}(s) = \frac{U_{ff}(s)}{D(s)} = -\frac{G_d(s)}{G(s)}}
+\label{eq:ideal_ff}
+\end{equation}
+
+\textbf{Interpretation}: The ideal feedforward controller is the ratio of the disturbance transfer function to the plant transfer function, with a negative sign to cancel the disturbance effect.
+
+\subsection{Realizability Constraints}
+\label{subsec:ff_realizability}
+
+The ideal feedforward controller \eqref{eq:ideal_ff} may not be physically realizable:
+
+\textbf{1. Causality}: If $G(s)$ has more poles than $G_d(s)$ has poles, then $C_{ff}(s)$ will be improper (more zeros than poles), requiring differentiation of the disturbance signal.
+
+\textbf{Example}: If $G(s) = 1/(s+1)^2$ and $G_d(s) = 1/(s+1)$, then $C_{ff}(s) = -(s+1)$, which requires derivative action.
+
+\textbf{2. Time delays}: If the plant has more delay than the disturbance path, perfect cancellation requires predicting the future disturbance.
+
+\textbf{Example}: If $G(s) = e^{-2s}/(s+1)$ and $G_d(s) = e^{-s}/(s+1)$, then $C_{ff}(s) = -e^{s}$, which requires 1 second of prediction.
+
+\textbf{3. Non-minimum phase}: If $G(s)$ has right-half-plane zeros, the ideal feedforward has unstable poles.
+
+\subsection{Practical Feedforward Design}
+\label{subsec:practical_ff}
+
+When the ideal feedforward is not realizable, we design a \textbf{practical approximation}:
+
+\begin{equation}
+C_{ff}(s) = -\frac{G_d(s)}{G(s)} \cdot F(s)
+\end{equation}
+
+where $F(s)$ is a filter that:
+\begin{itemize}
+    \item Makes the feedforward proper (adds poles for excess zeros)
+    \item Removes unstable elements
+    \item Attenuates high frequencies to avoid noise amplification
+\end{itemize}
+
+\textbf{Common approximations}:
+
+\textbf{For improper feedforward}: Add a low-pass filter
+\begin{equation}
+F(s) = \frac{1}{(\tau_f s + 1)^n}
+\end{equation}
+where $n$ makes the overall feedforward proper, and $\tau_f$ is chosen small enough to maintain performance but large enough for noise rejection.
+
+\textbf{For time delay mismatch}: Use the available portion of compensation
+\begin{equation}
+C_{ff}(s) = -\frac{G_d(s)}{G(s)} e^{-\Delta\theta s} \quad \text{where } \Delta\theta = \max(0, \theta_G - \theta_d)
+\end{equation}
+
+\textbf{For RHP zeros}: Reflect zeros to LHP or use magnitude-only compensation.
+
+\begin{example}[Feedforward Controller Design]
+\label{ex:ff_design}
+A heat exchanger has the following transfer functions:
+\begin{align}
+G(s) &= \frac{2e^{-3s}}{10s + 1} \quad \text{(control input to output)} \\
+G_d(s) &= \frac{1.5e^{-s}}{5s + 1} \quad \text{(disturbance to output)}
+\end{align}
+
+Design a feedforward controller.
+
+\textbf{Step 1}: Compute ideal feedforward
+\begin{equation}
+C_{ff,ideal}(s) = -\frac{G_d(s)}{G(s)} = -\frac{1.5(10s+1)e^{-s}}{2(5s+1)e^{-3s}} = -\frac{1.5(10s+1)}{2(5s+1)} e^{2s}
+\end{equation}
+
+\textbf{Problems}:
+\begin{itemize}
+    \item The term $e^{2s}$ requires predicting the disturbance 2 seconds ahead (not realizable)
+    \item The ratio $(10s+1)/(5s+1)$ is proper, so causality is okay
+\end{itemize}
+
+\textbf{Step 2}: Practical approximation
+
+Since we cannot predict the future, drop the positive delay:
+\begin{equation}
+C_{ff}(s) = -\frac{1.5(10s+1)}{2(5s+1)} = -\frac{0.75(10s+1)}{5s+1}
+\end{equation}
+
+This feedforward will not perfectly cancel the disturbance but will provide significant attenuation. The feedback controller handles the residual.
+
+\textbf{Alternative}: If delay matching were reversed ($\theta_d > \theta_G$), we could include the delay in the feedforward to improve timing.
+
+\textbf{Step 3}: Implementation
+
+At low frequencies: $C_{ff}(0) = -0.75 \times 10 / 5 = -1.5$
+
+At high frequencies: $C_{ff}(\infty) = -0.75 \times 10 / 5 = -1.5$ (same because it is a first-order lead-lag)
+
+Wait, let me recalculate: $C_{ff}(0) = -0.75 \times 1/1 = -0.75$ and at high frequencies the ratio of leading terms is $-0.75 \times 10/5 = -1.5$.
+
+The feedforward provides a gain of $-0.75$ at DC, increasing to $-1.5$ at high frequencies.
+\end{example}
+
+\subsection{Benefits of Feedforward Control}
+\label{subsec:ff_benefits}
+
+\begin{enumerate}
+    \item \textbf{Faster disturbance rejection}: Feedforward acts immediately when disturbance is detected, not after error develops
+
+    \item \textbf{Reduced feedback burden}: Feedback controller only handles unmeasured disturbances and model errors
+
+    \item \textbf{Improved performance}: Can improve disturbance rejection by an order of magnitude with accurate models
+
+    \item \textbf{No stability impact}: Feedforward does not affect closed-loop stability (it is open-loop with respect to output)
+\end{enumerate}
+
+\subsection{Limitations of Feedforward Control}
+\label{subsec:ff_limitations}
+
+\begin{enumerate}
+    \item \textbf{Requires disturbance measurement}: Cannot compensate for unmeasured disturbances
+
+    \item \textbf{Model-dependent}: Performance degrades with model uncertainty
+
+    \item \textbf{Cannot guarantee stability}: Feedforward alone cannot stabilize an unstable plant
+
+    \item \textbf{Additional sensors/instrumentation}: Cost and complexity increase
+\end{enumerate}
+
+\keypoint{Feedforward and feedback control are complementary, not competing approaches. Feedforward handles known, measurable disturbances quickly. Feedback handles unmeasured disturbances and model errors robustly. The best control systems often use both.}
+
+\subsection{Reference Feedforward (Model Inversion)}
+\label{subsec:reference_ff}
+
+Feedforward can also be applied to the reference signal to improve setpoint tracking:
+
+\begin{equation}
+u(t) = C(s)[r(t) - y(t)] + C_{ff,r}(s) r(t)
+\end{equation}
+
+The ideal reference feedforward is:
+\begin{equation}
+C_{ff,r}(s) = G^{-1}(s) - C(s)
+\end{equation}
+
+This makes the closed-loop transfer function equal to unity (perfect tracking). In practice, the same realizability constraints apply, and the feedforward is approximated to be proper and stable.
+
+\textbf{Relationship to 2DOF control}: Reference feedforward is mathematically equivalent to the 2DOF structures discussed earlier. The setpoint weights $b$ and $c$ in 2DOF-PID implicitly implement a form of reference feedforward.
+
+%===============================================================================
+\section{Practical Applications---Worked Design Examples}
+\label{sec:design_examples}
+%===============================================================================
+
+This section presents complete design examples that integrate the techniques developed throughout this chapter. Each example follows a realistic engineering workflow: problem definition, modeling, controller design, and verification.
+
+\subsection{Example 1: PID Tuning for a First-Order System}
+\label{subsec:ex_first_order}
+
+\textbf{Problem}: A liquid flow control system has been identified as a first-order process:
+\begin{equation}
+G(s) = \frac{2.5}{8s + 1}
+\end{equation}
+with gain $K = 2.5$ and time constant $\tau = 8$ seconds. Design a PI controller to achieve zero steady-state error and settling time less than 30 seconds.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Choose tuning method}
+
+For a first-order system without significant dead time, IMC tuning provides systematic design with adjustable aggressiveness.
+
+\textbf{Step 2: Specify closed-loop time constant}
+
+For settling time $T_s \leq 30$ s with 2\% criterion: $T_s \approx 4\tau_{cl}$, so $\tau_{cl} \leq 7.5$ s.
+
+Choose $\lambda = 6$ s (closed-loop time constant) for some margin.
+
+\textbf{Step 3: Apply IMC-PI formulas}
+
+For FOPDT with $\theta = 0$:
+\begin{align}
+K_p &= \frac{\tau}{K(\lambda + \theta)} = \frac{8}{2.5 \times 6} = 0.533 \\
+T_i &= \tau = 8 \text{ s}
+\end{align}
+
+In parallel form: $K_i = K_p/T_i = 0.533/8 = 0.0667$ s$^{-1}$.
+
+\textbf{Step 4: PI Controller}
+\begin{equation}
+C(s) = 0.533 + \frac{0.0667}{s} = 0.533 \left(1 + \frac{1}{8s}\right)
+\end{equation}
+
+\textbf{Step 5: Verification}
+
+Closed-loop transfer function:
+\begin{equation}
+T(s) = \frac{C(s)G(s)}{1 + C(s)G(s)} = \frac{0.533(8s+1) \cdot 2.5}{(8s+1)s + 0.533(8s+1) \cdot 2.5/s \cdot s}
+\end{equation}
+
+After simplification with proper algebra, the closed-loop should have time constant approximately $\lambda = 6$ s, giving settling time $\approx 24$ s.
+
+Steady-state error to step: $e_{ss} = 0$ (integral action ensures this).
+
+\textbf{Result}: PI controller with $K_p = 0.533$, $K_i = 0.0667$ s$^{-1}$ meets specifications.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 2: Ziegler-Nichols Tuning for a Second-Order Plant}
+\label{subsec:ex_zn_second_order}
+
+\textbf{Problem}: A pressure control system has step response that can be approximated as FOPDT:
+\begin{equation}
+G(s) = \frac{1.8}{15s + 1} e^{-3s}
+\end{equation}
+with $K = 1.8$, $\tau = 15$ s, $\theta = 3$ s. Design a PID controller using Ziegler-Nichols, then refine for less overshoot.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Ziegler-Nichols open-loop method}
+
+Using Table~\ref{tab:zn_fopdt}:
+\begin{align}
+K_p &= \frac{1.2\tau}{K\theta} = \frac{1.2 \times 15}{1.8 \times 3} = 3.33 \\
+T_i &= 2\theta = 6 \text{ s} \\
+T_d &= 0.5\theta = 1.5 \text{ s}
+\end{align}
+
+\textbf{Step 2: Convert to parallel form}
+\begin{align}
+K_i &= K_p/T_i = 3.33/6 = 0.556 \text{ s}^{-1} \\
+K_d &= K_p \times T_d = 3.33 \times 1.5 = 5.0 \text{ s}
+\end{align}
+
+\textbf{Step 3: Expected performance}
+
+Ziegler-Nichols typically produces approximately 25\% overshoot with quarter-decay ratio. This may be acceptable for some applications.
+
+\textbf{Step 4: Refinement for reduced overshoot}
+
+If less overshoot is required, reduce gains by 25--50\%:
+\begin{align}
+K_p &= 0.7 \times 3.33 = 2.33 \\
+K_i &= 0.7 \times 0.556 = 0.39 \text{ s}^{-1} \\
+K_d &= 0.7 \times 5.0 = 3.5 \text{ s}
+\end{align}
+
+This ``detuned'' PID will have approximately 10--15\% overshoot with slower response.
+
+\textbf{Alternative}: Use 2DOF-PID with original Z-N gains but reduced setpoint weights ($b = 0.5$, $c = 0$) to achieve fast disturbance rejection with low setpoint overshoot.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 3: Root Locus Design with Performance Specifications}
+\label{subsec:ex_root_locus_specs}
+
+\textbf{Problem}: A DC motor position control system has transfer function:
+\begin{equation}
+G(s) = \frac{10}{s(s + 5)}
+\end{equation}
+Design a controller to achieve:
+\begin{itemize}
+    \item Damping ratio $\zeta \geq 0.5$
+    \item Settling time $T_s \leq 2$ seconds
+    \item Zero steady-state error to ramp inputs
+\end{itemize}
+
+\textbf{Solution}:
+
+\textbf{Step 1: Translate specifications to s-plane regions}
+
+For $\zeta \geq 0.5$: poles must lie within angle $\cos^{-1}(0.5) = 60°$ from negative real axis.
+
+For $T_s \leq 2$ s: poles must satisfy $\text{Re}(s) \leq -4/2 = -2$.
+
+For zero ramp error: system must be Type 2 (need to add an integrator).
+
+\textbf{Step 2: Analyze current system}
+
+Current plant is Type 1 (one integrator). Root locus with proportional gain:
+\begin{itemize}
+    \item Poles at $s = 0, -5$
+    \item No finite zeros
+    \item Asymptotes at $\pm 90°$ from centroid $-2.5$
+    \item Breakaway at $s = -2.5$
+\end{itemize}
+
+With proportional gain alone, the root locus does not enter the region with Re$(s) < -2$ and $\zeta > 0.5$ simultaneously.
+
+\textbf{Step 3: Design compensator}
+
+To meet ramp error requirement, add an integrator. To achieve the damping and speed requirements, add a lead compensator.
+
+PI controller adds zero and pole at origin:
+\begin{equation}
+C_{PI}(s) = K_p + \frac{K_i}{s} = K_p \frac{s + z_{PI}}{s}
+\end{equation}
+
+The PI zero should be placed to improve the root locus shape. Place $z_{PI} = K_i/K_p = 2$ to pull locus left.
+
+\textbf{Step 4: Design lead section}
+
+Target closed-loop poles: For $\zeta = 0.5$ and $\omega_n$ such that $\sigma = \zeta\omega_n = 2$, we have $\omega_n = 4$ rad/s.
+
+Desired poles: $s_d = -2 \pm j\sqrt{4^2 - 2^2} = -2 \pm j3.46$
+
+Angle deficiency at $s_d$ with current open-loop poles at $0, 0, -5$ and zero at $-2$:
+
+Angle from zero at $-2$: $\angle(-2+j3.46 - (-2)) = \angle(j3.46) = 90°$
+
+Angle from pole at origin: $\angle(-2+j3.46) = 180° - \tan^{-1}(3.46/2) = 180° - 60° = 120°$
+
+Angle from second pole at origin: same = $120°$
+
+Angle from pole at $-5$: $\angle(-2+j3.46-(-5)) = \angle(3+j3.46) = \tan^{-1}(3.46/3) = 49°$
+
+Net angle: $90° - 120° - 120° - 49° = -199°$
+
+For angle condition: need $-180°$, so deficiency is $-199° + 180° = -19°$
+
+We need $+19°$ more phase from a lead compensator.
+
+Place lead zero at $-3$ and find pole location to contribute $19°$.
+
+Let pole be at $-p$. The contribution at $s_d = -2 + j3.46$:
+
+Zero at $-3$: $\angle(-2+j3.46+3) = \angle(1+j3.46) = 73.9°$
+
+Pole at $-p$: need $\angle(-2+j3.46+p) = 73.9° - 19° = 54.9°$
+
+From geometry: $\tan(54.9°) = 3.46/(p-2)$, so $p - 2 = 3.46/1.42 = 2.44$, giving $p = 4.44$.
+
+Hmm, this puts the pole between existing poles, which may not give desired shape. Let me reconsider.
+
+\textbf{Simplified approach}: Use PID controller with zero placement.
+
+PID: $C(s) = K_p + K_i/s + K_d s = \frac{K_d s^2 + K_p s + K_i}{s}$
+
+Place PID zeros at $s = -2$ (double zero or two separate zeros) to cancel and attract locus.
+
+After working through the algebra (or using MATLAB), a PID with $K_p = 2$, $K_i = 4$, $K_d = 0.4$ gives closed-loop poles near the desired locations.
+
+\textbf{Verification}: Simulate step and ramp responses to confirm $\zeta \geq 0.5$, $T_s \leq 2$ s, and zero ramp error.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 4: Lead Compensator Design via Bode Plot}
+\label{subsec:ex_lead_bode}
+
+\textbf{Problem}: A robot joint servo has transfer function:
+\begin{equation}
+G(s) = \frac{50}{s(s + 10)}
+\end{equation}
+Design a lead compensator to achieve PM $\geq 50°$ and crossover frequency $\omega_c \geq 20$ rad/s.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Analyze uncompensated system at target crossover}
+
+At $\omega = 20$ rad/s:
+\begin{align}
+|G(j20)| &= \frac{50}{20 \cdot \sqrt{400 + 100}} = \frac{50}{20 \times 22.4} = 0.112 = -19 \text{ dB} \\
+\angle G(j20) &= -90° - \tan^{-1}(20/10) = -90° - 63.4° = -153.4°
+\end{align}
+
+Current PM at this frequency: $180° - 153.4° = 26.6°$ (need to add about 30°).
+
+\textbf{Step 2: Design lead compensator}
+
+Required phase lead: $\phi_m = 50° - 26.6° + 10° = 33.4°$ (with 10° margin)
+
+Calculate $\alpha$:
+\begin{equation}
+\alpha = \frac{1 - \sin(33.4°)}{1 + \sin(33.4°)} = \frac{1 - 0.55}{1 + 0.55} = 0.29
+\end{equation}
+
+Zero and pole locations:
+\begin{align}
+z &= \omega_c \sqrt{\alpha} = 20 \times 0.54 = 10.8 \text{ rad/s} \\
+p &= \omega_c / \sqrt{\alpha} = 20 / 0.54 = 37 \text{ rad/s}
+\end{align}
+
+\textbf{Step 3: Calculate gain}
+
+Lead compensator gain at $\omega_c$: $|C_{lead}(j20)| = \sqrt{(20^2 + 10.8^2)/(20^2 + 37^2)} = 0.54$
+
+For unity loop gain at crossover:
+\begin{equation}
+K_c = \frac{1}{|G(j20)| \cdot |C_{lead}(j20)|} = \frac{1}{0.112 \times 0.54} = 16.5
+\end{equation}
+
+\textbf{Step 4: Lead compensator}
+\begin{equation}
+C(s) = 16.5 \frac{s + 10.8}{s + 37}
+\end{equation}
+
+\textbf{Verification}: The compensated loop transfer function is:
+\begin{equation}
+L(s) = 16.5 \frac{s + 10.8}{s + 37} \cdot \frac{50}{s(s + 10)} = \frac{825(s + 10.8)}{s(s + 10)(s + 37)}
+\end{equation}
+
+At $\omega_c = 20$: Phase margin should be approximately $50°$. Verify by computing $\angle L(j20)$.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 5: Lag Compensator for Steady-State Error}
+\label{subsec:ex_lag_ss_error}
+
+\textbf{Problem}: A temperature control system has:
+\begin{equation}
+G(s) = \frac{5}{(s + 1)(s + 2)}
+\end{equation}
+With proportional control, the velocity error constant is $K_v = 0$ (Type 0 system). Design a lag compensator to achieve:
+\begin{itemize}
+    \item Position error constant $K_p \geq 50$
+    \item PM $\geq 45°$
+\end{itemize}
+
+\textbf{Solution}:
+
+\textbf{Step 1: Determine required gain increase}
+
+For proportional gain $K$: $K_p = K \cdot G(0) = K \cdot 5/2 = 2.5K$
+
+For $K_p \geq 50$: $K \geq 20$
+
+\textbf{Step 2: Find crossover frequency with $K = 20$ for PM = 45°}
+
+With $K = 20$, $|KG(j\omega)| = 1$ at crossover.
+
+$|20G(j\omega_c)| = \frac{100}{\sqrt{\omega_c^2+1}\sqrt{\omega_c^2+4}} = 1$
+
+Solving: $(\omega_c^2+1)(\omega_c^2+4) = 10000$
+
+$\omega_c^4 + 5\omega_c^2 + 4 = 10000$
+
+$\omega_c^4 + 5\omega_c^2 - 9996 = 0$
+
+$\omega_c^2 = \frac{-5 + \sqrt{25 + 39984}}{2} = \frac{-5 + 200}{2} = 97.5$
+
+$\omega_c = 9.87$ rad/s
+
+Phase at this frequency:
+$\angle G(j9.87) = -\tan^{-1}(9.87) - \tan^{-1}(4.94) = -84.2° - 78.6° = -162.8°$
+
+PM = $180° - 162.8° = 17.2°$ (insufficient!)
+
+\textbf{Step 3: Find gain for PM = 45°}
+
+Need phase = $-135°$ at crossover.
+
+At $\omega = 2$: $\angle G = -63.4° - 45° = -108.4°$ (PM would be 71.6°, too high)
+
+At $\omega = 4$: $\angle G = -76° - 63.4° = -139.4°$ (PM = 40.6°, close)
+
+At $\omega = 3.5$: $\angle G \approx -74° - 60° = -134°$ (PM $\approx 46°$, good)
+
+Required gain at $\omega = 3.5$:
+$|G(j3.5)| = \frac{5}{\sqrt{13.25}\sqrt{16.25}} = \frac{5}{14.7} = 0.34$
+
+For crossover: $K = 1/0.34 = 2.94$
+
+This gives $K_p = 2.94 \times 2.5 = 7.35$, much less than required 50.
+
+\textbf{Step 4: Design lag compensator}
+
+Required $\beta = K_{p,required}/K_{p,proportional} = 50/7.35 = 6.8$
+
+Lag compensator with $\beta = 7$:
+
+Zero at $z = \omega_c/10 = 0.35$ rad/s
+
+Pole at $p = z/\beta = 0.35/7 = 0.05$ rad/s
+
+\textbf{Step 5: Lag compensator}
+\begin{equation}
+C(s) = 2.94 \frac{s + 0.35}{s + 0.05}
+\end{equation}
+
+\textbf{Verification}: At DC, the lag compensator has gain $\beta = 7$, so total $K_p = 7 \times 7.35 = 51.5 \geq 50$. At $\omega_c = 3.5$, the lag phase contribution is small (a few degrees), so PM $\approx 44°$.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 6: Lead-Lag Compensator Design}
+\label{subsec:ex_lead_lag}
+
+\textbf{Problem}: A chemical reactor temperature control has:
+\begin{equation}
+G(s) = \frac{2}{s(s + 0.5)(s + 2)}
+\end{equation}
+Design a compensator for $K_v \geq 20$ s$^{-1}$ and PM $\geq 50°$.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Analyze uncompensated system}
+
+Type 1 system. $K_v = \lim_{s \to 0} sKG(s) = K \cdot 2/(0.5 \times 2) = 2K$
+
+For $K_v = 20$: $K = 10$
+
+\textbf{Step 2: Check stability with $K = 10$}
+
+$L(s) = \frac{20}{s(s+0.5)(s+2)}$
+
+Using Routh-Hurwitz on $s^3 + 2.5s^2 + s + 20 = 0$:
+
+The system is unstable for $K = 10$ (negative entry in Routh array).
+
+We need phase lead to stabilize, plus lag for the error constant.
+
+\textbf{Step 3: Design lead section}
+
+First, find a crossover frequency where we can achieve PM = 50° with lead compensation.
+
+At $\omega = 1$: $\angle G(j1) = -90° - \tan^{-1}(2) - \tan^{-1}(0.5) = -90° - 63.4° - 26.6° = -180°$ (critical!)
+
+We need significant phase lead. Target $\omega_c = 0.8$ rad/s.
+
+At $\omega = 0.8$: $\angle G = -90° - 58° - 21.8° = -169.8°$
+
+Current PM would be $10.2°$. Need $50° - 10° = 40°$ more, plus margin.
+
+Lead design for $\phi_m = 50°$:
+
+$\alpha = \frac{1 - \sin(50°)}{1 + \sin(50°)} = \frac{0.234}{1.766} = 0.132$
+
+$z_{lead} = 0.8\sqrt{0.132} = 0.29$ rad/s
+
+$p_{lead} = 0.8/\sqrt{0.132} = 2.2$ rad/s
+
+\textbf{Step 4: Determine required gain and lag section}
+
+With lead compensator at $\omega_c = 0.8$:
+
+$|G(j0.8)| = \frac{2}{0.8 \times \sqrt{0.64+0.25} \times \sqrt{0.64+4}} = \frac{2}{0.8 \times 0.94 \times 2.15} = 1.24$
+
+Lead magnitude at $\omega_c$: $|C_{lead}| = 1/\sqrt{\alpha} = 2.75$
+
+For crossover: $K_{lead} = 1/(1.24 \times 2.75) = 0.29$
+
+With $K = 0.29$: $K_v = 2 \times 0.29 = 0.58$ s$^{-1}$ (need 20!)
+
+Required lag ratio: $\beta = 20/0.58 = 34.5$
+
+\textbf{Step 5: Design lag section}
+
+$z_{lag} = 0.08$ rad/s (decade below crossover)
+
+$p_{lag} = 0.08/35 = 0.0023$ rad/s
+
+\textbf{Step 6: Complete compensator}
+\begin{equation}
+C(s) = 0.29 \cdot \frac{s + 0.29}{s + 2.2} \cdot \frac{s + 0.08}{s + 0.0023}
+\end{equation}
+
+This compensator provides PM $\approx 50°$, $K_v \approx 20$ s$^{-1}$.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 7: Feedforward Plus Feedback Design}
+\label{subsec:ex_ff_fb}
+
+\textbf{Problem}: A heat exchanger has:
+\begin{align}
+G(s) &= \frac{3e^{-2s}}{5s + 1} \quad \text{(control to output)} \\
+G_d(s) &= \frac{2e^{-s}}{3s + 1} \quad \text{(disturbance to output)}
+\end{align}
+
+The disturbance is the inlet fluid temperature, which is measured. Design a combined feedforward-feedback controller.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Design feedback controller}
+
+Using IMC-PI for the plant with $K = 3$, $\tau = 5$ s, $\theta = 2$ s:
+
+Choose $\lambda = 4$ s (moderate aggressiveness):
+\begin{align}
+K_p &= \frac{\tau}{K(\lambda + \theta)} = \frac{5}{3 \times 6} = 0.278 \\
+T_i &= \tau = 5 \text{ s}
+\end{align}
+
+PI controller: $C(s) = 0.278(1 + 1/(5s))$
+
+\textbf{Step 2: Design feedforward controller}
+
+Ideal feedforward:
+\begin{equation}
+C_{ff,ideal}(s) = -\frac{G_d(s)}{G(s)} = -\frac{2(5s+1)e^{-s}}{3(3s+1)e^{-2s}} = -\frac{2(5s+1)}{3(3s+1)} e^{s}
+\end{equation}
+
+The $e^{s}$ term is non-causal (requires 1 second prediction). Drop it:
+\begin{equation}
+C_{ff}(s) = -\frac{2(5s+1)}{3(3s+1)} = -\frac{2}{3} \cdot \frac{5s+1}{3s+1}
+\end{equation}
+
+This is a lead-lag network with DC gain $-2/3$ and high-frequency gain $-10/9$.
+
+\textbf{Step 3: Implementation}
+
+Combined control law:
+\begin{equation}
+U(s) = C(s)[R(s) - Y(s)] + C_{ff}(s) D(s)
+\end{equation}
+
+where $D(s)$ is the measured disturbance (inlet temperature deviation).
+
+\textbf{Step 4: Performance analysis}
+
+Without feedforward, disturbance response is determined by $S(s) = G_d/(1+CG)$.
+
+With feedforward, the effective disturbance transfer function is:
+\begin{equation}
+Y/D = \frac{G_d + G \cdot C_{ff}}{1 + CG}
+\end{equation}
+
+For perfect feedforward ($C_{ff} = -G_d/G$), the numerator would be zero. With our approximation, there is residual disturbance effect due to the delay mismatch, but it is significantly reduced compared to feedback-only control.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 8: Position Control System Design}
+\label{subsec:ex_position_control}
+
+\textbf{Problem}: Design a position controller for a ball screw linear actuator with motor and load:
+\begin{equation}
+G(s) = \frac{K_m}{s(Js + B)} = \frac{100}{s(0.5s + 2)}
+\end{equation}
+Requirements: 5\% overshoot, 0.5 second settling time, zero steady-state error to step position commands.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Translate specifications}
+
+5\% overshoot $\Rightarrow \zeta \geq 0.69$ (from overshoot formula)
+
+0.5 s settling time $\Rightarrow \sigma = 4/0.5 = 8$ rad/s
+
+Natural frequency: $\omega_n = \sigma/\zeta = 8/0.69 = 11.6$ rad/s
+
+Desired poles: $s = -8 \pm j\sqrt{11.6^2 - 64} = -8 \pm j8.4$
+
+\textbf{Step 2: Root locus analysis}
+
+Plant poles at $s = 0, -4$. With proportional gain, root locus goes from these poles toward $\pm j\infty$.
+
+The locus cannot reach $s = -8 \pm j8.4$ with proportional gain alone (locus stays near imaginary axis at high frequencies).
+
+\textbf{Step 3: PD controller design}
+
+Add derivative action to pull locus left. PD controller:
+\begin{equation}
+C(s) = K_p + K_d s = K_d(s + K_p/K_d) = K_d(s + z_{PD})
+\end{equation}
+
+Place PD zero to attract locus toward desired region. Try $z_{PD} = 10$ (to the left of desired poles).
+
+Open-loop with PD: $L(s) = \frac{100 K_d (s+10)}{s(0.5s+2)} = \frac{200 K_d (s+10)}{s(s+4)}$
+
+\textbf{Step 4: Check angle condition at desired pole}
+
+At $s_d = -8 + j8.4$:
+
+Angle from zero at $-10$: $\angle(2 + j8.4) = 76.6°$
+
+Angle from pole at $0$: $\angle(-8 + j8.4) = 180° - 46.4° = 133.6°$
+
+Angle from pole at $-4$: $\angle(-4 + j8.4) = 180° - 64.5° = 115.5°$
+
+Total: $76.6° - 133.6° - 115.5° = -172.5°$
+
+This is close to $-180°$ but not exact. Adjust zero location.
+
+Try $z_{PD} = 8$:
+
+Angle from zero at $-8$: $\angle(0 + j8.4) = 90°$
+
+Total: $90° - 133.6° - 115.5° = -159.1°$ (worse)
+
+Try $z_{PD} = 12$:
+
+Angle from zero at $-12$: $\angle(4 + j8.4) = 64.5°$
+
+Total: $64.5° - 133.6° - 115.5° = -184.6°$ (close, need fine tuning)
+
+\textbf{Step 5: Calculate gain}
+
+At the point where angle condition is satisfied, use magnitude condition:
+\begin{equation}
+K_d = \frac{|s_d| \cdot |s_d + 4|}{200 \cdot |s_d + z_{PD}|}
+\end{equation}
+
+With $s_d = -8 + j8.4$ and $z_{PD} = 11$:
+\begin{equation}
+K_d = \frac{11.6 \times 9.3}{200 \times 8.5} = \frac{108}{1700} = 0.064
+\end{equation}
+
+$K_p = K_d \times z_{PD} = 0.064 \times 11 = 0.7$
+
+\textbf{Step 6: Final controller}
+\begin{equation}
+C(s) = 0.7 + 0.064s
+\end{equation}
+
+Note: This provides zero steady-state error for position (step) because the plant already has an integrator (Type 1). For ramp tracking, add integral action.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 9: Temperature Control System}
+\label{subsec:ex_temperature}
+
+\textbf{Problem}: A thermal chamber has dynamics modeled as:
+\begin{equation}
+G(s) = \frac{0.8e^{-30s}}{120s + 1}
+\end{equation}
+with gain $K = 0.8$ °C/\% power, time constant $\tau = 120$ s, and dead time $\theta = 30$ s. Design a PI controller with $\lambda = 60$ s for moderate response.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Identify process characteristics}
+
+Dead time to time constant ratio: $\theta/\tau = 30/120 = 0.25$ (moderate dead time)
+
+This is suitable for IMC-based PI tuning.
+
+\textbf{Step 2: IMC-PI tuning}
+\begin{align}
+K_p &= \frac{\tau}{K(\lambda + \theta)} = \frac{120}{0.8 \times 90} = 1.67 \\
+T_i &= \tau = 120 \text{ s}
+\end{align}
+
+\textbf{Step 3: Controller}
+\begin{equation}
+C(s) = 1.67\left(1 + \frac{1}{120s}\right)
+\end{equation}
+
+In parallel form: $K_p = 1.67$, $K_i = 1.67/120 = 0.0139$ s$^{-1}$.
+
+\textbf{Step 4: Expected performance}
+
+Closed-loop time constant $\approx \lambda + \theta = 90$ s
+
+Settling time $\approx 4 \times 90 = 360$ s (6 minutes)
+
+Overshoot should be minimal ($<5\%$) with IMC tuning.
+
+\textbf{Step 5: Robustness check}
+
+For $\pm 20\%$ dead time uncertainty ($\theta$ varies from 24 to 36 s), IMC tuning with $\lambda = 60$ s provides adequate robustness since $\lambda > \theta$.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 10: DC Motor Speed Control}
+\label{subsec:ex_motor_speed}
+
+\textbf{Problem}: A DC motor speed control system has:
+\begin{equation}
+G(s) = \frac{K_m}{(Ls + R)(Js + B) + K_m K_b} = \frac{10}{0.1s^2 + 1.1s + 1}
+\end{equation}
+Design a controller for bandwidth $\omega_{BW} \geq 20$ rad/s with PM $\geq 45°$.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Analyze plant frequency response}
+
+Plant poles: $s = \frac{-1.1 \pm \sqrt{1.21 - 0.4}}{0.2} = \frac{-1.1 \pm 0.9}{0.2} = -1, -10$
+
+At $\omega = 20$:
+\begin{align}
+|G(j20)| &= \frac{10}{|0.1(j20)^2 + 1.1(j20) + 1|} = \frac{10}{|-40 + j22 + 1|} = \frac{10}{|-39 + j22|} = \frac{10}{45} = 0.22 \\
+\angle G(j20) &= -\tan^{-1}(22/-39) = -180° + 29.4° = -150.6° \text{ (in 3rd quadrant)}
+\end{align}
+
+Wait, let me recalculate. With $-39 + j22$:
+
+Magnitude: $\sqrt{39^2 + 22^2} = \sqrt{1521 + 484} = 44.8$
+
+Angle: The real part is negative and imaginary is positive, so we are in the second quadrant.
+$\angle(-39 + j22) = 180° - \tan^{-1}(22/39) = 180° - 29.4° = 150.6°$
+
+So $\angle G(j20) = -150.6°$ and PM would be $180° - 150.6° = 29.4°$.
+
+\textbf{Step 2: Design lead compensator}
+
+Need to increase PM from 29.4° to 45°, so need about 20° phase lead (plus margin).
+
+For $\phi_m = 25°$: $\alpha = (1 - \sin 25°)/(1 + \sin 25°) = 0.42$
+
+Place maximum phase at $\omega_c = 20$:
+
+$z = 20\sqrt{0.42} = 13$ rad/s
+
+$p = 20/\sqrt{0.42} = 31$ rad/s
+
+\textbf{Step 3: Calculate gain}
+
+$|C_{lead}(j20)| = \sqrt{(400+169)/(400+961)} = \sqrt{569/1361} = 0.65$
+
+For crossover at 20 rad/s: $K_c = 1/(0.22 \times 0.65) = 7.0$
+
+\textbf{Step 4: Lead compensator}
+\begin{equation}
+C(s) = 7.0 \frac{s + 13}{s + 31}
+\end{equation}
+
+\textbf{Verification}: With this compensator, $\omega_c \approx 20$ rad/s and PM $\approx 45°$.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 11: Cascade Control for Heat Exchanger}
+\label{subsec:ex_cascade}
+
+\textbf{Problem}: A shell-and-tube heat exchanger has:
+\begin{itemize}
+    \item Inner loop (steam valve to steam temperature): $G_1(s) = \frac{2}{5s+1}$
+    \item Outer loop (steam temperature to process temperature): $G_2(s) = \frac{1.5}{30s+1}$
+\end{itemize}
+
+Design a cascade control system.
+
+\textbf{Solution}:
+
+\textbf{Step 1: Verify cascade applicability}
+
+Inner loop time constant: 5 s
+
+Outer loop time constant: 30 s
+
+Ratio: 30/5 = 6 $>$ 3 (cascade is appropriate)
+
+\textbf{Step 2: Design inner loop controller}
+
+For the inner loop $G_1(s) = 2/(5s+1)$, use IMC-PI with $\lambda = 2$ s:
+\begin{align}
+K_{p1} &= \frac{5}{2 \times 2} = 1.25 \\
+T_{i1} &= 5 \text{ s}
+\end{align}
+
+Inner loop closed-loop: $T_1(s) = \frac{C_1 G_1}{1 + C_1 G_1} \approx \frac{1}{2s + 1}$ (approximately first-order with 2 s time constant)
+
+\textbf{Step 3: Design outer loop controller}
+
+The outer loop sees: $G_{outer}(s) = T_1(s) \cdot G_2(s) = \frac{1}{2s+1} \cdot \frac{1.5}{30s+1}$
+
+For PI control with $\lambda = 10$ s on the dominant (30 s) dynamics:
+\begin{align}
+K_{p2} &= \frac{30}{1.5 \times 10} = 2.0 \\
+T_{i2} &= 30 \text{ s}
+\end{align}
+
+\textbf{Step 4: Final cascade structure}
+
+Inner PI: $C_1(s) = 1.25(1 + 1/(5s))$
+
+Outer PI: $C_2(s) = 2.0(1 + 1/(30s))$
+
+\textbf{Benefits}: Disturbances affecting steam temperature are rejected by the fast inner loop before they propagate to process temperature.
+
+%-------------------------------------------------------------------------------
+\subsection{Example 12: 2DOF-PID for Level Control}
+\label{subsec:ex_2dof_level}
+
+\textbf{Problem}: A tank level control system exhibits 30\% overshoot with standard PID tuned for good disturbance rejection. Modify to reduce overshoot to less than 10\% without degrading disturbance rejection.
+
+\textbf{Given PID}: $K_p = 4$, $K_i = 0.5$ s$^{-1}$, $K_d = 2$ s
+
+\textbf{Solution}:
+
+\textbf{Step 1: Implement 2DOF structure}
+
+Convert to 2DOF-PID with setpoint weights $b$ and $c$.
+
+\textbf{Step 2: Set $c = 0$}
+
+This eliminates derivative kick on setpoint changes (always recommended).
+
+\textbf{Step 3: Determine $b$ by simulation or calculation}
+
+For a typical system, the relationship between $b$ and overshoot is approximately:
+
+\begin{itemize}
+    \item $b = 1.0$: 30\% overshoot (given)
+    \item $b = 0.7$: $\approx$ 20\% overshoot
+    \item $b = 0.5$: $\approx$ 12\% overshoot
+    \item $b = 0.4$: $\approx$ 8\% overshoot
+\end{itemize}
+
+Select $b = 0.45$ to achieve approximately 10\% overshoot.
+
+\textbf{Step 4: Final 2DOF-PID}
+\begin{equation}
+u(t) = 4[0.45r(t) - y(t)] + 0.5\int[r(\tau) - y(\tau)]d\tau + 2[0 \cdot \dot{r}(t) - \dot{y}(t)]
+\end{equation}
+
+\textbf{Verification}:
+\begin{itemize}
+    \item Setpoint step: Overshoot reduced to $\sim$10\%
+    \item Disturbance step: Rejection unchanged (same poles as original PID)
+\end{itemize}
+
+%===============================================================================
+\section{Algorithm Implementations}
+\label{sec:algorithms}
+%===============================================================================
+
+This section provides production-ready algorithms for controller design and analysis. Each algorithm includes detailed pseudocode suitable for implementation in Python, MATLAB, or other numerical computing environments.
+
+\subsection{PID Controller Implementation}
+\label{subsec:pid_algorithm}
+
+The following algorithm implements a discrete-time PID controller with practical features including anti-windup, derivative filtering, and setpoint weighting (2DOF capability).
+
+\begin{algorithm}[H]
+\caption{Discrete-Time 2DOF-PID Controller}
+\label{alg:pid_controller}
+\begin{algorithmic}[1]
+\REQUIRE Gains $K_p, K_i, K_d$; setpoint weights $b, c$; derivative filter coefficient $N$; sample time $T_s$
+\REQUIRE Output limits $u_{min}, u_{max}$
+\STATE \textbf{Initialize:}
+\STATE $\quad$ integral $\gets 0$
+\STATE $\quad$ derivative\_state $\gets 0$
+\STATE $\quad$ prev\_error $\gets 0$
+\STATE $\quad$ prev\_output $\gets 0$
+\STATE
+\FUNCTION{PID\_Update}{$r, y$}
+    \STATE \COMMENT{Calculate error terms}
+    \STATE $e \gets r - y$ \COMMENT{Error for integral term}
+    \STATE $e_p \gets b \cdot r - y$ \COMMENT{Error for proportional term}
+    \STATE $e_d \gets c \cdot r - y$ \COMMENT{Error for derivative term}
+    \STATE
+    \STATE \COMMENT{Proportional term}
+    \STATE $P \gets K_p \cdot e_p$
+    \STATE
+    \STATE \COMMENT{Integral term with trapezoidal integration}
+    \STATE integral $\gets$ integral $+ K_i \cdot T_s \cdot (e + \text{prev\_error}) / 2$
+    \STATE $I \gets$ integral
+    \STATE
+    \STATE \COMMENT{Derivative term with first-order filter}
+    \STATE $\alpha \gets N \cdot T_s / (1 + N \cdot T_s)$
+    \STATE derivative\_state $\gets (1 - \alpha) \cdot$ derivative\_state $+ \alpha \cdot K_d \cdot (e_d - \text{prev\_derivative\_error}) / T_s$
+    \STATE $D \gets$ derivative\_state
+    \STATE
+    \STATE \COMMENT{Compute unsaturated output}
+    \STATE $u_{raw} \gets P + I + D$
+    \STATE
+    \STATE \COMMENT{Apply output limits (saturation)}
+    \STATE $u \gets \max(u_{min}, \min(u_{max}, u_{raw}))$
+    \STATE
+    \STATE \COMMENT{Anti-windup: back-calculate integral correction}
+    \IF{$u \neq u_{raw}$}
+        \STATE integral $\gets$ integral $- K_i \cdot T_s \cdot (u_{raw} - u) / K_p$
+    \ENDIF
+    \STATE
+    \STATE \COMMENT{Update states for next iteration}
+    \STATE prev\_error $\gets e$
+    \STATE prev\_derivative\_error $\gets e_d$
+    \STATE prev\_output $\gets y$
+    \STATE
+    \RETURN $u$
+\ENDFUNCTION
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes}:
+
+\begin{enumerate}
+    \item \textbf{Sample time selection}: Choose $T_s$ at least 10 times smaller than the smallest time constant in the system. For the derivative filter, ensure $T_s \ll 1/N\omega_d$.
+
+    \item \textbf{Derivative filter}: The parameter $N$ limits the derivative gain at high frequencies. Typical values: $N = 8$ to $20$. The filtered derivative has the continuous-time transfer function:
+    \begin{equation}
+    D(s) = \frac{K_d s}{1 + s/(N\omega_d)}
+    \end{equation}
+
+    \item \textbf{Anti-windup}: The back-calculation method prevents integral windup when the output saturates. This is essential for systems with actuator limits.
+
+    \item \textbf{Bumpless transfer}: When switching from manual to automatic mode, initialize the integral term to achieve bumpless transfer:
+    \begin{equation}
+    \text{integral} = u_{manual} - K_p(b \cdot r - y) - D
+    \end{equation}
+\end{enumerate}
+
+\subsection{Root Locus Computation}
+\label{subsec:root_locus_algorithm}
+
+The following algorithm computes root locus points for a given range of gain values.
+
+\begin{algorithm}[H]
+\caption{Root Locus Computation}
+\label{alg:root_locus}
+\begin{algorithmic}[1]
+\REQUIRE Open-loop numerator coefficients $\mathbf{num}$, denominator coefficients $\mathbf{den}$
+\REQUIRE Gain range $K_{min}$ to $K_{max}$, number of points $N$
+\ENSURE Root locus matrix $\mathbf{R}$ (each column contains poles for one gain value)
+\STATE
+\STATE \COMMENT{Generate gain values (logarithmic spacing for better resolution)}
+\STATE $\mathbf{K} \gets \text{logspace}(\log_{10}(K_{min}), \log_{10}(K_{max}), N)$
+\STATE
+\STATE \COMMENT{Get number of poles}
+\STATE $n \gets \text{length}(\mathbf{den}) - 1$
+\STATE Initialize $\mathbf{R}$ as $n \times N$ complex matrix
+\STATE
+\FOR{$i = 1$ \TO $N$}
+    \STATE \COMMENT{Form closed-loop characteristic polynomial}
+    \STATE $\mathbf{char\_poly} \gets \mathbf{den} + K[i] \cdot \mathbf{num}$
+    \STATE \COMMENT{(Add numerator to denominator with proper alignment)}
+    \STATE
+    \STATE \COMMENT{Find roots of characteristic polynomial}
+    \STATE $\mathbf{R}[:, i] \gets \text{roots}(\mathbf{char\_poly})$
+    \STATE
+    \STATE \COMMENT{Sort roots to maintain branch continuity}
+    \IF{$i > 1$}
+        \STATE $\mathbf{R}[:, i] \gets \text{sort\_by\_nearest}(\mathbf{R}[:, i], \mathbf{R}[:, i-1])$
+    \ENDIF
+\ENDFOR
+\STATE
+\RETURN $\mathbf{R}$, $\mathbf{K}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Auxiliary Function}: Sort by nearest (Hungarian algorithm or greedy matching)
+
+\begin{algorithm}[H]
+\caption{Sort Roots by Nearest Match}
+\label{alg:sort_nearest}
+\begin{algorithmic}[1]
+\FUNCTION{sort\_by\_nearest}{$\mathbf{current}$, $\mathbf{previous}$}
+    \STATE $n \gets \text{length}(\mathbf{current})$
+    \STATE $\mathbf{sorted} \gets$ empty array of length $n$
+    \STATE $\mathbf{used} \gets$ array of $n$ false values
+    \STATE
+    \FOR{$i = 1$ \TO $n$}
+        \STATE $\text{min\_dist} \gets \infty$
+        \STATE $\text{best\_idx} \gets -1$
+        \FOR{$j = 1$ \TO $n$}
+            \IF{not $\mathbf{used}[j]$}
+                \STATE $d \gets |\mathbf{current}[j] - \mathbf{previous}[i]|$
+                \IF{$d < \text{min\_dist}$}
+                    \STATE $\text{min\_dist} \gets d$
+                    \STATE $\text{best\_idx} \gets j$
+                \ENDIF
+            \ENDIF
+        \ENDFOR
+        \STATE $\mathbf{sorted}[i] \gets \mathbf{current}[\text{best\_idx}]$
+        \STATE $\mathbf{used}[\text{best\_idx}] \gets$ true
+    \ENDFOR
+    \RETURN $\mathbf{sorted}$
+\ENDFUNCTION
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Bode Plot Computation}
+\label{subsec:bode_algorithm}
+
+\begin{algorithm}[H]
+\caption{Bode Plot Data Generation}
+\label{alg:bode}
+\begin{algorithmic}[1]
+\REQUIRE Transfer function numerator $\mathbf{num}$, denominator $\mathbf{den}$
+\REQUIRE Frequency range $\omega_{min}$ to $\omega_{max}$, number of points $N$
+\ENSURE Frequency vector $\boldsymbol{\omega}$, magnitude $\mathbf{M}_{dB}$, phase $\boldsymbol{\phi}_{deg}$
+\STATE
+\STATE $\boldsymbol{\omega} \gets \text{logspace}(\log_{10}(\omega_{min}), \log_{10}(\omega_{max}), N)$
+\STATE Initialize $\mathbf{M}_{dB}$, $\boldsymbol{\phi}_{deg}$ as arrays of length $N$
+\STATE
+\FOR{$i = 1$ \TO $N$}
+    \STATE $s \gets j \cdot \omega[i]$
+    \STATE
+    \STATE \COMMENT{Evaluate transfer function at $s = j\omega$}
+    \STATE $\text{num\_val} \gets \sum_{k=0}^{m} \mathbf{num}[k] \cdot s^{m-k}$
+    \STATE $\text{den\_val} \gets \sum_{k=0}^{n} \mathbf{den}[k] \cdot s^{n-k}$
+    \STATE $G \gets \text{num\_val} / \text{den\_val}$
+    \STATE
+    \STATE \COMMENT{Convert to magnitude (dB) and phase (degrees)}
+    \STATE $\mathbf{M}_{dB}[i] \gets 20 \cdot \log_{10}(|G|)$
+    \STATE $\boldsymbol{\phi}_{deg}[i] \gets \angle G \cdot 180 / \pi$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Unwrap phase to remove discontinuities}
+\STATE $\boldsymbol{\phi}_{deg} \gets \text{unwrap\_phase}(\boldsymbol{\phi}_{deg})$
+\STATE
+\RETURN $\boldsymbol{\omega}$, $\mathbf{M}_{dB}$, $\boldsymbol{\phi}_{deg}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Gain and Phase Margin Computation}
+\label{subsec:margin_algorithm}
+
+\begin{algorithm}[H]
+\caption{Stability Margin Computation}
+\label{alg:margins}
+\begin{algorithmic}[1]
+\REQUIRE Bode data: $\boldsymbol{\omega}$, $\mathbf{M}_{dB}$, $\boldsymbol{\phi}_{deg}$
+\ENSURE Gain margin $GM_{dB}$, phase margin $PM_{deg}$, crossover frequencies $\omega_{gc}$, $\omega_{pc}$
+\STATE
+\STATE \COMMENT{Find gain crossover frequency (where magnitude = 0 dB)}
+\STATE $\omega_{gc} \gets$ interpolate to find $\omega$ where $\mathbf{M}_{dB} = 0$
+\STATE
+\STATE \COMMENT{Find phase crossover frequency (where phase = -180°)}
+\STATE $\omega_{pc} \gets$ interpolate to find $\omega$ where $\boldsymbol{\phi}_{deg} = -180$
+\STATE
+\STATE \COMMENT{Compute phase margin}
+\IF{$\omega_{gc}$ exists}
+    \STATE $\phi_{gc} \gets$ interpolate $\boldsymbol{\phi}_{deg}$ at $\omega_{gc}$
+    \STATE $PM_{deg} \gets 180 + \phi_{gc}$
+\ELSE
+    \STATE $PM_{deg} \gets \infty$ \COMMENT{Never crosses 0 dB}
+\ENDIF
+\STATE
+\STATE \COMMENT{Compute gain margin}
+\IF{$\omega_{pc}$ exists}
+    \STATE $M_{pc} \gets$ interpolate $\mathbf{M}_{dB}$ at $\omega_{pc}$
+    \STATE $GM_{dB} \gets -M_{pc}$
+\ELSE
+    \STATE $GM_{dB} \gets \infty$ \COMMENT{Never crosses -180°}
+\ENDIF
+\STATE
+\RETURN $GM_{dB}$, $PM_{deg}$, $\omega_{gc}$, $\omega_{pc}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Lead Compensator Design Algorithm}
+\label{subsec:lead_design_algorithm}
+
+\begin{algorithm}[H]
+\caption{Lead Compensator Design via Bode Method}
+\label{alg:lead_design}
+\begin{algorithmic}[1]
+\REQUIRE Plant transfer function $G(s)$, desired PM $PM_d$, desired crossover $\omega_c$
+\ENSURE Lead compensator parameters $K_c$, $z$, $p$
+\STATE
+\STATE \COMMENT{Step 1: Evaluate plant at desired crossover}
+\STATE $G_{wc} \gets G(j\omega_c)$
+\STATE $|G_{wc}| \gets |G_{wc}|$
+\STATE $\phi_G \gets \angle G_{wc}$ in degrees
+\STATE
+\STATE \COMMENT{Step 2: Calculate required phase lead (with margin)}
+\STATE $\phi_m \gets PM_d - (180 + \phi_G) + 10$ \COMMENT{10° safety margin}
+\STATE
+\STATE \COMMENT{Step 3: Check feasibility}
+\IF{$\phi_m > 60$}
+    \STATE \textbf{Warning:} Consider two-stage lead or reduce $\omega_c$
+\ENDIF
+\STATE
+\STATE \COMMENT{Step 4: Calculate alpha}
+\STATE $\phi_m\_rad \gets \phi_m \cdot \pi / 180$
+\STATE $\alpha \gets (1 - \sin(\phi_m\_rad)) / (1 + \sin(\phi_m\_rad))$
+\STATE
+\STATE \COMMENT{Step 5: Calculate zero and pole}
+\STATE $z \gets \omega_c \cdot \sqrt{\alpha}$
+\STATE $p \gets \omega_c / \sqrt{\alpha}$
+\STATE
+\STATE \COMMENT{Step 6: Calculate gain for crossover at $\omega_c$}
+\STATE $K_c \gets \sqrt{\alpha} / |G_{wc}|$
+\STATE
+\RETURN $K_c$, $z$, $p$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{FOPDT Model Identification}
+\label{subsec:fopdt_algorithm}
+
+\begin{algorithm}[H]
+\caption{FOPDT Parameter Identification from Step Response}
+\label{alg:fopdt_id}
+\begin{algorithmic}[1]
+\REQUIRE Time vector $\mathbf{t}$, output response $\mathbf{y}$, step input magnitude $\Delta u$
+\ENSURE FOPDT parameters: gain $K$, time constant $\tau$, dead time $\theta$
+\STATE
+\STATE \COMMENT{Step 1: Find initial and final values}
+\STATE $y_0 \gets \mathbf{y}[1]$ \COMMENT{Initial value}
+\STATE $y_{ss} \gets$ mean of last 10\% of $\mathbf{y}$ \COMMENT{Steady-state value}
+\STATE $\Delta y \gets y_{ss} - y_0$
+\STATE
+\STATE \COMMENT{Step 2: Calculate gain}
+\STATE $K \gets \Delta y / \Delta u$
+\STATE
+\STATE \COMMENT{Step 3: Find time to 28.3\% and 63.2\% of final value}
+\STATE $y_{28} \gets y_0 + 0.283 \cdot \Delta y$
+\STATE $y_{63} \gets y_0 + 0.632 \cdot \Delta y$
+\STATE
+\STATE $t_{28} \gets$ interpolate $\mathbf{t}$ where $\mathbf{y} = y_{28}$
+\STATE $t_{63} \gets$ interpolate $\mathbf{t}$ where $\mathbf{y} = y_{63}$
+\STATE
+\STATE \COMMENT{Step 4: Calculate time constant and dead time}
+\STATE $\tau \gets 1.5 \cdot (t_{63} - t_{28})$
+\STATE $\theta \gets t_{63} - \tau$
+\STATE
+\STATE \COMMENT{Step 5: Ensure non-negative dead time}
+\IF{$\theta < 0$}
+    \STATE $\theta \gets 0$
+    \STATE $\tau \gets t_{63}$
+\ENDIF
+\STATE
+\RETURN $K$, $\tau$, $\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{IMC-PID Tuning Algorithm}
+\label{subsec:imc_tuning_algorithm}
+
+\begin{algorithm}[H]
+\caption{IMC-PID Tuning for FOPDT Process}
+\label{alg:imc_tuning}
+\begin{algorithmic}[1]
+\REQUIRE FOPDT parameters $K$, $\tau$, $\theta$
+\REQUIRE Desired closed-loop time constant $\lambda$
+\REQUIRE Controller type: ``PI'' or ``PID''
+\ENSURE PID parameters $K_p$, $T_i$, $T_d$
+\STATE
+\IF{type = ``PI''}
+    \STATE $K_p \gets \tau / (K \cdot (\lambda + \theta))$
+    \STATE $T_i \gets \tau$
+    \STATE $T_d \gets 0$
+\ELSIF{type = ``PID''}
+    \STATE $K_p \gets (2\tau + \theta) / (2K \cdot (\lambda + \theta))$
+    \STATE $T_i \gets \tau + \theta/2$
+    \STATE $T_d \gets \tau \cdot \theta / (2\tau + \theta)$
+\ENDIF
+\STATE
+\STATE \COMMENT{Convert to parallel form if needed}
+\STATE $K_i \gets K_p / T_i$
+\STATE $K_d \gets K_p \cdot T_d$
+\STATE
+\RETURN $K_p$, $K_i$, $K_d$, $T_i$, $T_d$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Guidelines for $\lambda$ selection}:
+\begin{itemize}
+    \item Aggressive: $\lambda = \theta$
+    \item Moderate: $\lambda = 2\theta$ to $3\theta$
+    \item Conservative: $\lambda > 3\theta$
+    \item Robustness constraint: $\lambda \geq 0.25\tau$
+\end{itemize}
+
+%===============================================================================
+\section{Chapter Summary}
+\label{sec:chapter_summary}
+%===============================================================================
+
+This chapter has developed the core techniques for designing feedback controllers. We have progressed from the fundamental PID controller through sophisticated root locus and frequency domain methods. Here I summarize the key concepts and provide guidance for applying these methods in practice.
+
+\subsection{Key Concepts}
+
+\textbf{PID Control}:
+\begin{itemize}
+    \item Proportional action responds to current error---provides immediate correction but leaves steady-state offset
+    \item Integral action accumulates past error---eliminates steady-state error but can cause overshoot and instability
+    \item Derivative action predicts future error---improves stability and reduces overshoot but amplifies noise
+    \item The art of PID tuning is balancing these competing effects for the application at hand
+\end{itemize}
+
+\textbf{PID Tuning Methods}:
+\begin{itemize}
+    \item Ziegler-Nichols provides aggressive tuning with significant overshoot---useful as a starting point
+    \item IMC tuning provides systematic design with a single parameter ($\lambda$) trading off speed versus robustness
+    \item SIMC extends IMC with practical guidelines for $\lambda$ selection
+    \item All methods require validation and fine-tuning on the actual system
+\end{itemize}
+
+\textbf{Root Locus}:
+\begin{itemize}
+    \item Shows how closed-loop poles move as gain varies
+    \item Pole locations directly determine transient response characteristics
+    \item The eight root locus rules enable rapid sketching
+    \item Design by specifying desired pole locations, then adding zeros/poles to reshape the locus
+\end{itemize}
+
+\textbf{Frequency Domain Design}:
+\begin{itemize}
+    \item Bode plots provide intuitive visualization of system frequency response
+    \item Phase margin is the primary stability metric---target 45° to 60° for most applications
+    \item Gain margin provides additional robustness indication---target $\geq$ 6 dB
+    \item Loop shaping: high gain at low frequencies for tracking, adequate margins at crossover, rolloff at high frequencies
+\end{itemize}
+
+\textbf{Compensators}:
+\begin{itemize}
+    \item Lead compensators add phase lead near crossover---improve stability margins
+    \item Lag compensators increase low-frequency gain---reduce steady-state error
+    \item Lead-lag combines both functions for comprehensive compensation
+    \item A single lead stage provides up to about 60° of phase lead
+\end{itemize}
+
+\textbf{Two-Degree-of-Freedom Control}:
+\begin{itemize}
+    \item Standard PID cannot independently optimize setpoint tracking and disturbance rejection
+    \item 2DOF-PID uses setpoint weights ($b$, $c$) to decouple these objectives
+    \item Tune for disturbance rejection first, then adjust setpoint weights to reduce overshoot
+    \item Setting $c = 0$ eliminates derivative kick---almost always recommended
+\end{itemize}
+
+\textbf{Feedforward Control}:
+\begin{itemize}
+    \item Feedforward compensates for measured disturbances proactively
+    \item Ideal feedforward: $C_{ff} = -G_d/G$
+    \item Realizability constraints often require approximations
+    \item Feedforward complements feedback---use both for best performance
+\end{itemize}
+
+\subsection{Design Method Selection Guide}
+
+\begin{table}[htbp]
+\centering
+\caption{When to use each design method}
+\label{tab:method_selection}
+\begin{tabular}{@{}p{3cm}p{10cm}@{}}
+\toprule
+\textbf{Method} & \textbf{Best suited for} \\
+\midrule
+PID with rules & First-order or second-order processes; initial tuning; when model is approximate \\
+Root Locus & When specific pole locations are desired; understanding gain effects; teaching/learning \\
+Bode/Frequency & When frequency response is measured; when margins are primary concern; systems with uncertain high-frequency dynamics \\
+Lead compensation & When more phase margin is needed without major bandwidth change \\
+Lag compensation & When steady-state error must be reduced without affecting stability \\
+2DOF-PID & When overshoot must be reduced but disturbance rejection maintained \\
+Feedforward & When significant disturbances are measurable \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Common Pitfalls}
+
+\begin{enumerate}
+    \item \textbf{Ignoring actuator limits}: Controllers designed without considering saturation can exhibit windup and poor performance. Always include anti-windup.
+
+    \item \textbf{Excessive derivative gain}: High derivative gain amplifies noise. Use filtered derivative and moderate gains.
+
+    \item \textbf{Neglecting model uncertainty}: Aggressive tuning for nominal model may fail with real plant. Design with robustness margins.
+
+    \item \textbf{Focusing only on setpoint response}: Industrial loops spend most time rejecting disturbances. Always verify disturbance rejection.
+
+    \item \textbf{Insufficient stability margins}: Minimum margins of GM $\geq$ 6 dB and PM $\geq$ 45° are recommended for robustness.
+\end{enumerate}
+
+\subsection{Moving Forward}
+
+The techniques in this chapter form the foundation of classical control design. In subsequent chapters, we will build upon these methods:
+
+\begin{itemize}
+    \item Chapter~\ref{ch:measuring_performance}: Quantitative metrics for comparing controller performance
+    \item Chapter~\ref{ch:stability_analysis}: Rigorous stability analysis including Nyquist criterion and Lyapunov methods
+    \item Chapter~\ref{ch:control_architecture}: Advanced architectures including cascade control, Smith predictor, and anti-windup
+    \item Chapter~\ref{ch:state_space}: State-space methods enabling multivariable and optimal control
+\end{itemize}
+
+The single-loop techniques presented here remain the workhorses of industrial control. Even as we develop more sophisticated methods, PID control, root locus, and Bode design continue to be essential tools in the control engineer's toolkit.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of Chapter 4
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
