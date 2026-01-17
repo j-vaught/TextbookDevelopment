@@ -1,0 +1,2145 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Chapter 16: Transformer World Models
+% Modern Control Systems: From First Principles to Machine Learning
+% Author: J.C. Vaught
+% University of South Carolina
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Transformer World Models}
+\label{ch:world_models}
+
+\whythismatters{
+Throughout this textbook, we have derived mathematical models of physical systems from first principles---Newton's laws, Kirchhoff's equations, thermodynamic relations. These physics-based models have served us well, enabling analysis, controller design, and prediction. But what happens when the system is too complex to model analytically? What if we do not know the governing equations, or the equations we have are too simplified to capture the true dynamics? This chapter introduces a fundamentally different approach: \textbf{learning world models from data}. Instead of deriving equations, we let neural networks---specifically transformers---learn to predict how the world evolves in response to actions. These learned world models enable a powerful paradigm called \textbf{imagination-based planning}, where a controller can simulate many possible futures in its ``mind'' before committing to an action. This approach has achieved remarkable success in robotics, autonomous vehicles, and game-playing AI. By the end of this chapter, you will understand how to train world models, how to use them for planning and control, and when they outperform or complement traditional model-based control.
+}
+
+%===============================================================================
+\section{World Models for Control: Learning System Dynamics}
+\label{sec:world_models_intro}
+%===============================================================================
+
+The concept of a \textbf{world model} is beautifully simple: it is a learned function that predicts the future state of a system given its current state and the action taken. In the language of control theory, a world model learns the state transition dynamics:
+\begin{equation}
+\mathbf{x}_{t+1} = f(\mathbf{x}_t, \mathbf{u}_t) + \boldsymbol{\epsilon}_t
+\label{eq:world_model_basic}
+\end{equation}
+
+where $\mathbf{x}_t$ is the state at time $t$, $\mathbf{u}_t$ is the control input (or action), and $\boldsymbol{\epsilon}_t$ represents prediction uncertainty.
+
+In classical control, we derive $f(\cdot)$ from physics. In world model learning, we approximate $f(\cdot)$ with a neural network trained on observed transitions $(\mathbf{x}_t, \mathbf{u}_t, \mathbf{x}_{t+1})$ collected from the real system.
+
+\subsection{Why Learn Dynamics Instead of Deriving Them?}
+
+You might wonder: why abandon the elegant physics-based models we have developed throughout this book? There are several compelling reasons:
+
+\subsubsection{Complexity Beyond First Principles}
+
+Many real systems are too complex to model analytically:
+\begin{itemize}
+    \item \textbf{Contact dynamics:} A robot hand manipulating objects involves friction, deformation, and contact geometry that are extraordinarily difficult to model accurately.
+    \item \textbf{Fluid-structure interaction:} An underwater vehicle interacting with turbulent flow defies closed-form analysis.
+    \item \textbf{Biological systems:} A prosthetic limb interacting with human neural control has dynamics we cannot derive from first principles.
+    \item \textbf{Multi-physics coupling:} Systems involving thermal, mechanical, electrical, and chemical interactions simultaneously are analytically intractable.
+\end{itemize}
+
+\subsubsection{Unknown or Changing Parameters}
+
+Even when the physics is known, parameters may be unknown or vary:
+\begin{itemize}
+    \item Wear, aging, and environmental changes alter system parameters
+    \item Mass, inertia, and friction coefficients are difficult to measure accurately
+    \item Operating conditions differ from laboratory calibration
+\end{itemize}
+
+A learned model can capture the true dynamics without explicit parameter identification.
+
+\subsubsection{High-Dimensional Observations}
+
+Modern systems often observe the world through cameras, lidar, or other high-dimensional sensors:
+\begin{itemize}
+    \item An autonomous vehicle sees images, not state vectors
+    \item A robot arm observes RGB-D point clouds
+    \item A medical robot perceives through ultrasound or endoscopy
+\end{itemize}
+
+World models can learn to predict directly in observation space or in a learned latent space, bypassing the need for explicit state estimation.
+
+\subsection{The World Model Paradigm}
+
+A complete world model system consists of several components:
+
+\begin{definition}[World Model]
+A \textbf{world model} is a learned predictive model comprising:
+\begin{enumerate}
+    \item \textbf{Encoder} $e_\phi$: Maps high-dimensional observations $\mathbf{o}_t$ to a compact latent state $\mathbf{z}_t$
+    \item \textbf{Dynamics model} $f_\theta$: Predicts next latent state given current state and action
+    \item \textbf{Decoder} $d_\psi$: Reconstructs observations from latent states
+    \item \textbf{Reward predictor} $r_\xi$: Predicts reward (for reinforcement learning applications)
+\end{enumerate}
+\end{definition}
+
+The encoder-decoder structure allows the model to work with raw sensor data while performing prediction in a compressed representation. This is crucial for computational efficiency and generalization.
+
+\subsection{Connection to Classical Control}
+
+Let me draw explicit connections to concepts we have studied:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Classical Control} & \textbf{World Models} \\
+\midrule
+State-space model $\dot{\mathbf{x}} = f(\mathbf{x}, \mathbf{u})$ & Dynamics model $\mathbf{z}_{t+1} = f_\theta(\mathbf{z}_t, \mathbf{u}_t)$ \\
+Output equation $\mathbf{y} = h(\mathbf{x})$ & Decoder $\hat{\mathbf{o}}_t = d_\psi(\mathbf{z}_t)$ \\
+State observer $\hat{\mathbf{x}} = g(\mathbf{y})$ & Encoder $\mathbf{z}_t = e_\phi(\mathbf{o}_t)$ \\
+Model Predictive Control & Imagination-based planning \\
+System identification & World model training \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The key difference is that in classical control, we derive $f$, $h$, and $g$ from physics. In world models, we learn them from data.
+
+\subsection{Historical Context and Modern Developments}
+
+The idea of learning predictive models is not new. System identification, which we studied in Chapter \ref{ch:parameter_identification}, has been estimating dynamical models from data for decades. What distinguishes modern world models is:
+
+\begin{enumerate}
+    \item \textbf{Deep learning capacity:} Neural networks can approximate extremely complex, high-dimensional functions
+    \item \textbf{End-to-end learning:} The entire pipeline from observations to predictions is trained jointly
+    \item \textbf{Scalable training:} GPU acceleration enables training on millions of transitions
+    \item \textbf{Latent space learning:} The model discovers its own compact representation
+    \item \textbf{Transformer architectures:} Attention mechanisms capture long-range dependencies
+\end{enumerate}
+
+The seminal ``World Models'' paper by Ha and Schmidhuber in 2018 demonstrated that an agent could learn to play video games by first learning a predictive model of the environment, then training a policy entirely in the learned model---in its ``imagination.'' This approach has since been extended and refined into the Dreamer family of algorithms, IRIS, and decision transformers, which we will study in detail.
+
+%===============================================================================
+\section{Latent Dynamics Models}
+\label{sec:latent_dynamics}
+%===============================================================================
+
+When observations are high-dimensional (images, point clouds, sensor arrays), predicting directly in observation space is computationally prohibitive and statistically challenging. The solution is to learn a \textbf{latent dynamics model} that operates in a compressed representation.
+
+\subsection{The Latent Space Concept}
+
+\begin{definition}[Latent Dynamics Model]
+A \textbf{latent dynamics model} consists of:
+\begin{align}
+\mathbf{z}_t &= e_\phi(\mathbf{o}_t) & \text{(Encoder)} \\
+\mathbf{z}_{t+1} &= f_\theta(\mathbf{z}_t, \mathbf{u}_t) & \text{(Dynamics)} \\
+\hat{\mathbf{o}}_t &= d_\psi(\mathbf{z}_t) & \text{(Decoder)}
+\end{align}
+where $\mathbf{o}_t \in \mathbb{R}^{D_o}$ is the high-dimensional observation, $\mathbf{z}_t \in \mathbb{R}^{D_z}$ is the latent state with $D_z \ll D_o$, and $\mathbf{u}_t \in \mathbb{R}^{D_u}$ is the action.
+\end{definition}
+
+The latent space serves multiple purposes:
+\begin{itemize}
+    \item \textbf{Compression:} Reduces computational cost of prediction
+    \item \textbf{Abstraction:} Removes irrelevant details (lighting, texture noise)
+    \item \textbf{Regularity:} Dynamics in latent space can be simpler than in observation space
+    \item \textbf{Generalization:} Similar states map to nearby latent representations
+\end{itemize}
+
+\subsection{Deterministic vs. Stochastic Latent Models}
+
+A crucial design choice is whether the latent dynamics are deterministic or stochastic.
+
+\subsubsection{Deterministic Latent Models}
+
+In a deterministic model:
+\begin{equation}
+\mathbf{z}_{t+1} = f_\theta(\mathbf{z}_t, \mathbf{u}_t)
+\end{equation}
+
+Given the current latent state and action, the next latent state is fully determined. This is analogous to our deterministic state-space models from classical control.
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Simpler to implement and train
+    \item Efficient for single-trajectory rollouts
+    \item Works well when the environment is nearly deterministic
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item Cannot model inherent stochasticity in the environment
+    \item Prediction errors compound during long rollouts
+    \item May produce overconfident predictions
+\end{itemize}
+
+\subsubsection{Stochastic Latent Models}
+
+In a stochastic model, the dynamics produce a distribution:
+\begin{equation}
+\mathbf{z}_{t+1} \sim p_\theta(\mathbf{z}_{t+1} | \mathbf{z}_t, \mathbf{u}_t)
+\end{equation}
+
+Often parameterized as a Gaussian:
+\begin{equation}
+p_\theta(\mathbf{z}_{t+1} | \mathbf{z}_t, \mathbf{u}_t) = \mathcal{N}(\boldsymbol{\mu}_\theta(\mathbf{z}_t, \mathbf{u}_t), \boldsymbol{\Sigma}_\theta(\mathbf{z}_t, \mathbf{u}_t))
+\end{equation}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Can model stochastic environments (e.g., other agents, wind gusts)
+    \item Quantifies prediction uncertainty
+    \item Enables risk-aware planning
+    \item Better handles multimodal futures (the robot can turn left OR right)
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item More complex training (variational inference, sampling)
+    \item Higher computational cost
+    \item Requires careful design to avoid posterior collapse
+\end{itemize}
+
+\subsection{The Encoder-Dynamics-Decoder Architecture}
+
+Let me describe a concrete architecture. Consider observations as images of size $64 \times 64 \times 3$ (RGB) and actions as 4-dimensional vectors (e.g., robot joint velocities).
+
+\subsubsection{Encoder Network}
+
+The encoder maps images to latent vectors:
+\begin{equation}
+\mathbf{z}_t = e_\phi(\mathbf{o}_t): \mathbb{R}^{64 \times 64 \times 3} \to \mathbb{R}^{D_z}
+\end{equation}
+
+A typical architecture uses convolutional layers followed by dense layers:
+
+\begin{algorithm}[H]
+\caption{Convolutional Encoder Architecture}
+\begin{algorithmic}[1]
+\Require Image observation $\mathbf{o}_t \in \mathbb{R}^{64 \times 64 \times 3}$
+\Ensure Latent state $\mathbf{z}_t \in \mathbb{R}^{D_z}$
+\State $\mathbf{h}_1 \gets \text{Conv2D}(\mathbf{o}_t, 32 \text{ filters}, 4\times4, \text{stride } 2) + \text{ReLU}$
+\State $\mathbf{h}_2 \gets \text{Conv2D}(\mathbf{h}_1, 64 \text{ filters}, 4\times4, \text{stride } 2) + \text{ReLU}$
+\State $\mathbf{h}_3 \gets \text{Conv2D}(\mathbf{h}_2, 128 \text{ filters}, 4\times4, \text{stride } 2) + \text{ReLU}$
+\State $\mathbf{h}_4 \gets \text{Conv2D}(\mathbf{h}_3, 256 \text{ filters}, 4\times4, \text{stride } 2) + \text{ReLU}$
+\State $\mathbf{h}_{\text{flat}} \gets \text{Flatten}(\mathbf{h}_4)$
+\State $\mathbf{z}_t \gets \text{Dense}(\mathbf{h}_{\text{flat}}, D_z)$
+\State \Return $\mathbf{z}_t$
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Dynamics Network}
+
+The dynamics model predicts the next latent state:
+\begin{equation}
+\mathbf{z}_{t+1} = f_\theta(\mathbf{z}_t, \mathbf{u}_t): \mathbb{R}^{D_z + D_u} \to \mathbb{R}^{D_z}
+\end{equation}
+
+For deterministic dynamics, a simple MLP suffices:
+\begin{equation}
+f_\theta(\mathbf{z}, \mathbf{u}) = \mathbf{W}_3 \cdot \text{ReLU}(\mathbf{W}_2 \cdot \text{ReLU}(\mathbf{W}_1 \cdot [\mathbf{z}; \mathbf{u}] + \mathbf{b}_1) + \mathbf{b}_2) + \mathbf{b}_3
+\end{equation}
+
+For stochastic dynamics, the network outputs mean and variance:
+\begin{align}
+\boldsymbol{\mu}_\theta, \log \boldsymbol{\sigma}_\theta &= f_\theta^{\text{split}}(\mathbf{z}_t, \mathbf{u}_t) \\
+\mathbf{z}_{t+1} &= \boldsymbol{\mu}_\theta + \boldsymbol{\sigma}_\theta \odot \boldsymbol{\epsilon}, \quad \boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
+\end{align}
+
+The reparameterization trick (sampling using $\boldsymbol{\epsilon}$) allows gradient-based training.
+
+\subsubsection{Decoder Network}
+
+The decoder reconstructs observations from latent states:
+\begin{equation}
+\hat{\mathbf{o}}_t = d_\psi(\mathbf{z}_t): \mathbb{R}^{D_z} \to \mathbb{R}^{64 \times 64 \times 3}
+\end{equation}
+
+This uses transposed convolutions (deconvolutions) to upsample:
+
+\begin{algorithm}[H]
+\caption{Transposed Convolutional Decoder Architecture}
+\begin{algorithmic}[1]
+\Require Latent state $\mathbf{z}_t \in \mathbb{R}^{D_z}$
+\Ensure Reconstructed observation $\hat{\mathbf{o}}_t \in \mathbb{R}^{64 \times 64 \times 3}$
+\State $\mathbf{h}_1 \gets \text{Dense}(\mathbf{z}_t, 1024) + \text{ReLU}$
+\State $\mathbf{h}_2 \gets \text{Reshape}(\mathbf{h}_1, 4 \times 4 \times 64)$
+\State $\mathbf{h}_3 \gets \text{ConvTranspose2D}(\mathbf{h}_2, 128, 4\times4, \text{stride } 2) + \text{ReLU}$
+\State $\mathbf{h}_4 \gets \text{ConvTranspose2D}(\mathbf{h}_3, 64, 4\times4, \text{stride } 2) + \text{ReLU}$
+\State $\mathbf{h}_5 \gets \text{ConvTranspose2D}(\mathbf{h}_4, 32, 4\times4, \text{stride } 2) + \text{ReLU}$
+\State $\hat{\mathbf{o}}_t \gets \text{ConvTranspose2D}(\mathbf{h}_5, 3, 4\times4, \text{stride } 2) + \text{Sigmoid}$
+\State \Return $\hat{\mathbf{o}}_t$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Training Latent Dynamics Models}
+
+The model is trained end-to-end using collected experience. Given a dataset of trajectories:
+\begin{equation}
+\mathcal{D} = \{(\mathbf{o}_0^{(i)}, \mathbf{u}_0^{(i)}, \mathbf{o}_1^{(i)}, \mathbf{u}_1^{(i)}, \ldots, \mathbf{o}_T^{(i)})\}_{i=1}^N
+\end{equation}
+
+We minimize a combined loss:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\text{recon}} + \beta \mathcal{L}_{\text{dyn}} + \gamma \mathcal{L}_{\text{reg}}
+\label{eq:latent_model_loss}
+\end{equation}
+
+\subsubsection{Reconstruction Loss}
+
+Ensures the decoder can reconstruct observations:
+\begin{equation}
+\mathcal{L}_{\text{recon}} = \mathbb{E}_{(\mathbf{o}, \mathbf{u}) \sim \mathcal{D}} \left[ \| \mathbf{o}_t - d_\psi(e_\phi(\mathbf{o}_t)) \|^2 \right]
+\end{equation}
+
+This encourages the latent space to capture information needed for reconstruction.
+
+\subsubsection{Dynamics Loss}
+
+Ensures the dynamics model predicts accurately:
+\begin{equation}
+\mathcal{L}_{\text{dyn}} = \mathbb{E}_{(\mathbf{o}_t, \mathbf{u}_t, \mathbf{o}_{t+1}) \sim \mathcal{D}} \left[ \| e_\phi(\mathbf{o}_{t+1}) - f_\theta(e_\phi(\mathbf{o}_t), \mathbf{u}_t) \|^2 \right]
+\end{equation}
+
+This ensures that the encoded next observation matches the predicted next latent state.
+
+\subsubsection{Regularization Loss}
+
+For stochastic models with variational inference, we add a KL divergence term:
+\begin{equation}
+\mathcal{L}_{\text{reg}} = D_{\text{KL}}(q_\phi(\mathbf{z}_t | \mathbf{o}_t) \| p(\mathbf{z}_t))
+\end{equation}
+
+where $p(\mathbf{z}_t)$ is typically a unit Gaussian prior. This encourages a well-structured latent space.
+
+\subsection{Latent Space Properties for Control}
+
+For control applications, we want the latent space to have specific properties:
+
+\begin{enumerate}
+    \item \textbf{Predictability:} Dynamics in latent space should be learnable and accurate over relevant time horizons.
+
+    \item \textbf{Controllability:} Actions should have consistent, learnable effects on latent states.
+
+    \item \textbf{Stability:} Small changes in observations should produce small changes in latent states (Lipschitz continuity).
+
+    \item \textbf{Interpretability (optional):} It can be helpful if latent dimensions correspond to meaningful physical quantities, though this is not required.
+\end{enumerate}
+
+\keypoint{A good latent dynamics model trades off reconstruction quality, prediction accuracy, and latent space regularity. Tuning the loss coefficients $\beta$ and $\gamma$ in Equation \ref{eq:latent_model_loss} is crucial for achieving this balance.}
+
+%===============================================================================
+\section{The Dreamer Architecture}
+\label{sec:dreamer}
+%===============================================================================
+
+The Dreamer family of algorithms (Dreamer, DreamerV2, DreamerV3) represents the state of the art in model-based reinforcement learning. These algorithms learn world models and then train policies by ``imagining'' trajectories in the learned model.
+
+\subsection{Recurrent State-Space Model (RSSM)}
+
+The key innovation in Dreamer is the \textbf{Recurrent State-Space Model (RSSM)}, which combines deterministic and stochastic latent variables to capture both predictable dynamics and inherent uncertainty.
+
+\begin{definition}[Recurrent State-Space Model]
+The RSSM defines a latent state as:
+\begin{equation}
+\mathbf{s}_t = (\mathbf{h}_t, \mathbf{z}_t)
+\end{equation}
+where:
+\begin{itemize}
+    \item $\mathbf{h}_t \in \mathbb{R}^{D_h}$ is a deterministic recurrent state
+    \item $\mathbf{z}_t \in \mathbb{R}^{D_z}$ is a stochastic latent state
+\end{itemize}
+\end{definition}
+
+The RSSM consists of four components:
+
+\subsubsection{Sequence Model (Deterministic Transition)}
+
+The deterministic state evolves as a GRU or LSTM:
+\begin{equation}
+\mathbf{h}_t = \text{GRU}_\theta(\mathbf{h}_{t-1}, \mathbf{z}_{t-1}, \mathbf{u}_{t-1})
+\label{eq:rssm_deterministic}
+\end{equation}
+
+This captures the predictable, history-dependent aspects of dynamics.
+
+\subsubsection{Representation Model (Encoder)}
+
+Given an observation, the stochastic state is inferred:
+\begin{equation}
+\mathbf{z}_t \sim q_\phi(\mathbf{z}_t | \mathbf{h}_t, \mathbf{o}_t)
+\label{eq:rssm_representation}
+\end{equation}
+
+This ``posterior'' uses both the recurrent state and the observation.
+
+\subsubsection{Transition Model (Prior)}
+
+Without an observation, the stochastic state is predicted:
+\begin{equation}
+\hat{\mathbf{z}}_t \sim p_\theta(\mathbf{z}_t | \mathbf{h}_t)
+\label{eq:rssm_prior}
+\end{equation}
+
+This ``prior'' is used during imagination when we do not have real observations.
+
+\subsubsection{Observation Model (Decoder)}
+
+Observations are reconstructed from the full state:
+\begin{equation}
+\hat{\mathbf{o}}_t \sim p_\psi(\mathbf{o}_t | \mathbf{h}_t, \mathbf{z}_t)
+\label{eq:rssm_decoder}
+\end{equation}
+
+\subsection{RSSM Training}
+
+The RSSM is trained by maximizing the evidence lower bound (ELBO):
+\begin{equation}
+\mathcal{L}_{\text{RSSM}} = \sum_{t=1}^T \left[ \underbrace{\ln p_\psi(\mathbf{o}_t | \mathbf{h}_t, \mathbf{z}_t)}_{\text{Reconstruction}} - \beta \underbrace{D_{\text{KL}}(q_\phi(\mathbf{z}_t | \mathbf{h}_t, \mathbf{o}_t) \| p_\theta(\mathbf{z}_t | \mathbf{h}_t))}_{\text{Prior matching}} \right]
+\label{eq:elbo}
+\end{equation}
+
+The first term encourages accurate reconstruction. The second term encourages the representation model to produce latent states that the transition model can predict.
+
+\warningbox{The KL divergence term is crucial. Without it, the model might learn a representation that perfectly encodes observations but is unpredictable by the transition model, making imagination useless.}
+
+\subsection{Discrete vs. Continuous Latent States}
+
+\subsubsection{DreamerV1: Continuous Gaussian Latents}
+
+The original Dreamer uses continuous Gaussian distributions:
+\begin{align}
+q_\phi(\mathbf{z}_t | \mathbf{h}_t, \mathbf{o}_t) &= \mathcal{N}(\boldsymbol{\mu}_\phi(\mathbf{h}_t, \mathbf{o}_t), \boldsymbol{\sigma}_\phi^2(\mathbf{h}_t, \mathbf{o}_t)) \\
+p_\theta(\mathbf{z}_t | \mathbf{h}_t) &= \mathcal{N}(\boldsymbol{\mu}_\theta(\mathbf{h}_t), \boldsymbol{\sigma}_\theta^2(\mathbf{h}_t))
+\end{align}
+
+\subsubsection{DreamerV2 and V3: Discrete Latents}
+
+Later versions use categorical distributions over a set of discrete codes:
+\begin{align}
+\mathbf{z}_t &\in \{1, 2, \ldots, K\}^{D_z} \\
+p(\mathbf{z}_t) &= \prod_{d=1}^{D_z} \text{Categorical}(\boldsymbol{\pi}_{t,d})
+\end{align}
+
+Each dimension chooses from $K$ discrete values (typically $K = 32$), giving $K^{D_z}$ possible states.
+
+\textbf{Why discrete latents?}
+
+\begin{enumerate}
+    \item \textbf{Multimodality:} Discrete distributions naturally represent multiple possibilities (turn left OR turn right).
+
+    \item \textbf{Exploration:} Discrete latents encourage the model to use all categories, avoiding posterior collapse.
+
+    \item \textbf{Stability:} KL divergence is bounded for categorical distributions.
+
+    \item \textbf{Straight-through gradients:} The Gumbel-softmax trick enables gradient-based training.
+\end{enumerate}
+
+\subsection{Actor-Critic in Imagination}
+
+Once the world model is trained, Dreamer trains a policy by generating imagined trajectories.
+
+\subsubsection{Imagination Rollout}
+
+Starting from an encoded real observation:
+\begin{equation}
+\mathbf{s}_0 = (\mathbf{h}_0, \mathbf{z}_0), \quad \mathbf{z}_0 \sim q_\phi(\mathbf{z}_0 | \mathbf{h}_0, \mathbf{o}_0)
+\end{equation}
+
+We rollout using the policy and world model:
+\begin{align}
+\mathbf{u}_t &\sim \pi_\eta(\mathbf{u}_t | \mathbf{s}_t) \\
+\mathbf{h}_{t+1} &= \text{GRU}_\theta(\mathbf{h}_t, \mathbf{z}_t, \mathbf{u}_t) \\
+\mathbf{z}_{t+1} &\sim p_\theta(\mathbf{z}_{t+1} | \mathbf{h}_{t+1}) \\
+\hat{r}_{t+1} &= r_\xi(\mathbf{s}_{t+1})
+\end{align}
+
+This generates trajectories entirely in imagination---no interaction with the real environment.
+
+\subsubsection{Policy and Value Training}
+
+Using the imagined trajectories, we train:
+
+\textbf{Value function} $V_\nu(\mathbf{s})$: Predicts cumulative future reward
+\begin{equation}
+V_\nu(\mathbf{s}_t) \approx \mathbb{E}\left[ \sum_{k=0}^{H-1} \gamma^k \hat{r}_{t+k+1} + \gamma^H V_\nu(\mathbf{s}_{t+H}) \right]
+\end{equation}
+
+The value is trained to minimize:
+\begin{equation}
+\mathcal{L}_V = \mathbb{E}_{\text{imagine}}\left[ \sum_{t=0}^{H-1} \| V_\nu(\mathbf{s}_t) - V_t^{\text{target}} \|^2 \right]
+\end{equation}
+
+where $V_t^{\text{target}}$ is computed using $\lambda$-returns (a blend of TD and Monte Carlo estimates).
+
+\textbf{Policy} $\pi_\eta(\mathbf{u} | \mathbf{s})$: Maximizes expected value
+\begin{equation}
+\mathcal{L}_\pi = -\mathbb{E}_{\text{imagine}}\left[ \sum_{t=0}^{H-1} V_t^\lambda \right]
+\end{equation}
+
+where $V_t^\lambda$ is the $\lambda$-return estimate.
+
+\subsection{The Complete Dreamer Algorithm}
+
+\begin{algorithm}[H]
+\caption{Dreamer: Model-Based Reinforcement Learning}
+\begin{algorithmic}[1]
+\Require Environment, initial parameters $\theta, \phi, \psi, \xi, \eta, \nu$
+\State Initialize replay buffer $\mathcal{B}$
+\State Initialize recurrent state $\mathbf{h}_0$
+\For{each episode}
+    \State $\mathbf{o}_0 \gets \text{env.reset()}$
+    \For{$t = 0, 1, 2, \ldots$}
+        \State $\mathbf{z}_t \sim q_\phi(\mathbf{z}_t | \mathbf{h}_t, \mathbf{o}_t)$ \Comment{Encode observation}
+        \State $\mathbf{u}_t \sim \pi_\eta(\mathbf{u}_t | \mathbf{h}_t, \mathbf{z}_t)$ \Comment{Sample action}
+        \State $\mathbf{o}_{t+1}, r_{t+1} \gets \text{env.step}(\mathbf{u}_t)$ \Comment{Execute in environment}
+        \State $\mathcal{B} \gets \mathcal{B} \cup \{(\mathbf{o}_t, \mathbf{u}_t, r_{t+1}, \mathbf{o}_{t+1})\}$ \Comment{Store transition}
+        \State $\mathbf{h}_{t+1} \gets \text{GRU}_\theta(\mathbf{h}_t, \mathbf{z}_t, \mathbf{u}_t)$ \Comment{Update recurrent state}
+        \If{time to train}
+            \State Sample batch of sequences from $\mathcal{B}$
+            \State \textbf{World Model Update:}
+            \State \quad Compute RSSM loss (Eq. \ref{eq:elbo})
+            \State \quad Update $\theta, \phi, \psi, \xi$ by gradient descent
+            \State \textbf{Policy Update:}
+            \State \quad Imagine trajectories of length $H$ from encoded states
+            \State \quad Compute $\lambda$-returns
+            \State \quad Update $\nu$ (value) and $\eta$ (policy) by gradient descent
+        \EndIf
+    \EndFor
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{DreamerV3: Key Improvements}
+
+DreamerV3 introduces several improvements for robust scaling:
+
+\begin{enumerate}
+    \item \textbf{Symlog predictions:} Instead of predicting raw values, predict $\text{symlog}(x) = \text{sign}(x) \ln(|x| + 1)$. This handles rewards and values across different scales.
+
+    \item \textbf{Unimix categoricals:} Add uniform noise to categorical distributions to prevent collapse.
+
+    \item \textbf{Percentile scaling:} Normalize returns by their 5th-95th percentile range, not fixed scales.
+
+    \item \textbf{Free bits:} Only penalize KL divergence above a threshold, preventing posterior collapse.
+\end{enumerate}
+
+These changes enable DreamerV3 to work across diverse domains without hyperparameter tuning.
+
+%===============================================================================
+\section{IRIS and Discrete World Models}
+\label{sec:iris}
+%===============================================================================
+
+IRIS (Imagination via Real-time Synthesis) takes a different approach: instead of continuous or categorical latent states, it uses \textbf{discrete tokens} from a pre-trained image tokenizer, enabling the use of transformer language models for dynamics prediction.
+
+\subsection{The Tokenization Approach}
+
+\begin{definition}[IRIS Architecture]
+IRIS consists of:
+\begin{enumerate}
+    \item \textbf{Image tokenizer:} A VQ-VAE (Vector Quantized Variational Autoencoder) that converts images to sequences of discrete tokens
+    \item \textbf{Autoregressive transformer:} Predicts next tokens given past tokens and actions
+    \item \textbf{Actor-critic:} Trained on imagined token trajectories
+\end{enumerate}
+\end{definition}
+
+\subsection{Vector Quantized Variational Autoencoder (VQ-VAE)}
+
+The VQ-VAE learns to represent images as sequences of discrete tokens.
+
+\subsubsection{Encoder}
+
+The encoder maps an image to a grid of continuous vectors:
+\begin{equation}
+\mathbf{e} = \text{Encoder}(\mathbf{o}) \in \mathbb{R}^{H' \times W' \times D}
+\end{equation}
+
+For a $64 \times 64$ image with 4x downsampling, $H' = W' = 16$, giving 256 spatial positions.
+
+\subsubsection{Codebook Quantization}
+
+Each encoder output $\mathbf{e}_{ij}$ is replaced by the nearest entry in a learned codebook:
+\begin{equation}
+\mathbf{z}_{ij} = \arg\min_{\mathbf{c}_k \in \mathcal{C}} \| \mathbf{e}_{ij} - \mathbf{c}_k \|
+\end{equation}
+
+where $\mathcal{C} = \{\mathbf{c}_1, \ldots, \mathbf{c}_K\}$ is the codebook with $K$ entries (typically $K = 512$ or $K = 8192$).
+
+The image is now represented as a sequence of $H' \times W'$ discrete tokens, each taking values in $\{1, \ldots, K\}$.
+
+\subsubsection{Decoder}
+
+The decoder reconstructs the image from quantized features:
+\begin{equation}
+\hat{\mathbf{o}} = \text{Decoder}(\mathbf{z})
+\end{equation}
+
+\subsubsection{VQ-VAE Training}
+
+The VQ-VAE is trained with three losses:
+\begin{equation}
+\mathcal{L}_{\text{VQ-VAE}} = \underbrace{\| \mathbf{o} - \hat{\mathbf{o}} \|^2}_{\text{Reconstruction}} + \underbrace{\| \text{sg}[\mathbf{e}] - \mathbf{z} \|^2}_{\text{Codebook learning}} + \beta \underbrace{\| \mathbf{e} - \text{sg}[\mathbf{z}] \|^2}_{\text{Commitment}}
+\end{equation}
+
+where $\text{sg}[\cdot]$ is the stop-gradient operator.
+
+\subsection{Autoregressive Dynamics Model}
+
+Once images are tokenized, IRIS uses a transformer to predict dynamics.
+
+\subsubsection{Sequence Representation}
+
+A trajectory becomes a sequence of tokens:
+\begin{equation}
+(z_1^1, z_1^2, \ldots, z_1^{N}, a_1, z_2^1, z_2^2, \ldots, z_2^{N}, a_2, \ldots)
+\end{equation}
+
+where $z_t^i$ is the $i$-th token of frame $t$, and $a_t$ is the action (also discretized).
+
+\subsubsection{Transformer Prediction}
+
+The transformer predicts the next token autoregressively:
+\begin{equation}
+p(z_{t+1}^i | z_{1:t}, a_{1:t}, z_{t+1}^{1:i-1})
+\end{equation}
+
+This is exactly like language modeling: predict the next token given all previous tokens.
+
+\subsubsection{Imagination}
+
+To imagine a future trajectory:
+\begin{enumerate}
+    \item Encode the current observation into tokens
+    \item Provide action sequence
+    \item Sample next frame's tokens one by one from the transformer
+    \item Decode tokens back to images (optional, for visualization)
+\end{enumerate}
+
+\subsection{Advantages of IRIS}
+
+\begin{enumerate}
+    \item \textbf{Leverages transformer scale:} Transformers scale well with data and compute, benefiting from advances in NLP.
+
+    \item \textbf{Discrete is easier:} Categorical predictions are more stable than continuous predictions.
+
+    \item \textbf{Unified architecture:} The same transformer architecture works across domains.
+
+    \item \textbf{Pre-trained components:} Can use pre-trained image tokenizers.
+\end{enumerate}
+
+\subsection{IRIS Training Pipeline}
+
+\begin{algorithm}[H]
+\caption{IRIS Training}
+\begin{algorithmic}[1]
+\Require Dataset of trajectories $\mathcal{D}$
+\State \textbf{Phase 1: Train VQ-VAE}
+\For{each batch of images}
+    \State Encode, quantize, decode
+    \State Update VQ-VAE with reconstruction + codebook losses
+\EndFor
+\State \textbf{Phase 2: Train World Model Transformer}
+\State Tokenize all images in $\mathcal{D}$ using trained VQ-VAE
+\For{each batch of token sequences}
+    \State Compute autoregressive loss: $-\sum_t \log p(z_t | z_{<t}, a_{<t})$
+    \State Update transformer by gradient descent
+\EndFor
+\State \textbf{Phase 3: Train Actor-Critic}
+\For{each training iteration}
+    \State Sample initial states from $\mathcal{D}$
+    \State Imagine trajectories using transformer
+    \State Compute returns and update actor-critic
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+%===============================================================================
+\section{Decision Transformers: Sequence Modeling for Control}
+\label{sec:decision_transformer}
+%===============================================================================
+
+Decision Transformers take a radically different approach: instead of learning a dynamics model and planning, they frame control as \textbf{sequence prediction}. Given a desired outcome, the model predicts the actions that achieve it.
+
+\subsection{Control as Sequence Modeling}
+
+Traditional reinforcement learning learns a policy $\pi(\mathbf{u} | \mathbf{s})$ that maximizes expected return. Decision Transformers instead learn to predict actions conditioned on desired returns.
+
+\begin{definition}[Decision Transformer]
+A Decision Transformer is a transformer model that takes as input:
+\begin{equation}
+(\hat{R}_1, \mathbf{s}_1, \mathbf{u}_1, \hat{R}_2, \mathbf{s}_2, \mathbf{u}_2, \ldots, \hat{R}_t, \mathbf{s}_t)
+\end{equation}
+and predicts the next action $\mathbf{u}_t$, where $\hat{R}_t$ is the ``return-to-go'' (desired cumulative reward from step $t$ onward).
+\end{definition}
+
+\subsection{Return-Conditioned Policy}
+
+The key insight is conditioning on returns:
+\begin{equation}
+\mathbf{u}_t = \pi(\mathbf{u}_t | \mathbf{s}_1, \mathbf{u}_1, \ldots, \mathbf{s}_t, \hat{R}_1, \ldots, \hat{R}_t)
+\end{equation}
+
+At test time, we specify a high desired return $\hat{R}_1$ and let the model predict actions to achieve it.
+
+\subsection{Architecture}
+
+\subsubsection{Input Embedding}
+
+Each timestep has three tokens:
+\begin{align}
+\mathbf{e}_t^R &= \text{Embed}_R(\hat{R}_t) + \mathbf{p}_t & \text{(Return embedding)} \\
+\mathbf{e}_t^s &= \text{Embed}_s(\mathbf{s}_t) + \mathbf{p}_t & \text{(State embedding)} \\
+\mathbf{e}_t^u &= \text{Embed}_u(\mathbf{u}_t) + \mathbf{p}_t & \text{(Action embedding)}
+\end{align}
+
+where $\mathbf{p}_t$ is a learned timestep embedding.
+
+\subsubsection{Transformer Processing}
+
+The sequence of embeddings is processed by a causal transformer:
+\begin{equation}
+\mathbf{h}_1^R, \mathbf{h}_1^s, \mathbf{h}_1^u, \ldots, \mathbf{h}_T^R, \mathbf{h}_T^s = \text{Transformer}(\mathbf{e}_1^R, \mathbf{e}_1^s, \mathbf{e}_1^u, \ldots, \mathbf{e}_T^R, \mathbf{e}_T^s)
+\end{equation}
+
+Causal masking ensures each token only attends to previous tokens.
+
+\subsubsection{Action Prediction}
+
+The action is predicted from the state embedding output:
+\begin{equation}
+\mathbf{u}_t = \text{MLP}(\mathbf{h}_t^s)
+\end{equation}
+
+\subsection{Training}
+
+Decision Transformers are trained via supervised learning on offline datasets:
+
+\begin{equation}
+\mathcal{L}_{\text{DT}} = \mathbb{E}_{(\mathbf{s}, \mathbf{u}, R) \sim \mathcal{D}} \left[ \| \mathbf{u}_t - \hat{\mathbf{u}}_t \|^2 \right]
+\end{equation}
+
+where $\hat{\mathbf{u}}_t$ is the predicted action and $\mathbf{u}_t$ is the action in the dataset.
+
+\textbf{Key insight:} The model learns from trajectories of varying quality. By conditioning on high returns at test time, it can generalize to produce better behavior than any single trajectory in the training data.
+
+\subsection{Inference}
+
+At test time:
+\begin{enumerate}
+    \item Set initial return-to-go $\hat{R}_1$ to a high desired value
+    \item Observe state $\mathbf{s}_1$
+    \item Predict action $\mathbf{u}_1$
+    \item Execute action, receive reward $r_1$, observe $\mathbf{s}_2$
+    \item Update return-to-go: $\hat{R}_2 = \hat{R}_1 - r_1$
+    \item Repeat
+\end{enumerate}
+
+The return-to-go decreases as rewards are collected, keeping track of remaining desired reward.
+
+\subsection{Connection to Classical Control}
+
+Decision Transformers have an interesting connection to reference tracking:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Classical Control} & \textbf{Decision Transformer} \\
+\midrule
+Reference trajectory $\mathbf{r}(t)$ & Return-to-go sequence $\hat{R}_t$ \\
+Tracking error $\mathbf{e}(t) = \mathbf{r}(t) - \mathbf{y}(t)$ & Remaining return $\hat{R}_t$ \\
+Feedforward + feedback & Attention over history \\
+Model Predictive Control horizon & Transformer context length \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Advantages and Limitations}
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item Simple supervised learning---no value function bootstrapping
+    \item Stable training---no policy gradient variance
+    \item Works with offline data---no environment interaction needed
+    \item Inherits transformer benefits (parallelization, scalability)
+\end{itemize}
+
+\textbf{Limitations:}
+\begin{itemize}
+    \item Requires diverse training data spanning many return levels
+    \item Cannot extrapolate to returns higher than seen in training
+    \item No explicit model of dynamics
+    \item May not generalize well to new situations
+\end{itemize}
+
+\subsection{Trajectory Transformer}
+
+A related approach, the \textbf{Trajectory Transformer}, models the joint distribution over entire trajectories:
+\begin{equation}
+p(\tau) = p(\mathbf{s}_1, \mathbf{u}_1, r_1, \mathbf{s}_2, \mathbf{u}_2, r_2, \ldots)
+\end{equation}
+
+Planning is performed by sampling trajectories conditioned on high rewards:
+\begin{equation}
+\tau^* = \arg\max_\tau p(\tau | R(\tau) > R_{\text{thresh}})
+\end{equation}
+
+This enables more flexible planning than return-conditioned action prediction.
+
+%===============================================================================
+\section{Imagination-Based Planning and MPC}
+\label{sec:imagination_planning}
+%===============================================================================
+
+Once we have a world model, we can use it for planning---evaluating many possible action sequences to find the best one.
+
+\subsection{Model Predictive Control with Learned Models}
+
+Recall from Chapter \ref{ch:optimal_predictive_control} that Model Predictive Control (MPC) solves:
+\begin{equation}
+\mathbf{u}_{0:H-1}^* = \arg\min_{\mathbf{u}_{0:H-1}} \sum_{t=0}^{H-1} c(\hat{\mathbf{x}}_t, \mathbf{u}_t) + c_f(\hat{\mathbf{x}}_H)
+\end{equation}
+
+subject to:
+\begin{equation}
+\hat{\mathbf{x}}_{t+1} = f(\hat{\mathbf{x}}_t, \mathbf{u}_t)
+\end{equation}
+
+In classical MPC, $f$ is derived from physics. In imagination-based planning, $f$ is the learned world model.
+
+\subsection{Challenges with Learned Models}
+
+Using learned models for MPC introduces new challenges:
+
+\subsubsection{Model Error Compounding}
+
+Prediction errors accumulate over the horizon:
+\begin{equation}
+\text{Error}(\hat{\mathbf{x}}_H) \approx \sum_{t=0}^{H-1} \text{Error}(f) \cdot (L_f)^{H-t}
+\end{equation}
+
+where $L_f$ is the Lipschitz constant of the dynamics. For long horizons, small per-step errors become large trajectory errors.
+
+\textbf{Mitigation strategies:}
+\begin{itemize}
+    \item Use shorter prediction horizons
+    \item Re-plan frequently
+    \item Use ensemble models to estimate uncertainty
+    \item Penalize actions that lead to high-uncertainty regions
+\end{itemize}
+
+\subsubsection{Non-Differentiability}
+
+Many planning algorithms require gradients through the dynamics. If the world model uses discrete tokens (like IRIS) or sampling operations, gradients may not flow.
+
+\textbf{Solutions:}
+\begin{itemize}
+    \item Use derivative-free optimization (CEM, MPPI)
+    \item Use reparameterization tricks for stochastic models
+    \item Use straight-through estimators for discrete models
+\end{itemize}
+
+\subsection{Sampling-Based Planning}
+
+When gradients are unavailable or unreliable, sampling-based methods work well.
+
+\subsubsection{Cross-Entropy Method (CEM)}
+
+CEM iteratively refines a distribution over action sequences:
+
+\begin{algorithm}[H]
+\caption{Cross-Entropy Method for Planning}
+\begin{algorithmic}[1]
+\Require World model $f$, cost function $c$, horizon $H$, initial state $\mathbf{x}_0$
+\Require Number of samples $N$, elite fraction $\rho$, iterations $K$
+\State Initialize: $\boldsymbol{\mu} \gets \mathbf{0}$, $\boldsymbol{\Sigma} \gets \sigma_0^2 \mathbf{I}$ (for each timestep)
+\For{$k = 1, \ldots, K$}
+    \State Sample $N$ action sequences: $\mathbf{u}_{0:H-1}^{(i)} \sim \mathcal{N}(\boldsymbol{\mu}, \boldsymbol{\Sigma})$
+    \For{$i = 1, \ldots, N$}
+        \State Rollout: $\hat{\mathbf{x}}_0^{(i)} = \mathbf{x}_0$
+        \For{$t = 0, \ldots, H-1$}
+            \State $\hat{\mathbf{x}}_{t+1}^{(i)} = f(\hat{\mathbf{x}}_t^{(i)}, \mathbf{u}_t^{(i)})$
+        \EndFor
+        \State Evaluate cost: $J^{(i)} = \sum_{t=0}^{H-1} c(\hat{\mathbf{x}}_t^{(i)}, \mathbf{u}_t^{(i)})$
+    \EndFor
+    \State Select elite samples: top $\rho N$ with lowest cost
+    \State Update: $\boldsymbol{\mu} \gets \text{mean of elite samples}$
+    \State Update: $\boldsymbol{\Sigma} \gets \text{covariance of elite samples}$
+\EndFor
+\State \Return $\mathbf{u}_0^* = \boldsymbol{\mu}_0$ (first action of mean sequence)
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Model Predictive Path Integral (MPPI)}
+
+MPPI uses importance sampling with soft costs:
+
+\begin{equation}
+\mathbf{u}_t^* = \frac{\sum_{i=1}^N \exp(-\lambda J^{(i)}) \mathbf{u}_t^{(i)}}{\sum_{i=1}^N \exp(-\lambda J^{(i)})}
+\end{equation}
+
+where $\lambda$ is a temperature parameter. Lower costs receive higher weights.
+
+\subsection{Gradient-Based Planning}
+
+When the world model is differentiable, we can optimize directly:
+
+\begin{equation}
+\mathbf{u}_{0:H-1}^* = \arg\min_{\mathbf{u}} J(\mathbf{u}) = \arg\min_{\mathbf{u}} \sum_{t=0}^{H-1} c(f^{(t)}(\mathbf{x}_0, \mathbf{u}_{0:t}), \mathbf{u}_t)
+\end{equation}
+
+Gradients are computed via backpropagation through time:
+\begin{equation}
+\frac{\partial J}{\partial \mathbf{u}_t} = \frac{\partial c}{\partial \mathbf{u}_t} + \sum_{k=t+1}^{H} \frac{\partial c}{\partial \hat{\mathbf{x}}_k} \frac{\partial \hat{\mathbf{x}}_k}{\partial \mathbf{u}_t}
+\end{equation}
+
+\warningbox{Gradients through long sequences can vanish or explode. Use gradient clipping, careful initialization, and consider truncated backpropagation.}
+
+\subsection{Combining Imagination with Real Experience}
+
+Pure imagination-based planning can drift from reality. Practical systems combine imagined and real experience.
+
+\subsubsection{Dyna Architecture}
+
+The Dyna architecture alternates between:
+\begin{enumerate}
+    \item \textbf{Real experience:} Interact with environment, store transitions
+    \item \textbf{Model learning:} Update world model from stored transitions
+    \item \textbf{Planning:} Generate imagined transitions, update policy
+\end{enumerate}
+
+For each real transition, we might generate $k$ imagined transitions, amplifying data efficiency.
+
+\subsubsection{Model-Based Policy Optimization (MBPO)}
+
+MBPO addresses model error by:
+\begin{enumerate}
+    \item Training an ensemble of world models
+    \item Rolling out short trajectories from real states
+    \item Using model disagreement to estimate uncertainty
+    \item Mixing imagined and real data for policy training
+\end{enumerate}
+
+The key insight: start imagined rollouts from real states to limit error accumulation.
+
+%===============================================================================
+\section{Training World Models}
+\label{sec:training_world_models}
+%===============================================================================
+
+Training high-quality world models requires careful attention to loss functions, data collection, and architectural choices.
+
+\subsection{Loss Functions for World Models}
+
+\subsubsection{Reconstruction Loss}
+
+For models with decoders, reconstruction loss ensures the latent space captures observation information:
+\begin{equation}
+\mathcal{L}_{\text{recon}} = \mathbb{E}_{(\mathbf{o}_t) \sim \mathcal{D}} \left[ -\log p(\mathbf{o}_t | \mathbf{z}_t) \right]
+\end{equation}
+
+For Gaussian observation models:
+\begin{equation}
+\mathcal{L}_{\text{recon}} = \frac{1}{2\sigma^2} \| \mathbf{o}_t - \hat{\mathbf{o}}_t \|^2 + \text{const}
+\end{equation}
+
+For discrete observations (like image tokens):
+\begin{equation}
+\mathcal{L}_{\text{recon}} = -\sum_i \log p(o_t^i | \mathbf{z}_t)
+\end{equation}
+
+\subsubsection{Prediction Loss}
+
+The core world model loss ensures accurate dynamics prediction:
+\begin{equation}
+\mathcal{L}_{\text{pred}} = \mathbb{E}_{(\mathbf{z}_t, \mathbf{u}_t, \mathbf{z}_{t+1}) \sim \mathcal{D}} \left[ -\log p(\mathbf{z}_{t+1} | \mathbf{z}_t, \mathbf{u}_t) \right]
+\end{equation}
+
+For deterministic models:
+\begin{equation}
+\mathcal{L}_{\text{pred}} = \| \mathbf{z}_{t+1} - f_\theta(\mathbf{z}_t, \mathbf{u}_t) \|^2
+\end{equation}
+
+For stochastic models with Gaussian predictions:
+\begin{equation}
+\mathcal{L}_{\text{pred}} = \frac{1}{2} \left( (\mathbf{z}_{t+1} - \boldsymbol{\mu})^T \boldsymbol{\Sigma}^{-1} (\mathbf{z}_{t+1} - \boldsymbol{\mu}) + \log|\boldsymbol{\Sigma}| \right)
+\end{equation}
+
+\subsubsection{Reward Prediction Loss}
+
+For reinforcement learning, we also predict rewards:
+\begin{equation}
+\mathcal{L}_{\text{reward}} = \mathbb{E}_{(\mathbf{z}_t, r_t) \sim \mathcal{D}} \left[ (r_t - \hat{r}_t)^2 \right]
+\end{equation}
+
+For sparse rewards (mostly zero), use cross-entropy with a categorical output.
+
+\subsubsection{Termination Prediction}
+
+For episodic tasks, predict episode termination:
+\begin{equation}
+\mathcal{L}_{\text{term}} = \mathbb{E} \left[ -d_t \log \hat{d}_t - (1-d_t) \log(1-\hat{d}_t) \right]
+\end{equation}
+
+where $d_t \in \{0, 1\}$ indicates termination.
+
+\subsubsection{KL Divergence (Variational Models)}
+
+For models using variational inference:
+\begin{equation}
+\mathcal{L}_{\text{KL}} = D_{\text{KL}}(q(\mathbf{z}_t | \mathbf{o}_t, \mathbf{h}_t) \| p(\mathbf{z}_t | \mathbf{h}_t))
+\end{equation}
+
+This encourages the posterior (with observation) to match the prior (without observation).
+
+\subsection{Multi-Step Prediction}
+
+Training only on one-step prediction can lead to models that perform poorly over long horizons.
+
+\subsubsection{Multi-Step Loss}
+
+Train on trajectories of length $K$:
+\begin{equation}
+\mathcal{L}_{\text{multi}} = \sum_{k=1}^{K} \lambda^{k-1} \mathcal{L}_{\text{pred}}(\mathbf{z}_{t+k}, \hat{\mathbf{z}}_{t+k})
+\end{equation}
+
+where $\hat{\mathbf{z}}_{t+k}$ is obtained by rolling out the model from $\mathbf{z}_t$.
+
+The discount $\lambda < 1$ puts more weight on near-term accuracy.
+
+\subsubsection{Scheduled Sampling}
+
+During training, sometimes use predicted states instead of ground truth:
+\begin{equation}
+\mathbf{z}_t^{\text{input}} = \begin{cases}
+\mathbf{z}_t^{\text{true}} & \text{with probability } p \\
+\hat{\mathbf{z}}_t & \text{with probability } 1-p
+\end{cases}
+\end{equation}
+
+Gradually decrease $p$ during training to expose the model to its own errors.
+
+\subsection{Data Collection Strategies}
+
+\subsubsection{Random Exploration}
+
+Initially, collect data with random actions:
+\begin{equation}
+\mathbf{u}_t \sim \text{Uniform}(\mathcal{U})
+\end{equation}
+
+This provides broad coverage but may miss interesting regions.
+
+\subsubsection{Curiosity-Driven Exploration}
+
+Seek states where the model is uncertain:
+\begin{equation}
+r_{\text{intrinsic}} = \| \mathbf{z}_{t+1} - f_\theta(\mathbf{z}_t, \mathbf{u}_t) \|^2
+\end{equation}
+
+High prediction error indicates unexplored regions.
+
+\subsubsection{Task-Relevant Exploration}
+
+Focus on states relevant to the task. Use the current policy with added exploration noise:
+\begin{equation}
+\mathbf{u}_t = \pi(\mathbf{s}_t) + \boldsymbol{\epsilon}, \quad \boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \sigma^2 \mathbf{I})
+\end{equation}
+
+\subsection{Handling Distribution Shift}
+
+The policy changes during training, causing the state distribution to shift.
+
+\subsubsection{Replay Buffer}
+
+Store all experience in a buffer $\mathcal{B}$ and sample uniformly:
+\begin{equation}
+(\mathbf{o}_t, \mathbf{u}_t, \mathbf{o}_{t+1}) \sim \text{Uniform}(\mathcal{B})
+\end{equation}
+
+This mixes old and new data.
+
+\subsubsection{Prioritized Replay}
+
+Sample transitions with high prediction error more often:
+\begin{equation}
+p_i \propto |\delta_i|^\alpha
+\end{equation}
+
+where $\delta_i$ is the prediction error for transition $i$.
+
+\subsubsection{Model Ensemble}
+
+Train an ensemble of $M$ models:
+\begin{equation}
+\{f_{\theta_1}, f_{\theta_2}, \ldots, f_{\theta_M}\}
+\end{equation}
+
+Use disagreement to estimate uncertainty:
+\begin{equation}
+\text{Uncertainty}(\mathbf{z}_t, \mathbf{u}_t) = \frac{1}{M} \sum_{m=1}^M \| f_{\theta_m}(\mathbf{z}_t, \mathbf{u}_t) - \bar{f}(\mathbf{z}_t, \mathbf{u}_t) \|^2
+\end{equation}
+
+where $\bar{f}$ is the ensemble mean.
+
+\subsection{Architectural Considerations}
+
+\subsubsection{Sequence Length}
+
+Transformers have fixed context lengths. Common choices:
+\begin{itemize}
+    \item 50-100 frames for fast dynamics (video games)
+    \item 10-20 frames for slow dynamics (robotics)
+\end{itemize}
+
+\subsubsection{Latent Dimension}
+
+The latent dimension $D_z$ trades off compression and expressiveness:
+\begin{itemize}
+    \item Too small: Cannot capture complex states
+    \item Too large: Harder to learn dynamics, overfitting risk
+\end{itemize}
+
+Common choices: $D_z \in [32, 256]$ for continuous, $32 \times 32$ discrete codes for IRIS.
+
+\subsubsection{Action Representation}
+
+Actions can be:
+\begin{itemize}
+    \item Continuous: Embed with MLP
+    \item Discrete: Embed with lookup table
+    \item Mixed: Separate embeddings combined
+\end{itemize}
+
+%===============================================================================
+\section{Practical Applications}
+\label{sec:world_model_applications}
+%===============================================================================
+
+This section presents worked examples demonstrating world model concepts from simple to complex.
+
+\subsection{Example 1: Learning a Simple Pendulum World Model}
+
+We begin with a system whose physics we know, to validate our world model approach.
+
+\subsubsection{System Description}
+
+Consider an inverted pendulum with state $\mathbf{x} = [\theta, \dot{\theta}]^T$ and action $u = \tau$ (torque). The true dynamics are:
+\begin{align}
+\dot{\theta} &= \omega \\
+\dot{\omega} &= \frac{g}{l}\sin\theta - \frac{b}{ml^2}\omega + \frac{1}{ml^2}\tau
+\end{align}
+
+With parameters: $m = 1$ kg, $l = 1$ m, $b = 0.1$ Ns/m, $g = 9.81$ m/s$^2$.
+
+\subsubsection{Data Collection}
+
+We collect 10,000 transitions with random torques:
+\begin{equation}
+\tau \sim \text{Uniform}(-5, 5) \text{ Nm}
+\end{equation}
+
+Each transition is $(\theta_t, \omega_t, \tau_t, \theta_{t+1}, \omega_{t+1})$ with $\Delta t = 0.02$ s.
+
+\subsubsection{World Model Architecture}
+
+We use a simple feedforward network:
+\begin{equation}
+[\Delta\theta, \Delta\omega] = f_\theta([\theta, \omega, \tau])
+\end{equation}
+
+where the network predicts state changes rather than absolute states.
+
+Architecture:
+\begin{itemize}
+    \item Input: 3 dimensions (state + action)
+    \item Hidden: 2 layers, 64 units each, ReLU activation
+    \item Output: 2 dimensions (state delta)
+\end{itemize}
+
+\subsubsection{Training}
+
+Loss function:
+\begin{equation}
+\mathcal{L} = \frac{1}{N}\sum_{i=1}^N \| \mathbf{x}_{t+1}^{(i)} - \mathbf{x}_t^{(i)} - f_\theta(\mathbf{x}_t^{(i)}, \mathbf{u}_t^{(i)}) \|^2
+\end{equation}
+
+Training details:
+\begin{itemize}
+    \item Optimizer: Adam with learning rate $10^{-3}$
+    \item Batch size: 256
+    \item Epochs: 100
+\end{itemize}
+
+\subsubsection{Results}
+
+After training, we compare the learned model to the true physics.
+
+\textbf{One-step prediction error:}
+\begin{equation}
+\text{RMSE} = 0.003 \text{ rad for } \theta, \quad 0.015 \text{ rad/s for } \omega
+\end{equation}
+
+\textbf{Multi-step rollout (50 steps, 1 second):}
+\begin{equation}
+\text{Final error} = 0.05 \text{ rad}, \quad 0.2 \text{ rad/s}
+\end{equation}
+
+The learned model accurately captures the dynamics despite having no knowledge of the underlying physics.
+
+\subsubsection{Comparison to Physics Model}
+
+We compare the learned model $f_\theta$ to the discrete-time physics model:
+\begin{align}
+\theta_{t+1} &= \theta_t + \Delta t \cdot \omega_t \\
+\omega_{t+1} &= \omega_t + \Delta t \cdot \left(\frac{g}{l}\sin\theta_t - \frac{b}{ml^2}\omega_t + \frac{1}{ml^2}\tau_t\right)
+\end{align}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Learned Model} & \textbf{Physics Model} \\
+\midrule
+1-step RMSE ($\theta$) & 0.003 rad & 0 rad (exact) \\
+50-step RMSE ($\theta$) & 0.05 rad & 0 rad (exact) \\
+Training time & 5 min & N/A \\
+Physics knowledge required & None & Full equations \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\keypoint{For systems with known physics, the physics model is superior. The power of learned models is for systems where physics is unknown or intractable.}
+
+\subsection{Example 2: Latent State Prediction for Cart-Pole}
+
+We now consider learning from images rather than state vectors.
+
+\subsubsection{Setup}
+
+The cart-pole system is observed through $64 \times 64$ grayscale images. The true state $[\theta, \dot{\theta}, x, \dot{x}]$ is not directly accessible.
+
+\subsubsection{VQ-VAE for Image Tokenization}
+
+We train a VQ-VAE with:
+\begin{itemize}
+    \item Encoder: 4 conv layers, outputting $8 \times 8$ spatial grid
+    \item Codebook: 512 codes of dimension 64
+    \item Decoder: 4 transposed conv layers
+\end{itemize}
+
+Each image becomes 64 discrete tokens.
+
+\textbf{Reconstruction quality:} SSIM = 0.95 (excellent perceptual quality)
+
+\subsubsection{Dynamics Model}
+
+We train a small transformer (4 layers, 4 heads, dimension 256) to predict next-frame tokens:
+\begin{equation}
+p(z_{t+1}^{1:64} | z_t^{1:64}, a_t)
+\end{equation}
+
+\subsubsection{Latent State Analysis}
+
+To understand what the latent space learned, we:
+\begin{enumerate}
+    \item Collect 1000 images with known ground-truth states
+    \item Encode each image to latent tokens
+    \item Fit a linear regression from latent features to true states
+\end{enumerate}
+
+Results show:
+\begin{itemize}
+    \item Pole angle $\theta$: $R^2 = 0.98$
+    \item Cart position $x$: $R^2 = 0.95$
+    \item Velocities: $R^2 \approx 0.7$ (harder to infer from single frames)
+\end{itemize}
+
+The latent space has learned a representation that is approximately linear in the true state---without ever seeing state labels during training.
+
+\subsection{Example 3: Planning with a Learned Model}
+
+We use the pendulum world model for MPC-style planning.
+
+\subsubsection{Task}
+
+Swing up the pendulum from hanging ($\theta = \pi$) to upright ($\theta = 0$) and balance.
+
+\subsubsection{Cost Function}
+
+\begin{equation}
+c(\mathbf{x}, u) = \theta^2 + 0.1\omega^2 + 0.01u^2
+\end{equation}
+
+\subsubsection{CEM Planning}
+
+We use CEM with:
+\begin{itemize}
+    \item Horizon $H = 25$ steps (0.5 seconds)
+    \item Samples $N = 500$
+    \item Elite fraction $\rho = 0.1$
+    \item Iterations $K = 5$
+\end{itemize}
+
+\subsubsection{Results}
+
+Starting from $\theta = \pi$ (hanging):
+
+\begin{enumerate}
+    \item \textbf{Steps 0-50:} The planner applies maximum torque to swing the pendulum
+    \item \textbf{Steps 50-100:} Momentum builds, pendulum swings past horizontal
+    \item \textbf{Steps 100-150:} Controlled deceleration as pendulum approaches upright
+    \item \textbf{Steps 150+:} Balancing with small corrections
+\end{enumerate}
+
+\textbf{Comparison to model-free RL:}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Training Episodes} & \textbf{Success Rate} \\
+\midrule
+PPO (model-free) & 500 & 95\% \\
+SAC (model-free) & 300 & 98\% \\
+CEM + World Model & 50 (for model) & 92\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The world model approach requires 6-10x fewer real environment interactions.
+
+\subsection{Example 4: Decision Transformer for Robot Arm}
+
+We apply Decision Transformers to a 7-DOF robot arm reaching task.
+
+\subsubsection{Dataset}
+
+We have 10,000 offline trajectories of varying quality:
+\begin{itemize}
+    \item 2,000 expert trajectories (from a trained policy)
+    \item 5,000 medium-quality trajectories (partially trained policy)
+    \item 3,000 random trajectories
+\end{itemize}
+
+Returns range from 0 (failed reach) to 100 (perfect reach).
+
+\subsubsection{Architecture}
+
+\begin{itemize}
+    \item Context length: 20 timesteps
+    \item State embedding: MLP with 128 hidden units
+    \item Action embedding: MLP with 128 hidden units
+    \item Return embedding: Linear projection
+    \item Transformer: 4 layers, 4 heads, dimension 256
+\end{itemize}
+
+\subsubsection{Training}
+
+\begin{itemize}
+    \item Loss: MSE between predicted and actual actions
+    \item Optimizer: Adam, learning rate $10^{-4}$
+    \item Epochs: 100
+    \item Batch size: 64 sequences
+\end{itemize}
+
+\subsubsection{Evaluation}
+
+At test time, we set return-to-go = 90 (high desired performance).
+
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Method} & \textbf{Average Return} \\
+\midrule
+Random policy & 5.2 \\
+Behavior cloning (all data) & 42.1 \\
+Behavior cloning (expert only) & 78.5 \\
+Decision Transformer (RTG=50) & 48.3 \\
+Decision Transformer (RTG=90) & 82.7 \\
+Decision Transformer (RTG=100) & 79.1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Key observations:}
+\begin{enumerate}
+    \item DT with high RTG outperforms behavior cloning on all data
+    \item DT nearly matches behavior cloning on expert data, despite training on mixed data
+    \item RTG=100 performs slightly worse than RTG=90 (extrapolation difficulty)
+\end{enumerate}
+
+\subsection{Example 5: Comparing Model-Free vs Model-Based Learning}
+
+We systematically compare approaches on a manipulation task.
+
+\subsubsection{Task: Block Pushing}
+
+A robot arm must push a block to a target location. The task is challenging due to contact dynamics.
+
+\subsubsection{Methods Compared}
+
+\begin{enumerate}
+    \item \textbf{SAC (model-free):} Soft Actor-Critic, trained online
+    \item \textbf{Dreamer (model-based):} RSSM world model + actor-critic in imagination
+    \item \textbf{MBPO (hybrid):} Model ensemble + SAC with mixed real/imagined data
+    \item \textbf{Decision Transformer (offline):} Trained on prior dataset
+\end{enumerate}
+
+\subsubsection{Results: Sample Efficiency}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Episodes to 80\%} & \textbf{Final Performance} & \textbf{Wall Time} \\
+\midrule
+SAC & 1000 & 92\% & 8 hours \\
+Dreamer & 200 & 88\% & 4 hours \\
+MBPO & 300 & 90\% & 5 hours \\
+Decision Transformer & N/A (offline) & 85\% & 2 hours \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Analysis:}
+\begin{itemize}
+    \item Model-based methods (Dreamer, MBPO) reach good performance with 3-5x fewer episodes
+    \item Model-free SAC achieves the highest final performance given enough experience
+    \item Decision Transformer is competitive with minimal computation but requires prior data
+\end{itemize}
+
+\subsection{Example 6: World Model for Autonomous Driving}
+
+We apply world models to a more complex domain: autonomous vehicle planning.
+
+\subsubsection{Observation Space}
+
+\begin{itemize}
+    \item Camera images: $256 \times 256 \times 3$ RGB
+    \item Lidar point cloud: $N \times 4$ (x, y, z, intensity)
+    \item Vehicle state: $[v_x, v_y, \psi, \dot{\psi}]$ (velocity, heading, yaw rate)
+\end{itemize}
+
+\subsubsection{Action Space}
+
+\begin{itemize}
+    \item Steering angle: $[-0.5, 0.5]$ rad
+    \item Acceleration: $[-3, 3]$ m/s$^2$
+\end{itemize}
+
+\subsubsection{World Model Architecture}
+
+\begin{enumerate}
+    \item \textbf{Image encoder:} ResNet-18, outputs 512-dim feature
+    \item \textbf{Point cloud encoder:} PointNet++, outputs 256-dim feature
+    \item \textbf{State encoder:} MLP, outputs 64-dim feature
+    \item \textbf{Fusion:} Concatenate and project to 256-dim latent
+    \item \textbf{Dynamics:} GRU with 512 hidden units
+    \item \textbf{Decoders:} Separate heads for image, point cloud, state
+\end{enumerate}
+
+\subsubsection{Training Data}
+
+50 hours of driving data from a simulator, including:
+\begin{itemize}
+    \item Highway driving
+    \item Urban intersections
+    \item Adverse weather conditions
+\end{itemize}
+
+\subsubsection{Planning Application}
+
+At each timestep:
+\begin{enumerate}
+    \item Encode current observation
+    \item Generate 100 candidate trajectories using CEM
+    \item Evaluate each trajectory using learned cost predictor
+    \item Execute first action of best trajectory
+    \item Re-plan at 10 Hz
+\end{enumerate}
+
+\subsubsection{Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{World Model MPC} & \textbf{Baseline MPC} \\
+\midrule
+Collision rate & 2.3\% & 4.1\% \\
+Lane deviation (avg) & 0.12 m & 0.18 m \\
+Jerk (comfort) & 1.2 m/s$^3$ & 1.8 m/s$^3$ \\
+Computation time & 45 ms & 30 ms \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The world model captures complex interactions (other vehicles, lane geometry) that are difficult to model analytically.
+
+\subsection{Example 7: Multi-Step Prediction with Uncertainty}
+
+We examine how prediction uncertainty grows over time.
+
+\subsubsection{Setup}
+
+Use the pendulum world model from Example 1, but with an ensemble of 5 models.
+
+\subsubsection{Uncertainty Estimation}
+
+For each prediction, compute:
+\begin{equation}
+\text{Epistemic uncertainty} = \frac{1}{M}\sum_{m=1}^M \| f_{\theta_m}(\mathbf{x}, \mathbf{u}) - \bar{f}(\mathbf{x}, \mathbf{u}) \|^2
+\end{equation}
+
+\subsubsection{Results}
+
+Rolling out 100 steps with the same initial state:
+
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+\textbf{Steps} & \textbf{Mean Error (rad)} & \textbf{Uncertainty (rad)} \\
+\midrule
+10 & 0.01 & 0.005 \\
+25 & 0.03 & 0.02 \\
+50 & 0.08 & 0.06 \\
+100 & 0.25 & 0.20 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Observation:} Uncertainty grows approximately linearly, while error grows super-linearly. The uncertainty estimate is calibrated---it tracks the actual error well.
+
+\subsection{Example 8: Transfer Learning with World Models}
+
+We explore whether world models transfer across related tasks.
+
+\subsubsection{Source Task}
+
+Pendulum swing-up with $l = 1$ m.
+
+\subsubsection{Target Task}
+
+Pendulum swing-up with $l = 0.8$ m (20\% shorter).
+
+\subsubsection{Approach}
+
+\begin{enumerate}
+    \item Train world model on source task (10,000 transitions)
+    \item Fine-tune on target task with limited data (500 transitions)
+    \item Compare to training from scratch
+\end{enumerate}
+
+\subsubsection{Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{1-step RMSE} & \textbf{Control Success} \\
+\midrule
+From scratch (500 trans.) & 0.025 rad & 65\% \\
+Transfer + fine-tune & 0.008 rad & 88\% \\
+From scratch (10,000 trans.) & 0.003 rad & 95\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Transfer learning provides significant benefit with limited target data.
+
+\subsection{Example 9: Handling Partial Observability}
+
+Many real systems have partial observability---we cannot directly measure all states.
+
+\subsubsection{Setup}
+
+Cart-pole where we only observe:
+\begin{itemize}
+    \item Cart position $x$
+    \item Pole angle $\theta$
+\end{itemize}
+
+Velocities $\dot{x}$ and $\dot{\theta}$ are not measured.
+
+\subsubsection{Approach: Recurrent World Model}
+
+Use an LSTM-based world model that maintains hidden state:
+\begin{align}
+\mathbf{h}_t &= \text{LSTM}(\mathbf{h}_{t-1}, \mathbf{o}_t, \mathbf{u}_{t-1}) \\
+\hat{\mathbf{o}}_{t+1} &= f_\theta(\mathbf{h}_t, \mathbf{u}_t)
+\end{align}
+
+The hidden state $\mathbf{h}_t$ learns to encode velocity information from the history.
+
+\subsubsection{Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{1-step RMSE} & \textbf{10-step RMSE} \\
+\midrule
+Feedforward (memoryless) & 0.15 rad & 0.8 rad \\
+LSTM (with memory) & 0.02 rad & 0.12 rad \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The recurrent model dramatically outperforms the feedforward model by inferring hidden state.
+
+\subsection{Example 10: Dreamer on Atari Games}
+
+We demonstrate Dreamer on a classic benchmark.
+
+\subsubsection{Environment}
+
+Atari game ``Breakout'':
+\begin{itemize}
+    \item Observation: $84 \times 84$ grayscale frames
+    \item Action: 4 discrete actions (left, right, fire, no-op)
+    \item Reward: Points for breaking bricks
+\end{itemize}
+
+\subsubsection{World Model}
+
+\begin{itemize}
+    \item CNN encoder: 4 conv layers
+    \item RSSM: Deterministic dim = 200, stochastic dim = 30
+    \item Decoder: 4 transposed conv layers
+\end{itemize}
+
+\subsubsection{Training}
+
+\begin{itemize}
+    \item Environment steps: 100,000
+    \item Imagination horizon: 15 steps
+    \item Imagined trajectories per update: 50
+\end{itemize}
+
+\subsubsection{Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Score @ 100k steps} & \textbf{Human Performance} \\
+\midrule
+Random & 1.7 & --- \\
+DQN (model-free) & 4.9 & --- \\
+Dreamer & 18.2 & 30.5 \\
+Human & --- & 30.5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Dreamer achieves 60\% of human performance with only 100k steps---significantly more sample-efficient than DQN.
+
+\subsection{Example 11: IRIS on DMControl}
+
+We apply IRIS to continuous control tasks.
+
+\subsubsection{Environment}
+
+DMControl Walker Walk:
+\begin{itemize}
+    \item Observation: $64 \times 64$ RGB images
+    \item Action: 6-dimensional continuous (joint torques)
+    \item Reward: Forward velocity
+\end{itemize}
+
+\subsubsection{IRIS Architecture}
+
+\begin{itemize}
+    \item VQ-VAE: 512 codes, $8 \times 8$ spatial grid (64 tokens per frame)
+    \item Transformer: 8 layers, 8 heads, dimension 512
+    \item Context: 4 frames
+\end{itemize}
+
+\subsubsection{Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Score @ 500k steps} & \textbf{Sample Efficiency} \\
+\midrule
+SAC (from state) & 950 & Baseline \\
+DrQ (from images) & 850 & 1x \\
+Dreamer & 900 & 2x \\
+IRIS & 880 & 2.5x \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+IRIS is competitive with Dreamer while using a simpler discrete tokenization approach.
+
+\subsection{Example 12: Combining World Models with Classical Control}
+
+We show how world models can augment rather than replace classical control.
+
+\subsubsection{Setup}
+
+Quadrotor position control with model mismatch. The true inertia differs from the nominal model by 30\%.
+
+\subsubsection{Classical Approach}
+
+Design an LQR controller using nominal parameters. Performance degrades due to model mismatch.
+
+\subsubsection{Hybrid Approach}
+
+\begin{enumerate}
+    \item Use LQR as the base controller
+    \item Train a residual world model: $\mathbf{x}_{t+1} = f_{\text{nominal}}(\mathbf{x}_t, \mathbf{u}_t) + f_\theta(\mathbf{x}_t, \mathbf{u}_t)$
+    \item Use the residual model to adjust feedforward commands
+\end{enumerate}
+
+\subsubsection{Results}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Tracking Error (cm)} & \textbf{Robustness} \\
+\midrule
+LQR (nominal model) & 15.2 & Marginal stability \\
+LQR (true model) & 2.1 & Stable \\
+LQR + Residual Model & 3.5 & Stable \\
+Pure learned model & 5.8 & Stable \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The hybrid approach achieves near-optimal performance while leveraging physical knowledge.
+
+%===============================================================================
+\section{Algorithm Implementations}
+\label{sec:world_model_algorithms}
+%===============================================================================
+
+This section provides detailed algorithm implementations for world model training and planning.
+
+\subsection{World Model Training Algorithm}
+
+\begin{algorithm}[H]
+\caption{Complete World Model Training Pipeline}
+\begin{algorithmic}[1]
+\Require Environment env, encoder $e_\phi$, dynamics $f_\theta$, decoder $d_\psi$
+\Require Replay buffer $\mathcal{B}$, batch size $B$, sequence length $L$
+\Require Learning rate $\alpha$, KL coefficient $\beta$
+\State Initialize networks with random weights
+\State Initialize replay buffer $\mathcal{B} \gets \emptyset$
+\State \textbf{// Phase 1: Data Collection}
+\For{episode $= 1, \ldots, N_{\text{collect}}$}
+    \State $\mathbf{o}_0 \gets \text{env.reset}()$
+    \For{$t = 0, \ldots, T-1$}
+        \State $\mathbf{u}_t \sim \text{ExplorationPolicy}(\mathbf{o}_t)$ \Comment{Random or curiosity-driven}
+        \State $\mathbf{o}_{t+1}, r_{t+1}, \text{done} \gets \text{env.step}(\mathbf{u}_t)$
+        \State $\mathcal{B}.\text{add}((\mathbf{o}_t, \mathbf{u}_t, r_{t+1}, \mathbf{o}_{t+1}, \text{done}))$
+        \If{done}
+            \State \textbf{break}
+        \EndIf
+    \EndFor
+\EndFor
+\State \textbf{// Phase 2: Model Training}
+\For{iteration $= 1, \ldots, N_{\text{train}}$}
+    \State Sample batch of sequences: $\{(\mathbf{o}_{1:L}^{(i)}, \mathbf{u}_{1:L}^{(i)}, r_{1:L}^{(i)})\}_{i=1}^B$
+    \State \textbf{// Forward pass through world model}
+    \For{$i = 1, \ldots, B$}
+        \State Initialize: $\mathbf{h}_0^{(i)} \gets \mathbf{0}$
+        \For{$t = 1, \ldots, L$}
+            \State $\mathbf{z}_t^{(i)} \gets e_\phi(\mathbf{o}_t^{(i)}, \mathbf{h}_{t-1}^{(i)})$ \Comment{Encode}
+            \State $\hat{\mathbf{z}}_{t}^{(i)} \gets f_\theta(\mathbf{h}_{t-1}^{(i)})$ \Comment{Predict prior}
+            \State $\mathbf{h}_t^{(i)} \gets \text{GRU}(\mathbf{h}_{t-1}^{(i)}, \mathbf{z}_{t-1}^{(i)}, \mathbf{u}_{t-1}^{(i)})$ \Comment{Update recurrent}
+            \State $\hat{\mathbf{o}}_t^{(i)} \gets d_\psi(\mathbf{h}_t^{(i)}, \mathbf{z}_t^{(i)})$ \Comment{Decode}
+        \EndFor
+    \EndFor
+    \State \textbf{// Compute losses}
+    \State $\mathcal{L}_{\text{recon}} \gets \frac{1}{BL} \sum_{i,t} \|\mathbf{o}_t^{(i)} - \hat{\mathbf{o}}_t^{(i)}\|^2$
+    \State $\mathcal{L}_{\text{KL}} \gets \frac{1}{BL} \sum_{i,t} D_{\text{KL}}(q(\mathbf{z}_t^{(i)}) \| p(\hat{\mathbf{z}}_t^{(i)}))$
+    \State $\mathcal{L}_{\text{total}} \gets \mathcal{L}_{\text{recon}} + \beta \mathcal{L}_{\text{KL}}$
+    \State \textbf{// Update parameters}
+    \State $\phi, \theta, \psi \gets \phi, \theta, \psi - \alpha \nabla_{\phi,\theta,\psi} \mathcal{L}_{\text{total}}$
+\EndFor
+\State \Return Trained model $(e_\phi, f_\theta, d_\psi)$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Imagination Rollout Algorithm}
+
+\begin{algorithm}[H]
+\caption{Imagination Rollout for Planning}
+\begin{algorithmic}[1]
+\Require Trained world model $(e_\phi, f_\theta, d_\psi)$
+\Require Initial observation $\mathbf{o}_0$, action sequence $\mathbf{u}_{0:H-1}$
+\Require Imagination horizon $H$
+\Ensure Predicted trajectory $\{(\hat{\mathbf{z}}_t, \hat{r}_t)\}_{t=1}^H$
+\State $\mathbf{h}_0 \gets \mathbf{0}$ \Comment{Initialize recurrent state}
+\State $\mathbf{z}_0 \gets e_\phi(\mathbf{o}_0, \mathbf{h}_0)$ \Comment{Encode initial observation}
+\State $\text{trajectory} \gets [(\mathbf{z}_0, 0)]$
+\For{$t = 0, \ldots, H-1$}
+    \State $\mathbf{h}_{t+1} \gets \text{GRU}(\mathbf{h}_t, \mathbf{z}_t, \mathbf{u}_t)$ \Comment{Update recurrent state}
+    \State $\mathbf{z}_{t+1} \sim p_\theta(\mathbf{z}_{t+1} | \mathbf{h}_{t+1})$ \Comment{Sample next latent}
+    \State $\hat{r}_{t+1} \gets r_\xi(\mathbf{h}_{t+1}, \mathbf{z}_{t+1})$ \Comment{Predict reward}
+    \State $\text{trajectory}.\text{append}((\mathbf{z}_{t+1}, \hat{r}_{t+1}))$
+\EndFor
+\State \Return trajectory
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Model Predictive Control with CEM}
+
+\begin{algorithm}[H]
+\caption{CEM-based Model Predictive Control}
+\begin{algorithmic}[1]
+\Require World model $(e_\phi, f_\theta)$, cost function $c$
+\Require Horizon $H$, samples $N$, elite fraction $\rho$, iterations $K$
+\Require Action bounds $[\mathbf{u}_{\min}, \mathbf{u}_{\max}]$
+\Ensure Optimal first action $\mathbf{u}_0^*$
+\Procedure{CEM-MPC}{$\mathbf{o}_0$}
+    \State $\mathbf{z}_0 \gets e_\phi(\mathbf{o}_0)$
+    \State $\boldsymbol{\mu} \gets \mathbf{0}_{H \times D_u}$ \Comment{Mean action sequence}
+    \State $\boldsymbol{\sigma} \gets \sigma_0 \mathbf{1}_{H \times D_u}$ \Comment{Std dev}
+    \For{$k = 1, \ldots, K$}
+        \State \textbf{// Sample action sequences}
+        \For{$i = 1, \ldots, N$}
+            \State $\mathbf{U}^{(i)} \gets \text{clip}(\boldsymbol{\mu} + \boldsymbol{\sigma} \odot \boldsymbol{\epsilon}^{(i)}, \mathbf{u}_{\min}, \mathbf{u}_{\max})$
+            \State where $\boldsymbol{\epsilon}^{(i)} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+        \EndFor
+        \State \textbf{// Evaluate action sequences}
+        \For{$i = 1, \ldots, N$}
+            \State $\text{traj}^{(i)} \gets \text{ImagineRollout}(\mathbf{z}_0, \mathbf{U}^{(i)})$
+            \State $J^{(i)} \gets \sum_{t=0}^{H-1} c(\mathbf{z}_t^{(i)}, \mathbf{u}_t^{(i)})$
+        \EndFor
+        \State \textbf{// Select elite samples}
+        \State $\text{elite\_indices} \gets \text{argsort}(\{J^{(i)}\})[:[\rho N]]$
+        \State $\text{elite\_actions} \gets \{\mathbf{U}^{(i)} : i \in \text{elite\_indices}\}$
+        \State \textbf{// Update distribution}
+        \State $\boldsymbol{\mu} \gets \text{mean}(\text{elite\_actions})$
+        \State $\boldsymbol{\sigma} \gets \text{std}(\text{elite\_actions})$
+    \EndFor
+    \State \Return $\boldsymbol{\mu}[0]$ \Comment{First action of mean sequence}
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Decision Transformer Training}
+
+\begin{algorithm}[H]
+\caption{Decision Transformer Training}
+\begin{algorithmic}[1]
+\Require Offline dataset $\mathcal{D} = \{(\mathbf{s}_t, \mathbf{u}_t, r_t)_{t=1}^T\}$
+\Require Context length $K$, learning rate $\alpha$
+\Require Embedding networks, transformer $T_\theta$, action head $\pi_\eta$
+\State Compute returns: $R_t = \sum_{k=t}^T r_k$ for all trajectories
+\For{iteration $= 1, \ldots, N_{\text{train}}$}
+    \State Sample batch of subsequences from $\mathcal{D}$
+    \For{each subsequence $(\mathbf{s}_{t-K:t}, \mathbf{u}_{t-K:t-1}, R_{t-K:t})$}
+        \State \textbf{// Create input sequence}
+        \State $\mathbf{e}^R_{t'} \gets \text{Embed}_R(R_{t'})$ for $t' \in [t-K, t]$
+        \State $\mathbf{e}^s_{t'} \gets \text{Embed}_s(\mathbf{s}_{t'})$ for $t' \in [t-K, t]$
+        \State $\mathbf{e}^u_{t'} \gets \text{Embed}_u(\mathbf{u}_{t'})$ for $t' \in [t-K, t-1]$
+        \State Interleave: $\mathbf{E} \gets (\mathbf{e}^R_{t-K}, \mathbf{e}^s_{t-K}, \mathbf{e}^u_{t-K}, \ldots, \mathbf{e}^R_t, \mathbf{e}^s_t)$
+        \State \textbf{// Forward pass}
+        \State $\mathbf{H} \gets T_\theta(\mathbf{E})$ \Comment{Transformer}
+        \State $\hat{\mathbf{u}}_t \gets \pi_\eta(\mathbf{H}[\text{state positions}])$ \Comment{Predict actions}
+        \State \textbf{// Compute loss}
+        \State $\mathcal{L} \gets \|\mathbf{u}_{t-K:t-1} - \hat{\mathbf{u}}_{t-K:t-1}\|^2$
+    \EndFor
+    \State $\theta, \eta \gets \theta, \eta - \alpha \nabla_{\theta,\eta} \mathcal{L}$
+\EndFor
+\State \Return Trained model $(T_\theta, \pi_\eta)$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Decision Transformer Inference}
+
+\begin{algorithm}[H]
+\caption{Decision Transformer Inference}
+\begin{algorithmic}[1]
+\Require Trained model $(T_\theta, \pi_\eta)$, environment env
+\Require Desired return $R_{\text{target}}$, context length $K$
+\State $\mathbf{s}_0 \gets \text{env.reset}()$
+\State $R_0 \gets R_{\text{target}}$ \Comment{Initial return-to-go}
+\State history $\gets [(R_0, \mathbf{s}_0, \text{None})]$
+\For{$t = 0, 1, 2, \ldots$}
+    \State \textbf{// Prepare context}
+    \State context $\gets$ last $K$ entries of history
+    \State $\mathbf{E} \gets \text{embed\_and\_interleave}(\text{context})$
+    \State \textbf{// Predict action}
+    \State $\mathbf{H} \gets T_\theta(\mathbf{E})$
+    \State $\mathbf{u}_t \gets \pi_\eta(\mathbf{H}[-1])$ \Comment{From last state embedding}
+    \State \textbf{// Execute in environment}
+    \State $\mathbf{s}_{t+1}, r_{t+1}, \text{done} \gets \text{env.step}(\mathbf{u}_t)$
+    \State \textbf{// Update return-to-go}
+    \State $R_{t+1} \gets R_t - r_{t+1}$
+    \State \textbf{// Update history}
+    \State history$[-1][2] \gets \mathbf{u}_t$ \Comment{Fill in action}
+    \State history.append$(R_{t+1}, \mathbf{s}_{t+1}, \text{None})$
+    \If{done}
+        \State \textbf{break}
+    \EndIf
+\EndFor
+\State \Return total reward collected
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Dreamer Actor-Critic Update}
+
+\begin{algorithm}[H]
+\caption{Dreamer Policy Optimization}
+\begin{algorithmic}[1]
+\Require Trained world model, actor $\pi_\eta$, critic $V_\nu$
+\Require Imagination horizon $H$, discount $\gamma$, $\lambda$ for returns
+\Require Initial states from replay buffer
+\Procedure{UpdateActorCritic}{}
+    \State Sample batch of initial states $\{\mathbf{s}_0^{(i)}\}_{i=1}^B$ from buffer
+    \State \textbf{// Imagine trajectories}
+    \For{$i = 1, \ldots, B$}
+        \State $\mathbf{s}_0^{(i)} \gets (\mathbf{h}_0^{(i)}, \mathbf{z}_0^{(i)})$ encoded from observation
+        \For{$t = 0, \ldots, H-1$}
+            \State $\mathbf{u}_t^{(i)} \sim \pi_\eta(\mathbf{u} | \mathbf{s}_t^{(i)})$
+            \State $\mathbf{s}_{t+1}^{(i)} \gets \text{WorldModel}(\mathbf{s}_t^{(i)}, \mathbf{u}_t^{(i)})$
+            \State $\hat{r}_{t+1}^{(i)} \gets \text{RewardModel}(\mathbf{s}_{t+1}^{(i)})$
+        \EndFor
+    \EndFor
+    \State \textbf{// Compute $\lambda$-returns}
+    \For{$i = 1, \ldots, B$}
+        \State $V_H^{(i)} \gets V_\nu(\mathbf{s}_H^{(i)})$
+        \For{$t = H-1, \ldots, 0$}
+            \State $V_t^{\lambda,(i)} \gets \hat{r}_{t+1}^{(i)} + \gamma \left((1-\lambda) V_\nu(\mathbf{s}_{t+1}^{(i)}) + \lambda V_{t+1}^{\lambda,(i)}\right)$
+        \EndFor
+    \EndFor
+    \State \textbf{// Update critic}
+    \State $\mathcal{L}_V \gets \frac{1}{BH} \sum_{i,t} (V_\nu(\mathbf{s}_t^{(i)}) - \text{sg}[V_t^{\lambda,(i)}])^2$
+    \State $\nu \gets \nu - \alpha_V \nabla_\nu \mathcal{L}_V$
+    \State \textbf{// Update actor}
+    \State $\mathcal{L}_\pi \gets -\frac{1}{BH} \sum_{i,t} V_t^{\lambda,(i)}$
+    \State $\eta \gets \eta - \alpha_\pi \nabla_\eta \mathcal{L}_\pi$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+%===============================================================================
+\section{Chapter Summary}
+\label{sec:world_models_summary}
+%===============================================================================
+
+This chapter has introduced the powerful paradigm of learning world models for control. Let me summarize the key concepts and their relationships to classical control theory.
+
+\subsection{Core Concepts}
+
+\begin{enumerate}
+    \item \textbf{World Models:} Neural networks that learn to predict system dynamics from data, providing an alternative to physics-based modeling when analytical derivation is intractable.
+
+    \item \textbf{Latent Dynamics:} Operating in a learned compressed representation enables efficient prediction for high-dimensional observations like images.
+
+    \item \textbf{RSSM:} The Recurrent State-Space Model combines deterministic recurrence with stochastic latent states to capture both predictable and uncertain aspects of dynamics.
+
+    \item \textbf{Imagination-Based Planning:} World models enable evaluating many possible futures without interacting with the real world, dramatically improving sample efficiency.
+
+    \item \textbf{Decision Transformers:} Reframe control as sequence prediction, conditioning on desired outcomes to generate appropriate actions.
+\end{enumerate}
+
+\subsection{Connection to Classical Control}
+
+\begin{center}
+\begin{tabular}{p{4cm}p{4cm}p{6cm}}
+\toprule
+\textbf{Classical Concept} & \textbf{World Model Analog} & \textbf{Key Difference} \\
+\midrule
+State-space model & Latent dynamics model & Learned from data vs. derived from physics \\
+System identification & World model training & Can handle high-dimensional observations \\
+State observer/estimator & Encoder network & Learns observation-to-state mapping \\
+Model Predictive Control & CEM/MPPI planning & Works with learned, potentially non-differentiable models \\
+Certainty equivalence & Ensemble uncertainty & Explicitly models prediction uncertainty \\
+Gain scheduling & Transfer learning & Adapts to changing dynamics \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{When to Use World Models}
+
+\textbf{World models are appropriate when:}
+\begin{itemize}
+    \item The system is too complex for analytical modeling
+    \item Observations are high-dimensional (images, point clouds)
+    \item Sample efficiency is critical (expensive or dangerous to collect real data)
+    \item The task requires long-horizon planning
+    \item Transfer across similar tasks is needed
+\end{itemize}
+
+\textbf{Classical models are preferable when:}
+\begin{itemize}
+    \item Physics is well understood and accurate
+    \item Formal guarantees (stability, robustness) are required
+    \item Training data is limited or unavailable
+    \item Interpretability and transparency are essential
+    \item Computational resources for neural networks are constrained
+\end{itemize}
+
+\subsection{Practical Guidelines}
+
+\begin{enumerate}
+    \item \textbf{Start with physics when possible:} Use learned models to capture residual dynamics that physics cannot explain.
+
+    \item \textbf{Use ensembles for uncertainty:} Multiple models provide robustness and uncertainty estimates for risk-aware planning.
+
+    \item \textbf{Keep imagination horizons short:} Long rollouts accumulate error. Re-plan frequently with fresh observations.
+
+    \item \textbf{Validate on held-out data:} World model quality directly affects control performance. Monitor prediction accuracy throughout training.
+
+    \item \textbf{Consider computational cost:} Imagination and planning add latency. Ensure the system can meet real-time requirements.
+
+    \item \textbf{Collect diverse data:} World models cannot extrapolate well. Ensure training data covers the operating regime.
+\end{enumerate}
+
+\subsection{Looking Ahead}
+
+World models represent a fundamental shift in how we approach control system design. Rather than deriving models from first principles, we learn them from experience. This enables tackling systems that were previously intractable while maintaining the core principle of model-based control: use prediction to plan optimal actions.
+
+In the next chapter, we will explore how to combine learned components with classical control structures, creating hybrid systems that leverage the strengths of both paradigms. We will see how neural networks can augment physics-based models, how learned perception can feed into classical controllers, and how to maintain safety guarantees when learning is involved.
+
+The synthesis of classical control theory with modern machine learning is not a replacement of one by the other, but a powerful combination that extends our ability to control complex systems in the real world.
+
+\section{Problems}
+
+\subsection{Problem 1: Simple World Model}
+
+Consider a discrete-time linear system:
+\begin{equation}
+\mathbf{x}_{t+1} = \begin{bmatrix} 0.9 & 0.1 \\ -0.1 & 0.8 \end{bmatrix} \mathbf{x}_t + \begin{bmatrix} 0.5 \\ 0.1 \end{bmatrix} u_t
+\end{equation}
+
+(a) Generate 1000 state transitions with random inputs $u_t \sim \text{Uniform}(-1, 1)$.
+
+(b) Train a feedforward neural network (2 hidden layers, 32 units each) to predict $\mathbf{x}_{t+1}$ from $(\mathbf{x}_t, u_t)$.
+
+(c) Compare the learned model's predictions to the true model over a 50-step rollout.
+
+(d) How does performance change if you only use 100 training samples?
+
+\subsection{Problem 2: Latent Space Analysis}
+
+A VQ-VAE is trained on images from a cart-pole environment with codebook size $K = 256$.
+
+(a) If each $64 \times 64$ image is encoded to an $8 \times 8$ grid of tokens, how many possible latent representations exist?
+
+(b) If the true state space has 4 continuous dimensions $[\theta, \dot{\theta}, x, \dot{x}]$, what is the effective resolution of each state dimension in the discrete latent space?
+
+(c) Why might this discrete representation be sufficient for control despite being much coarser than the true continuous state space?
+
+\subsection{Problem 3: Planning Horizon Selection}
+
+A world model has single-step prediction error of 2\% (relative RMSE). Assume errors accumulate multiplicatively.
+
+(a) What is the expected error after 10 prediction steps? After 50 steps?
+
+(b) If acceptable control performance requires less than 20\% prediction error, what is the maximum planning horizon?
+
+(c) If you re-plan every 5 steps using fresh observations, how does this affect the effective error bound?
+
+\subsection{Problem 4: Decision Transformer Conditioning}
+
+A Decision Transformer is trained on robot arm trajectories with returns ranging from 0 (failed grasp) to 100 (successful grasp and placement).
+
+(a) What return-to-go should you condition on at test time if you want maximum performance?
+
+(b) What happens if you condition on a return-to-go of 150 (higher than any training trajectory)?
+
+(c) Design an experiment to determine the optimal conditioning return for a new task.
+
+\subsection{Problem 5: RSSM Design}
+
+You are designing an RSSM for a drone navigation task with the following characteristics:
+\begin{itemize}
+    \item Observations: $128 \times 128$ RGB images
+    \item Actions: 4-dimensional (roll, pitch, yaw rate, thrust)
+    \item Typical episode length: 500 steps
+    \item Key dynamics: Position, velocity, attitude
+\end{itemize}
+
+(a) Propose dimensions for the deterministic state $\mathbf{h}_t$ and stochastic state $\mathbf{z}_t$. Justify your choices.
+
+(b) Should $\mathbf{z}_t$ be continuous (Gaussian) or discrete (categorical)? Why?
+
+(c) What imagination horizon would you use for planning? Why?
+
+\subsection{Problem 6: Model Ensemble Uncertainty}
+
+An ensemble of 5 world models predicts the following next states for a given (state, action) pair:
+\begin{align}
+\hat{\mathbf{x}}_1 &= [1.0, 2.1] \\
+\hat{\mathbf{x}}_2 &= [1.1, 2.0] \\
+\hat{\mathbf{x}}_3 &= [0.9, 2.2] \\
+\hat{\mathbf{x}}_4 &= [1.0, 2.0] \\
+\hat{\mathbf{x}}_5 &= [3.5, 1.5]
+\end{align}
+
+(a) Compute the ensemble mean and variance.
+
+(b) One model ($\hat{\mathbf{x}}_5$) disagrees significantly. How should this affect planning?
+
+(c) Propose a method to identify and handle outlier models in the ensemble.
+
+\subsection{Problem 7: Sample Efficiency Comparison}
+
+A manipulation task can be solved with either:
+\begin{itemize}
+    \item Model-free RL (SAC): 100,000 environment steps to reach 90\% success
+    \item Model-based RL (Dreamer): 20,000 environment steps to reach 90\% success
+\end{itemize}
+
+However, Dreamer requires 5x more computation per step due to world model training and imagination.
+
+(a) If environment interaction costs \$1 per step and computation costs \$0.001 per unit, which method is more cost-effective?
+
+(b) If environment interaction is slow (1 step/second) but computation is fast (1000 steps/second), which method is faster in wall-clock time?
+
+(c) Under what conditions would you prefer the model-free approach despite lower sample efficiency?
+
+\subsection{Problem 8: Combining Physics and Learning}
+
+A quadrotor has known rigid-body dynamics but unknown aerodynamic effects at high speeds.
+
+(a) Design a hybrid model that uses physics for low-speed flight and a learned residual for high-speed corrections.
+
+(b) How would you collect training data that covers the high-speed regime safely?
+
+(c) How would you ensure smooth transitions between the physics-only and hybrid regimes?
+
+\subsection{Problem 9: Dreamer $\lambda$-Returns}
+
+The Dreamer algorithm uses $\lambda$-returns for value estimation:
+\begin{equation}
+V_t^\lambda = r_{t+1} + \gamma \left((1-\lambda) V(s_{t+1}) + \lambda V_{t+1}^\lambda\right)
+\end{equation}
+
+(a) Show that $\lambda = 0$ gives the 1-step TD return and $\lambda = 1$ gives the Monte Carlo return.
+
+(b) If the world model has 5\% per-step error, what value of $\lambda$ would you recommend? Why?
+
+(c) How does the choice of $\lambda$ interact with the imagination horizon $H$?
+
+\subsection{Problem 10: IRIS Token Prediction}
+
+An IRIS model uses a transformer to predict image tokens autoregressively. Each frame has 64 tokens, and actions are discretized into 10 possible values.
+
+(a) For a context of 4 frames, how many tokens are in the input sequence?
+
+(b) What is the computational complexity of attention (in terms of sequence length)?
+
+(c) Propose a method to reduce computation while maintaining prediction quality.
+
+\section{Further Reading}
+
+For deeper study of the topics in this chapter, I recommend:
+
+\begin{itemize}
+    \item Ha, D. and Schmidhuber, J. ``World Models'' (2018)---The seminal paper introducing the concept of learning world models for control.
+
+    \item Hafner, D. et al. ``Dream to Control: Learning Behaviors by Latent Imagination'' (Dreamer, 2020)---Introduces the RSSM and imagination-based policy learning.
+
+    \item Hafner, D. et al. ``Mastering Diverse Domains through World Models'' (DreamerV3, 2023)---State-of-the-art world model algorithm with robust scaling.
+
+    \item Chen, L. et al. ``Decision Transformer: Reinforcement Learning via Sequence Modeling'' (2021)---Reframes RL as sequence prediction.
+
+    \item Micheli, V. et al. ``Transformers are Sample-Efficient World Models'' (IRIS, 2023)---Discrete tokenization approach to world models.
+
+    \item Janner, M. et al. ``Planning with Diffusion for Flexible Behavior Synthesis'' (2022)---Combines world models with diffusion for planning.
+
+    \item Chua, K. et al. ``Deep Reinforcement Learning in a Handful of Trials using Probabilistic Dynamics Models'' (PETS, 2018)---Ensemble methods for uncertainty-aware planning.
+\end{itemize}
+
+For implementation, the following codebases are excellent references:
+\begin{itemize}
+    \item DreamerV3: \texttt{github.com/danijar/dreamerv3}
+    \item Decision Transformers: \texttt{github.com/kzl/decision-transformer}
+    \item IRIS: \texttt{github.com/eloialonso/iris}
+\end{itemize}
+
