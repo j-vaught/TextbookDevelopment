@@ -1,0 +1,2228 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Chapter 6: Stability Analysis Techniques
+% Modern Control Systems: From First Principles to Machine Learning
+% Author: J.C. Vaught
+% University of South Carolina
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Stability Analysis Techniques}
+\label{ch:stability_analysis}
+
+\whythismatters{
+Stability is the most fundamental requirement in control system design---an unstable system is not merely suboptimal, it is dangerous. Before we can discuss performance, robustness, or optimization, we must first guarantee that our system will not diverge to infinity, oscillate uncontrollably, or exhibit catastrophic behavior. This chapter provides you with a complete toolkit for analyzing stability: from the algebraic Routh-Hurwitz criterion that tells us whether poles lie in the right half-plane, to the graphical Nyquist criterion that reveals how feedback affects stability, to Bode plot methods that quantify stability margins, and finally to Lyapunov's powerful energy-based approach that extends to nonlinear systems. These techniques are not merely academic exercises---they are used daily by engineers designing flight control systems, power grids, chemical reactors, and autonomous vehicles. Master them, and you will have the foundation upon which all subsequent control design rests.
+}
+
+%===============================================================================
+\section{Stability Definitions}
+\label{sec:stability_definitions}
+%===============================================================================
+
+Before we can analyze stability, we must precisely define what we mean by the term. In control engineering, several distinct notions of stability exist, each serving different purposes and applicable to different classes of systems. I will present these definitions carefully, as confusion between them leads to errors in analysis and design.
+
+\subsection{The Fundamental Question}
+
+Consider a dynamical system described by the state equation:
+\begin{equation}
+\dot{\mathbf{x}}(t) = \mathbf{f}(\mathbf{x}(t), \mathbf{u}(t))
+\label{eq:general_dynamics}
+\end{equation}
+
+The fundamental stability question is: \textit{If we perturb the system slightly from an equilibrium state, will it return to that state, remain nearby, or diverge?}
+
+This seemingly simple question admits several precise answers, depending on what we mean by ``return,'' ``remain nearby,'' and ``diverge.'' Let me distinguish three essential stability concepts.
+
+\subsection{BIBO Stability}
+
+\begin{definition}[BIBO Stability]
+\label{def:bibo_stability}
+A system is \textbf{Bounded-Input, Bounded-Output (BIBO) stable} if and only if every bounded input produces a bounded output. Mathematically, for input $u(t)$ and output $y(t)$:
+\begin{equation}
+\|u(t)\|_\infty < \infty \quad \Rightarrow \quad \|y(t)\|_\infty < \infty
+\end{equation}
+where $\|\cdot\|_\infty$ denotes the supremum norm: $\|u(t)\|_\infty = \sup_{t \geq 0} |u(t)|$.
+\end{definition}
+
+BIBO stability is an \textit{input-output} property---it characterizes the external behavior of a system without reference to internal states. For linear time-invariant (LTI) systems, BIBO stability has an elegant characterization.
+
+\begin{theorem}[BIBO Stability for LTI Systems]
+\label{thm:bibo_lti}
+A continuous-time LTI system with impulse response $h(t)$ is BIBO stable if and only if:
+\begin{equation}
+\int_0^\infty |h(t)| \, dt < \infty
+\end{equation}
+Equivalently, a system with transfer function $H(s) = N(s)/D(s)$ is BIBO stable if and only if all poles of $H(s)$ lie in the open left half-plane:
+\begin{equation}
+\text{Re}\{p_i\} < 0 \quad \text{for all poles } p_i
+\end{equation}
+\end{theorem}
+
+The physical interpretation is clear: if the impulse response decays sufficiently fast (is absolutely integrable), then the convolution integral producing the output remains bounded for any bounded input.
+
+\begin{example}[BIBO Stability Assessment]
+\label{ex:bibo_assessment}
+Consider the transfer function:
+\begin{equation}
+H(s) = \frac{s + 3}{(s + 1)(s + 2)(s - 1)}
+\end{equation}
+
+The poles are at $s = -1$, $s = -2$, and $s = +1$. Since one pole lies in the right half-plane ($s = +1$), this system is \textbf{not BIBO stable}. Even a constant input will produce an output that grows without bound due to the unstable mode $e^{t}$.
+\end{example}
+
+\subsection{Asymptotic Stability}
+
+While BIBO stability concerns input-output behavior, \textit{asymptotic stability} concerns the internal state dynamics, specifically what happens to states when no input is applied.
+
+\begin{definition}[Equilibrium Point]
+\label{def:equilibrium}
+A point $\bar{\mathbf{x}}$ is an \textbf{equilibrium point} of the autonomous system $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$ if:
+\begin{equation}
+\mathbf{f}(\bar{\mathbf{x}}) = \mathbf{0}
+\end{equation}
+At equilibrium, the state derivative is zero, so the system remains at $\bar{\mathbf{x}}$ if started there.
+\end{definition}
+
+\begin{definition}[Lyapunov Stability]
+\label{def:lyapunov_stability}
+An equilibrium point $\bar{\mathbf{x}}$ is \textbf{stable in the sense of Lyapunov} if for every $\varepsilon > 0$, there exists $\delta > 0$ such that:
+\begin{equation}
+\|\mathbf{x}(0) - \bar{\mathbf{x}}\| < \delta \quad \Rightarrow \quad \|\mathbf{x}(t) - \bar{\mathbf{x}}\| < \varepsilon \quad \text{for all } t \geq 0
+\end{equation}
+\end{definition}
+
+Lyapunov stability says that trajectories starting close to equilibrium \textit{stay close}. However, this does not guarantee that they \textit{approach} the equilibrium.
+
+\begin{definition}[Asymptotic Stability]
+\label{def:asymptotic_stability}
+An equilibrium point $\bar{\mathbf{x}}$ is \textbf{asymptotically stable} if:
+\begin{enumerate}
+    \item It is stable in the sense of Lyapunov, and
+    \item There exists $\delta > 0$ such that:
+    \begin{equation}
+    \|\mathbf{x}(0) - \bar{\mathbf{x}}\| < \delta \quad \Rightarrow \quad \lim_{t \to \infty} \mathbf{x}(t) = \bar{\mathbf{x}}
+    \end{equation}
+\end{enumerate}
+\end{definition}
+
+Asymptotic stability is the gold standard for control systems: not only do nearby trajectories stay close, they actually \textit{converge} to the equilibrium as time goes to infinity. Disturbances decay away rather than merely remaining bounded.
+
+\begin{definition}[Global Asymptotic Stability]
+\label{def:gas}
+An equilibrium point $\bar{\mathbf{x}}$ is \textbf{globally asymptotically stable} if it is asymptotically stable and all trajectories converge to it regardless of initial condition:
+\begin{equation}
+\lim_{t \to \infty} \mathbf{x}(t) = \bar{\mathbf{x}} \quad \text{for all } \mathbf{x}(0) \in \mathbb{R}^n
+\end{equation}
+\end{definition}
+
+\subsection{Marginal Stability}
+
+Between stability and instability lies a critical boundary case.
+
+\begin{definition}[Marginal Stability]
+\label{def:marginal_stability}
+A system is \textbf{marginally stable} if:
+\begin{enumerate}
+    \item All poles lie in the closed left half-plane (none in the open right half-plane)
+    \item At least one pole lies on the imaginary axis
+    \item Poles on the imaginary axis are simple (multiplicity one)
+\end{enumerate}
+\end{definition}
+
+A marginally stable system exhibits sustained oscillations that neither grow nor decay. While mathematically interesting, marginally stable systems are generally \textbf{unacceptable} for practical control design because:
+
+\begin{itemize}
+    \item Any parameter variation can push the system into instability
+    \item There is zero robustness margin
+    \item Outputs oscillate indefinitely rather than settling
+\end{itemize}
+
+\begin{example}[Marginally Stable System]
+\label{ex:marginal}
+The undamped harmonic oscillator:
+\begin{equation}
+\ddot{x} + \omega_n^2 x = 0
+\end{equation}
+has transfer function $H(s) = 1/(s^2 + \omega_n^2)$ with poles at $s = \pm j\omega_n$. This system oscillates forever at frequency $\omega_n$---it is marginally stable but not asymptotically stable.
+\end{example}
+
+\subsection{Exponential Stability}
+
+For quantitative performance guarantees, we often need to know not just \textit{whether} the system converges, but \textit{how fast}.
+
+\begin{definition}[Exponential Stability]
+\label{def:exponential_stability}
+An equilibrium point $\bar{\mathbf{x}}$ is \textbf{exponentially stable} if there exist positive constants $\alpha$, $\beta$, and $\delta$ such that:
+\begin{equation}
+\|\mathbf{x}(0) - \bar{\mathbf{x}}\| < \delta \quad \Rightarrow \quad \|\mathbf{x}(t) - \bar{\mathbf{x}}\| \leq \beta \|\mathbf{x}(0) - \bar{\mathbf{x}}\| e^{-\alpha t}
+\end{equation}
+The parameter $\alpha$ is the \textbf{decay rate} and $1/\alpha$ is the \textbf{time constant}.
+\end{definition}
+
+Exponential stability provides a guaranteed minimum convergence rate. For LTI systems, asymptotic stability and exponential stability are equivalent---the slowest mode decays like $e^{\sigma_{\max} t}$ where $\sigma_{\max}$ is the real part of the rightmost pole.
+
+\keypoint{For linear systems, exponential stability, asymptotic stability, and BIBO stability (assuming controllability and observability) all reduce to the same condition: \textbf{all eigenvalues of the system matrix must have negative real parts}, or equivalently, all poles must lie in the open left half-plane.}
+
+\subsection{Relationships Between Stability Notions}
+
+The hierarchy of stability concepts is:
+\begin{equation}
+\text{Exponential Stability} \Rightarrow \text{Asymptotic Stability} \Rightarrow \text{Lyapunov Stability}
+\end{equation}
+
+The converses do not hold in general:
+\begin{itemize}
+    \item Lyapunov stability does not imply asymptotic stability (consider the undamped oscillator)
+    \item Asymptotic stability does not imply exponential stability for nonlinear systems (consider $\dot{x} = -x^3$, which converges like $1/\sqrt{t}$ rather than exponentially)
+\end{itemize}
+
+For LTI systems, these distinctions collapse: asymptotic stability implies exponential stability (with decay rate determined by the dominant pole).
+
+%===============================================================================
+\section{Pole Locations and Stability}
+\label{sec:pole_locations}
+%===============================================================================
+
+For linear time-invariant systems, stability analysis reduces to examining the locations of system poles in the complex plane. This geometric interpretation provides powerful intuition for control design.
+
+\subsection{The $s$-Plane and Stability Regions}
+
+The complex $s$-plane is divided into three regions with distinct stability implications:
+
+\begin{enumerate}
+    \item \textbf{Open Left Half-Plane (LHP):} $\text{Re}\{s\} < 0$
+
+    Poles in this region contribute modes of the form $e^{\sigma t}$ with $\sigma < 0$, which decay exponentially. A system with all poles in the LHP is asymptotically stable.
+
+    \item \textbf{Imaginary Axis:} $\text{Re}\{s\} = 0$
+
+    Simple poles on the imaginary axis contribute sustained oscillations (or constants for $s = 0$). Repeated poles on the imaginary axis cause polynomial growth (e.g., $te^{j\omega t}$), leading to instability.
+
+    \item \textbf{Open Right Half-Plane (RHP):} $\text{Re}\{s\} > 0$
+
+    Poles in this region contribute modes that grow exponentially without bound. Any pole in the RHP makes the system unstable.
+\end{enumerate}
+
+\subsection{Pole Location and Time Response}
+
+The location of a pole $p = \sigma + j\omega$ directly determines the character of its contribution to the time response:
+
+\begin{itemize}
+    \item \textbf{Real part $\sigma$:} Determines the decay/growth rate
+    \begin{itemize}
+        \item $\sigma < 0$: Exponential decay with time constant $\tau = -1/\sigma$
+        \item $\sigma = 0$: Sustained oscillation or constant
+        \item $\sigma > 0$: Exponential growth
+    \end{itemize}
+
+    \item \textbf{Imaginary part $\omega$:} Determines oscillation frequency
+    \begin{itemize}
+        \item $\omega = 0$: Pure exponential (no oscillation)
+        \item $\omega \neq 0$: Damped (or growing) sinusoid at frequency $\omega$ rad/s
+    \end{itemize}
+\end{itemize}
+
+\subsection{Second-Order System Pole Geometry}
+
+For a standard second-order system with natural frequency $\omega_n$ and damping ratio $\zeta$:
+\begin{equation}
+H(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+The poles are:
+\begin{equation}
+p_{1,2} = -\zeta\omega_n \pm \omega_n\sqrt{\zeta^2 - 1}
+\end{equation}
+
+The damping ratio determines the pole configuration:
+
+\begin{itemize}
+    \item $\zeta > 1$ (Overdamped): Two real poles in LHP
+    \item $\zeta = 1$ (Critically damped): Repeated real pole at $s = -\omega_n$
+    \item $0 < \zeta < 1$ (Underdamped): Complex conjugate poles at:
+    \begin{equation}
+    p_{1,2} = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2} = -\sigma \pm j\omega_d
+    \end{equation}
+    where $\sigma = \zeta\omega_n$ is the decay rate and $\omega_d = \omega_n\sqrt{1-\zeta^2}$ is the damped natural frequency.
+    \item $\zeta = 0$ (Undamped): Poles on imaginary axis at $s = \pm j\omega_n$
+    \item $\zeta < 0$ (Negative damping): Poles in RHP---unstable!
+\end{itemize}
+
+\subsection{Stability Boundaries in Parameter Space}
+
+A critical application of pole analysis is determining stability boundaries as system parameters vary. Consider a characteristic polynomial that depends on a parameter $K$:
+\begin{equation}
+\Delta(s, K) = s^3 + 3s^2 + 2s + K
+\end{equation}
+
+As $K$ varies, the poles move through the $s$-plane. The stability boundary occurs when poles cross the imaginary axis. Setting $s = j\omega$:
+\begin{equation}
+(j\omega)^3 + 3(j\omega)^2 + 2(j\omega) + K = -j\omega^3 - 3\omega^2 + 2j\omega + K = 0
+\end{equation}
+
+Separating real and imaginary parts:
+\begin{align}
+\text{Real:} \quad & K - 3\omega^2 = 0 \\
+\text{Imaginary:} \quad & 2\omega - \omega^3 = \omega(2 - \omega^2) = 0
+\end{align}
+
+From the imaginary equation: $\omega = 0$ or $\omega = \sqrt{2}$.
+
+\begin{itemize}
+    \item $\omega = 0$: $K = 0$ (pole at origin)
+    \item $\omega = \sqrt{2}$: $K = 3(2) = 6$ (poles at $\pm j\sqrt{2}$)
+\end{itemize}
+
+Therefore, the system is stable for $0 < K < 6$.
+
+%===============================================================================
+\section{Routh-Hurwitz Criterion}
+\label{sec:routh_hurwitz}
+%===============================================================================
+
+The Routh-Hurwitz criterion provides an algebraic test for stability that determines whether all roots of a polynomial lie in the left half-plane \textit{without actually computing the roots}. This is invaluable for systems with symbolic parameters or high-order polynomials.
+
+\subsection{Historical Context}
+
+Edward John Routh developed his criterion in 1876 as part of his Adams Prize essay, and Adolf Hurwitz independently developed a related criterion in 1895. The Routh array provides a systematic procedure that was practical for hand calculation before computers existed, and remains valuable today for symbolic analysis and gaining insight into how parameters affect stability.
+
+\subsection{Necessary Conditions for Stability}
+
+Before constructing the Routh array, we can apply two simple necessary conditions:
+
+\begin{theorem}[Necessary Conditions for Stability]
+\label{thm:necessary_conditions}
+For the polynomial:
+\begin{equation}
+\Delta(s) = a_n s^n + a_{n-1} s^{n-1} + \cdots + a_1 s + a_0
+\end{equation}
+to have all roots in the open left half-plane, the following conditions are \textbf{necessary} (but not sufficient for $n > 2$):
+\begin{enumerate}
+    \item All coefficients $a_i$ must have the \textbf{same sign}
+    \item \textbf{No coefficients may be zero} (no missing powers of $s$)
+\end{enumerate}
+\end{theorem}
+
+If either condition fails, the system is unstable, and we need not proceed further. However, satisfying these conditions does not guarantee stability---we must apply the full Routh-Hurwitz test.
+
+\begin{example}[Necessary Condition Failure]
+Consider $\Delta(s) = s^3 + 2s^2 - 3s + 4$. The coefficient of $s$ is negative while others are positive---different signs indicate instability without further analysis.
+
+Consider $\Delta(s) = s^4 + 2s^3 + 5s + 3$. The $s^2$ term is missing (coefficient is zero), indicating either imaginary-axis poles or RHP poles.
+\end{example}
+
+\subsection{Constructing the Routh Array}
+
+Given the characteristic polynomial:
+\begin{equation}
+\Delta(s) = a_n s^n + a_{n-1} s^{n-1} + a_{n-2} s^{n-2} + \cdots + a_1 s + a_0
+\end{equation}
+
+The Routh array is constructed as follows:
+
+\textbf{Step 1:} Form the first two rows from the coefficients:
+\begin{center}
+\begin{tabular}{c|cccc}
+$s^n$ & $a_n$ & $a_{n-2}$ & $a_{n-4}$ & $\cdots$ \\
+$s^{n-1}$ & $a_{n-1}$ & $a_{n-3}$ & $a_{n-5}$ & $\cdots$
+\end{tabular}
+\end{center}
+
+\textbf{Step 2:} Compute subsequent rows using the formula:
+\begin{equation}
+b_1 = \frac{a_{n-1} \cdot a_{n-2} - a_n \cdot a_{n-3}}{a_{n-1}}, \quad
+b_2 = \frac{a_{n-1} \cdot a_{n-4} - a_n \cdot a_{n-5}}{a_{n-1}}, \quad \ldots
+\end{equation}
+
+In general, each element is computed as:
+\begin{equation}
+\text{element} = \frac{(\text{first element of row above}) \times (\text{element above and to the right}) - (\text{first element two rows above}) \times (\text{element two rows above and to the right})}{\text{first element of row above}}
+\label{eq:routh_formula}
+\end{equation}
+
+\textbf{Step 3:} Continue until reaching the $s^0$ row.
+
+\begin{theorem}[Routh-Hurwitz Stability Criterion]
+\label{thm:routh_hurwitz}
+A polynomial has all roots in the open left half-plane if and only if all elements in the first column of the Routh array have the same sign. The number of sign changes in the first column equals the number of roots in the right half-plane.
+\end{theorem}
+
+\subsection{Detailed Example}
+
+\begin{example}[Complete Routh Array Construction]
+\label{ex:routh_complete}
+Determine the stability of a system with characteristic polynomial:
+\begin{equation}
+\Delta(s) = s^4 + 3s^3 + 5s^2 + 6s + 4
+\end{equation}
+
+\textbf{Step 1:} Check necessary conditions---all coefficients positive, no missing terms. Proceed with Routh array.
+
+\textbf{Step 2:} Construct the array:
+
+\begin{center}
+\begin{tabular}{c|ccc}
+$s^4$ & 1 & 5 & 4 \\
+$s^3$ & 3 & 6 & 0 \\
+$s^2$ & $b_1$ & $b_2$ & \\
+$s^1$ & $c_1$ & & \\
+$s^0$ & $d_1$ & &
+\end{tabular}
+\end{center}
+
+Computing $s^2$ row:
+\begin{align}
+b_1 &= \frac{3 \cdot 5 - 1 \cdot 6}{3} = \frac{15 - 6}{3} = 3 \\
+b_2 &= \frac{3 \cdot 4 - 1 \cdot 0}{3} = \frac{12}{3} = 4
+\end{align}
+
+Computing $s^1$ row:
+\begin{equation}
+c_1 = \frac{3 \cdot 6 - 3 \cdot 4}{3} = \frac{18 - 12}{3} = 2
+\end{equation}
+
+Computing $s^0$ row:
+\begin{equation}
+d_1 = \frac{2 \cdot 4 - 3 \cdot 0}{2} = \frac{8}{2} = 4
+\end{equation}
+
+The complete array:
+\begin{center}
+\begin{tabular}{c|ccc}
+$s^4$ & 1 & 5 & 4 \\
+$s^3$ & 3 & 6 & 0 \\
+$s^2$ & 3 & 4 & 0 \\
+$s^1$ & 2 & 0 & \\
+$s^0$ & 4 & &
+\end{tabular}
+\end{center}
+
+\textbf{First column:} $\{1, 3, 3, 2, 4\}$---all positive, no sign changes.
+
+\textbf{Conclusion:} The system is \textbf{stable}---all four poles lie in the left half-plane.
+\end{example}
+
+\subsection{Special Case 1: Zero in the First Column}
+
+If a zero appears in the first column (but the entire row is not zero), we cannot proceed directly because we would divide by zero. The solution is to replace the zero with a small positive number $\varepsilon$ and continue, then examine the sign pattern as $\varepsilon \to 0^+$.
+
+\begin{example}[Zero in First Column]
+\label{ex:routh_zero_first_column}
+Consider:
+\begin{equation}
+\Delta(s) = s^4 + s^3 + 2s^2 + 2s + 1
+\end{equation}
+
+Constructing the array:
+\begin{center}
+\begin{tabular}{c|ccc}
+$s^4$ & 1 & 2 & 1 \\
+$s^3$ & 1 & 2 & 0 \\
+$s^2$ & $\frac{1 \cdot 2 - 1 \cdot 2}{1} = 0$ & 1 &
+\end{tabular}
+\end{center}
+
+Replace 0 with $\varepsilon$:
+\begin{center}
+\begin{tabular}{c|ccc}
+$s^4$ & 1 & 2 & 1 \\
+$s^3$ & 1 & 2 & 0 \\
+$s^2$ & $\varepsilon$ & 1 & \\
+$s^1$ & $\frac{\varepsilon \cdot 2 - 1 \cdot 1}{\varepsilon} = \frac{2\varepsilon - 1}{\varepsilon}$ & & \\
+$s^0$ & 1 & &
+\end{tabular}
+\end{center}
+
+As $\varepsilon \to 0^+$: $\frac{2\varepsilon - 1}{\varepsilon} \to -\infty$ (negative)
+
+First column signs: $\{+, +, +, -, +\}$---two sign changes.
+
+\textbf{Conclusion:} Two poles lie in the right half-plane. The system is \textbf{unstable}.
+\end{example}
+
+\subsection{Special Case 2: Row of Zeros}
+
+If an entire row becomes zero, this indicates the presence of pairs of roots that are symmetric about the origin: either on the imaginary axis ($\pm j\omega$), real and symmetric ($\pm\sigma$), or complex conjugate pairs symmetric about both axes ($\pm\sigma \pm j\omega$).
+
+The procedure is:
+\begin{enumerate}
+    \item Form an \textbf{auxiliary polynomial} from the row \textit{above} the zero row
+    \item \textbf{Differentiate} the auxiliary polynomial
+    \item Replace the zero row with the coefficients of the derivative
+    \item Continue constructing the array
+\end{enumerate}
+
+\begin{example}[Row of Zeros---Marginally Stable]
+\label{ex:routh_row_zeros}
+Consider:
+\begin{equation}
+\Delta(s) = s^4 + 2s^3 + 3s^2 + 2s + 2
+\end{equation}
+
+Array construction:
+\begin{center}
+\begin{tabular}{c|ccc}
+$s^4$ & 1 & 3 & 2 \\
+$s^3$ & 2 & 2 & 0 \\
+$s^2$ & $\frac{2 \cdot 3 - 1 \cdot 2}{2} = 2$ & $\frac{2 \cdot 2 - 1 \cdot 0}{2} = 2$ & \\
+$s^1$ & $\frac{2 \cdot 2 - 2 \cdot 2}{2} = 0$ & &
+\end{tabular}
+\end{center}
+
+The $s^1$ row is zero. Form auxiliary polynomial from $s^2$ row:
+\begin{equation}
+A(s) = 2s^2 + 2 = 2(s^2 + 1)
+\end{equation}
+
+Differentiate: $A'(s) = 4s$
+
+Replace $s^1$ row with coefficients of $A'(s) = 4s + 0$:
+\begin{center}
+\begin{tabular}{c|ccc}
+$s^4$ & 1 & 3 & 2 \\
+$s^3$ & 2 & 2 & 0 \\
+$s^2$ & 2 & 2 & \\
+$s^1$ & 4 & 0 & \\
+$s^0$ & 2 & &
+\end{tabular}
+\end{center}
+
+First column: $\{1, 2, 2, 4, 2\}$---all positive, no sign changes.
+
+However, the auxiliary polynomial $A(s) = 2(s^2 + 1)$ has roots at $s = \pm j$---poles on the imaginary axis!
+
+\textbf{Conclusion:} The system is \textbf{marginally stable} with poles at $s = \pm j$. The other two poles are in the LHP.
+\end{example}
+
+\subsection{Finding Parameter Ranges for Stability}
+
+One of the most powerful applications of the Routh-Hurwitz criterion is determining the range of a parameter (such as controller gain) for which a system remains stable.
+
+\begin{example}[Stability Range for Gain Parameter]
+\label{ex:routh_parameter}
+Consider a feedback system with closed-loop characteristic polynomial:
+\begin{equation}
+\Delta(s) = s^3 + 3s^2 + (K+2)s + 4K
+\end{equation}
+
+Find the range of $K$ for stability.
+
+\textbf{Step 1:} Necessary conditions require all coefficients positive:
+\begin{itemize}
+    \item $K + 2 > 0 \Rightarrow K > -2$
+    \item $4K > 0 \Rightarrow K > 0$
+\end{itemize}
+
+So we need $K > 0$ from necessary conditions.
+
+\textbf{Step 2:} Construct Routh array:
+\begin{center}
+\begin{tabular}{c|cc}
+$s^3$ & 1 & $K+2$ \\
+$s^2$ & 3 & $4K$ \\
+$s^1$ & $\frac{3(K+2) - 1 \cdot 4K}{3} = \frac{3K + 6 - 4K}{3} = \frac{6-K}{3}$ & \\
+$s^0$ & $4K$ &
+\end{tabular}
+\end{center}
+
+\textbf{Step 3:} For stability, all first-column elements must be positive:
+\begin{itemize}
+    \item $s^3$: $1 > 0$ \checkmark
+    \item $s^2$: $3 > 0$ \checkmark
+    \item $s^1$: $\frac{6-K}{3} > 0 \Rightarrow K < 6$
+    \item $s^0$: $4K > 0 \Rightarrow K > 0$
+\end{itemize}
+
+\textbf{Conclusion:} The system is stable for $\boxed{0 < K < 6}$.
+
+At $K = 6$, the $s^1$ element becomes zero, indicating marginal stability with imaginary-axis poles. The frequency of oscillation at marginal stability can be found from the auxiliary polynomial at that point.
+\end{example}
+
+%===============================================================================
+\section{Nyquist Stability Criterion}
+\label{sec:nyquist}
+%===============================================================================
+
+The Nyquist stability criterion is one of the most elegant and powerful results in control theory. It determines closed-loop stability by examining the open-loop frequency response---a remarkable feat that connects complex analysis to feedback system behavior.
+
+\subsection{The Encirclement Problem}
+
+Harry Nyquist developed his criterion in 1932 at Bell Labs while studying feedback amplifier stability. The genius of his approach is using the \textit{principle of the argument} from complex analysis to count closed-loop poles in the right half-plane.
+
+Consider a standard feedback system with open-loop transfer function $L(s) = G(s)C(s)$. The closed-loop characteristic equation is:
+\begin{equation}
+1 + L(s) = 0
+\end{equation}
+
+The closed-loop poles are the zeros of $1 + L(s)$. Our goal is to determine how many of these zeros lie in the right half-plane.
+
+\subsection{The Nyquist Contour}
+
+The Nyquist criterion uses a closed contour in the $s$-plane that encircles the entire right half-plane:
+
+\begin{enumerate}
+    \item The imaginary axis from $s = -j\infty$ to $s = +j\infty$
+    \item A semicircular arc of infinite radius in the right half-plane
+\end{enumerate}
+
+In practice, we evaluate $L(s)$ along this contour and plot the result in the complex plane. The imaginary-axis portion gives us $L(j\omega)$ for $-\infty < \omega < \infty$---the familiar frequency response.
+
+\subsection{The Principle of the Argument}
+
+The mathematical foundation of the Nyquist criterion is the \textbf{principle of the argument}:
+
+\begin{theorem}[Principle of the Argument]
+Let $F(s)$ be a rational function of $s$. As $s$ traverses a closed contour $\Gamma$ clockwise, the image $F(s)$ encircles the origin a net number of times equal to:
+\begin{equation}
+N = Z - P
+\end{equation}
+where $Z$ is the number of zeros of $F(s)$ inside $\Gamma$ and $P$ is the number of poles of $F(s)$ inside $\Gamma$. Positive $N$ indicates clockwise encirclements.
+\end{theorem}
+
+\subsection{Nyquist Stability Criterion}
+
+Applying the principle of the argument to $F(s) = 1 + L(s)$ with the Nyquist contour:
+
+\begin{theorem}[Nyquist Stability Criterion]
+\label{thm:nyquist}
+Let $L(s)$ be the open-loop transfer function of a feedback system. Let:
+\begin{itemize}
+    \item $P$ = number of open-loop poles in the right half-plane (RHP poles of $L(s)$)
+    \item $N$ = number of clockwise encirclements of $-1$ by the Nyquist plot of $L(j\omega)$
+    \item $Z$ = number of closed-loop poles in the right half-plane
+\end{itemize}
+
+Then:
+\begin{equation}
+Z = P + N
+\label{eq:nyquist_formula}
+\end{equation}
+
+For closed-loop stability, we require $Z = 0$, which means:
+\begin{equation}
+N = -P
+\end{equation}
+\end{theorem}
+
+\keypoint{For a stable open-loop system ($P = 0$), the Nyquist criterion simplifies to: the closed-loop system is stable if and only if the Nyquist plot does \textbf{not} encircle the point $-1$.}
+
+\subsection{Interpreting Encirclements}
+
+Counting encirclements correctly is essential:
+
+\begin{itemize}
+    \item \textbf{Clockwise encirclement:} $N > 0$. The Nyquist plot winds around $-1$ in the clockwise direction.
+    \item \textbf{Counter-clockwise encirclement:} $N < 0$. The Nyquist plot winds around $-1$ in the counter-clockwise direction.
+    \item \textbf{No encirclement:} $N = 0$. The point $-1$ is not enclosed by the Nyquist plot.
+\end{itemize}
+
+To count encirclements, draw a line from $-1$ to infinity. Count how many times the Nyquist plot crosses this line, with positive direction (clockwise) crossings counted as $+1$ and negative direction crossings as $-1$.
+
+\subsection{Detailed Example: Stable Open-Loop}
+
+\begin{example}[Nyquist Analysis---Type 1 System]
+\label{ex:nyquist_type1}
+Consider the open-loop transfer function:
+\begin{equation}
+L(s) = \frac{K}{s(s+1)(s+2)}
+\end{equation}
+
+\textbf{Open-loop poles:} $s = 0, -1, -2$. All in LHP except for the pole at origin.
+
+Actually, a pole at the origin is on the imaginary axis, requiring special handling. We indent the Nyquist contour around it with a small semicircle of radius $\varepsilon$ in the right half-plane.
+
+\textbf{Step 1: Frequency response along imaginary axis}
+
+For $s = j\omega$ with $\omega > 0$:
+\begin{equation}
+L(j\omega) = \frac{K}{j\omega(j\omega+1)(j\omega+2)} = \frac{K}{j\omega(j\omega+1)(j\omega+2)}
+\end{equation}
+
+Computing magnitude and phase:
+\begin{align}
+|L(j\omega)| &= \frac{K}{\omega\sqrt{1+\omega^2}\sqrt{4+\omega^2}} \\
+\angle L(j\omega) &= -90° - \tan^{-1}(\omega) - \tan^{-1}(\omega/2)
+\end{align}
+
+At $\omega = 0^+$: $|L| \to \infty$, $\angle L \to -90°$
+
+At $\omega \to \infty$: $|L| \to 0$, $\angle L \to -270°$
+
+\textbf{Step 2: Find phase crossover}
+
+The phase crossover frequency $\omega_{pc}$ satisfies $\angle L(j\omega_{pc}) = -180°$:
+\begin{equation}
+-90° - \tan^{-1}(\omega_{pc}) - \tan^{-1}(\omega_{pc}/2) = -180°
+\end{equation}
+
+This gives $\omega_{pc} = \sqrt{2}$ rad/s.
+
+\textbf{Step 3: Magnitude at phase crossover}
+
+\begin{equation}
+|L(j\sqrt{2})| = \frac{K}{\sqrt{2} \cdot \sqrt{3} \cdot \sqrt{6}} = \frac{K}{6}
+\end{equation}
+
+\textbf{Step 4: Apply Nyquist criterion}
+
+Open-loop poles: $P = 0$ (pole at origin handled by indentation)
+
+For $N = 0$ (no encirclements of $-1$), we need $|L(j\omega_{pc})| < 1$ at phase crossover:
+\begin{equation}
+\frac{K}{6} < 1 \Rightarrow K < 6
+\end{equation}
+
+\textbf{Conclusion:} The closed-loop system is stable for $K < 6$, matching our Routh-Hurwitz result.
+\end{example}
+
+\subsection{Unstable Open-Loop Systems}
+
+When the open-loop system is unstable ($P > 0$), the Nyquist criterion requires counter-clockwise encirclements to stabilize the closed-loop system.
+
+\begin{example}[Stabilizing an Unstable Plant]
+\label{ex:nyquist_unstable_ol}
+Consider:
+\begin{equation}
+L(s) = \frac{K(s+2)}{(s-1)(s+3)}
+\end{equation}
+
+\textbf{Open-loop poles:} $s = 1$ (RHP), $s = -3$ (LHP). So $P = 1$.
+
+For closed-loop stability: $Z = P + N = 0$ requires $N = -1$ (one counter-clockwise encirclement).
+
+The Nyquist plot must encircle $-1$ once in the counter-clockwise direction. This places constraints on $K$ that can be determined by analyzing the Nyquist plot geometry.
+
+Through careful analysis, stability requires $K > 2$. Too little gain, and we don't get the required encirclement; too much gain creates additional encirclements.
+\end{example}
+
+\subsection{Gain and Phase Margins from Nyquist Plots}
+
+The Nyquist plot provides a geometric interpretation of stability margins:
+
+\begin{definition}[Gain Margin from Nyquist Plot]
+The \textbf{gain margin} is the reciprocal of the magnitude $|L(j\omega_{pc})|$ where the Nyquist plot crosses the negative real axis:
+\begin{equation}
+GM = \frac{1}{|L(j\omega_{pc})|}
+\end{equation}
+In decibels: $GM_{dB} = -20\log_{10}|L(j\omega_{pc})|$
+\end{definition}
+
+Geometrically, $GM$ is the factor by which we can scale the entire Nyquist plot before it passes through $-1$.
+
+\begin{definition}[Phase Margin from Nyquist Plot]
+The \textbf{phase margin} is the angle from the negative real axis to the point where the Nyquist plot crosses the unit circle:
+\begin{equation}
+PM = 180° + \angle L(j\omega_{gc})
+\end{equation}
+where $\omega_{gc}$ is the gain crossover frequency ($|L(j\omega_{gc})| = 1$).
+\end{definition}
+
+Geometrically, $PM$ is the angular distance from the Nyquist plot to the critical point $-1$ when measured along the unit circle.
+
+\subsection{Conditional Stability}
+
+Some systems exhibit \textbf{conditional stability}---they are stable only for a range of gains, becoming unstable if gain is either increased \textit{or} decreased beyond certain limits.
+
+This occurs when the Nyquist plot crosses the negative real axis multiple times, creating regions where encirclements change. Conditional stability is dangerous because:
+
+\begin{itemize}
+    \item Reducing gain (which operators often try when a system oscillates) can make it worse
+    \item Startup transients may pass through unstable gain regions
+    \item Component aging can drift the gain into an unstable region from either direction
+\end{itemize}
+
+\warningbox{Always check for conditional stability by examining the complete Nyquist plot. A system may be stable at nominal gain but unstable at both higher and lower gains. The Bode plot section provides additional tools for identifying this dangerous condition.}
+
+%===============================================================================
+\section{Bode Stability Analysis}
+\label{sec:bode_stability}
+%===============================================================================
+
+Bode plots provide the most practical method for stability analysis in everyday control engineering. The logarithmic frequency scale and separate magnitude/phase plots make it easy to assess stability margins and design compensators.
+
+\subsection{Bode Stability Criterion}
+
+For minimum-phase, stable open-loop systems, the Bode stability criterion follows directly from the Nyquist criterion:
+
+\begin{theorem}[Bode Stability Criterion]
+\label{thm:bode_stability}
+For a stable, minimum-phase open-loop system $L(s)$, the closed-loop system is stable if and only if:
+\begin{equation}
+|L(j\omega_{pc})| < 1 \quad \text{(i.e., magnitude is below 0 dB at phase crossover)}
+\end{equation}
+Equivalently, the phase must be greater than $-180°$ at gain crossover:
+\begin{equation}
+\angle L(j\omega_{gc}) > -180°
+\end{equation}
+\end{theorem}
+
+This leads to the fundamental stability assessment from Bode plots:
+
+\keypoint{A minimum-phase system is stable if the magnitude plot crosses 0 dB \textbf{before} the phase plot crosses $-180°$. The ``before'' refers to lower frequency---we need gain crossover at a lower frequency than phase crossover.}
+
+\subsection{Gain Margin}
+
+\begin{definition}[Gain Margin]
+\label{def:gain_margin}
+The \textbf{gain margin (GM)} is the amount by which the open-loop gain can be increased before the system becomes unstable. It is measured at the phase crossover frequency $\omega_{pc}$ where $\angle L(j\omega_{pc}) = -180°$:
+\begin{equation}
+GM = \frac{1}{|L(j\omega_{pc})|}
+\end{equation}
+\begin{equation}
+GM_{dB} = -20\log_{10}|L(j\omega_{pc})| = 0\text{ dB} - |L(j\omega_{pc})|_{dB}
+\end{equation}
+\end{definition}
+
+\textbf{Interpretation:} If $GM = 4$ (or 12 dB), the loop gain can increase by a factor of 4 before the system becomes unstable.
+
+\textbf{Graphical Reading:} On a Bode magnitude plot, $GM_{dB}$ is the vertical distance from the magnitude curve to 0 dB, measured at the phase crossover frequency.
+
+\subsection{Phase Margin}
+
+\begin{definition}[Phase Margin]
+\label{def:phase_margin}
+The \textbf{phase margin (PM)} is the additional phase lag required to bring the system to instability. It is measured at the gain crossover frequency $\omega_{gc}$ where $|L(j\omega_{gc})| = 1$ (0 dB):
+\begin{equation}
+PM = 180° + \angle L(j\omega_{gc})
+\end{equation}
+\end{definition}
+
+\textbf{Interpretation:} If $PM = 50°$, the system can tolerate an additional $50°$ of phase lag (perhaps from an unmodeled time delay) before becoming unstable.
+
+\textbf{Graphical Reading:} On a Bode phase plot, $PM$ is the vertical distance from the phase curve to $-180°$, measured at the gain crossover frequency.
+
+\subsection{Relationship to Time-Domain Performance}
+
+Phase margin is strongly correlated with damping ratio for systems with dominant second-order behavior:
+
+\begin{equation}
+PM \approx 100\zeta \quad \text{(degrees, for } 0.3 < \zeta < 0.7\text{)}
+\label{eq:pm_zeta}
+\end{equation}
+
+This relationship connects frequency-domain margins to time-domain transient response:
+
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+\textbf{Phase Margin} & \textbf{Damping Ratio} & \textbf{Overshoot} & \textbf{Character} \\
+\midrule
+$20°$ & $\sim 0.2$ & 53\% & Highly oscillatory \\
+$30°$ & $\sim 0.3$ & 37\% & Oscillatory \\
+$45°$ & $\sim 0.45$ & 21\% & Acceptable \\
+$50°$ & $\sim 0.5$ & 16\% & Good \\
+$60°$ & $\sim 0.6$ & 9.5\% & Very good \\
+$70°$ & $\sim 0.7$ & 4.6\% & Excellent \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Tolerance to Time Delay}
+
+Phase margin directly determines the maximum tolerable time delay. A time delay $\tau$ introduces phase lag:
+\begin{equation}
+\angle e^{-j\omega\tau} = -\omega\tau \text{ radians} = -57.3\omega\tau \text{ degrees}
+\end{equation}
+
+The maximum delay before instability:
+\begin{equation}
+\tau_{\max} = \frac{PM}{\omega_{gc}} \text{ (radians)} = \frac{PM°}{57.3 \cdot \omega_{gc}} \text{ (seconds)}
+\label{eq:max_delay}
+\end{equation}
+
+\begin{example}[Delay Tolerance]
+\label{ex:delay_tolerance}
+A system has $PM = 60°$ and $\omega_{gc} = 20$ rad/s. The maximum tolerable delay is:
+\begin{equation}
+\tau_{\max} = \frac{60°}{57.3 \times 20} = 52 \text{ ms}
+\end{equation}
+This is critical for digital control: if computation plus communication delay exceeds 52 ms, the system becomes unstable.
+\end{example}
+
+\subsection{Design Guidelines for Stability Margins}
+
+Industry-standard minimum margins vary by application:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Application} & \textbf{Min GM} & \textbf{Min PM} \\
+\midrule
+General industrial & 6 dB & 30° \\
+Process control & 8--10 dB & 45° \\
+Aerospace/flight control & 6 dB & 45° \\
+Safety-critical systems & 10--12 dB & 50--60° \\
+High-performance servo & 6 dB & 40° \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\keypoint{A well-designed system should have \textbf{both} adequate gain margin \textbf{and} phase margin. One large margin does not compensate for a small margin in the other---both represent different types of robustness.}
+
+\subsection{Reading Margins from Bode Plots: Step-by-Step}
+
+\begin{example}[Complete Bode Margin Analysis]
+\label{ex:bode_margins}
+For the system:
+\begin{equation}
+L(s) = \frac{100}{s(s+5)(s+20)}
+\end{equation}
+
+\textbf{Step 1: Find gain crossover frequency}
+
+At low frequencies, $|L(j\omega)| \approx 100/(5 \cdot 20 \cdot \omega) = 1/\omega$ (integrator dominates).
+
+Setting $|L(j\omega_{gc})| = 1$: numerical evaluation gives $\omega_{gc} \approx 4.5$ rad/s.
+
+\textbf{Step 2: Find phase at gain crossover}
+\begin{equation}
+\angle L(j4.5) = -90° - \tan^{-1}(4.5/5) - \tan^{-1}(4.5/20) = -90° - 42° - 12.7° = -144.7°
+\end{equation}
+
+\textbf{Step 3: Calculate phase margin}
+\begin{equation}
+PM = 180° + (-144.7°) = 35.3°
+\end{equation}
+
+\textbf{Step 4: Find phase crossover frequency}
+
+Set $\angle L(j\omega_{pc}) = -180°$:
+\begin{equation}
+-90° - \tan^{-1}(\omega_{pc}/5) - \tan^{-1}(\omega_{pc}/20) = -180°
+\end{equation}
+
+Solving numerically: $\omega_{pc} \approx 10$ rad/s.
+
+\textbf{Step 5: Find magnitude at phase crossover}
+\begin{equation}
+|L(j10)| = \frac{100}{10 \cdot \sqrt{125} \cdot \sqrt{500}} = \frac{100}{10 \cdot 11.2 \cdot 22.4} = 0.04 = -28 \text{ dB}
+\end{equation}
+
+\textbf{Step 6: Calculate gain margin}
+\begin{equation}
+GM_{dB} = 0 - (-28) = 28 \text{ dB} \quad (GM = 25)
+\end{equation}
+
+\textbf{Conclusion:} The system has excellent gain margin (28 dB) but marginal phase margin (35°). A lead compensator could improve phase margin while maintaining adequate gain margin.
+\end{example}
+
+\subsection{Identifying Conditional Stability from Bode Plots}
+
+Conditional stability occurs when the Bode plot exhibits multiple gain crossovers or multiple phase crossovers. Warning signs include:
+
+\begin{enumerate}
+    \item Magnitude plot crosses 0 dB at multiple frequencies
+    \item Phase plot crosses $-180°$ at multiple frequencies
+    \item Phase goes below $-180°$ and then returns above it
+\end{enumerate}
+
+\begin{example}[Conditional Stability Detection]
+\label{ex:conditional_stability}
+A system with lead compensation shows:
+\begin{itemize}
+    \item First gain crossover at $\omega_1 = 2$ rad/s with phase $= -120°$ ($PM_1 = 60°$)
+    \item Second gain crossover at $\omega_2 = 20$ rad/s with phase $= -200°$ ($PM_2 = -20°$)
+    \item Phase crossover at $\omega_{pc} = 10$ rad/s with magnitude $= +6$ dB
+\end{itemize}
+
+This system is \textbf{conditionally stable}:
+\begin{itemize}
+    \item At current gain: stable (positive $PM_1$ dominates)
+    \item If gain reduced by 6 dB: magnitude at $\omega_{pc}$ reaches 0 dB $\Rightarrow$ unstable!
+    \item If gain increased: eventually $\omega_2$ becomes the effective crossover $\Rightarrow$ unstable!
+\end{itemize}
+
+\textbf{Design action:} Avoid aggressive lead compensation that creates high-frequency gain humps. Add high-frequency roll-off or reduce compensation aggressiveness.
+\end{example}
+
+%===============================================================================
+\section{Introduction to Lyapunov Stability}
+\label{sec:lyapunov}
+%===============================================================================
+
+The stability methods presented so far---Routh-Hurwitz, Nyquist, and Bode---apply specifically to linear time-invariant systems. For nonlinear systems, or when we want deeper insight into stability mechanisms, we turn to \textbf{Lyapunov's direct method}. This approach, developed by Aleksandr Lyapunov in 1892, uses energy-like functions to prove stability without solving differential equations.
+
+\subsection{The Energy Perspective}
+
+Consider a ball rolling in a bowl with friction. We know intuitively that the ball will eventually settle at the bottom. Why? Because:
+
+\begin{enumerate}
+    \item The ball has positive energy away from the bottom
+    \item Friction dissipates energy---energy always decreases
+    \item Since energy is bounded below (by zero) and always decreasing, the ball must approach the minimum-energy state
+\end{enumerate}
+
+This reasoning---that a decreasing, positive-definite function implies convergence---is the essence of Lyapunov's method. The function need not be actual physical energy; any function with these properties suffices.
+
+\subsection{Lyapunov Functions}
+
+\begin{definition}[Lyapunov Function]
+\label{def:lyapunov_function}
+For the autonomous system $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$ with equilibrium at the origin, a continuously differentiable function $V: D \to \mathbb{R}$ (where $D$ is a neighborhood of the origin) is a \textbf{Lyapunov function} if:
+\begin{enumerate}
+    \item $V(\mathbf{0}) = 0$
+    \item $V(\mathbf{x}) > 0$ for all $\mathbf{x} \neq \mathbf{0}$ in $D$ (positive definite)
+    \item $\dot{V}(\mathbf{x}) \leq 0$ for all $\mathbf{x}$ in $D$ (negative semi-definite)
+\end{enumerate}
+where the time derivative along trajectories is:
+\begin{equation}
+\dot{V}(\mathbf{x}) = \nabla V \cdot \mathbf{f}(\mathbf{x}) = \sum_{i=1}^{n} \frac{\partial V}{\partial x_i} f_i(\mathbf{x})
+\end{equation}
+\end{definition}
+
+The function $V$ generalizes the concept of energy:
+\begin{itemize}
+    \item $V > 0$: Energy is positive away from equilibrium
+    \item $\dot{V} \leq 0$: Energy never increases (dissipation)
+    \item $V = 0$ only at equilibrium: Minimum energy at rest
+\end{itemize}
+
+\subsection{Lyapunov's Direct Method}
+
+\begin{theorem}[Lyapunov's Direct Method---Stability]
+\label{thm:lyapunov_stability}
+If there exists a Lyapunov function $V(\mathbf{x})$ for the system $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$, then the equilibrium at the origin is \textbf{stable in the sense of Lyapunov}.
+\end{theorem}
+
+\begin{theorem}[Lyapunov's Direct Method---Asymptotic Stability]
+\label{thm:lyapunov_asymptotic}
+If there exists a function $V(\mathbf{x})$ such that:
+\begin{enumerate}
+    \item $V(\mathbf{0}) = 0$ and $V(\mathbf{x}) > 0$ for $\mathbf{x} \neq \mathbf{0}$ (positive definite)
+    \item $\dot{V}(\mathbf{x}) < 0$ for $\mathbf{x} \neq \mathbf{0}$ (negative definite)
+\end{enumerate}
+then the equilibrium is \textbf{asymptotically stable}.
+\end{theorem}
+
+\begin{theorem}[Lyapunov's Direct Method---Global Asymptotic Stability]
+\label{thm:lyapunov_global}
+If additionally $V(\mathbf{x})$ is \textbf{radially unbounded} (i.e., $V(\mathbf{x}) \to \infty$ as $\|\mathbf{x}\| \to \infty$), then the equilibrium is \textbf{globally asymptotically stable}.
+\end{theorem}
+
+\subsection{Example: Mass-Spring-Damper}
+
+\begin{example}[Energy-Based Stability Analysis]
+\label{ex:lyapunov_msd}
+Consider the mass-spring-damper system:
+\begin{equation}
+m\ddot{x} + b\dot{x} + kx = 0 \quad (b > 0, k > 0)
+\end{equation}
+
+In state-space form with $x_1 = x$, $x_2 = \dot{x}$:
+\begin{align}
+\dot{x}_1 &= x_2 \\
+\dot{x}_2 &= -\frac{k}{m}x_1 - \frac{b}{m}x_2
+\end{align}
+
+\textbf{Choose $V$ as total energy:}
+\begin{equation}
+V(x_1, x_2) = \frac{1}{2}kx_1^2 + \frac{1}{2}mx_2^2
+\end{equation}
+
+This is clearly positive definite: $V > 0$ for $(x_1, x_2) \neq (0, 0)$.
+
+\textbf{Compute $\dot{V}$:}
+\begin{align}
+\dot{V} &= kx_1\dot{x}_1 + mx_2\dot{x}_2 \\
+&= kx_1 x_2 + mx_2\left(-\frac{k}{m}x_1 - \frac{b}{m}x_2\right) \\
+&= kx_1 x_2 - kx_1 x_2 - bx_2^2 \\
+&= -bx_2^2 \leq 0
+\end{align}
+
+Since $b > 0$, we have $\dot{V} \leq 0$, with $\dot{V} = 0$ only when $x_2 = 0$.
+
+\textbf{Conclusion:} The origin is stable. Moreover, since $\dot{V} = 0$ only on the line $x_2 = 0$, and trajectories cannot stay on this line (if $x_2 = 0$ but $x_1 \neq 0$, then $\dot{x}_2 = -kx_1/m \neq 0$), we can conclude asymptotic stability using LaSalle's invariance principle.
+\end{example}
+
+\subsection{Lyapunov Functions for Linear Systems}
+
+For linear systems $\dot{\mathbf{x}} = \mathbf{A}\mathbf{x}$, we can systematically construct quadratic Lyapunov functions of the form:
+\begin{equation}
+V(\mathbf{x}) = \mathbf{x}^T \mathbf{P} \mathbf{x}
+\end{equation}
+where $\mathbf{P}$ is a symmetric positive definite matrix.
+
+Computing the derivative:
+\begin{align}
+\dot{V} &= \dot{\mathbf{x}}^T \mathbf{P} \mathbf{x} + \mathbf{x}^T \mathbf{P} \dot{\mathbf{x}} \\
+&= \mathbf{x}^T \mathbf{A}^T \mathbf{P} \mathbf{x} + \mathbf{x}^T \mathbf{P} \mathbf{A} \mathbf{x} \\
+&= \mathbf{x}^T (\mathbf{A}^T \mathbf{P} + \mathbf{P} \mathbf{A}) \mathbf{x}
+\end{align}
+
+For $\dot{V}$ to be negative definite, we need:
+\begin{equation}
+\mathbf{A}^T \mathbf{P} + \mathbf{P} \mathbf{A} = -\mathbf{Q}
+\label{eq:lyapunov_equation}
+\end{equation}
+where $\mathbf{Q}$ is positive definite. This is the \textbf{Lyapunov equation}.
+
+\begin{theorem}[Lyapunov Equation for Stability]
+\label{thm:lyapunov_equation}
+The linear system $\dot{\mathbf{x}} = \mathbf{A}\mathbf{x}$ is asymptotically stable if and only if for any positive definite matrix $\mathbf{Q}$, there exists a unique positive definite solution $\mathbf{P}$ to the Lyapunov equation \eqref{eq:lyapunov_equation}.
+\end{theorem}
+
+\begin{example}[Solving the Lyapunov Equation]
+\label{ex:lyapunov_equation}
+Consider:
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -1 & 2 \\ 0 & -3 \end{bmatrix}
+\end{equation}
+
+Eigenvalues are $-1$ and $-3$, both in LHP, so the system is stable. Let's find $\mathbf{P}$ for $\mathbf{Q} = \mathbf{I}$.
+
+Setting $\mathbf{P} = \begin{bmatrix} p_{11} & p_{12} \\ p_{12} & p_{22} \end{bmatrix}$ and solving $\mathbf{A}^T\mathbf{P} + \mathbf{P}\mathbf{A} = -\mathbf{I}$:
+
+\begin{align}
+-2p_{11} + 2p_{12} &= -1 \\
+2p_{11} - 4p_{12} &= 0 \\
+-6p_{22} + 4p_{12} &= -1
+\end{align}
+
+Solving: $p_{11} = 5/8$, $p_{12} = 1/4$, $p_{22} = 1/4$.
+
+So:
+\begin{equation}
+\mathbf{P} = \begin{bmatrix} 5/8 & 1/4 \\ 1/4 & 1/4 \end{bmatrix}, \quad V(\mathbf{x}) = \frac{5}{8}x_1^2 + \frac{1}{2}x_1 x_2 + \frac{1}{4}x_2^2
+\end{equation}
+
+This is a valid Lyapunov function (one can verify $\mathbf{P} > 0$).
+\end{example}
+
+\subsection{LaSalle's Invariance Principle}
+
+Often we can only show $\dot{V} \leq 0$ rather than $\dot{V} < 0$. LaSalle's invariance principle allows us to still conclude asymptotic stability under certain conditions.
+
+\begin{theorem}[LaSalle's Invariance Principle]
+\label{thm:lasalle}
+Let $V(\mathbf{x})$ be a continuously differentiable, positive definite function such that $\dot{V}(\mathbf{x}) \leq 0$ on a compact set $\Omega$. Let $E = \{\mathbf{x} \in \Omega : \dot{V}(\mathbf{x}) = 0\}$, and let $M$ be the largest invariant set contained in $E$. Then every solution starting in $\Omega$ approaches $M$ as $t \to \infty$.
+
+In particular, if $M = \{\mathbf{0}\}$, then the origin is asymptotically stable.
+\end{theorem}
+
+\textbf{Physical interpretation:} Even if energy doesn't strictly decrease everywhere, the system cannot ``stay'' at points where $\dot{V} = 0$ unless those points form an invariant set. The system is forced toward the invariant set, which is often just the equilibrium.
+
+\subsection{Estimating Regions of Attraction}
+
+For nonlinear systems with local stability, Lyapunov functions can estimate the \textbf{region of attraction}---the set of initial conditions that converge to the equilibrium.
+
+If $V(\mathbf{x})$ is a Lyapunov function with $\dot{V} < 0$ on domain $D$, then any sublevel set:
+\begin{equation}
+\Omega_c = \{\mathbf{x} : V(\mathbf{x}) \leq c\}
+\end{equation}
+that is bounded and contained in $D$ is an \textbf{invariant set}, and all trajectories starting in $\Omega_c$ converge to the equilibrium.
+
+The largest such $c$ gives the best estimate of the region of attraction from that particular Lyapunov function.
+
+%===============================================================================
+\section{Relative Stability and Robustness}
+\label{sec:relative_stability}
+%===============================================================================
+
+A system may be stable, but how \textit{robustly} stable is it? Relative stability measures how far a system is from the stability boundary and thus how much uncertainty it can tolerate.
+
+\subsection{Why Relative Stability Matters}
+
+In practice, no model is perfect. Parameters drift with temperature, components age, and unmodeled dynamics exist. A system with poles barely in the left half-plane may become unstable with minor parameter variations. We need \textbf{margins of safety}.
+
+\subsection{Gain and Phase Margins as Robustness Measures}
+
+Gain margin quantifies robustness to gain variations:
+\begin{itemize}
+    \item Component tolerances (resistors: $\pm$5\%, op-amps: $\pm$20\%)
+    \item Actuator gain variations (motor torque constant: $\pm$15\%)
+    \item Operating point changes in nonlinear systems
+    \item Environmental effects (temperature, aging)
+\end{itemize}
+
+Phase margin quantifies robustness to phase variations:
+\begin{itemize}
+    \item Unmodeled high-frequency dynamics (each neglected pole adds up to $-90°$)
+    \item Time delays (computation, communication, transport)
+    \item Sensor and actuator dynamics
+\end{itemize}
+
+\subsection{Sensitivity Peak and Robustness}
+
+The \textbf{sensitivity function} $S(s) = 1/(1 + L(s))$ describes how disturbances at the output affect the output. The sensitivity peak:
+\begin{equation}
+M_s = \max_{\omega} |S(j\omega)| = \max_{\omega} \frac{1}{|1 + L(j\omega)|}
+\end{equation}
+
+has a direct relationship to stability margins. For typical systems:
+\begin{equation}
+M_s \approx \frac{1}{\sin(PM)} \quad \text{(for } PM < 90°\text{)}
+\end{equation}
+
+Design guidelines:
+\begin{itemize}
+    \item $M_s < 1.3$ (2.3 dB): Conservative, excellent robustness
+    \item $M_s \approx 1.5$ (3.5 dB): Moderate, good for most applications
+    \item $M_s > 2$ (6 dB): Aggressive, poor robustness
+\end{itemize}
+
+\subsection{Disk Margins}
+
+Classical gain and phase margins consider perturbations one at a time. In reality, \textit{simultaneous} gain and phase perturbations occur. \textbf{Disk margins} address this by finding the smallest combined perturbation that causes instability.
+
+A system with large classical margins but small disk margin has a vulnerability: a specific combination of moderate gain and phase changes (that individually would be tolerable) destabilizes the system.
+
+Modern robust control tools compute disk margins automatically, providing a more realistic robustness assessment than classical margins alone.
+
+\subsection{Pole Placement and Relative Stability}
+
+In state-space design, relative stability can be specified by requiring closed-loop poles to lie in a restricted region of the LHP:
+
+\begin{enumerate}
+    \item \textbf{Minimum decay rate $\alpha$:} All poles satisfy $\text{Re}\{p_i\} < -\alpha$
+    \item \textbf{Maximum damping ratio $\zeta$:} Poles lie within a cone from the origin
+    \item \textbf{Maximum natural frequency $\omega_n$:} Poles lie within a circle centered at origin
+\end{enumerate}
+
+These constraints ensure not just stability but guaranteed minimum performance.
+
+%===============================================================================
+\section{Practical Applications: Worked Examples}
+\label{sec:stability_examples}
+%===============================================================================
+
+This section presents comprehensive worked examples covering all major stability analysis techniques. I have selected problems that illustrate common scenarios and potential pitfalls.
+
+\subsection{Example 1: Routh Array with Special Case}
+
+\begin{example}[Routh Array---Zero in First Column]
+\label{ex:routh_special1}
+Analyze the stability of:
+\begin{equation}
+\Delta(s) = s^5 + 2s^4 + 3s^3 + 6s^2 + 2s + 1
+\end{equation}
+
+\textbf{Necessary conditions:} All coefficients positive, no missing terms. Proceed.
+
+\textbf{Routh array construction:}
+
+\begin{center}
+\begin{tabular}{c|cccc}
+$s^5$ & 1 & 3 & 2 \\
+$s^4$ & 2 & 6 & 1 \\
+$s^3$ & $\frac{2(3)-1(6)}{2} = 0$ & $\frac{2(2)-1(1)}{2} = 1.5$ & \\
+\end{tabular}
+\end{center}
+
+Zero in first column! Replace with $\varepsilon$:
+
+\begin{center}
+\begin{tabular}{c|cccc}
+$s^5$ & 1 & 3 & 2 \\
+$s^4$ & 2 & 6 & 1 \\
+$s^3$ & $\varepsilon$ & 1.5 & 0 \\
+$s^2$ & $\frac{\varepsilon(6) - 2(1.5)}{\varepsilon} = \frac{6\varepsilon - 3}{\varepsilon}$ & 1 & \\
+$s^1$ & $\frac{(6\varepsilon-3)(1.5)/\varepsilon - \varepsilon(1)}{(6\varepsilon-3)/\varepsilon}$ & & \\
+$s^0$ & 1 & &
+\end{tabular}
+\end{center}
+
+As $\varepsilon \to 0^+$:
+\begin{itemize}
+    \item $s^2$ element: $(6\varepsilon - 3)/\varepsilon \to -\infty$ (negative)
+    \item This sign change indicates RHP roots
+\end{itemize}
+
+Continuing the analysis shows \textbf{two sign changes}, indicating \textbf{two roots in the RHP}. The system is \textbf{unstable}.
+\end{example}
+
+\subsection{Example 2: Parameter Range for Stability}
+
+\begin{example}[Stability Region in Two-Parameter Space]
+\label{ex:two_parameter}
+For the characteristic polynomial:
+\begin{equation}
+\Delta(s) = s^3 + as^2 + bs + 2
+\end{equation}
+determine the region in the $(a, b)$ plane for which the system is stable.
+
+\textbf{Necessary conditions:}
+\begin{itemize}
+    \item All coefficients same sign: $a > 0$, $b > 0$ (coefficient of $s^3$ is 1, constant is 2)
+\end{itemize}
+
+\textbf{Routh array:}
+\begin{center}
+\begin{tabular}{c|cc}
+$s^3$ & 1 & $b$ \\
+$s^2$ & $a$ & 2 \\
+$s^1$ & $\frac{ab - 2}{a}$ & \\
+$s^0$ & 2 &
+\end{tabular}
+\end{center}
+
+\textbf{Stability conditions:}
+\begin{enumerate}
+    \item $a > 0$ (from $s^2$ row)
+    \item $\frac{ab - 2}{a} > 0$, which requires $ab > 2$ (since $a > 0$)
+    \item Constant term 2 is already positive
+\end{enumerate}
+
+\textbf{Stability region:} $a > 0$, $b > 0$, and $ab > 2$.
+
+The boundary $ab = 2$ is a hyperbola in the first quadrant. Points above this hyperbola (larger $a$ or $b$) are stable; points below are unstable.
+\end{example}
+
+\subsection{Example 3: Nyquist Plot Sketching}
+
+\begin{example}[Nyquist Plot Construction]
+\label{ex:nyquist_sketch}
+Sketch the Nyquist plot for:
+\begin{equation}
+L(s) = \frac{K}{(s+1)(s+2)}
+\end{equation}
+and determine the range of $K$ for stability.
+
+\textbf{Frequency response:}
+\begin{align}
+L(j\omega) &= \frac{K}{(j\omega+1)(j\omega+2)} = \frac{K}{(2-\omega^2) + j3\omega} \\
+|L(j\omega)| &= \frac{K}{\sqrt{(2-\omega^2)^2 + 9\omega^2}} \\
+\angle L(j\omega) &= -\tan^{-1}\left(\frac{3\omega}{2-\omega^2}\right)
+\end{align}
+
+\textbf{Key points:}
+\begin{itemize}
+    \item $\omega = 0$: $|L| = K/2$, $\angle L = 0°$ (on positive real axis)
+    \item $\omega \to \infty$: $|L| \to 0$, $\angle L \to -180°$ (approaches origin from third quadrant)
+    \item Phase crossover: Set $\angle L = -180°$. For this system, phase never reaches $-180°$ for finite $\omega$ (maximum is $-180°$ as $\omega \to \infty$)
+\end{itemize}
+
+\textbf{Nyquist plot shape:} Starts at $K/2$ on positive real axis, curves through fourth quadrant, approaches origin tangent to negative real axis.
+
+\textbf{Stability analysis:} Since $P = 0$ (no open-loop RHP poles) and the Nyquist plot never crosses the negative real axis beyond the origin, there are no encirclements of $-1$ for any positive $K$.
+
+\textbf{Conclusion:} The closed-loop system is stable for all $K > 0$.
+\end{example}
+
+\subsection{Example 4: Gain Margin from Nyquist Plot}
+
+\begin{example}[Gain Margin Calculation]
+\label{ex:gm_nyquist}
+For:
+\begin{equation}
+L(s) = \frac{10}{s(s+1)(s+5)}
+\end{equation}
+find the gain margin using the Nyquist criterion.
+
+\textbf{Phase crossover frequency:}
+\begin{equation}
+-90° - \tan^{-1}(\omega_{pc}) - \tan^{-1}(\omega_{pc}/5) = -180°
+\end{equation}
+
+Let $\phi_1 = \tan^{-1}(\omega_{pc})$ and $\phi_2 = \tan^{-1}(\omega_{pc}/5)$. We need $\phi_1 + \phi_2 = 90°$.
+
+Using $\tan(\phi_1 + \phi_2) = \tan(90°) \to \infty$:
+\begin{equation}
+\frac{\omega_{pc} + \omega_{pc}/5}{1 - \omega_{pc}(\omega_{pc}/5)} = \frac{6\omega_{pc}/5}{1 - \omega_{pc}^2/5} \to \infty
+\end{equation}
+
+This requires $1 - \omega_{pc}^2/5 = 0$, giving $\omega_{pc} = \sqrt{5}$ rad/s.
+
+\textbf{Magnitude at phase crossover:}
+\begin{equation}
+|L(j\sqrt{5})| = \frac{10}{\sqrt{5} \cdot \sqrt{1+5} \cdot \sqrt{25+5}} = \frac{10}{\sqrt{5} \cdot \sqrt{6} \cdot \sqrt{30}} = \frac{10}{\sqrt{900}} = \frac{10}{30} = \frac{1}{3}
+\end{equation}
+
+\textbf{Gain margin:}
+\begin{equation}
+GM = \frac{1}{|L(j\omega_{pc})|} = \frac{1}{1/3} = 3 \quad (= 9.5 \text{ dB})
+\end{equation}
+
+The loop gain can increase by a factor of 3 (9.5 dB) before instability.
+\end{example}
+
+\subsection{Example 5: Phase Margin from Bode Plot}
+
+\begin{example}[Phase Margin Calculation]
+\label{ex:pm_bode}
+For the unity-feedback system with:
+\begin{equation}
+L(s) = \frac{50}{s(s+2)(s+10)}
+\end{equation}
+find the phase margin.
+
+\textbf{Find gain crossover frequency numerically:}
+
+At $\omega_{gc}$, $|L(j\omega_{gc})| = 1$:
+\begin{equation}
+\frac{50}{\omega_{gc}\sqrt{4+\omega_{gc}^2}\sqrt{100+\omega_{gc}^2}} = 1
+\end{equation}
+
+Trying $\omega_{gc} = 2$: $|L| = 50/(2 \cdot 2.83 \cdot 10.2) = 0.87$ (too low)
+
+Trying $\omega_{gc} = 1.8$: $|L| = 50/(1.8 \cdot 2.69 \cdot 10.16) = 1.02$ (close)
+
+So $\omega_{gc} \approx 1.8$ rad/s.
+
+\textbf{Phase at gain crossover:}
+\begin{align}
+\angle L(j1.8) &= -90° - \tan^{-1}(1.8/2) - \tan^{-1}(1.8/10) \\
+&= -90° - 42° - 10.2° = -142.2°
+\end{align}
+
+\textbf{Phase margin:}
+\begin{equation}
+PM = 180° + (-142.2°) = 37.8°
+\end{equation}
+
+This is marginally acceptable. A lead compensator could improve the phase margin to 50--60°.
+\end{example}
+
+\subsection{Example 6: Stability of Feedback System}
+
+\begin{example}[Closed-Loop Stability Analysis]
+\label{ex:feedback_stability}
+A proportional controller with gain $K_p$ controls a plant:
+\begin{equation}
+G(s) = \frac{1}{(s-1)(s+3)}
+\end{equation}
+
+Determine the range of $K_p$ for closed-loop stability.
+
+\textbf{Note:} The plant has an unstable pole at $s = 1$.
+
+\textbf{Closed-loop characteristic equation:}
+\begin{equation}
+1 + K_p G(s) = 1 + \frac{K_p}{(s-1)(s+3)} = 0
+\end{equation}
+\begin{equation}
+(s-1)(s+3) + K_p = s^2 + 2s - 3 + K_p = 0
+\end{equation}
+
+\textbf{Routh array:}
+\begin{center}
+\begin{tabular}{c|cc}
+$s^2$ & 1 & $K_p - 3$ \\
+$s^1$ & 2 & 0 \\
+$s^0$ & $K_p - 3$ &
+\end{tabular}
+\end{center}
+
+\textbf{Stability conditions:}
+\begin{itemize}
+    \item $s^2$: coefficient is 1 > 0 \checkmark
+    \item $s^1$: coefficient is 2 > 0 \checkmark
+    \item $s^0$: $K_p - 3 > 0 \Rightarrow K_p > 3$
+\end{itemize}
+
+\textbf{Conclusion:} The closed-loop system is stable for $K_p > 3$.
+
+\textbf{Physical interpretation:} The proportional gain must be large enough to ``overpower'' the unstable plant pole. With $K_p = 3$, poles are at $s = \pm j\sqrt{3}$ (marginally stable). With $K_p > 3$, both poles move into the LHP.
+\end{example}
+
+\subsection{Example 7: Conditional Stability}
+
+\begin{example}[Identifying Conditional Stability]
+\label{ex:conditional}
+Consider:
+\begin{equation}
+L(s) = \frac{K(s+2)^2}{s(s+1)(s+0.1)}
+\end{equation}
+
+This system has zeros at $s = -2$ (double) that create phase lead, and poles at $s = 0, -1, -0.1$.
+
+\textbf{Bode plot analysis:}
+
+At low frequencies: $|L| \approx K(4)/(0.1\omega) = 40K/\omega$ with phase starting at $-90°$.
+
+The double zero at $s = -2$ adds $+180°$ of phase over a range of frequencies, while the poles subtract phase.
+
+\textbf{Resulting behavior:}
+\begin{itemize}
+    \item Phase starts at $-90°$, decreases toward $-180°$
+    \item Double zero causes phase to increase back toward $0°$ around $\omega = 2$
+    \item At higher frequencies, phase decreases again past $-180°$
+\end{itemize}
+
+This creates multiple phase crossings of $-180°$, leading to conditional stability:
+
+\begin{itemize}
+    \item For $K$ too small: insufficient gain to stabilize
+    \item For moderate $K$: stable operation
+    \item For $K$ too large: high-frequency instability
+\end{itemize}
+
+\textbf{Design recommendation:} Avoid such configurations. If unavoidable, carefully document the stable gain range and implement gain limits.
+\end{example}
+
+\subsection{Example 8: Lyapunov Analysis of Nonlinear System}
+
+\begin{example}[Lyapunov Stability for Nonlinear System]
+\label{ex:lyapunov_nonlinear}
+Analyze stability of:
+\begin{align}
+\dot{x}_1 &= -x_1 + x_2 \\
+\dot{x}_2 &= -x_1 - x_2^3
+\end{align}
+
+\textbf{Equilibrium:} Setting $\dot{x}_1 = \dot{x}_2 = 0$: $(x_1, x_2) = (0, 0)$.
+
+\textbf{Linearization check:}
+\begin{equation}
+\mathbf{A} = \begin{bmatrix} -1 & 1 \\ -1 & 0 \end{bmatrix}
+\end{equation}
+
+Eigenvalues: $\lambda^2 + \lambda + 1 = 0 \Rightarrow \lambda = -0.5 \pm j0.866$
+
+Both in LHP, so linearization suggests local asymptotic stability.
+
+\textbf{Lyapunov function approach:}
+
+Try a quadratic: $V = ax_1^2 + bx_1x_2 + cx_2^2$
+
+After some trial and error (or solving the Lyapunov equation for the linear part):
+\begin{equation}
+V(x_1, x_2) = x_1^2 + x_1 x_2 + x_2^2
+\end{equation}
+
+This is positive definite (can verify by checking the matrix $\begin{bmatrix} 1 & 0.5 \\ 0.5 & 1 \end{bmatrix}$ has positive eigenvalues).
+
+\textbf{Compute $\dot{V}$:}
+\begin{align}
+\dot{V} &= 2x_1\dot{x}_1 + x_1\dot{x}_2 + x_2\dot{x}_1 + 2x_2\dot{x}_2 \\
+&= 2x_1(-x_1 + x_2) + x_1(-x_1 - x_2^3) + x_2(-x_1 + x_2) + 2x_2(-x_1 - x_2^3) \\
+&= -2x_1^2 + 2x_1x_2 - x_1^2 - x_1x_2^3 - x_1x_2 + x_2^2 - 2x_1x_2 - 2x_2^4 \\
+&= -3x_1^2 - x_1x_2 + x_2^2 - x_1x_2^3 - 2x_2^4
+\end{align}
+
+The quadratic part $-3x_1^2 - x_1x_2 + x_2^2$ needs checking. Completing the square:
+\begin{equation}
+-3x_1^2 - x_1x_2 + x_2^2 = -3\left(x_1 + \frac{x_2}{6}\right)^2 + \frac{x_2^2}{12} + x_2^2 = -3\left(x_1 + \frac{x_2}{6}\right)^2 + \frac{13x_2^2}{12}
+\end{equation}
+
+This is not negative definite (positive when $x_1 \approx -x_2/6$ and $x_2$ is nonzero).
+
+\textbf{Better approach:} Use the linearization result for local stability, and note that the $-x_2^3$ and $-2x_2^4$ terms provide additional damping for large $|x_2|$. A more sophisticated Lyapunov function (perhaps including $x_2^4$ terms) could prove global stability.
+
+\textbf{Conclusion:} The system is locally asymptotically stable (from linearization). Global stability requires more careful analysis.
+\end{example}
+
+\subsection{Example 9: Routh-Hurwitz with Row of Zeros}
+
+\begin{example}[Auxiliary Polynomial Method]
+\label{ex:auxiliary_poly}
+Analyze:
+\begin{equation}
+\Delta(s) = s^5 + 2s^4 + 4s^3 + 8s^2 + 3s + 6
+\end{equation}
+
+\textbf{Routh array:}
+\begin{center}
+\begin{tabular}{c|ccc}
+$s^5$ & 1 & 4 & 3 \\
+$s^4$ & 2 & 8 & 6 \\
+$s^3$ & $\frac{2(4)-1(8)}{2} = 0$ & $\frac{2(3)-1(6)}{2} = 0$ & 0 \\
+\end{tabular}
+\end{center}
+
+Entire $s^3$ row is zero! Form auxiliary polynomial from $s^4$ row:
+\begin{equation}
+A(s) = 2s^4 + 8s^2 + 6 = 2(s^4 + 4s^2 + 3) = 2(s^2 + 1)(s^2 + 3)
+\end{equation}
+
+The auxiliary polynomial has roots at $s = \pm j$ and $s = \pm j\sqrt{3}$---all on the imaginary axis!
+
+\textbf{Differentiate:}
+\begin{equation}
+A'(s) = 8s^3 + 16s
+\end{equation}
+
+Replace $s^3$ row with coefficients [8, 16, 0]:
+
+\begin{center}
+\begin{tabular}{c|ccc}
+$s^5$ & 1 & 4 & 3 \\
+$s^4$ & 2 & 8 & 6 \\
+$s^3$ & 8 & 16 & 0 \\
+$s^2$ & $\frac{8(8)-2(16)}{8} = 4$ & 6 & \\
+$s^1$ & $\frac{4(16)-8(6)}{4} = 4$ & & \\
+$s^0$ & 6 & &
+\end{tabular}
+\end{center}
+
+First column: $\{1, 2, 8, 4, 4, 6\}$---all positive, no sign changes.
+
+\textbf{Conclusion:} The remaining root (after the four on the imaginary axis) is in the LHP. The system is \textbf{marginally stable} with poles at $s = \pm j$, $s = \pm j\sqrt{3}$, and one real pole in the LHP.
+\end{example}
+
+\subsection{Example 10: Gain and Phase Margin Design}
+
+\begin{example}[Designing for Specified Margins]
+\label{ex:margin_design}
+Design a proportional controller for:
+\begin{equation}
+G(s) = \frac{1}{s(s+1)(s+4)}
+\end{equation}
+to achieve $PM \geq 45°$ and $GM \geq 10$ dB.
+
+\textbf{Phase crossover frequency:}
+\begin{equation}
+-90° - \tan^{-1}(\omega_{pc}) - \tan^{-1}(\omega_{pc}/4) = -180°
+\end{equation}
+
+Solving: $\omega_{pc} = 2$ rad/s.
+
+\textbf{Gain margin requirement:}
+\begin{equation}
+|KG(j2)| < 10^{-10/20} = 0.316
+\end{equation}
+\begin{equation}
+|G(j2)| = \frac{1}{2 \cdot \sqrt{5} \cdot \sqrt{20}} = \frac{1}{20} = 0.05
+\end{equation}
+
+For $GM \geq 10$ dB: $K \cdot 0.05 < 0.316 \Rightarrow K < 6.32$
+
+\textbf{Phase margin requirement:}
+
+For $PM = 45°$, we need phase $= -135°$ at gain crossover.
+
+At what frequency is phase $= -135°$?
+\begin{equation}
+-90° - \tan^{-1}(\omega) - \tan^{-1}(\omega/4) = -135°
+\end{equation}
+
+Solving numerically: $\omega_{gc} \approx 0.75$ rad/s.
+
+At this frequency:
+\begin{equation}
+|G(j0.75)| = \frac{1}{0.75 \cdot \sqrt{1.56} \cdot \sqrt{16.56}} = \frac{1}{0.75 \cdot 1.25 \cdot 4.07} = 0.26
+\end{equation}
+
+For gain crossover here: $K \cdot 0.26 = 1 \Rightarrow K = 3.85$
+
+\textbf{Verify both margins with $K = 3.85$:}
+
+\begin{itemize}
+    \item $GM$: $|KG(j2)| = 3.85 \times 0.05 = 0.19$, so $GM = 1/0.19 = 5.2$ (14.3 dB) \checkmark
+    \item $PM$: At $\omega_{gc} = 0.75$, phase $\approx -135°$, so $PM \approx 45°$ \checkmark
+\end{itemize}
+
+\textbf{Conclusion:} $K = 3.85$ satisfies both margin requirements.
+\end{example}
+
+\subsection{Example 11: Nyquist for System with RHP Zero}
+
+\begin{example}[Non-Minimum Phase System]
+\label{ex:nmp_nyquist}
+Analyze stability of the closed-loop system with:
+\begin{equation}
+L(s) = \frac{K(1-s)}{(s+1)^2}
+\end{equation}
+
+This is a non-minimum phase system (RHP zero at $s = 1$).
+
+\textbf{Key frequencies:}
+
+At $\omega = 0$: $|L| = K$, $\angle L = 0°$
+
+At $\omega = 1$:
+\begin{align}
+|L(j)| &= K\frac{\sqrt{1+1}}{\sqrt{2}\cdot\sqrt{2}} = K\frac{\sqrt{2}}{2} \\
+\angle L(j) &= \tan^{-1}(-1) - 2\tan^{-1}(1) = -45° - 90° = -135°
+\end{align}
+
+At $\omega \to \infty$: $|L| \to 0$, $\angle L \to -90° - 180° = -270°$ (RHP zero contributes $-90°$!)
+
+\textbf{Phase crossover:} Phase reaches $-180°$ at $\omega_{pc}$ where:
+\begin{equation}
+\tan^{-1}(-\omega_{pc}) - 2\tan^{-1}(\omega_{pc}) = -180°
+\end{equation}
+
+The RHP zero causes extra phase lag, making phase crossover occur at lower frequency than for a minimum-phase system.
+
+Solving numerically: $\omega_{pc} \approx 1.73$ rad/s.
+
+\textbf{Stability:} With $P = 0$, stability requires no encirclements of $-1$. The critical constraint is $|L(j\omega_{pc})| < 1$, which limits $K$.
+
+\textbf{Conclusion:} Non-minimum phase systems have reduced phase margin and limited achievable bandwidth. The RHP zero fundamentally constrains control performance.
+\end{example}
+
+\subsection{Example 12: Time Delay Stability Analysis}
+
+\begin{example}[Stability with Time Delay]
+\label{ex:time_delay}
+A system with time delay $\tau$ has open-loop transfer function:
+\begin{equation}
+L(s) = \frac{K e^{-\tau s}}{s+1}
+\end{equation}
+
+Determine the maximum $K$ for stability when $\tau = 0.5$ s.
+
+\textbf{Effect of time delay:}
+\begin{itemize}
+    \item Magnitude: unchanged ($|e^{-j\omega\tau}| = 1$)
+    \item Phase: adds $-\omega\tau$ radians $= -57.3\omega\tau$ degrees
+\end{itemize}
+
+\textbf{Phase crossover:}
+\begin{equation}
+-\tan^{-1}(\omega_{pc}) - \omega_{pc}\tau = -180° = -\pi \text{ rad}
+\end{equation}
+
+For $\tau = 0.5$:
+\begin{equation}
+-\tan^{-1}(\omega_{pc}) - 0.5\omega_{pc} = -\pi
+\end{equation}
+
+Solving numerically: $\omega_{pc} \approx 2.03$ rad/s.
+
+\textbf{Magnitude at phase crossover:}
+\begin{equation}
+|L(j2.03)| = \frac{K}{\sqrt{1 + 2.03^2}} = \frac{K}{2.26}
+\end{equation}
+
+\textbf{Stability condition:}
+\begin{equation}
+|L(j\omega_{pc})| < 1 \Rightarrow \frac{K}{2.26} < 1 \Rightarrow K < 2.26
+\end{equation}
+
+\textbf{Conclusion:} Maximum stable gain is $K = 2.26$. Compare to the delay-free case where $K$ can be arbitrarily large!
+
+\textbf{Key insight:} Time delay severely limits achievable gain and bandwidth. This is why digital control systems must sample fast enough relative to the desired bandwidth.
+\end{example}
+
+\subsection{Example 13: Multiple Feedback Loops}
+
+\begin{example}[Inner-Outer Loop Stability]
+\label{ex:cascade_stability}
+Consider a cascade control system where the inner loop has transfer function:
+\begin{equation}
+T_{\text{inner}}(s) = \frac{K_i}{s + K_i}
+\end{equation}
+and the outer loop sees the plant:
+\begin{equation}
+G_{\text{outer}}(s) = \frac{T_{\text{inner}}(s)}{s(s+2)} = \frac{K_i}{s(s+2)(s+K_i)}
+\end{equation}
+
+The outer loop uses proportional gain $K_o$. Find the relationship between $K_i$ and $K_o$ for stability.
+
+\textbf{Closed-loop characteristic equation:}
+\begin{equation}
+s(s+2)(s+K_i) + K_o K_i = 0
+\end{equation}
+\begin{equation}
+s^3 + (2+K_i)s^2 + 2K_i s + K_o K_i = 0
+\end{equation}
+
+\textbf{Routh array:}
+\begin{center}
+\begin{tabular}{c|cc}
+$s^3$ & 1 & $2K_i$ \\
+$s^2$ & $2+K_i$ & $K_o K_i$ \\
+$s^1$ & $\frac{(2+K_i)(2K_i) - K_o K_i}{2+K_i} = \frac{2K_i(2+K_i) - K_o K_i}{2+K_i}$ & \\
+$s^0$ & $K_o K_i$ &
+\end{tabular}
+\end{center}
+
+\textbf{Stability conditions (assuming $K_i, K_o > 0$):}
+\begin{enumerate}
+    \item $2 + K_i > 0$: Always satisfied for $K_i > 0$
+    \item $s^1$ element positive: $2K_i(2+K_i) > K_o K_i \Rightarrow K_o < 2(2+K_i)$
+    \item $s^0$ element positive: Always satisfied for $K_i, K_o > 0$
+\end{enumerate}
+
+\textbf{Stability region:} $K_o < 2(2 + K_i) = 4 + 2K_i$
+
+\textbf{Design insight:} Larger inner-loop bandwidth ($K_i$) allows larger outer-loop gain ($K_o$). This is the benefit of cascade control---the fast inner loop effectively stabilizes the plant, permitting more aggressive outer-loop control.
+\end{example}
+
+\subsection{Example 14: Lyapunov Function for Pendulum}
+
+\begin{example}[Damped Pendulum Stability]
+\label{ex:pendulum_lyapunov}
+Consider the damped pendulum:
+\begin{align}
+\dot{\theta} &= \omega \\
+\dot{\omega} &= -\frac{g}{L}\sin\theta - b\omega
+\end{align}
+where $g/L > 0$ and $b > 0$.
+
+\textbf{Equilibria:} $(\theta, \omega) = (0, 0)$ (down) and $(\pi, 0)$ (up).
+
+\textbf{Lyapunov function (total energy):}
+\begin{equation}
+V(\theta, \omega) = \frac{1}{2}\omega^2 + \frac{g}{L}(1 - \cos\theta)
+\end{equation}
+
+This represents kinetic energy plus potential energy (shifted so $V = 0$ at $\theta = 0$).
+
+\textbf{Check positive definiteness around $\theta = 0$:}
+\begin{itemize}
+    \item $V(0, 0) = 0$ \checkmark
+    \item For small $\theta$: $1 - \cos\theta \approx \theta^2/2$, so $V \approx \omega^2/2 + (g/2L)\theta^2 > 0$ \checkmark
+\end{itemize}
+
+\textbf{Compute $\dot{V}$:}
+\begin{align}
+\dot{V} &= \omega\dot{\omega} + \frac{g}{L}\sin\theta \cdot \dot{\theta} \\
+&= \omega\left(-\frac{g}{L}\sin\theta - b\omega\right) + \frac{g}{L}\sin\theta \cdot \omega \\
+&= -\frac{g}{L}\omega\sin\theta - b\omega^2 + \frac{g}{L}\omega\sin\theta \\
+&= -b\omega^2 \leq 0
+\end{align}
+
+\textbf{Apply LaSalle's invariance principle:}
+
+$\dot{V} = 0$ when $\omega = 0$. On the set $\{\omega = 0\}$:
+\begin{equation}
+\dot{\omega} = -\frac{g}{L}\sin\theta = 0 \Rightarrow \theta = 0, \pi, 2\pi, \ldots
+\end{equation}
+
+The largest invariant set in $\{\omega = 0\}$ is the set of equilibria: $(n\pi, 0)$.
+
+\textbf{Conclusion:} All trajectories approach an equilibrium. Near $\theta = 0$, the pendulum is asymptotically stable. Near $\theta = \pi$, it is unstable (the Lyapunov function analysis shows stability only where $V$ is a local minimum, which is at $\theta = 0$, not $\theta = \pi$).
+\end{example}
+
+\subsection{Example 15: Robustness Analysis}
+
+\begin{example}[Parameter Sensitivity]
+\label{ex:robustness}
+A nominal system has:
+\begin{equation}
+L_0(s) = \frac{10}{s(s+2)}
+\end{equation}
+
+Due to manufacturing variation, the actual system may have:
+\begin{equation}
+L(s) = \frac{10(1+\Delta_K)}{s(s+2(1+\Delta_p))}
+\end{equation}
+where $|\Delta_K| \leq 0.2$ (20\% gain variation) and $|\Delta_p| \leq 0.3$ (30\% pole variation).
+
+\textbf{Nominal stability margins:}
+
+Phase crossover: $-90° - \tan^{-1}(\omega_{pc}/2) = -180° \Rightarrow \omega_{pc} \to \infty$
+
+This system never reaches $-180°$ phase! GM = $\infty$.
+
+Gain crossover: $|L_0(j\omega_{gc})| = 10/(\omega_{gc}\sqrt{4+\omega_{gc}^2}) = 1$
+
+Solving: $\omega_{gc} \approx 2.7$ rad/s.
+
+Phase at crossover: $-90° - \tan^{-1}(2.7/2) = -90° - 53.5° = -143.5°$
+
+$PM = 180° - 143.5° = 36.5°$.
+
+\textbf{Worst-case analysis:}
+
+Gain increase ($\Delta_K = 0.2$): Increases $\omega_{gc}$, reduces PM.
+
+Pole moves closer to origin ($\Delta_p = -0.3$): pole at $s = -1.4$, adds more phase lag.
+
+\textbf{Worst case:}
+\begin{equation}
+L_{\text{worst}}(s) = \frac{12}{s(s+1.4)}
+\end{equation}
+
+New gain crossover: $\omega_{gc} \approx 3.2$ rad/s.
+
+Phase: $-90° - \tan^{-1}(3.2/1.4) = -90° - 66.4° = -156.4°$
+
+$PM_{\text{worst}} = 180° - 156.4° = 23.6°$.
+
+\textbf{Conclusion:} Parameter variations degrade the phase margin from 36.5° to 23.6°. The nominal margin of 36.5° provides adequate robustness for this level of uncertainty.
+\end{example}
+
+%===============================================================================
+\section{Algorithm Implementations}
+\label{sec:stability_algorithms}
+%===============================================================================
+
+This section provides production-ready algorithms for stability analysis. These implementations emphasize numerical robustness, proper handling of edge cases, and practical applicability.
+
+\subsection{Routh Array Construction}
+
+\begin{algorithm}[H]
+\caption{Routh-Hurwitz Stability Analysis}
+\label{alg:routh}
+\begin{algorithmic}[1]
+\REQUIRE Polynomial coefficients $\{a_n, a_{n-1}, \ldots, a_1, a_0\}$ with $a_n > 0$
+\ENSURE Number of RHP roots, stability status, Routh array
+\STATE
+\STATE \COMMENT{Check necessary conditions}
+\FOR{$i = 0$ \TO $n$}
+    \IF{$a_i \leq 0$}
+        \RETURN ``Unstable: coefficient $a_i$ non-positive''
+    \ENDIF
+\ENDFOR
+\STATE
+\STATE \COMMENT{Initialize Routh array}
+\STATE $R \gets$ matrix of zeros with $(n+1)$ rows and $\lceil(n+1)/2\rceil$ columns
+\STATE $R[0, :] \gets [a_n, a_{n-2}, a_{n-4}, \ldots]$ \COMMENT{Even-indexed coefficients}
+\STATE $R[1, :] \gets [a_{n-1}, a_{n-3}, a_{n-5}, \ldots]$ \COMMENT{Odd-indexed coefficients}
+\STATE
+\STATE \COMMENT{Build remaining rows}
+\FOR{$i = 2$ \TO $n$}
+    \STATE $\varepsilon \gets 10^{-10}$ \COMMENT{Small number for numerical stability}
+    \IF{$|R[i-1, 0]| < \varepsilon$}
+        \IF{all elements of row $i-1$ are approximately zero}
+            \STATE \COMMENT{Row of zeros: form auxiliary polynomial}
+            \STATE Form auxiliary polynomial from row $i-2$
+            \STATE Differentiate auxiliary polynomial
+            \STATE Replace row $i-1$ with derivative coefficients
+        \ELSE
+            \STATE $R[i-1, 0] \gets \varepsilon$ \COMMENT{Replace single zero with $\varepsilon$}
+        \ENDIF
+    \ENDIF
+    \FOR{$j = 0$ \TO columns$-1$}
+        \STATE $R[i, j] \gets \frac{R[i-1, 0] \cdot R[i-2, j+1] - R[i-2, 0] \cdot R[i-1, j+1]}{R[i-1, 0]}$
+    \ENDFOR
+\ENDFOR
+\STATE
+\STATE \COMMENT{Count sign changes in first column}
+\STATE $\text{sign\_changes} \gets 0$
+\FOR{$i = 1$ \TO $n$}
+    \IF{$R[i, 0] \cdot R[i-1, 0] < 0$}
+        \STATE $\text{sign\_changes} \gets \text{sign\_changes} + 1$
+    \ENDIF
+\ENDFOR
+\STATE
+\IF{$\text{sign\_changes} = 0$}
+    \RETURN ``Stable'', 0, $R$
+\ELSE
+    \RETURN ``Unstable'', sign\_changes, $R$
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Complexity:} $\mathcal{O}(n^2)$ for polynomial of degree $n$.
+
+\textbf{Numerical Considerations:}
+\begin{itemize}
+    \item Use pivoting or scaling for ill-conditioned polynomials
+    \item The $\varepsilon$-replacement method can produce numerical artifacts; verify borderline cases with root finding
+    \item For high-degree polynomials ($n > 20$), consider using numerical root finders instead
+\end{itemize}
+
+\subsection{Gain and Phase Margin Calculation}
+
+\begin{algorithm}[H]
+\caption{Stability Margins from Frequency Response}
+\label{alg:margins}
+\begin{algorithmic}[1]
+\REQUIRE Transfer function $L(s)$, frequency range $[\omega_{\min}, \omega_{\max}]$, number of points $N$
+\ENSURE Gain margin (GM), phase margin (PM), crossover frequencies $\omega_{pc}$, $\omega_{gc}$
+\STATE
+\STATE \COMMENT{Generate frequency vector (logarithmically spaced)}
+\STATE $\omega \gets \text{logspace}(\log_{10}\omega_{\min}, \log_{10}\omega_{\max}, N)$
+\STATE
+\STATE \COMMENT{Compute frequency response}
+\FOR{$k = 1$ \TO $N$}
+    \STATE $L_k \gets L(j\omega_k)$
+    \STATE $\text{mag}_k \gets |L_k|$
+    \STATE $\text{phase}_k \gets \angle L_k$ \COMMENT{In degrees, unwrapped}
+\ENDFOR
+\STATE
+\STATE \COMMENT{Find gain crossover frequency (magnitude = 1 or 0 dB)}
+\STATE $\omega_{gc} \gets$ interpolate to find $\omega$ where $\text{mag} = 1$
+\IF{multiple crossings exist}
+    \STATE Store all $\omega_{gc}$ values for conditional stability check
+\ENDIF
+\STATE
+\STATE \COMMENT{Find phase crossover frequency (phase = -180°)}
+\STATE $\omega_{pc} \gets$ interpolate to find $\omega$ where $\text{phase} = -180°$
+\IF{no crossing found}
+    \STATE $GM \gets \infty$ \COMMENT{Phase never reaches -180°}
+\ELSE
+    \STATE $\text{mag}_{pc} \gets$ interpolate magnitude at $\omega_{pc}$
+    \STATE $GM \gets 1/\text{mag}_{pc}$
+    \STATE $GM_{dB} \gets -20\log_{10}(\text{mag}_{pc})$
+\ENDIF
+\STATE
+\STATE \COMMENT{Calculate phase margin}
+\IF{$\omega_{gc}$ not found}
+    \STATE $PM \gets \infty$ (or undefined if magnitude always $> 1$)
+\ELSE
+    \STATE $\text{phase}_{gc} \gets$ interpolate phase at $\omega_{gc}$
+    \STATE $PM \gets 180° + \text{phase}_{gc}$
+\ENDIF
+\STATE
+\STATE \COMMENT{Check for conditional stability}
+\IF{multiple $\omega_{gc}$ or multiple $\omega_{pc}$}
+    \STATE Flag system as potentially conditionally stable
+    \STATE Return all margin pairs
+\ENDIF
+\STATE
+\RETURN $GM$, $PM$, $\omega_{gc}$, $\omega_{pc}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Implementation Notes:}
+\begin{itemize}
+    \item Use at least $N = 1000$ points for accurate interpolation
+    \item Phase unwrapping is essential---use MATLAB's \texttt{unwrap} or equivalent
+    \item For systems with transport delay, include the delay phase contribution: $\angle e^{-j\omega\tau} = -\omega\tau$
+    \item Verify results by checking that increasing gain by GM causes instability
+\end{itemize}
+
+\subsection{Nyquist Plot Generation}
+
+\begin{algorithm}[H]
+\caption{Nyquist Plot with Encirclement Count}
+\label{alg:nyquist}
+\begin{algorithmic}[1]
+\REQUIRE Transfer function $L(s)$, frequency range, contour indentation radius $\varepsilon$
+\ENSURE Nyquist plot data, number of encirclements of $-1$
+\STATE
+\STATE \COMMENT{Handle poles on imaginary axis}
+\STATE Find poles of $L(s)$ on imaginary axis (including $s = 0$)
+\STATE
+\STATE \COMMENT{Positive frequency portion}
+\STATE $\omega \gets \text{logspace}(-3, 3, 1000)$ \COMMENT{Adjust range as needed}
+\STATE Remove frequencies within $\varepsilon$ of imaginary axis poles
+\STATE Add indentation arcs around each imaginary axis pole
+\STATE
+\FOR{each $\omega_k$ in frequency vector}
+    \STATE $L_k \gets L(j\omega_k)$
+    \STATE Store $(\text{Re}(L_k), \text{Im}(L_k))$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Infinite semicircle contribution}
+\STATE Compute $\lim_{|s|\to\infty} L(s)$ along semicircle in RHP
+\STATE Typically: arc from angle $+90°$ to $-90°$ at origin (for proper systems)
+\STATE
+\STATE \COMMENT{Negative frequency portion (mirror about real axis)}
+\FOR{each positive frequency point}
+    \STATE Add complex conjugate to complete the contour
+\ENDFOR
+\STATE
+\STATE \COMMENT{Count encirclements of -1}
+\STATE $N \gets 0$
+\STATE Draw ray from $-1$ to $\infty$ along negative real axis
+\FOR{each segment of Nyquist contour}
+    \IF{segment crosses the ray}
+        \IF{crossing is clockwise}
+            \STATE $N \gets N + 1$
+        \ELSE
+            \STATE $N \gets N - 1$
+        \ENDIF
+    \ENDIF
+\ENDFOR
+\STATE
+\STATE \COMMENT{Determine stability}
+\STATE $P \gets$ number of open-loop RHP poles
+\STATE $Z \gets P + N$ \COMMENT{Closed-loop RHP poles}
+\IF{$Z = 0$}
+    \STATE System is stable
+\ELSE
+    \STATE System is unstable with $Z$ RHP poles
+\ENDIF
+\STATE
+\RETURN Plot data, $N$, stability status
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Lyapunov Equation Solver}
+
+\begin{algorithm}[H]
+\caption{Continuous-Time Lyapunov Equation Solver}
+\label{alg:lyapunov_eq}
+\begin{algorithmic}[1]
+\REQUIRE System matrix $\mathbf{A} \in \mathbb{R}^{n \times n}$, positive definite $\mathbf{Q} \in \mathbb{R}^{n \times n}$
+\ENSURE Solution $\mathbf{P}$ to $\mathbf{A}^T\mathbf{P} + \mathbf{P}\mathbf{A} = -\mathbf{Q}$, or indication of instability
+\STATE
+\STATE \COMMENT{Check stability (necessary for solution to exist)}
+\STATE $\lambda \gets \text{eigenvalues}(\mathbf{A})$
+\IF{any $\text{Re}(\lambda_i) \geq 0$}
+    \RETURN ``System unstable: no positive definite solution exists''
+\ENDIF
+\STATE
+\STATE \COMMENT{Method 1: Bartels-Stewart Algorithm (preferred for numerical stability)}
+\STATE Compute real Schur decomposition: $\mathbf{A} = \mathbf{U}\mathbf{T}\mathbf{U}^T$
+\STATE Transform: $\tilde{\mathbf{Q}} = \mathbf{U}^T\mathbf{Q}\mathbf{U}$
+\STATE Solve $\mathbf{T}^T\tilde{\mathbf{P}} + \tilde{\mathbf{P}}\mathbf{T} = -\tilde{\mathbf{Q}}$ via back-substitution
+\STATE Transform back: $\mathbf{P} = \mathbf{U}\tilde{\mathbf{P}}\mathbf{U}^T$
+\STATE
+\STATE \COMMENT{Method 2: Vectorization (for small $n$)}
+\STATE $\text{vec}(\mathbf{P}) = -(\mathbf{I} \otimes \mathbf{A}^T + \mathbf{A}^T \otimes \mathbf{I})^{-1} \text{vec}(\mathbf{Q})$
+\STATE Reshape to obtain $\mathbf{P}$
+\STATE
+\STATE \COMMENT{Verify solution}
+\STATE Compute residual: $\mathbf{R} = \mathbf{A}^T\mathbf{P} + \mathbf{P}\mathbf{A} + \mathbf{Q}$
+\IF{$\|\mathbf{R}\|_F > \text{tolerance}$}
+    \STATE Warning: numerical issues in solution
+\ENDIF
+\STATE
+\STATE \COMMENT{Verify positive definiteness}
+\STATE $\lambda_P \gets \text{eigenvalues}(\mathbf{P})$
+\IF{any $\lambda_{P,i} \leq 0$}
+    \STATE Warning: solution not positive definite (check input stability)
+\ENDIF
+\STATE
+\RETURN $\mathbf{P}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Computational Complexity:} $\mathcal{O}(n^3)$ for the Bartels-Stewart algorithm.
+
+\textbf{MATLAB/Python Implementation:}
+\begin{itemize}
+    \item MATLAB: \texttt{P = lyap(A', Q)} (note the transpose!)
+    \item Python (scipy): \texttt{P = scipy.linalg.solve\_continuous\_lyapunov(A.T, -Q)}
+    \item Python (control): \texttt{P = control.lyap(A.T, Q)}
+\end{itemize}
+
+\subsection{Region of Attraction Estimation}
+
+\begin{algorithm}[H]
+\caption{Region of Attraction Estimation via Lyapunov Sublevel Sets}
+\label{alg:roa}
+\begin{algorithmic}[1]
+\REQUIRE System $\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})$, Lyapunov function $V(\mathbf{x})$, domain $D$
+\ENSURE Estimated region of attraction $\Omega_c = \{\mathbf{x} : V(\mathbf{x}) \leq c\}$
+\STATE
+\STATE \COMMENT{Verify V is a valid Lyapunov function}
+\STATE Check $V(\mathbf{0}) = 0$ and $V(\mathbf{x}) > 0$ for $\mathbf{x} \neq \mathbf{0}$
+\STATE
+\STATE \COMMENT{Find the largest valid sublevel set}
+\STATE $c_{\max} \gets \infty$
+\STATE
+\STATE \COMMENT{Method 1: Check domain boundary}
+\IF{domain $D$ has finite boundary $\partial D$}
+    \STATE Sample points on $\partial D$
+    \STATE $c_1 \gets \min_{\mathbf{x} \in \partial D} V(\mathbf{x})$
+    \STATE $c_{\max} \gets \min(c_{\max}, c_1)$
+\ENDIF
+\STATE
+\STATE \COMMENT{Method 2: Check where $\dot{V} = 0$ outside origin}
+\STATE Find level sets where $\dot{V}(\mathbf{x}) = 0$ for $\mathbf{x} \neq \mathbf{0}$
+\STATE $c_2 \gets \min V(\mathbf{x})$ over these level sets
+\STATE $c_{\max} \gets \min(c_{\max}, c_2)$
+\STATE
+\STATE \COMMENT{Method 3: Check other equilibria}
+\STATE Find all equilibria $\bar{\mathbf{x}}_i$ of the system
+\FOR{each equilibrium $\bar{\mathbf{x}}_i \neq \mathbf{0}$}
+    \STATE $c_3 \gets V(\bar{\mathbf{x}}_i)$
+    \STATE $c_{\max} \gets \min(c_{\max}, c_3)$
+\ENDFOR
+\STATE
+\STATE \COMMENT{Return conservative estimate}
+\STATE $c \gets 0.95 \cdot c_{\max}$ \COMMENT{Small safety factor}
+\RETURN $\Omega_c = \{\mathbf{x} : V(\mathbf{x}) \leq c\}$
+\end{algorithmic}
+\end{algorithm}
+
+%===============================================================================
+\section{Chapter Summary}
+\label{sec:stability_summary}
+%===============================================================================
+
+This chapter has provided a comprehensive treatment of stability analysis techniques for control systems. Let me summarize the key concepts and their relationships.
+
+\subsection{Stability Concepts Hierarchy}
+
+We defined several stability notions, arranged from weakest to strongest:
+
+\begin{enumerate}
+    \item \textbf{BIBO Stability:} Bounded inputs produce bounded outputs. For LTI systems, requires all poles of the transfer function in the open LHP.
+
+    \item \textbf{Lyapunov Stability:} Trajectories starting near equilibrium stay near. Does not guarantee convergence.
+
+    \item \textbf{Asymptotic Stability:} Trajectories converge to equilibrium. The gold standard for control.
+
+    \item \textbf{Exponential Stability:} Convergence occurs at an exponential rate. Provides quantitative performance guarantees.
+\end{enumerate}
+
+For linear systems, asymptotic stability implies all other forms. The key condition is: \textbf{all eigenvalues (poles) must have strictly negative real parts}.
+
+\subsection{Analysis Methods Summary}
+
+\begin{center}
+\begin{tabular}{p{3cm}p{4cm}p{5cm}}
+\toprule
+\textbf{Method} & \textbf{Applicable To} & \textbf{What It Provides} \\
+\midrule
+Routh-Hurwitz & LTI systems, characteristic polynomials & Number of RHP roots, parameter ranges for stability \\
+\addlinespace
+Nyquist & Any SISO feedback system & Closed-loop stability from open-loop frequency response, handles unstable plants \\
+\addlinespace
+Bode & Minimum-phase LTI systems & Gain and phase margins, intuitive design \\
+\addlinespace
+Lyapunov & Any autonomous system (including nonlinear) & Stability proof without solving ODEs, region of attraction estimates \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Key Formulas}
+
+\textbf{Routh-Hurwitz:}
+\begin{itemize}
+    \item Sign changes in first column = number of RHP roots
+    \item All first-column elements same sign $\Leftrightarrow$ stability
+\end{itemize}
+
+\textbf{Nyquist:}
+\begin{equation}
+Z = P + N
+\end{equation}
+where $Z$ = closed-loop RHP poles, $P$ = open-loop RHP poles, $N$ = clockwise encirclements of $-1$.
+
+\textbf{Bode Margins:}
+\begin{align}
+GM &= \frac{1}{|L(j\omega_{pc})|} = -|L(j\omega_{pc})|_{dB} \\
+PM &= 180° + \angle L(j\omega_{gc})
+\end{align}
+
+\textbf{Lyapunov:}
+\begin{equation}
+\dot{V}(\mathbf{x}) = \nabla V \cdot \mathbf{f}(\mathbf{x}) < 0 \text{ for } \mathbf{x} \neq \mathbf{0} \Rightarrow \text{Asymptotic Stability}
+\end{equation}
+
+\textbf{Lyapunov Equation:}
+\begin{equation}
+\mathbf{A}^T\mathbf{P} + \mathbf{P}\mathbf{A} = -\mathbf{Q} \text{ has unique } \mathbf{P} > 0 \Leftrightarrow \mathbf{A} \text{ is stable}
+\end{equation}
+
+\subsection{Design Guidelines}
+
+\textbf{Minimum Stability Margins:}
+\begin{itemize}
+    \item General applications: $GM \geq 6$ dB, $PM \geq 30°$
+    \item Most industrial systems: $GM \geq 10$ dB, $PM \geq 45°$
+    \item Safety-critical systems: $GM \geq 12$ dB, $PM \geq 60°$
+\end{itemize}
+
+\textbf{Phase Margin and Damping:}
+\begin{equation}
+PM \approx 100\zeta \text{ (degrees)}
+\end{equation}
+
+\textbf{Maximum Tolerable Delay:}
+\begin{equation}
+\tau_{\max} = \frac{PM \text{ (radians)}}{\omega_{gc}}
+\end{equation}
+
+\subsection{Common Pitfalls}
+
+\begin{enumerate}
+    \item \textbf{Confusing stability types:} BIBO stability does not imply internal stability if there are hidden modes.
+
+    \item \textbf{Ignoring non-minimum phase effects:} RHP zeros limit achievable bandwidth and reduce phase margin.
+
+    \item \textbf{Conditional stability:} Always check for multiple gain/phase crossovers that could cause instability at both high and low gains.
+
+    \item \textbf{Insufficient margins:} Nominal stability is not enough---parameter variations will degrade margins.
+
+    \item \textbf{Linearization limitations:} For eigenvalues on the imaginary axis, linearization is inconclusive.
+\end{enumerate}
+
+\subsection{Looking Ahead}
+
+The stability analysis techniques in this chapter form the foundation for:
+
+\begin{itemize}
+    \item \textbf{Chapter 7 (Control Architecture):} We will use stability margins to design compensators and configure multi-loop systems.
+
+    \item \textbf{Chapter 8 (State-Space):} Pole placement directly controls eigenvalue locations for desired stability margins.
+
+    \item \textbf{Chapter 10 (Nonlinear Systems):} Lyapunov methods extend to nonlinear controller design and robustness analysis.
+
+    \item \textbf{Part IV (MIMO):} Stability analysis generalizes to multivariable systems using singular values and structured singular values.
+\end{itemize}
+
+Stability is the foundation upon which all control design rests. Before optimizing performance, before adding features, before deploying a controller---verify stability, ensure adequate margins, and understand how parameter variations affect those margins. With the tools in this chapter, you can confidently assess whether your control system will behave as intended or catastrophically fail.
+
+%===============================================================================
+% End of Chapter 6
+%===============================================================================
+
