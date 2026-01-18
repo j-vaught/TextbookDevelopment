@@ -1,0 +1,115 @@
+\subsection{Model Validation Against Experimental Data}
+
+The preceding sections of this chapter have presented systematic procedures for developing mathematical models of physical systems. We have seen how to construct models from first principles using free-body diagrams and fundamental laws, how to linearize nonlinear relationships around operating points, and how to identify model parameters from experimental data. However, the construction of a model represents only half of the modeling endeavor. The second, equally essential half is validation: the systematic process of determining whether our model accurately captures the behavior of the physical system it represents. A model that has not been validated against real-world measurements is, at best, an educated guess and, at worst, a dangerous falsehood that could lead to catastrophic control system failures.
+
+Model validation answers a fundamental question that must be asked of every model: \emph{Does this model, when subjected to the same inputs as the physical system, produce outputs that match the system's actual responses within acceptable tolerances?} This question seems simple, but answering it rigorously requires careful attention to experimental design, statistical analysis, and the interpretation of results. Furthermore, we must recognize that validation is never truly complete. A model can be shown to be inadequate, but it can never be proven to be perfect. This distinction has profound implications for how we approach the validation process and how we communicate the results to engineers and decision-makers who will use our models.
+
+The validation process begins with the collection of experimental data that was not used in the construction or parameter identification of the model. This distinction is crucial because using the same data for both fitting and validation creates a dangerous circularity. A model can always be made to fit the data on which it was trained, but this fit tells us nothing about how the model will perform on new, unseen data. The model may have memorized the training data rather than learning the underlying dynamics, a phenomenon in statistics and machine learning known as overfitting. Our validation data must therefore come from separate experimental trials, conducted under conditions that mimic those in which the model will eventually be deployed.
+
+Consider a practical example to build intuition before we formalize the validation methodology. Suppose we have constructed a model of an electric motor based on the principles discussed in Section 1.4. Our model takes voltage input and produces angular velocity as output. To validate this model, we would connect the motor to a data acquisition system, apply a series of voltage signals, and record the resulting angular velocities. We would then compare these measured velocities with the velocities predicted by our model when subjected to the same voltage inputs. The differences between predicted and measured values, which we call \emph{residuals}, form the basis for our validation assessment.
+
+Residual analysis is the cornerstone of model validation and deserves careful attention. When we compute residuals, we are essentially asking: "What is left over that our model fails to explain?" If our model perfectly captured the motor dynamics, the residuals would be zero for all time instants. In practice, residuals are never zero, but their character tells us a great deal about the quality of our model and the nature of any deficiencies.
+
+A well-validated model should produce residuals with four important properties. First, the residuals should have zero mean. If the residuals consistently deviate in one direction, this indicates a systematic bias in our model, meaning we have missed some physical effect that causes the model to consistently over- or under-predict the system behavior. Second, the residuals should exhibit no obvious patterns when plotted against time or against the model inputs. If patterns exist, the model has failed to capture some dynamic feature of the system. Third, the residuals should not be correlated with each other; the value of one residual should not help predict the value of the next. Correlated residuals indicate that the model is missing some time-dependent behavior. Fourth, the residuals should have constant variance, meaning they should not grow larger at certain operating conditions or input levels. Residuals whose variance changes with operating conditions suggest that the model is more accurate in some regimes than others.
+
+To make these concepts concrete, let us work through a complete validation example. Suppose we have identified the parameters of a first-order model for a thermal system and obtained the following validation data, where $T_m(k)$ denotes the measured temperature at discrete time step $k$ and $T_p(k)$ denotes the temperature predicted by our model:
+
+\begin{center}
+\begin{tabular}{c|c|c|c}
+Time (s) & Input Voltage (V) & Measured $T_m$ (°C) & Predicted $T_p$ (°C) \\ \hline
+0 & 5.0 & 25.0 & 25.0 \\
+1 & 5.0 & 27.3 & 27.1 \\
+2 & 5.0 & 29.1 & 28.9 \\
+3 & 5.0 & 30.5 & 30.4 \\
+4 & 5.0 & 31.6 & 31.6 \\
+5 & 5.0 & 32.4 & 32.5 \\
+6 & 5.0 & 33.0 & 33.2 \\
+7 & 5.0 & 33.5 & 33.7 \\
+8 & 5.0 & 33.9 & 34.1 \\
+9 & 5.0 & 34.2 & 34.4 \\
+10 & 5.0 & 34.4 & 34.6 \\
+\end{tabular}
+\end{center}
+
+We compute the residual at each time step as $e(k) = T_m(k) - T_p(k)$. The residuals for this dataset are:
+
+\begin{center}
+\begin{tabular}{c|c}
+Time (s) & Residual $e(k)$ (°C) \\ \hline
+0 & 0.0 \\
+1 & 0.2 \\
+2 & 0.2 \\
+3 & 0.1 \\
+4 & 0.0 \\
+5 & -0.1 \\
+6 & -0.2 \\
+7 & -0.2 \\
+8 & -0.2 \\
+9 & -0.2 \\
+10 & -0.2 \\
+\end{tabular}
+\end{center}
+
+Examining these residuals, we observe that they fluctuate between -0.2 and +0.2 °C, with no obvious trend or pattern. The mean residual is approximately 0.0 °C, suggesting no systematic bias. The residuals appear to be randomly distributed around zero with roughly constant magnitude. These observations suggest that our model captures the essential dynamics of the thermal system reasonably well, though we should note that the residuals are not perfectly random—they seem to oscillate slightly before settling at a small negative bias. This oscillation might indicate that our first-order model is missing a slight second-order dynamic, though the effect is small enough that the model may still be adequate for its intended purpose.
+
+While visual inspection of residuals is valuable, we can strengthen our validation by computing quantitative statistical metrics. The most commonly used metric is the root mean square error (RMSE), defined as:
+
+\begin{equation}
+\text{RMSE} = \sqrt{\frac{1}{N}\sum_{k=1}^{N} \left[ T_m(k) - T_p(k) \right]^2}
+\end{equation}
+
+For our thermal system example, we calculate the RMSE by summing the squared residuals, dividing by the number of data points, and taking the square root. The squared residuals are [0, 0.04, 0.04, 0.01, 0, 0.01, 0.04, 0.04, 0.04, 0.04, 0.04], summing to 0.30. Dividing by 11 data points gives 0.027, and the square root yields RMSE = 0.165 °C. This value tells us that, on average, our model's predictions deviate from measurements by about one-sixth of a degree. Whether this constitutes adequate validation depends on the requirements of the application. If the system must maintain temperature within ±0.5 °C of setpoint, an RMSE of 0.165 °C might be acceptable. If tighter control is required, we would need to improve the model or accept that our predictions carry significant uncertainty.
+
+Another useful metric is the coefficient of determination, often denoted $R^2$. This metric compares our model's predictions to a naive baseline model that simply predicts the mean of the measured values for all inputs. The $R^2$ value ranges from negative infinity to 1, with 1 indicating perfect predictions and values near or below zero indicating that our model performs no better than (or worse than) the mean baseline. The mathematical definition is:
+
+\begin{equation}
+R^2 = 1 - \frac{\sum_{k=1}^{N} \left[ T_m(k) - T_p(k) \right]^2}{\sum_{k=1}^{N} \left[ T_m(k) - \bar{T}_m \right]^2}
+\end{equation}
+
+where $\bar{T}_m$ is the mean of the measured temperatures. For our example, the measured temperatures range from 25.0 to 34.4 °C, with mean approximately 31.4 °C. The denominator of the $R^2$ expression, which measures the total variance in the measured data, is the sum of squared deviations from this mean. Comparing the residual sum of squares (0.30) to the total sum of squares (which we can calculate as approximately 100.5), we obtain $R^2 \approx 0.997$. This very high $R^2$ value indicates that our model explains approximately 99.7\% of the variance in the measured data, which is excellent performance.
+
+These statistical metrics provide useful summaries, but they must be interpreted with caution. A model can have an excellent $R^2$ value while still being inadequate for control system design. For instance, a model that predicts steady-state behavior correctly but captures transient dynamics poorly might still achieve high $R^2$ if the system spends most of its time near steady state. Similarly, a model that is accurate on average but consistently under-predicts at high temperatures might be unsuitable for an application that operates primarily in that regime. These considerations motivate more sophisticated validation techniques that examine model behavior across different operating conditions.
+
+Cross-validation is a powerful methodology that addresses some of the limitations of single-dataset validation. The fundamental idea is to divide available experimental data into multiple subsets, use some subsets for parameter identification and others for validation, and rotate this assignment to obtain multiple validation assessments. This approach helps detect overfitting and provides more robust estimates of model performance on new data.
+
+The simplest form of cross-validation is train-test splitting, where we reserve a portion of our data—typically 20-30\%—for validation and use the remainder for parameter identification. The model is fitted on the training portion, then validated on the held-out test portion. The advantage of this approach is that it provides an unbiased estimate of how the model will perform on truly new data, since the test data was never seen during parameter estimation. However, the estimate depends on which particular data points ended up in the training and test sets, and we may have discarded valuable data that could have improved our parameter estimates.
+
+K-fold cross-validation addresses this concern by dividing the data into $k$ equally sized partitions, or folds. The model is trained $k$ times, each time using $k-1$ folds for parameter estimation and the remaining fold for validation. Each data point serves as validation data exactly once across the $k$ iterations. The final validation metrics are obtained by averaging the results across all $k$ folds. This approach makes efficient use of the available data and provides more stable estimates of model performance. Common choices for $k$ are 5 or 10, balancing computational cost against statistical reliability.
+
+For very small datasets, leave-one-out cross-validation provides the most thorough assessment. In this approach, we train the model $N$ times, each time holding out a single data point for validation and using the remaining $N-1$ points for parameter estimation. While computationally intensive for large $N$, this method provides the most complete possible assessment of model behavior, since every data point is used for both training and validation.
+
+To illustrate cross-validation, suppose we have collected 30 data points from our thermal system experiments. We might divide these into 5 folds of 6 points each. For the first iteration, we use folds 2 through 5 (24 points) to estimate the model parameters, then compute validation metrics on fold 1 (6 points). We repeat this process for each of the 5 folds, obtaining 5 independent validation assessments. If our model is robust, the validation metrics should be similar across all folds. If the metrics vary dramatically from fold to fold, this suggests that our model is sensitive to the particular training data used, which is a warning sign of overfitting or of poor coverage of the operating regime in some folds.
+
+The concept of validation for specific operating conditions and purposes deserves special emphasis. A model validated under one set of conditions may perform poorly under different conditions, even if those conditions fall within the nominal operating range of the system. This occurs because the physical phenomena governing system behavior may change qualitatively at different operating points, or because our linearization assumptions become invalid as we move away from the conditions under which we identified the model.
+
+Consider our thermal system model identified at an ambient temperature of 25°C with input voltages around 5V. This model may work well for predicting system behavior in similar conditions, but what happens if we apply a much higher voltage, causing the temperature to rise far above the range covered in our validation data? The thermal properties of materials often change with temperature, heat transfer coefficients vary with the temperature difference between the system and its environment, and our linear model may simply not be accurate at these elevated temperatures. To validate the model for use at higher temperatures, we must conduct experiments at those temperatures and assess whether our model remains adequate.
+
+This principle extends to all aspects of the intended model use. If our control system will operate the motor at varying speeds, we must validate the model across that speed range. If the system will experience sudden load changes, we must validate the model's response to those disturbances. If the system will operate continuously for extended periods, we must assess whether the model remains valid as components age and parameters drift. Each intended operating mode and each anticipated operating condition requires its own validation assessment.
+
+The interpretation of validation results requires judgment and contextual knowledge that no statistical metric can fully capture. A model with an RMSE of 0.165°C may be excellent for one application and inadequate for another. A model with $R^2 = 0.997$ may be suitable for some control designs but fail to capture phenomena critical to others. The engineer conducting the validation must consider the intended use of the model, the consequences of model errors, the costs and benefits of improving model accuracy, and the practical constraints on data collection and model development.
+
+We must also recognize and communicate the limitations of our validation assessment. No matter how extensive our validation efforts, we can never be certain that our model will perform correctly under all conditions. We can only say that we have tested the model under certain conditions and found it adequate, and that we have no reason to believe it will fail dramatically under similar conditions. The absence of evidence against a model is not evidence of its correctness. This epistemological humility is not a weakness but a strength: it reminds us that modeling is an iterative process of successive approximation, and that vigilance and ongoing testing are essential even after a model has been deployed.
+
+The validation process can be formalized in an algorithm that guides the engineer through the essential steps while allowing flexibility for the particulars of each situation.
+
+\begin{center}
+\fcolorbox{UofSCBlack}{white}{\begin{minipage}{0.95\textwidth}
+\vspace{0.2cm}
+\textbf{Algorithm: Model Validation Procedure}
+\begin{algorithmic}[1]
+\State \textbf{Step 1: Reserve Validation Data} Collect experimental data that was not used in model construction or parameter identification. Ensure the data covers the operating conditions of interest.
+\State \textbf{Step 2: Compute Residuals} For each validation data point, calculate the residual as the difference between measured and predicted output.
+\State \textbf{Step 3: Visual Inspection} Plot residuals versus time and versus model inputs. Look for patterns, trends, or changing variance that might indicate model deficiencies.
+\State \textbf{Step 4: Compute Statistical Metrics} Calculate RMSE, $R^2$, and other appropriate metrics. Compare to application requirements.
+\State \textbf{Step 5: Check Residual Properties} Assess whether residuals have zero mean, no autocorrelation, and constant variance.
+\State \textbf{Step 6: Cross-Validate} If sufficient data is available, perform cross-validation to obtain robust performance estimates.
+\State \textbf{Step 7: Test Operating Conditions} Validate separately at different operating conditions if the model will be used across a range of conditions.
+\State \textbf{Step 8: Document and Interpret} Record all validation results and interpret them in the context of the intended application. Note any limitations or concerns.
+\State \textbf{Step 9: Iterate} If validation reveals significant deficiencies, return to model development and improve the model before redeploying.
+\end{algorithmic}
+\end{minipage}}
+\end{center}
+
+This algorithm provides a structured approach to validation, but it should not be followed mechanically. Each step requires judgment: What constitutes "sufficient" validation data? What patterns in residuals are concerning and what are benign? What RMSE value is acceptable for a given application? These questions can only be answered by engineers who understand both the mathematical models and the physical systems they represent, and who know how the models will be used in practice.
+
+To conclude this section, we return to a philosophical point made earlier: validation is an ongoing process, not a one-time achievement. Even after a model has been deployed in a control system, we must continue to monitor its performance and validate it against new data as it becomes available. Component aging, environmental changes, and operating conditions outside the original validation envelope can all degrade model accuracy over time. The responsible engineer treats every model as a hypothesis awaiting further testing, constantly seeking evidence of its adequacy or inadequacy, and remaining prepared to revise or replace the model as our understanding deepens. This perspective may seem pessimistic, but it is the only stance consistent with the reality that all models are approximations of the infinitely complex physical world, and all approximations eventually fail in ways their creators did not anticipate.

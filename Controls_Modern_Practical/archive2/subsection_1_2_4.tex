@@ -1,0 +1,213 @@
+\subsection{Complex Numbers and Frequency Domain Thinking}
+
+The analysis of control systems invariably involves quantities that oscillate, vibrate, and repeat over time. Before we can understand how controllers shape the behavior of dynamic systems, we must develop a mathematical language capable of describing oscillatory motion with elegance and simplicity. This language is built upon complex numbers, and the purpose of this subsection is to develop the geometric and algebraic intuition necessary to use complex numbers as a tool for control system analysis. What may initially appear as an abstract mathematical detour will prove to be the cornerstone of everything that follows, transforming the seemingly intractable problem of solving differential equations into straightforward algebraic manipulations.
+
+\subsubsection{The Geometric View: Numbers as Points in a Plane}
+
+Our familiar real numbers can be visualized as points along a straight line, where each position corresponds to a specific value. This one-dimensional number line serves well for representing quantities like temperature, velocity, or mass, but it fails entirely to capture the essential character of oscillatory phenomena. When a mass bobs up and down on a spring, it moves through a cycle of positions that repeats endlessly. When an alternating current flows through a wire, the voltage rises and falls in a rhythmic pattern. These behaviors are fundamentally two-dimensional in nature, involving both a magnitude and a direction of rotation or phase.
+
+A complex number provides precisely this two-dimensional representation. We define a complex number $z$ as an ordered pair of real numbers $(a, b)$, which we write in the standard form $z = a + jb$ where $j$ represents the imaginary unit satisfying $j^2 = -1$. The term $a$ is called the real part of $z$, denoted $\operatorname{Re}\{z\}$, and $b$ is called the imaginary part, denoted $\operatorname{Im}\{z\}$. To visualize a complex number, we construct the complex plane, shown in Figure~\ref{fig:complex_plane}, where the horizontal axis represents the real component and the vertical axis represents the imaginary component. Every complex number corresponds to exactly one point in this plane, and conversely, every point in the complex plane corresponds to exactly one complex number.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[scale=1.2, >=stealth]
+        \draw[->, UofSCBlack, line width=1.5pt] (-2.5, 0) -- (2.5, 0) node[right] {$\operatorname{Re}$};
+        \draw[->, UofSCBlack, line width=1.5pt] (0, -2.5) -- (0, 2.5) node[above] {$\operatorname{Im}$};
+        \draw[UofSCBlack, line width=0.5pt] (0,0) grid (2.4,2.4);
+        \draw[UofSCBlack, line width=0.5pt] (0,0) grid (-2.4,-2.4);
+
+        \coordinate (z1) at (1.5, 1.0);
+        \coordinate (z2) at (-1.0, 1.8);
+        \coordinate (z3) at (-1.2, -0.8);
+
+        \draw[UofSCGarnet, line width=2pt] (0,0) -- (z1) node[midway, above right] {$z_1 = 1.5 + j1.0$};
+        \draw[UofSCGarnet, line width=2pt] (0,0) -- (z2) node[midway, left] {$z_2 = -1.0 + j1.8$};
+        \draw[UofSCGarnet, line width=2pt] (0,0) -- (z3) node[midway, below right] {$z_3 = -1.2 - j0.8$};
+
+        \fill[UofSCGarnet] (z1) circle (2.5pt) node[above right] {$z_1$};
+        \fill[UofSCGarnet] (z2) circle (2.5pt) node[above left] {$z_2$};
+        \fill[UofSCGarnet] (z3) circle (2.5pt) node[below right] {$z_3$};
+
+        \draw[UofSCBlack, dashed] (1.5, 0) -- (z1) -- (0, 1.0);
+        \node[UofSCBlack] at (1.5, -0.3) {$a$};
+        \node[UofSCBlack] at (-0.3, 1.0) {$b$};
+
+        \draw[UofSCGarnet, ->, line width=1.5pt] (1.5, 0) arc (0:33.69:1.5);
+        \node[UofSCGarnet] at (1.8, 0.3) {$\theta$};
+    \end{tikzpicture}
+    \caption{The complex plane represents complex numbers as points. Each complex number $z = a + jb$ corresponds to a point with real coordinate $a$ and imaginary coordinate $b$. The angle $\theta$ and radius $r$ provide an alternative polar representation.}
+    \label{fig:complex_plane}
+\end{figure}
+
+Beyond representing points, complex numbers encode a profound geometric operation: rotation. Consider what happens when we multiply a complex number by $j$. If we begin with $z = a + jb$, then $jz = j(a + jb) = ja + j^2b = -b + ja$. This transformation moves the point $(a, b)$ to $(-b, a)$, which geometrically represents a counterclockwise rotation of 90 degrees about the origin. Multiplying by $j$ again gives $j^2z = j(-b + ja) = -jb + j^2a = -a - jb$, which corresponds to a 180-degree rotation. A third multiplication gives $j^3z = j(-a - jb) = -ja - j^2b = b - ja$, and finally $j^4z = j(b - ja) = jb - j^2a = a + jb$, returning us to the original point after a complete 360-degree rotation. This extraordinary property—that multiplication by $j$ corresponds to a right angle rotation—lies at the heart of why complex numbers prove so useful for describing oscillatory phenomena. An oscillation, after all, is precisely a rotation in a two-dimensional space where only one dimension (the real axis) is physically observable.
+
+\subsubsection{Polar Form and Euler's Formula}
+
+While the rectangular form $z = a + jb$ proves convenient for addition and subtraction, the polar form provides tremendous advantages for multiplication, division, and especially for describing oscillatory behavior. Any complex number $z = a + jb$ can be expressed as $z = re^{j\theta}$, where $r = \sqrt{a^2 + b^2}$ is the magnitude (or modulus) of $z$, and $\theta = \arctan(b/a)$ is the angle (or argument) of $z$ measured counterclockwise from the positive real axis. This representation connects directly to our geometric intuition: $r$ tells us how far the point lies from the origin, while $\theta$ tells us in which direction.
+
+The equivalence between rectangular and polar forms rests upon one of the most remarkable identities in all of mathematics, known as Euler's formula:
+\begin{equation}
+e^{j\theta} = \cos\theta + j\sin\theta.
+\end{equation}
+This formula, proven by the Swiss mathematician Leonhard Euler in the eighteenth century, establishes an unexpected bridge between exponential functions and trigonometric functions through the vehicle of complex numbers. To verify Euler's formula intuitively, consider the Taylor series expansions of the exponential, cosine, and sine functions:
+\begin{align}
+e^x &= 1 + x + \frac{x^2}{2!} + \frac{x^3}{3!} + \frac{x^4}{4!} + \cdots, \\
+\cos x &= 1 - \frac{x^2}{2!} + \frac{x^4}{4!} - \frac{x^6}{6!} + \cdots, \\
+\sin x &= x - \frac{x^3}{3!} + \frac{x^5}{5!} - \frac{x^7}{7!} + \cdots.
+\end{align}
+Substituting $x = j\theta$ into the exponential series and grouping real and imaginary terms yields:
+\begin{align}
+e^{j\theta} &= 1 + j\theta + \frac{(j\theta)^2}{2!} + \frac{(j\theta)^3}{3!} + \frac{(j\theta)^4}{4!} + \cdots \\
+&= 1 + j\theta - \frac{\theta^2}{2!} - j\frac{\theta^3}{3!} + \frac{\theta^4}{4!} + \cdots \\
+&= \left(1 - \frac{\theta^2}{2!} + \frac{\theta^4}{4!} - \cdots\right) + j\left(\theta - \frac{\theta^3}{3!} + \frac{\theta^5}{5!} - \cdots\right) \\
+&= \cos\theta + j\sin\theta.
+\end{align}
+The power of Euler's formula lies in how dramatically it simplifies operations that would otherwise be cumbersome. Multiplication of two complex numbers in rectangular form requires four multiplications and two additions:
+\begin{equation}
+(a + jb)(c + jd) = (ac - bd) + j(ad + bc).
+\end{equation}
+In polar form, however, multiplication reduces to multiplying the magnitudes and adding the angles:
+\begin{equation}
+(r_1 e^{j\theta_1})(r_2 e^{j\theta_2}) = r_1 r_2 e^{j(\theta_1 + \theta_2)}.
+\end{equation}
+Division becomes division of magnitudes and subtraction of angles. Raising a complex number to a power involves raising the magnitude to that power and multiplying the angle by the exponent. These algebraic simplifications directly mirror the geometric operations of scaling and rotating, and they prove indispensable when we analyze systems that oscillate at specific frequencies.
+
+\subsubsection{Complex Exponentials and Oscillations}
+
+We are now prepared to understand why complex numbers serve as the natural language for describing oscillatory motion. Consider the function $x(t) = A\cos(\omega t + \phi)$, which represents simple harmonic oscillation with amplitude $A$, angular frequency $\omega$, and phase shift $\phi$. This function describes the position of an idealized mass on a spring, the voltage of an alternating current, or countless other physical phenomena exhibiting repetitive behavior. Using Euler's formula, we can express this cosine function as the real part of a complex exponential:
+\begin{equation}
+A\cos(\omega t + \phi) = \operatorname{Re}\left\{A e^{j(\omega t + \phi)}\right\} = \operatorname{Re}\left\{A e^{j\phi} e^{j\omega t}\right\}.
+\end{equation}
+The complex quantity $\tilde{x}(t) = A e^{j\phi} e^{j\omega t}$ contains exactly the same information as the real function $x(t)$, but in a form that is dramatically easier to manipulate mathematically. The factor $A e^{j\phi}$ is a complex constant called the phasor (or complex amplitude), which encodes both the amplitude $A$ and the phase $\phi$ of the oscillation. The factor $e^{j\omega t}$ represents a point rotating counterclockwise around the origin of the complex plane at angular velocity $\omega$. Taking the real part of this rotating phasor at any time $t$ yields the physical oscillatory quantity.
+
+The genius of this representation becomes apparent when we consider differentiation. Computing the derivative of the real cosine function requires applying the chain rule:
+\begin{equation}
+\frac{d}{dt}A\cos(\omega t + \phi) = -A\omega\sin(\omega t + \phi).
+\end{equation}
+The derivative of the complex exponential, however, follows directly from the differentiation rule for exponentials:
+\begin{equation}
+\frac{d}{dt}e^{j\omega t} = j\omega e^{j\omega t}.
+\end{equation}
+Differentiating a complex exponential simply multiplies it by the constant $j\omega$. This is the crucial observation that will transform our approach to control system analysis. The differential operator $\frac{d}{dt}$ acting on $e^{j\omega t}$ becomes an algebraic multiplication by the complex constant $j\omega$. If we represent all signals as the real parts of complex exponentials oscillating at various frequencies, differential equations become algebraic equations.
+
+To see this transformation in action, consider the simple differential equation describing an undamped harmonic oscillator:
+\begin{equation}
+\ddot{x} + \omega_n^2 x = 0.
+\end{equation}
+We seek solutions of the form $x(t) = \operatorname{Re}\{\tilde{x}(t)\}$ where $\tilde{x}(t) = X e^{j\omega t}$ for some complex amplitude $X$. Computing the derivatives:
+\begin{align}
+\dot{x}(t) &= \operatorname{Re}\{j\omega X e^{j\omega t}\}, \\
+\ddot{x}(t) &= \operatorname{Re}\{(j\omega)^2 X e^{j\omega t}\} = \operatorname{Re}\{-\omega^2 X e^{j\omega t}\}.
+\end{align}
+Substituting into the differential equation gives:
+\begin{equation}
+\operatorname{Re}\{-\omega^2 X e^{j\omega t}\} + \omega_n^2 \operatorname{Re}\{X e^{j\omega t}\} = \operatorname{Re}\{(-\omega^2 + \omega_n^2) X e^{j\omega t}\} = 0.
+\end{equation}
+For this to hold for all time $t$, the complex quantity in braces must be identically zero, which requires:
+\begin{equation}
+-\omega^2 + \omega_n^2 = 0 \quad\Rightarrow\quad \omega = \pm\omega_n.
+\end{equation}
+The solutions correspond to oscillations at the natural frequency $\omega_n$, exactly as expected. The general solution is $x(t) = A\cos(\omega_n t) + B\sin(\omega_n t)$, which can be expressed using two complex exponentials at frequencies $\omega_n$ and $-\omega_n$. The negative frequency term, which might seem physically nonsensical, mathematically represents the complex conjugate pair necessary to produce a real-valued physical signal.
+
+\subsubsection{From Time Domain to Frequency Domain}
+
+The procedure we just demonstrated introduces the fundamental concept of frequency domain analysis. In the time domain, we describe signals and systems through differential equations relating inputs and outputs as functions of time. In the frequency domain, we describe the same signals and systems through algebraic equations relating complex amplitudes at specific frequencies. This transformation, which we have glimpsed here and will develop more fully when we introduce the Laplace transform, represents perhaps the most powerful analytical tool in the control engineer's repertoire.
+
+The key insight is that complex exponentials $e^{j\omega t}$ are eigenfunctions of linear time-invariant systems. An eigenfunction is a function that, when passed through a system, emerges scaled by a constant factor but otherwise unchanged in form. For a linear time-invariant system described by a differential equation with constant coefficients, when the input is $e^{j\omega t}$, the output is $H(j\omega)e^{j\omega t}$ where $H(j\omega)$ is a complex number depending on the frequency $\omega$ called the frequency response function. This remarkable property means that if we know how a system responds to complex exponentials at all possible frequencies, we know how it will respond to any signal whatsoever, since any reasonably behaved signal can be expressed as a combination (indeed, an integral) of complex exponentials at different frequencies.
+
+To build intuition for frequency domain thinking, consider the table below showing the correspondence between time domain operations and their frequency domain equivalents:
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{p{0.4\textwidth} p{0.5\textwidth}}
+        \hline
+        \textbf{Time Domain Operation} & \textbf{Frequency Domain Equivalent} \\ \hline
+        Differentiation $\frac{d}{dt}$ & Multiplication by $j\omega$ \\ \hline
+        Integration $\int dt$ & Division by $j\omega$ \\ \hline
+        Time delay by $\tau$ & Multiplication by $e^{-j\omega\tau}$ \\ \hline
+        Addition of signals & Addition of complex amplitudes \\ \hline
+        Multiplication by constant $K$ & Multiplication by constant $K$ \\ \hline
+    \end{tabular}
+    \caption{Operations in the time domain transform into simple algebraic operations in the frequency domain. This table shows the most fundamental correspondences that we will use throughout our study of control systems.}
+    \label{tab:time_frequency_correspondence}
+\end{table}
+
+\subsubsection{A Worked Example: RC Circuit Analysis}
+
+To solidify these concepts, let us work through a concrete example involving a simple electrical circuit. Consider a series circuit consisting of a resistor $R$ and a capacitor $C$ connected to a voltage source $v_s(t)$. The governing differential equation relates the source voltage to the current $i(t)$ flowing through the circuit:
+\begin{equation}
+Ri(t) + \frac{1}{C}\int i(\tau)d\tau = v_s(t).
+\end{equation}
+Suppose the source voltage is sinusoidal: $v_s(t) = V_s\cos(\omega t)$. We wish to find the steady-state current $i(t)$ in the circuit.
+
+We approach this problem by converting to the frequency domain. The source voltage is the real part of a complex exponential:
+\begin{equation}
+v_s(t) = \operatorname{Re}\{V_s e^{j\omega t}\}.
+\end{equation}
+We seek a current of the form $i(t) = \operatorname{Re}\{I e^{j\omega t}\}$ where $I$ is a complex amplitude to be determined. The voltage drop across the resistor is $Ri(t)$, which in frequency domain becomes $RI$. The voltage drop across the capacitor involves an integral, which in frequency domain becomes division by $j\omega$:
+\begin{equation}
+\frac{1}{C}\int i(\tau)d\tau \quad\longrightarrow\quad \frac{1}{C}\cdot\frac{1}{j\omega}I = \frac{I}{j\omega C}.
+\end{equation}
+The frequency domain version of Kirchhoff's voltage law is therefore:
+\begin{equation}
+RI + \frac{I}{j\omega C} = V_s.
+\end{equation}
+Solving algebraically for the complex current amplitude $I$:
+\begin{align}
+I\left(R + \frac{1}{j\omega C}\right) &= V_s, \\
+I &= \frac{V_s}{R + \frac{1}{j\omega C}} = \frac{V_s}{R - j\frac{1}{\omega C}}.
+\end{align}
+To express this result in polar form, we multiply numerator and denominator by the complex conjugate of the denominator:
+\begin{align}
+I &= V_s\frac{R + j\frac{1}{\omega C}}{R^2 + \left(\frac{1}{\omega C}\right)^2} \\
+&= \frac{V_s R}{R^2 + \frac{1}{\omega^2 C^2}} + j\frac{V_s}{\omega C\left(R^2 + \frac{1}{\omega^2 C^2}\right)}.
+\end{align}
+The magnitude and phase of the current are:
+\begin{align}
+|I| &= \frac{V_s}{\sqrt{R^2 + \left(\frac{1}{\omega C}\right)^2}}, \\
+\angle I &= \arctan\left(\frac{1/\omega C}{R}\right) = \arctan\left(\frac{1}{\omega RC}\right).
+\end{align}
+Finally, the steady-state current in the time domain is:
+\begin{equation}
+i(t) = |I|\cos(\omega t + \angle I) = \frac{V_s}{\sqrt{R^2 + \left(\frac{1}{\omega C}\right)^2}}\cos\left(\omega t + \arctan\left(\frac{1}{\omega RC}\right)\right).
+\end{equation}
+This result, obtained through straightforward algebraic manipulation in the frequency domain, would have required considerably more effort to derive directly in the time domain. Notice that the impedance of the resistor is simply $R$ (purely real), while the impedance of the capacitor is $\frac{1}{j\omega C} = -j\frac{1}{\omega C}$ (purely imaginary). The total impedance is the sum of these complex impedances, and Ohm's law in the frequency domain takes the familiar form $V = IZ$ with complex quantities. This impedance formalism, entirely analogous to resistance in DC circuits, provides a powerful framework for analyzing AC circuits that extends directly to the transfer function concept central to control system design.
+
+\subsubsection{Preparation for Laplace Transforms}
+
+The frequency domain analysis we have developed here using complex exponentials at a single frequency $\omega$ represents a special case of the more general Laplace transform. The Laplace transform extends the concept of frequency domain analysis to encompass the complete transient and steady-state behavior of systems, including initial conditions and unstable dynamics. When we restrict our attention to sinusoidal steady-state behavior at a fixed frequency $\omega$, the Laplace variable $s$ reduces to $s = j\omega$, and the Laplace transfer function $H(s)$ becomes the frequency response function $H(j\omega)$ that we have introduced.
+
+The conceptual foundation we have built in this subsection prepares us naturally for this generalization. We have learned to think of complex numbers as representing rotations in a plane, to use Euler's formula to connect trigonometric functions with complex exponentials, and to understand how differentiation transforms into multiplication. These concepts will resurface throughout our study of control systems, from the analysis of feedback stability to the design of compensators and filters. The frequency domain perspective—viewing signals and systems through the lens of how they behave at different frequencies rather than how they evolve moment by moment in time—provides a geometric and intuitive framework that makes the mathematics of control theory transparent and accessible.
+
+\begin{example}
+Consider a mass $m$ attached to a spring with stiffness $k$ and a damper with damping coefficient $c$. The equation of motion governing the displacement $x(t)$ from equilibrium is:
+\begin{equation}
+m\ddot{x} + c\dot{x} + kx = f(t),
+\end{equation}
+where $f(t)$ is an external force. Suppose the force is sinusoidal: $f(t) = F\cos(\omega t)$. Find the steady-state displacement response.
+
+\textbf{Solution:} Represent the force as the real part of a complex exponential: $f(t) = \operatorname{Re}\{F e^{j\omega t}\}$. Seek a displacement response $x(t) = \operatorname{Re}\{X e^{j\omega t}\}$. In frequency domain, differentiation becomes multiplication by $j\omega$, so the equation becomes:
+\begin{equation}
+m(j\omega)^2 X + c(j\omega) X + kX = F,
+\end{equation}
+which simplifies to:
+\begin{equation}
+X\left(-m\omega^2 + jc\omega + k\right) = F.
+\end{equation}
+Solving for the complex amplitude $X$:
+\begin{equation}
+X = \frac{F}{k - m\omega^2 + jc\omega}.
+\end{equation}
+The magnitude and phase of the response are:
+\begin{align}
+|X| &= \frac{F}{\sqrt{(k - m\omega^2)^2 + (c\omega)^2}}, \\
+\angle X &= -\arctan\left(\frac{c\omega}{k - m\omega^2}\right).
+\end{align}
+Thus the steady-state displacement is:
+\begin{equation}
+x(t) = |X|\cos(\omega t + \angle X).
+\end{equation}
+This example illustrates how the frequency response function $H(j\omega) = \frac{1}{k - m\omega^2 + jc\omega}$ completely characterizes how this second-order mechanical system responds to sinusoidal excitation at any frequency $\omega$.
+\end{example}
+
+The journey we have undertaken in this subsection—from geometric intuition about rotations in the complex plane, through Euler's formula connecting exponentials and trigonometry, to the dramatic simplification of differentiation into multiplication—establishes the mathematical foundation upon which all subsequent analysis in this textbook will build. Complex numbers are not merely an abstract curiosity but rather the essential lens through which we will view dynamic systems and their responses to inputs of all kinds. Mastery of these concepts will enable us to analyze system behavior, design controllers, and ultimately shape the dynamic characteristics of engineered systems to meet desired specifications.

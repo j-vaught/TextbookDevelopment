@@ -1,0 +1,109 @@
+\subsection{Mechanical System Modeling — Newton's Laws and Free-Body Diagrams}
+
+The preceding sections developed the mathematical framework for representing dynamical systems through differential equations, but we have not yet addressed the fundamental question of how to derive these equations for physical mechanical systems. This subsection addresses that gap by developing systematic methods for modeling mechanical systems based on Newton's laws of motion. The approach presented here forms the foundation upon which nearly all control system models are built, and mastering these techniques is essential for any engineer working with physical systems.
+
+Newton's three laws of motion, published in his monumental work \textit{Principia Mathematica} in 1687, provide the bedrock for understanding how forces cause motion in mechanical systems. While the first law describes the behavior of objects in the absence of net force and the third law describes action-reaction force pairs, it is the second law that provides the quantitative relationship we need for control system modeling. This law states that the net force acting on a body equals the rate of change of its momentum, and in the vast majority of engineering applications where masses are constant, this simplifies to the familiar equation $F = ma$. Understanding this equation in its full vector form and learning to apply it systematically through free-body diagrams enables us to derive accurate models for mechanical systems of arbitrary complexity.
+
+The second law in its most general vector form relates the sum of all forces acting on a body to its acceleration. When we write this in three-dimensional Cartesian coordinates, we obtain three coupled differential equations that must be solved simultaneously. If we denote the position vector of a particle as $\mathbf{r}(t) = [x(t), y(t), z(t)]^T$ and the net force vector as $\mathbf{F}(t) = [F_x(t), F_y(t), F_z(t)]^T$, then Newton's second law states that
+
+\[
+\sum \mathbf{F} = m\mathbf{a} = m\frac{d^2\mathbf{r}}{dt^2} = m\begin{bmatrix} \ddot{x} \\ \ddot{y} \\ \ddot{z} \end{bmatrix}.
+\]
+
+This seemingly simple equation encapsulates all of classical mechanics, and the challenge in system modeling lies not in the equation itself but in correctly identifying all the forces that appear on the left-hand side. A single missing or mischaracterized force can render an entire model useless, which is why developing systematic methods for force identification is paramount.
+
+The free-body diagram is the essential analytical tool that ensures we account for every force acting on a body. This technique, which should be applied to every body in a mechanical system, involves isolating that body from its surroundings and representing all forces that other bodies exert on it. The process of constructing a free-body diagram forces the analyst to consider each interaction systematically and prevents the common error of omitting important forces. A well-constructed free-body diagram shows the isolated body with all external forces drawn as vectors originating from the point of application, and it should include sufficient annotation to identify the source of each force and its line of action.
+
+Consider a simple example that illustrates the power of this approach. Imagine a block of mass $m$ sliding on a horizontal frictionless surface, with a horizontal force $F$ applied through a string attached to the block. The free-body diagram for this block would show three forces: the applied force $F$ pointing to the right, the gravitational force $mg$ pointing downward, and the normal force $N$ from the surface pointing upward. Because the surface is frictionless, there is no horizontal force opposing the motion. The vertical forces balance since there is no vertical acceleration, giving $N = mg$. The horizontal equation of motion is simply $F = m\ddot{x}$, where $x$ is the horizontal position of the block. This example demonstrates how the free-body diagram approach leads directly to the equations of motion with minimal chance of error.
+
+When mechanical systems involve complex geometries, forces must often be resolved into components along convenient coordinate directions. This decomposition is essential because the acceleration vector $\mathbf{a}$ typically has different components in different directions, and we must ensure that force components match up correctly with corresponding acceleration components. The resolution process involves projecting each force vector onto the coordinate axes using trigonometric relationships. If a force $\mathbf{F}$ makes an angle $\theta$ with the horizontal axis, then its components are $F_x = F\cos\theta$ and $F_y = F\sin\theta$. These components then enter Newton's second law separately: $\sum F_x = m\ddot{x}$ and $\sum F_y = m\ddot{y}$.
+
+Rotating reference frames introduce additional complexity that appears frequently in control systems involving motors, turbines, gyroscopes, and rotating machinery. When we describe motion in a frame that is itself rotating with angular velocity $\boldsymbol{\Omega}$ relative to an inertial frame, the acceleration of a particle has additional terms beyond the simple second derivative of position. In a frame rotating with constant angular velocity about the $z$-axis, the acceleration observed in the rotating frame relates to the actual acceleration in the inertial frame through
+
+\[
+\mathbf{a}_{\text{inertial}} = \mathbf{a}_{\text{rot}} + 2\boldsymbol{\Omega} \times \mathbf{v}_{\text{rot}} + \boldsymbol{\Omega} \times (\boldsymbol{\Omega} \times \mathbf{r}) + \dot{\boldsymbol{\Omega}} \times \mathbf{r},
+\]
+
+where $\mathbf{v}_{\text{rot}}$ is the velocity measured in the rotating frame, $\mathbf{r}$ is the position vector, and the cross products account for the Coriolis effect, centrifugal acceleration, and Euler acceleration respectively. For a frame rotating with constant angular velocity about a fixed axis, $\dot{\boldsymbol{\Omega}} = 0$, simplifying this expression.
+
+The Coriolis term $2\boldsymbol{\Omega} \times \mathbf{v}_{\text{rot}}$ is particularly important in control systems because it couples the rotational motion of the reference frame to the linear motion of particles within the frame. A classic example is the Foucault pendulum, where the Coriolis force causes the plane of oscillation to rotate slowly over time. In engineering applications, this effect must be accounted for in systems ranging from cruise missile guidance to industrial robot arm control. The centrifugal term $\boldsymbol{\Omega} \times (\boldsymbol{\Omega} \times \mathbf{r})$ always acts outward from the axis of rotation and is often the dominant force in high-speed rotating machinery.
+
+Constraint forces arise whenever physical bodies interact in ways that restrict their relative motion. These forces are not applied directly by an external agent but emerge from the geometry and material properties of the system. A simple example is the normal force that prevents a block from sinking into a table, or the tension in a string that constrains a pendulum to move along a circular arc. The key characteristic of constraint forces is that they do no work in the direction of the constraint, meaning they transfer energy between bodies but do not add or remove energy from the system as a whole. In the language of variational mechanics, constraint forces are orthogonal to the allowed variations of the system's configuration.
+
+When working with constraints, it is often advantageous to use generalized coordinates that automatically satisfy the constraints, thereby eliminating constraint forces from the equations of motion entirely. This observation leads directly to the Lagrangian approach discussed in the next section, but it is worth understanding here how the Newtonian approach handles constraints. If a bead is constrained to slide on a wire, we could use Cartesian coordinates and include the normal force from the wire as an unknown in our equations, or we could use arc-length coordinates along the wire and derive equations that contain only the tangential force components. The latter approach, while requiring more sophisticated mathematical tools, often yields simpler equations because we eliminate unknown constraint forces at the outset.
+
+The contrast between the Newtonian approach developed here and the Lagrangian approach introduced in the next section illuminates an important philosophical divide in classical mechanics. The Newtonian approach focuses on forces acting on individual bodies, building up the equations of motion by considering each component of the system separately. This method has the advantage of being very concrete and physical—we can always point to each term in the equation and identify the physical interaction it represents. The free-body diagram makes this connection explicit and provides a visual check that all forces have been properly included. For systems with non-holonomic constraints (constraints that cannot be expressed purely as relations between coordinates), the Newtonian approach often remains tractable when the Lagrangian approach becomes mathematically cumbersome.
+
+The Lagrangian approach, by contrast, focuses on the energy of the entire system rather than forces on individual bodies. It introduces the Lagrangian function $L = T - V$, where $T$ is the total kinetic energy and $V$ is the total potential energy of the system. The equations of motion are then obtained from the Euler-Lagrange equations
+
+\[
+\frac{d}{dt}\left(\frac{\partial L}{\partial \dot{q}_i}\right) - \frac{\partial L}{\partial q_i} = 0,
+\]
+
+where $q_i$ are the generalized coordinates describing the system configuration. This approach automatically incorporates constraint forces into the energy expressions and eliminates them from the final equations when generalized coordinates are chosen appropriately. The Lagrangian method is particularly powerful for systems with many degrees of freedom or with complex energy storage mechanisms, because it provides a systematic procedure that can be applied without drawing free-body diagrams for every body in the system.
+
+When deciding which approach to use for a given problem, several factors should guide the choice. The Newtonian approach is preferred when the system consists of a small number of discrete bodies with clear force interactions, when constraint forces need to be explicitly calculated (for instance, to determine bearing loads or structural stresses), or when the physical intuition provided by free-body diagrams aids understanding. The Lagrangian approach is advantageous for complex systems with many degrees of freedom, for systems where energy methods simplify the analysis, or when working with constraints that are easier to express in coordinate form than as force relationships. In practice, many engineers use a hybrid approach, applying Newtonian mechanics to some parts of a system while using Lagrangian methods for others.
+
+The following extended example illustrates the Newtonian approach in detail for a two-body system with a rotating component, demonstrating how free-body diagrams and force resolution lead to a complete system of differential equations.
+
+\begin{example}
+Consider a mass $m_2$ attached to a rotating arm of length $r$ that rotates about a fixed pivot with angular position $\theta(t)$. The rotating arm has mass $m_1$ and is driven by a torque $\tau(t)$ applied at the pivot. A spring of stiffness $k$ connects the mass $m_2$ to the end of the arm, and there is a damper with coefficient $c$ that provides velocity-proportional resistance to the radial motion of $m_2$. This system might represent a simplified model of a tuned mass damper used in building structures to absorb vibrational energy.
+
+We begin by constructing free-body diagrams for each moving body. For the rotating arm of mass $m_1$, assuming it is a thin uniform rod pivoted at one end, the forces are the applied torque $\tau$, the gravitational force $m_1g$ acting at the center of mass (located at $r/2$ from the pivot), the reaction force at the pivot (which has both radial and tangential components that we denote $R_r$ and $R_t$), and the force transmitted through the connecting spring and damper at the end of the arm. The spring and damper exert a force $F_s = k(r - r_0)$ and $F_d = c\dot{r}$ on the arm, where $r_0$ is the unstretched length of the spring. These forces act along the direction of the arm, so their tangential component on the arm is $-(k(r - r_0) + c\dot{r})$ because the reaction force on the arm is equal and opposite to the force on the mass $m_2$.
+
+For the mass $m_2$, the forces are the spring force $k(r - r_0)$ pulling toward the pivot, the damper force $c\dot{r}$ opposing radial motion, the gravitational force $m_2g$ acting downward, and a normal force $N$ from the guide that constrains $m_2$ to move along the arm. The guide force $N$ is perpendicular to the arm and is a constraint force that ensures $m_2$ remains at the fixed radius $r$ while allowing it to slide freely along the arm's direction.
+
+To derive the equations of motion, we apply Newton's second law in polar coordinates, which are natural for this rotating system. The acceleration of a point in polar coordinates has radial component $\ddot{r} - r\dot{\theta}^2$ and tangential component $r\ddot{\theta} + 2\dot{r}\dot{\theta}$. The first term in each component represents the acceleration relative to the rotating frame, while the second terms in the tangential component and the first term in the radial component arise from the rotation itself.
+
+For mass $m_2$, the radial equation of motion is obtained by summing forces in the radial direction. The component of the spring force in the radial direction is $k(r - r_0)$, and the damper force is $c\dot{r}$, both acting inward (negative radial direction). The tangential motion of $m_2$ creates a centrifugal force $m_2r\dot{\theta}^2$ that appears as an outward pseudo-force in the rotating frame. Equating radial forces to radial acceleration gives
+
+\[
+-k(r - r_0) - c\dot{r} + m_2r\dot{\theta}^2 = m_2(\ddot{r} - r\dot{\theta}^2).
+\]
+
+Simplifying this equation, noting that the centrifugal terms cancel, we obtain the radial equation for $m_2$:
+
+\[
+m_2\ddot{r} + c\dot{r} + k(r - r_0) = 0.
+\]
+
+This equation shows that the radial motion of $m_2$ is governed by a simple mass-spring-damper system with the interesting property that the centrifugal term exactly cancels, leaving no coupling to the rotational motion. This cancellation occurs because the centrifugal force arises from the same constraint that maintains the circular motion in the tangential direction.
+
+For the tangential direction, the only force on $m_2$ is the component of gravity (if we assume the system rotates in a horizontal plane, gravity has no tangential component) and the tangential component of the guide force $N$, which we denote $N_t$. The tangential acceleration of $m_2$ is $r\ddot{\theta} + 2\dot{r}\dot{\theta}$, giving
+
+\[
+N_t = m_2(r\ddot{\theta} + 2\dot{r}\dot{\theta}).
+\]
+
+This equation determines the guide force $N_t$ once we know the angular acceleration, but it does not affect the dynamics of $r$ and $\theta$ since $N_t$ is a constraint force orthogonal to the motion.
+
+For the rotating arm of mass $m_1$, we apply Newton's second law for rotational motion about the pivot point. The moment equation is $\sum \tau = I\ddot{\theta}$, where $I$ is the moment of inertia of the arm about the pivot. For a thin uniform rod of length $r$ about one end, $I = \frac{1}{3}m_1r^2$. The torques about the pivot are the applied torque $\tau$, the torque from the spring and damper forces acting at the end of the arm, and the torque from gravity acting at the center of mass. The spring and damper forces act along the arm, so their torque about the pivot is $-(k(r - r_0) + c\dot{r})r$. The gravitational torque is $m_1g\frac{r}{2}\cos\theta$, where $\theta$ is measured from the vertical. Equating total torque to $I\ddot{\theta}$ gives
+
+\[
+\tau - (k(r - r_0) + c\dot{r})r - m_1g\frac{r}{2}\cos\theta = \frac{1}{3}m_1r^2\ddot{\theta}.
+\]
+
+Rearranging to solve for the angular acceleration:
+
+\[
+\ddot{\theta} = \frac{3}{m_1r^2}\left[\tau - r(k(r - r_0) + c\dot{r}) - \frac{m_1gr}{2}\cos\theta\right].
+\]
+
+The complete system of equations for this two-degree-of-freedom system is then
+
+\[
+m_2\ddot{r} + c\dot{r} + k(r - r_0) = 0,
+\]
+
+\[
+\ddot{\theta} = \frac{3}{m_1r^2}\tau - \frac{3k}{m_1r}(r - r_0) - \frac{3c}{m_1r}\dot{r} - \frac{g}{2r}\cos\theta.
+\]
+
+These equations, derived systematically through free-body diagrams and proper force resolution, form the basis for analyzing this mechanical system's dynamic behavior. They can now be linearized about an operating point for small-signal analysis or simulated directly for large-motion studies.
+\end{example}
+
+This example demonstrates the systematic application of Newton's laws through free-body diagrams and force resolution. Each force was identified by considering the interactions between bodies, resolved into appropriate coordinate directions, and entered into the equations of motion through Newton's second law. The result is a complete and accurate model that captures the essential dynamics of the mechanical system.
+
+For control system design, the equations derived through Newtonian mechanics can be linearized about equilibrium points to obtain state-space models or transfer functions suitable for classical control design techniques. The radial equation for $m_2$ is already linear if we define the deviation from the unstretched length $x = r - r_0$, giving $\ddot{x} + \frac{c}{m_2}\dot{x} + \frac{k}{m_2}x = 0$, which describes a standard second-order system with natural frequency $\omega_n = \sqrt{k/m_2}$ and damping ratio $\zeta = \frac{c}{2\sqrt{km_2}}$. The angular equation is nonlinear due to the $1/r$ terms and the gravitational coupling, requiring linearization if we wish to apply frequency-domain design methods.
+
+The techniques developed in this subsection provide a foundation for modeling mechanical systems of arbitrary complexity. By consistently applying the free-body diagram methodology, systematically resolving forces into appropriate coordinate directions, and carefully accounting for constraint forces and rotating reference frames, engineers can derive accurate dynamical models for virtually any mechanical system. These models serve as the starting point for control system design, simulation, and analysis throughout the remainder of this textbook.

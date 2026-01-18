@@ -1,0 +1,251 @@
+\subsection{Parameter Identification — From Measurements to Model Parameters}
+
+The process of parameter identification transforms raw experimental data into meaningful model parameters that describe the behavior of a physical system. When we construct mathematical models of control systems, we inevitably introduce parameters such as time constants, damping ratios, gains, and time delays that must be determined through experimentation. This section develops the fundamental techniques for extracting these parameters from measured data, providing both the theoretical foundations and practical methods that engineers use in laboratory and industrial settings. The material presented here bridges the gap between abstract mathematical models and their physical implementations, enabling practitioners to close the loop between theory and experiment.
+
+Parameter identification begins with the fundamental recognition that all physical measurements contain some degree of uncertainty and noise. When we apply an input to a system and observe its output, the relationship between these signals carries information about the system's internal structure and parameters. However, extracting this information requires careful analysis techniques that separate the underlying deterministic behavior from random measurement errors. The methods presented in this section range from simple graphical analysis of response curves to sophisticated regression algorithms that fit entire models to experimental data. Each approach offers different trade-offs between computational complexity, accuracy, and robustness to measurement imperfections.
+
+The distinction between static and dynamic identification represents a fundamental organizing principle for the methods that follow. Static identification concerns itself with the steady-state relationship between inputs and outputs, characterizing how a system behaves once transient effects have decayed away. Dynamic identification, by contrast, captures the time-varying behavior of systems during transitions between states, revealing the time constants, natural frequencies, and damping characteristics that govern transient responses. A complete understanding of any system typically requires both types of identification, as the static gain tells us the ultimate magnitude of response while the dynamic characteristics determine how quickly and Oscillatory that response occurs.
+
+\begin{table}[htbp]
+\centering
+\caption{Common parameter identification methods and their applications}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Method} & \textbf{System Type} & \textbf{Parameters Obtained} \\
+\hline
+Step Response Analysis & First and second-order systems & Time constants, damping ratio, gain \\
+\hline
+Frequency Response Analysis & Linear time-invariant systems & Resonance frequency, bandwidth, gain margin \\
+\hline
+Least Squares Regression & Arbitrary linear models & Coefficients of linear differential equations \\
+\hline
+Nonlinear Optimization & Nonlinear models & Arbitrary model parameters \\
+\hline
+\end{tabular}
+\label{tab:identification_methods}
+\end{table}
+
+% Subsection: Step Response Analysis
+\textbf{Step Response Analysis}
+
+The step response represents one of the most experimentally accessible methods for parameter identification because it requires only a simple change in the input signal and straightforward observation of the resulting output. When we suddenly change the input to a system from one constant value to another, the output transitions through a characteristic trajectory that encodes information about the system's dynamic properties. By analyzing this trajectory, we can extract parameters that describe the system's speed of response, tendency to oscillate, and steady-state behavior. The simplicity of generating step inputs makes this approach particularly attractive for practical applications where complex signal generation equipment may not be available.
+
+Consider a first-order system characterized by the differential equation $\tau \dot{y}(t) + y(t) = K u(t)$, where $\tau$ represents the time constant, $K$ represents the steady-state gain, $y(t)$ denotes the output, and $u(t)$ denotes the input. When we apply a step input of magnitude $A$ at time $t = 0$, the analytical solution for the output is given by $y(t) = KA\left(1 - e^{-t/\tau}\right)$. This expression reveals that the output begins at zero (assuming zero initial conditions) and asymptotically approaches the steady-state value $KA$ as time increases. The time constant $\tau$ determines how rapidly this approach occurs: after one time constant, the output has reached approximately $63.2\%$ of its final value; after three time constants, it has reached over $95\%$ of the final value. This exponential behavior provides a direct graphical method for identifying $\tau$ from experimental data.
+
+To extract the time constant from measured step response data, we can plot the output on a semi-logarithmic scale. Taking the natural logarithm of the error between the steady-state value and the instantaneous output yields $\ln(KA - y(t)) = \ln(KA) - t/\tau$. This expression demonstrates that the logarithm of the error decays linearly with time, with slope equal to $-1/\tau$. By measuring this slope from experimental data, we obtain the time constant directly. In practice, we measure the output at several time instants after the step input, compute the error from the final value, take logarithms, and perform a linear fit to determine the slope. The steady-state gain $K$ follows immediately from the final output value divided by the input step magnitude $A$. This procedure works well when the measurement noise is modest and when the system truly exhibits first-order dynamics.
+
+For second-order systems, the step response analysis becomes more sophisticated because the response depends critically on the damping ratio $\zeta$. A second-order system with no zeros and natural frequency $\omega_n$ satisfies the differential equation $\ddot{y}(t) + 2\zeta\omega_n\dot{y}(t) + \omega_n^2 y(t) = K\omega_n^2 u(t)$. The form of the step response varies dramatically depending on whether $\zeta = 0$ (undamped), $0 < \zeta < 1$ (underdamped), $\zeta = 1$ (critically damped), or $\zeta > 1$ (overdamped). Underdamped responses exhibit oscillatory behavior that decays over time, while overdamped responses rise monotonically but more slowly than a critically damped response. Most practical control systems operate in the underdamped regime because this provides a good balance between response speed and overshoot.
+
+When the damping ratio satisfies $0 < \zeta < 1$, the step response of a second-order system is given by
+\[
+y(t) = KA\left[1 - \frac{e^{-\zeta\omega_n t}}{\sqrt{1-\zeta^2}}\sin\left(\omega_d t + \phi\right)\right],
+\]
+where $\omega_d = \omega_n\sqrt{1-\zeta^2}$ represents the damped natural frequency and $\phi = \arctan\left(\sqrt{1-\zeta^2}/\zeta\right)$ represents the phase angle. The oscillatory component causes the output to overshoot its steady-state value, reach a peak, oscillate, and eventually settle. The percentage overshoot $PO$ relates directly to the damping ratio through the expression
+\[
+PO = 100\exp\left(\frac{-\zeta\pi}{\sqrt{1-\zeta^2}}\right).
+\]
+This relationship provides a convenient graphical method for identifying $\zeta$: we measure the percentage overshoot from the experimental step response and solve for $\zeta$. For instance, a $20\%$ overshoot corresponds to a damping ratio of approximately $\zeta = 0.456$, while a $50\%$ overshoot corresponds to $\zeta \approx 0.216$. Higher overshoot percentages indicate more oscillatory behavior and lower damping.
+
+The time to the first peak $t_p$ in an underdamped step response relates to the damped natural frequency through $t_p = \pi/\omega_d$. Since $\omega_d = \omega_n\sqrt{1-\zeta^2}$, measuring the peak time enables us to determine the natural frequency once we have identified the damping ratio from the overshoot. The settling time $t_s$, typically defined as the time required for the response to remain within $2\%$ of its final value, provides another relationship involving both $\omega_n$ and $\zeta$. For the $2\%$ criterion, the settling time approximately satisfies $t_s \approx 4/(\zeta\omega_n)$. Combining these relationships allows complete identification of both $\omega_n$ and $\zeta$ from a single step response measurement.
+
+Overdamped second-order systems, characterized by $\zeta > 1$, exhibit step responses that resemble those of first-order systems but with more complex behavior arising from two distinct time constants. The response can be expressed as the difference of two exponentials
+\[
+y(t) = KA\left[1 - \frac{\zeta + \sqrt{\zeta^2-1}}{2\sqrt{\zeta^2-1}}e^{-(\zeta-\sqrt{\zeta^2-1})\omega_n t} + \frac{\zeta - \sqrt{\zeta^2-1}}{2\sqrt{\zeta^2-1}}e^{-(\zeta+\sqrt{\zeta^2-1})\omega_n t}\right].
+\]
+Identifying parameters from overdamped responses requires fitting this two-exponential model to measured data, typically using nonlinear regression techniques discussed later in this section. The slower exponential term dominates the late-time behavior, while the faster term affects only the initial portion of the response. Practical identification often focuses on the late-time behavior to determine the dominant time constant, recognizing that the faster dynamics are more difficult to identify accurately.
+
+\textbf{Example 1.7.2.1: First-Order System Identification}
+
+Suppose we apply a step input of magnitude $1$ V to an unknown first-order system and measure the output voltage as a function of time. The measured data appears in the table below, where all values are in volts and seconds.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|c|c|}
+\hline
+Time (s) & Output Voltage (V) \\
+\hline
+0.0 & 0.000 \\
+\hline
+0.5 & 1.581 \\
+\hline
+1.0 & 2.330 \\
+\hline
+1.5 & 2.763 \\
+\hline
+2.0 & 3.010 \\
+\hline
+2.5 & 3.155 \\
+\hline
+3.0 & 3.244 \\
+\hline
+3.5 & 3.299 \\
+\hline
+4.0 & 3.335 \\
+\hline
+5.0 & 3.380 \\
+\hline
+\end{tabular}
+\label{tab:first_order_data}
+\end{table}
+
+To identify the parameters, we first estimate the steady-state gain $K$ from the final measured value. The output appears to be approaching approximately $3.40$ V, suggesting $K \approx 3.40$. Next, we compute the error from steady state for each measurement and take the natural logarithm. The error at $t = 1.0$ s is $3.40 - 2.33 = 1.07$ V, giving $\ln(1.07) \approx 0.068$. At $t = 2.0$ s, the error is $3.40 - 3.01 = 0.39$ V, giving $\ln(0.39) \approx -0.94$. At $t = 3.0$ s, the error is $3.40 - 3.24 = 0.16$ V, giving $\ln(0.16) \approx -1.83$. Plotting $\ln(\text{error})$ versus time and performing linear regression yields a slope of approximately $-1.0$ s$^{-1}$. The time constant is therefore $\tau = 1/\text{slope} = 1$ s. The identified model is $\tau \dot{y} + y = 3.40 u$ with $\tau = 1$ s and $K = 3.40$.
+
+We verify this identification by comparing the predicted response $y(t) = 3.40(1 - e^{-t})$ with the measured data. At $t = 1$ s, the prediction is $3.40(1 - e^{-1}) = 3.40(1 - 0.368) = 2.15$ V, compared to the measured $2.33$ V. At $t = 2$ s, the prediction is $3.40(1 - e^{-2}) = 3.40(1 - 0.135) = 2.94$ V, compared to $3.01$ V. The predictions are reasonably close to the measurements, with discrepancies likely arising from measurement noise and minor model inadequacy.
+
+\textbf{Frequency Response Analysis}
+
+While step response analysis reveals how systems behave during transients, frequency response analysis characterizes the steady-state response to sinusoidal inputs across a range of frequencies. When a linear time-invariant system receives a sinusoidal input $u(t) = A\sin(\omega t)$, the steady-state output is also sinusoidal with the same frequency but potentially different amplitude and phase shift. The ratio of output amplitude to input amplitude as a function of frequency defines the magnitude of the frequency response, while the phase shift defines the phase response. These functions together constitute the system's frequency response function, which provides an alternative perspective on system dynamics that proves particularly valuable for control system design and parameter identification.
+
+For a first-order system with transfer function $G(s) = K/(\tau s + 1)$, the frequency response is obtained by substituting $s = j\omega$ to yield $G(j\omega) = K/[j\omega\tau + 1]$. The magnitude is $|G(j\omega)| = K/\sqrt{(\omega\tau)^2 + 1}$, and the phase is $\angle G(j\omega) = -\arctan(\omega\tau)$. At low frequencies where $\omega \ll 1/\tau$, the magnitude approaches $K$ and the phase approaches $0^\circ$. At high frequencies where $\omega \gg 1/\tau$, the magnitude decreases with slope $-20$ dB/decade on a logarithmic frequency scale, and the phase approaches $-90^\circ$. The frequency $\omega = 1/\tau$ (or $f = 1/(2\pi\tau)$ in Hz) represents the corner frequency or break frequency where the magnitude has dropped to $K/\sqrt{2} \approx 0.707K$, corresponding to a $-3$ dB attenuation from the low-frequency gain. Identifying this corner frequency directly provides the time constant $\tau$.
+
+For second-order systems with transfer function $G(s) = K\omega_n^2/(s^2 + 2\zeta\omega_n s + \omega_n^2)$, the frequency response exhibits a resonance peak when $0 < \zeta < 1/\sqrt{2}$. The magnitude of the frequency response is
+\[
+|G(j\omega)| = \frac{K\omega_n^2}{\sqrt{(\omega_n^2 - \omega^2)^2 + (2\zeta\omega_n\omega)^2}}.
+\]
+The resonance frequency $\omega_r$, where the magnitude reaches its maximum value, occurs at $\omega_r = \omega_n\sqrt{1 - 2\zeta^2}$ for $\zeta < 1/\sqrt{2}$. The peak magnitude is $|G(j\omega_r)| = K/[2\zeta\sqrt{1-\zeta^2}]$. As the damping ratio decreases, the resonance peak becomes sharper and more pronounced. For heavily damped systems with $\zeta \geq 1/\sqrt{2}$, no resonance peak exists and the magnitude decreases monotonically from the low-frequency gain.
+
+The bandwidth $\omega_b$ of a system represents the frequency at which the magnitude drops to $K/\sqrt{2}$ (or $-3$ dB from the low-frequency gain). For second-order systems, the bandwidth relates to both the natural frequency and damping ratio. In general, systems with larger bandwidth respond more rapidly to input changes, while systems with smaller bandwidth respond more slowly but provide better attenuation of high-frequency disturbances. Identifying the bandwidth from frequency response measurements provides practical information about the system's speed of response complementary to that obtained from step response analysis.
+
+To perform frequency response identification experimentally, we apply sinusoidal inputs at multiple frequencies spanning the range of interest. At each frequency, we allow the system to reach steady state, then measure the amplitude and phase of the output relative to the input. The amplitude ratio and phase difference at each frequency constitute one point on the frequency response curve. By repeating this process across a logarithmic frequency range, we construct the complete Bode plot (magnitude and phase versus frequency) or Nyquist plot (real versus imaginary parts) of the system. The density of frequency points should be sufficient to capture any resonance peaks or other features of interest, with closer spacing near resonances where the response changes rapidly.
+
+\textbf{Example 1.7.2.2: Second-Order System from Frequency Response}
+
+Consider a second-order system whose frequency response measurements yield the following data at various frequencies:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+Frequency (rad/s) & Magnitude (dB) & Phase (degrees) \\
+\hline
+1.0 & 0.0 & -5 \\
+\hline
+2.0 & -0.5 & -20 \\
+\hline
+5.0 & -3.0 & -65 \\
+\hline
+10.0 & -7.0 & -110 \\
+\hline
+20.0 & -14.0 & -140 \\
+\hline
+50.0 & -26.0 & -160 \\
+\hline
+\end{tabular}
+\label{tab:frequency_data}
+\end{table}
+
+The low-frequency magnitude of $0$ dB indicates a steady-state gain of $K = 1$. The phase approaches $-180^\circ$ at high frequencies, consistent with a second-order system having no zeros. To identify the natural frequency and damping ratio, we first locate the resonance peak. The magnitude decreases monotonically in the data provided, suggesting the resonance occurs below $1$ rad/s or has been significantly damped. Assuming the system is underdamped with a resonance near the measurement range, we estimate the bandwidth from the frequency where magnitude drops to $-3$ dB. Extrapolating between $1$ rad/s ($0$ dB) and $2$ rad/s ($-0.5$ dB), the $-3$ dB point occurs near $7$ rad/s. Using the approximation for second-order systems $\omega_b \approx \omega_n$ when $\zeta \approx 0.7$, we estimate $\omega_n \approx 7$ rad/s.
+
+More precise identification requires fitting the theoretical magnitude expression to the experimental data. The magnitude in linear scale is $|G(j\omega)| = 1/\sqrt{(1 - (\omega/\omega_n)^2)^2 + (2\zeta\omega/\omega_n)^2}$. At $\omega = 10$ rad/s, the measured magnitude is $10^{-7/20} \approx 0.447$. Substituting into the magnitude expression gives $0.447 = 1/\sqrt{(1 - (10/\omega_n)^2)^2 + (2\zeta(10/\omega_n))^2}$. At $\omega = 20$ rad/s, the measured magnitude is $10^{-14/20} \approx 0.200$, giving $0.200 = 1/\sqrt{(1 - (20/\omega_n)^2)^2 + (2\zeta(20/\omega_n))^2}$. Solving these two equations simultaneously yields $\omega_n \approx 11.5$ rad/s and $\zeta \approx 0.55$. The identified model is $G(s) = 132.25/(s^2 + 12.65s + 132.25)$.
+
+\textbf{Regression Methods for Parameter Fitting}
+
+Step response and frequency response analysis provide graphical and analytical methods for identifying parameters from specially designed experiments. Regression methods offer a more general framework for fitting model parameters to arbitrary experimental data by formulating the identification problem as an optimization problem. The fundamental idea is to adjust the model parameters until the model's predictions best match the measured data according to some criterion, typically the sum of squared errors between predictions and measurements. This approach extends naturally to models of arbitrary complexity and provides a principled framework for handling noisy measurements and over-parameterized models.
+
+For linear-in-parameters models, the least squares method provides an analytical solution for the optimal parameter estimates. A model is linear in its parameters if each term in the model equation is either a constant or the product of a constant and a single unknown parameter. For example, the model $y = \theta_1 x_1 + \theta_2 x_2 + \theta_3$ is linear in parameters $\theta_1$, $\theta_2$, and $\theta_3$, even though it involves nonlinear functions of the independent variable $x$. Consider identifying the parameters of a first-order differential equation $\dot{y} + a y = b u$ from measurements of $y(t)$ and $u(t)$. We can discretize the derivative using finite differences to obtain $(y_{k+1} - y_k)/\Delta t + a y_k = b u_k$, which rearranges to $y_{k+1} = (1 - a\Delta t)y_k + b\Delta t u_k$. This expression is linear in the parameters $a$ and $b$.
+
+The least squares method minimizes the sum of squared differences between the measured outputs and the model predictions. For $N$ data points, the residual at point $k$ is $e_k = y_k^{\text{meas}} - y_k^{\text{model}}$. The sum of squared residuals is $J = \sum_{k=1}^N e_k^2$. For linear-in-parameters models, the parameters that minimize $J$ can be found analytically by taking derivatives with respect to each parameter, setting them to zero, and solving the resulting linear system. The solution takes the elegant form $\hat{\theta} = (X^TX)^{-1}X^Ty$, where $X$ is the matrix of regressors (the independent variables evaluated at each measurement point) and $y$ is the vector of measured outputs. This expression is known as the normal equation in linear regression.
+
+For models that are not linear in their parameters, the least squares problem becomes nonlinear and typically requires iterative optimization algorithms. Common approaches include gradient descent, the Levenberg-Marquardt algorithm, and various quasi-Newton methods. These algorithms start from an initial guess for the parameters and iteratively adjust them to reduce the sum of squared errors. Gradient descent updates parameters in the direction of the negative gradient of the error sum with respect to the parameters. The Levenberg-Marquardt algorithm provides a robust alternative that interpolates between gradient descent and Gauss-Newton iteration, offering good performance across a wide range of problem types. Convergence to the global minimum is not guaranteed for nonlinear problems, making careful initialization important in practice.
+
+The quality of parameter estimates depends critically on the quality and quantity of experimental data. Informative experiments that excite the relevant system dynamics provide better identifiability than experiments that remain steady state. For multi near-parameter models, the input should contain frequency components spanning the range of dynamics that affect the parameters of interest. Poor excitation leads to ill-conditioned regression matrices, meaning that small changes in the data produce large changes in the estimated parameters. The condition number of the matrix $X^TX$ provides a quantitative measure of this sensitivity: large condition numbers indicate poorly conditioned problems where parameter estimates are unreliable.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Method} & \textbf{Advantages} & \textbf{Limitations} \\
+\hline
+Analytical least squares & Closed-form solution, optimal for linear models & Requires linearity in parameters \\
+\hline
+Iterative least squares & Handles nonlinear models & May converge to local minima \\
+\hline
+Maximum likelihood & Provides statistically optimal estimates under noise assumptions & Computationally intensive \\
+\hline
+Recursive identification & Updates estimates online as new data arrives & Requires careful tuning \\
+\hline
+\end{tabular}
+\label{tab:regression_methods}
+\end{table}
+
+\textbf{Practical Challenges in Parameter Identification}
+
+Real experimental data invariably contains measurement noise arising from sensors, environmental interference, and quantization effects in digital systems. This noise contaminates the measured signals and introduces errors in the identified parameters. The effects of noise depend on both its amplitude and its spectral content relative to the system dynamics. High-frequency noise is often attenuated by the system dynamics themselves, while low-frequency noise more directly corrupts the measured signals. Understanding the noise characteristics is essential for designing appropriate filtering and identification procedures.
+
+The signal-to-noise ratio (SNR) quantifies the relative magnitude of the desired signal to the background noise. For sinusoidal signals, the SNR in decibels is defined as $20\log_{10}(A_{\text{signal}}/A_{\text{noise}})$, where $A$ represents amplitude. Higher SNR values indicate cleaner measurements that support more accurate parameter identification. When SNR is low, the identification algorithms may fit noise rather than true system dynamics, a phenomenon known as overfitting. Regularization techniques that penalize large parameter values or parameter complexity can mitigate overfitting but introduce bias in the estimates.
+
+Bias in parameter estimates arises not only from noise but also from model structure errors. If the assumed model form does not accurately represent the true system dynamics, the identified parameters will be biased even with perfect noise-free measurements. For example, fitting a first-order model to a system that actually has second-order dynamics will yield time constants and gains that represent some average behavior rather than the true underlying dynamics. Residual analysis—examining the differences between model predictions and measurements—can reveal systematic model errors. If residuals show patterns rather than random scatter, the model structure is likely inadequate.
+
+Distinguishing between structural parameters and effective parameters represents an important practical consideration. Some parameters in a model may not correspond to physical quantities but rather represent effective behavior arising from complex underlying mechanisms. For instance, the damping ratio in a simplified mechanical model may capture energy dissipation from multiple sources including friction, air resistance, and structural damping. While such effective parameters are useful for prediction and control design, they should not be interpreted as physical quantities with independent meaning. This distinction matters when using identified models for physical insight or when extrapolating beyond the range of experimental data.
+
+\textbf{Static Versus Dynamic Identification}
+
+Static identification characterizes the steady-state relationship between inputs and outputs, providing the gain or transfer function value at zero frequency. This relationship answers fundamental questions about how the system responds in the long run: if we apply a constant input, what constant output will eventually result? Static identification is typically simpler than dynamic identification because it avoids the complexities of transient behavior. We simply apply several different constant input levels, wait for the system to reach steady state, and record the corresponding output values. The static gain follows from the slope of the input-output curve.
+
+For systems with significant static nonlinearities, the steady-state relationship between input and output may not be linear. A common approach is to fit a polynomial or other nonlinear function to the steady-state data, obtaining a static characteristic curve. Alternatively, for feedback control applications, we may linearize the static nonlinearity around an operating point to obtain a local linear gain. This linearization approach enables the use of linear control techniques while capturing the essential behavior near the point of interest.
+
+Dynamic identification captures the time-varying behavior during transitions between steady states, revealing the time constants, natural frequencies, and other parameters that govern transient responses. The complexity of dynamic identification exceeds that of static identification because it requires modeling not just the relationship between input and output magnitudes but also the dynamics connecting them. Step response methods, frequency response methods, and time-domain regression all fall under the umbrella of dynamic identification. The choice of method depends on the available experimental equipment, the system characteristics, and the desired accuracy.
+
+In practice, a complete identification campaign typically includes both static and dynamic experiments. The static characterization establishes the operating range and local gain, while the dynamic characterization determines the transient behavior. Combining these results yields a complete model suitable for control system design and analysis. The separation between static and dynamic identification also provides a useful check: if the static gain from step response analysis differs significantly from that obtained from frequency response analysis at low frequency, an error in the experimental procedure or analysis may have occurred.
+
+\textbf{Example 1.7.2.3: Complete Identification of a Thermal System}
+
+Consider identifying the parameters of a first-order thermal system described by $\tau \dot{T} + T = K T_a$, where $T$ represents the system temperature, $T_a$ represents the ambient temperature (the input), $\tau$ represents the thermal time constant, and $K$ represents the steady-state gain relating ambient temperature to system temperature. This system models situations where the system temperature approaches the ambient temperature exponentially, with the time constant determined by thermal mass and insulation properties.
+
+For static identification, we set the ambient temperature to several different values and wait for the system to reach thermal equilibrium. Suppose we obtain the following steady-state data:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|c|c|}
+\hline
+$T_a$ (°C) & $T$ (°C) \\
+\hline
+20 & 22.0 \\
+\hline
+25 & 27.2 \\
+\hline
+30 & 32.4 \\
+\hline
+35 & 37.5 \\
+\hline
+40 & 42.8 \\
+\hline
+\end{tabular}
+\label{tab:thermal_static}
+\end{table}
+
+The relationship appears linear with slope approximately $1.04$, suggesting $K \approx 1.04$. The small intercept (approximately $-0.8$ °C) may indicate a measurement offset or small systematic error. Using linear regression on all five data points yields the exact relationship $T = 1.040 T_a - 0.88$. The steady-state gain is therefore $K = 1.040$.
+
+For dynamic identification, we apply a step change in ambient temperature from $20$ °C to $30$ °C and record the system temperature over time:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|c|c|}
+\hline
+Time (min) & $T$ (°C) \\
+\hline
+0 & 22.0 \\
+\hline
+5 & 24.8 \\
+\hline
+10 & 27.0 \\
+\hline
+15 & 28.6 \\
+\hline
+20 & 29.7 \\
+\hline
+30 & 31.0 \\
+\hline
+40 & 31.6 \\
+\hline
+60 & 32.2 \\
+\hline
+\end{tabular}
+\label{tab:thermal_dynamic}
+\end{table}
+
+The initial temperature is $22.0$ °C, and the final temperature approaches approximately $32.4$ °C, consistent with the static identification. The temperature error from steady state at $t = 10$ min is $32.4 - 27.0 = 5.4$ °C. At $t = 20$ min, the error is $32.4 - 29.7 = 2.7$ °C. Taking natural logarithms yields $\ln(5.4) \approx 1.69$ and $\ln(2.7) \approx 0.99$. The slope of $\ln(\text{error})$ versus time is $(0.99 - 1.69)/(20 - 10) = -0.070$ min$^{-1}$, giving a time constant $\tau = 1/0.070 \approx 14.3$ min. The complete identified model is $14.3 \dot{T} + T = 1.04 T_a$.
+
+Verifying this model against the measured data: at $t = 10$ min, the predicted temperature is $T(10) = 1.04(30) + (22.0 - 1.04(20))e^{-10/14.3} = 31.2 + (1.6)e^{-0.70} = 31.2 + 1.6(0.497) = 32.0$ °C, compared to the measured $27.0$ °C. The discrepancy suggests that the identified time constant may be too long, or that the system exhibits some additional dynamics not captured by the first-order model. Using more sophisticated regression methods or additional experiments could improve the identification accuracy.
+
+The parameter identification methods developed in this section provide the essential toolkit for translating physical measurements into mathematical models suitable for control system design. From the simple graphical analysis of step responses to the sophisticated optimization algorithms for nonlinear regression, these techniques enable engineers to characterize system behavior from experimental data. The worked examples demonstrate both the application of these methods and the practical challenges that arise in real-world identification problems. As control system design increasingly relies on accurate models derived from measurements, mastery of these identification techniques becomes essential for the practicing control engineer.
