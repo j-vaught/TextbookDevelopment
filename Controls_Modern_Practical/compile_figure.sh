@@ -124,22 +124,34 @@ ENDOFHARNESS
 # Copy temp file to working directory
 cp /tmp/figure_harness_temp.tex figure_harness.tex
 
-# Compile
+# Compile (suppress output, check if PDF was created/updated)
+BEFORE_TIME=0
+if [[ -f "$OUTPUT_PDF" ]]; then
+    BEFORE_TIME=$(stat -f %m "$OUTPUT_PDF" 2>/dev/null || stat -c %Y "$OUTPUT_PDF" 2>/dev/null)
+fi
+
 pdflatex -interaction=nonstopmode figure_harness.tex > /dev/null 2>&1
 
-if [[ $? -eq 0 ]]; then
-    echo -e "${GREEN}Success! Output: $OUTPUT_PDF${NC}"
+# Check if PDF exists and was updated
+if [[ -f "$OUTPUT_PDF" ]]; then
+    AFTER_TIME=$(stat -f %m "$OUTPUT_PDF" 2>/dev/null || stat -c %Y "$OUTPUT_PDF" 2>/dev/null)
+    if [[ "$AFTER_TIME" -gt "$BEFORE_TIME" ]]; then
+        echo -e "${GREEN}Success! Output: $OUTPUT_PDF${NC}"
 
-    # Open PDF if requested
-    if [[ "$OPEN_PDF" == true ]]; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            open "$OUTPUT_PDF"
-        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            xdg-open "$OUTPUT_PDF"
+        # Open PDF if requested
+        if [[ "$OPEN_PDF" == true ]]; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                open "$OUTPUT_PDF"
+            elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+                xdg-open "$OUTPUT_PDF"
+            fi
         fi
+    else
+        echo -e "${RED}Compilation may have failed. Running again with output:${NC}"
+        pdflatex -interaction=nonstopmode figure_harness.tex | tail -30
     fi
 else
-    echo -e "${RED}Compilation failed. Running again with full output:${NC}"
+    echo -e "${RED}Compilation failed - no PDF generated. Running again:${NC}"
     pdflatex -interaction=nonstopmode figure_harness.tex | tail -30
 fi
 
