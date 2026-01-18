@@ -1,0 +1,113 @@
+\subsection{Case Study 3 --- Thermal System with Multiple Zones}
+
+Many practical thermal systems involve heat transfer across multiple interconnected regions. Consider a building with several rooms, a semiconductor wafer processing tool with multiple temperature zones, or an industrial furnace with different thermal regions. In each case, we must understand how heat flows between zones and how we can model these interactions for control purposes. This case study develops a comprehensive model of a multi-zone thermal system, introduces the concept of state-space representation for distributed-parameter systems, and demonstrates how physical insight can guide model reduction and controller design.
+
+The physical phenomena governing multi-zone thermal systems are straightforward extensions of the single-zone case we examined in Section 1.8.1. Each zone possesses thermal mass, meaning it can store energy in proportion to its temperature. Heat transfers between adjacent zones through conduction, following Fourier's law, which states that the heat flow rate is proportional to the temperature difference and the thermal conductivity of the material separating the zones. Each zone also exchanges heat with its surroundings through convection, where the rate of heat loss to the environment depends on the temperature difference between the zone and ambient conditions, scaled by a convective heat transfer coefficient and the surface area exposed to the environment. Additionally, heating elements within each zone can inject thermal energy, providing the control inputs we manipulate to regulate temperatures.
+
+To develop a mathematical model, we apply the principle of energy conservation to each thermal zone. The net rate of energy accumulation within a zone equals the sum of all energy inflows minus the sum of all energy outflows. For a zone labeled $i$ with temperature $T_i$, the rate of energy accumulation is given by $C_i \dot{T}_i$, where $C_i$ represents the thermal capacitance of the zone and the dot denotes differentiation with respect to time. This capacitance depends on the mass of material in the zone, its specific heat capacity, and any additional thermal mass from equipment or furnishings within the zone. The thermal capacitance has units of joules per degree Celsius, or equivalently, watt-seconds per degree Celsius, reflecting the energy required to raise the zone temperature by one degree.
+
+The energy flows entering and leaving zone $i$ arise from three distinct mechanisms. First, conductive heat transfer from each adjacent zone $j$ occurs at a rate $k_{ij}(T_j - T_i)$, where $k_{ij}$ is the thermal conductance between zones $i$ and $j$. The thermal conductance depends on the thermal conductivity of the separating material, the cross-sectional area available for heat transfer, and the path length over which conduction occurs. Note that this expression naturally captures the direction of heat flow: if $T_j > T_i$, heat flows from zone $j$ to zone $i$, adding energy to zone $i$. Second, convective heat loss to the environment occurs at a rate $h_{i}(T_i - T_{\text{amb}})$, where $h_i$ is the overall convective heat transfer coefficient for zone $i$ and $T_{\text{amb}}$ represents the ambient or outdoor temperature. This coefficient accounts for all heat transfer from the zone's exposed surfaces to the surrounding air, including effects from natural convection, radiation, and any air infiltration. Third, heating inputs from HVAC systems, electric heaters, or other sources inject energy at rates $u_i$, which serve as our control inputs. Combining these contributions, the energy balance equation for zone $i$ becomes:
+
+$$C_i \dot{T}_i = \sum_{j \in \mathcal{N}_i} k_{ij}(T_j - T_i) + h_i(T_{\text{amb}} - T_i) + u_i$$
+
+where $\mathcal{N}_i$ denotes the set of zones adjacent to zone $i$. This equation captures the complete dynamics of how temperature in each zone evolves based on interactions with neighboring zones, environmental losses, and active heating.
+
+Let us illustrate these concepts with a concrete example involving three thermally interconnected zones arranged in a linear configuration, as might occur in a simple building with three rooms connected in sequence. Suppose zone 1 represents an exterior room with significant exposure to outdoor conditions, zone 2 is an interior hallway serving as a buffer zone, and zone 3 is another exterior room on the opposite side of the building. The thermal capacitances are $C_1 = 5000$ J/$\!^\circ$C, $C_2 = 3000$ J/$\!^\circ$C, and $C_3 = 5000$ J/$\!^\circ$C. The conductive coupling between zones 1 and 2 has conductance $k_{12} = 20$ W/$\!^\circ$C, while the coupling between zones 2 and 3 has the same conductance $k_{23} = 20$ W/$\!^\circ$C. Zone 1 loses heat to the environment with coefficient $h_1 = 15$ W/$\!^\circ$C, zone 2 has minimal exposure with $h_2 = 5$ W/$\!^\circ$C, and zone 3 loses heat with $h_3 = 15$ W/$\!^\circ$C. The ambient temperature is $T_{\text{amb}} = 5^\circ$C, representing a cold winter day. Each zone has an independent heating input: $u_1$, $u_2$, and $u_3$ in watts.
+
+Applying the energy balance equation to each zone yields a system of three coupled first-order differential equations:
+
+\begin{align}
+\dot{T}_1 &= \frac{k_{12}}{C_1}(T_2 - T_1) + \frac{h_1}{C_1}(T_{\text{amb}} - T_1) + \frac{u_1}{C_1} \\
+\dot{T}_2 &= \frac{k_{12}}{C_2}(T_1 - T_2) + \frac{k_{23}}{C_2}(T_3 - T_2) + \frac{h_2}{C_2}(T_{\text{amb}} - T_2) + \frac{u_2}{C_2} \\
+\dot{T}_3 &= \frac{k_{23}}{C_2}(T_2 - T_3) + \frac{h_3}{C_3}(T_{\text{amb}} - T_3) + \frac{u_3}{C_3}
+\end{align}
+
+Substituting the numerical values, we obtain:
+
+\begin{align}
+\dot{T}_1 &= 0.004(T_2 - T_1) + 0.003(5 - T_1) + \frac{u_1}{5000} \\
+\dot{T}_2 &= \frac{20}{3000}(T_1 - T_2) + \frac{20}{3000}(T_3 - T_2) + \frac{5}{3000}(5 - T_2) + \frac{u_2}{3000} \\
+\dot{T}_3 &= \frac{20}{5000}(T_2 - T_3) + 0.003(5 - T_3) + \frac{u_3}{5000}
+\end{align}
+
+Simplifying the coefficients:
+
+\begin{align}
+\dot{T}_1 &= 0.004T_2 - 0.007T_1 + 0.015 + \frac{u_1}{5000} \\
+\dot{T}_2 &= 0.00667T_1 + 0.00667T_3 - 0.0193T_2 + 0.00833 + \frac{u_2}{3000} \\
+\dot{T}_3 &= 0.004T_2 - 0.007T_3 + 0.015 + \frac{u_3}{5000}
+\end{align}
+
+This system of differential equations describes how the three zone temperatures evolve over time given heating inputs and environmental conditions. The constant terms arising from the ambient temperature represent heat loss or gain from the environment even when zone temperatures are zero, serving as a constant disturbance to the system.
+
+The state-space representation provides a compact and powerful framework for analyzing such multi-input multi-output systems. We define the state vector as $\mathbf{x} = \begin{bmatrix} T_1 & T_2 & T_3 \end{bmatrix}^T$, the input vector as $\mathbf{u} = \begin{bmatrix} u_1 & u_2 & u_3 \end{bmatrix}^T$, and the output vector as $\mathbf{y} = \mathbf{x}$ if we measure all zone temperatures. The system dynamics take the standard linear form $\dot{\mathbf{x}} = A\mathbf{x} + B\mathbf{u} + \mathbf{d}$, where $A$ is the state matrix capturing internal couplings, $B$ is the input matrix mapping heating rates to temperature derivatives, and $\mathbf{d}$ represents the constant disturbance from ambient conditions. For our three-zone example, these matrices are:
+
+$$A = \begin{bmatrix}
+-0.007 & 0.004 & 0 \\
+0.00667 & -0.0193 & 0.00667 \\
+0 & 0.004 & -0007
+\end{bmatrix}, \quad
+B = \begin{bmatrix}
+\frac{1}{5000} & 0 & 0 \\
+0 & \frac{1}{3000} & 0 \\
+0 & 0 & \frac{1}{5000}
+\end{bmatrix}, \quad
+\mathbf{d} = \begin{bmatrix}
+0.015 \\ 0.00833 \\ 0.015
+\end{bmatrix}$$
+
+This representation makes the structure of the system immediately apparent. The diagonal entries of $A$ are negative, indicating that each zone's temperature tends to decrease when isolated from other zones, reflecting the inherent heat losses to the environment. The off-diagonal entries are positive, showing that increasing a neighbor's temperature tends to increase the local temperature through conductive heat transfer. The input matrix $B$ is diagonal, meaning each heating input affects only its own zone temperature directly, though indirect effects propagate through the coupling terms in $A$.
+
+An important concept in multi-zone thermal systems is time-scale separation, which arises when different parts of the system respond at vastly different speeds. In our example, the two exterior zones (1 and 3) have larger thermal capacitances ($5000$ J/$\!^\circ$C) and significant environmental exposure, while the interior hallway zone (2) has smaller thermal capacitance ($3000$ J/$\!^\circ$C) and minimal environmental losses. This configuration creates two distinct time scales: the interior zone responds relatively quickly to changes in neighboring temperatures because its small thermal capacitance means it requires less energy to change temperature, while the exterior zones respond more slowly due to their larger thermal masses and the continuous energy drain of environmental heat loss.
+
+To analyze time-scale separation quantitatively, we examine the eigenvalues of the state matrix $A$. These eigenvalues, which are the roots of the characteristic equation $\det(sI - A) = 0$, determine the natural response rates of the system. For our three-zone system, computing the eigenvalues yields approximately $s_1 = -0.025$ rad/s, $s_2 = -0.011$ rad/s, and $s_3 = -0.005$ rad/s. The corresponding time constants are $\tau_i = -1/s_i$, giving $\tau_1 \approx 40$ s, $\tau_2 \approx 90$ s, and $\tau_3 \approx 200$ s. The ratio between the slowest and fastest time constants is about 5:1, representing moderate time-scale separation. In more extreme cases, such as a building with massive thermal mass in walls and floors but rapid air temperature response, this ratio might exceed 100:1, creating strongly separated dynamics.
+
+Time-scale separation has profound implications for control system design. When dynamics occur on significantly different time scales, we can often design controllers that treat the slow and fast dynamics somewhat independently. The fast dynamics might be controlled using aggressive feedback that responds quickly to disturbances, while the slow dynamics might use more gradual control actions that avoid exciting the faster modes unnecessarily. This separation is particularly valuable in building HVAC systems, where the fast dynamics of zone air temperatures can be controlled independently of the slow dynamics of thermal mass in walls and furniture, allowing for efficient hierarchical control architectures.
+
+Model reduction techniques leverage time-scale separation and other structural properties to obtain simpler models that capture the essential behavior of the original system. In a multi-zone thermal system, we might reduce the model order by identifying zones with similar temperatures that can be lumped together, by neglecting high-frequency modes that have minimal impact on the system's low-frequency behavior, or by identifying dominant state variables that capture most of the system's energy. The reduced-order model provides a computationally tractable representation for controller design while preserving the dynamic characteristics most important for achieving control objectives.
+
+One common reduction approach for thermal systems is modal truncation, where we retain only the slowest modes of the system and discard faster modes that contribute little to the overall response. For our three-zone example, if we retained only the slowest mode corresponding to $s_3 = -0.005$ rad/s, we would obtain a first-order model that captures the long-term thermal behavior of the entire building but misses the faster transient responses in individual zones. This reduced model might be suitable for supervisory control that sets setpoints for zone-level controllers, but would be inadequate for direct zone temperature regulation. The trade-off between model fidelity and complexity always involves understanding which aspects of system behavior matter for the intended control objective.
+
+Spatially lumped approximations transform distributed-parameter systems, where temperature varies continuously in space, into finite-dimensional state-space models with discrete state variables representing temperatures at specific locations. This approach divides the distributed system into zones or nodes, assumes uniform temperature within each zone, and derives lumped energy balance equations as we have done. The accuracy of the lumped approximation depends on how well the uniform-temperature assumption holds, which in turn depends on the thermal diffusivity of the material and the characteristic length scale of each zone. Materials with high thermal diffusivity conduct heat rapidly, making temperature more uniform across the zone and justifying the lumped approximation. Materials with low thermal diffusivity develop significant temperature gradients within the zone, requiring smaller zones or more sophisticated distributed models.
+
+The choice of zone boundaries in a lumped approximation involves physical insight and engineering judgment. Consider a building wall consisting of insulation, sheathing, and drywall. Rather than modeling each layer as a separate zone, we might combine all wall layers into a single thermal mass representing the wall's total thermal capacitance. The heat transfer through the wall would then be modeled as conduction from the interior air zone to the exterior air zone through an effective thermal resistance representing the combined resistance of all wall layers. This approach reduces model complexity while preserving the essential energy storage and transfer dynamics, provided we correctly calculate the equivalent thermal capacitance and conductance from the layer properties.
+
+To illustrate model reduction through lumping, suppose we decide that zones 1 and 3 in our three-zone example are thermally similar and strongly coupled to the environment, while zone 2 acts primarily as a thermal buffer between them. We might create a reduced two-zone model by lumping zones 1 and 3 into a single "exterior zone" with combined thermal capacitance $C_e = C_1 + C_3 = 10000$ J/$\!^\circ$C and effective environmental conductance $h_e = h_1 + h_3 = 30$ W/$\!^\circ$C. The interior zone remains unchanged with $C_i = 3000$ J/$\!^\circ$C and $h_i = 5$ W/$\!^\circ$C. The coupling between the lumped exterior zone and the interior zone becomes $k_{ei} = k_{12} + k_{23} = 40$ W/$\!^\circ$C, representing the combined conductive paths through both original interfaces. The reduced two-zone model is:
+
+\begin{align}
+\dot{T}_e &= \frac{k_{ei}}{C_e}(T_i - T_e) + \frac{h_e}{C_e}(T_{\text{amb}} - T_e) + \frac{u_1 + u_3}{C_e} \\
+\dot{T}_i &= \frac{k_{ei}}{C_e}(T_e - T_i) + \frac{h_i}{C_i}(T_{\text{amb}} - T_i) + \frac{u_2}{C_i}
+\end{align}
+
+Substituting values:
+
+\begin{align}
+\dot{T}_e &= 0.004(T_i - T_e) + 0.003(5 - T_e) + \frac{u_1 + u_3}{10000} \\
+\dot{T}_i &= 0.0133(T_e - T_i) + 0.00167(5 - T_i) + \frac{u_2}{3000}
+\end{align}
+
+This reduced model captures the essential dynamics of the original three-zone system with approximately half the state dimension, making controller design simpler while preserving the key interactions between interior and exterior thermal behavior.
+
+The multi-zone thermal system studied in this case study exemplifies several recurring themes in control systems engineering. First, physical principles from thermodynamics and heat transfer provide the foundation for deriving accurate models from first principles. Second, the state-space representation offers a unified framework for analyzing systems with multiple inputs, outputs, and internal couplings. Third, time-scale separation, when present, creates opportunities for hierarchical control architectures and model reduction. Fourth, lumped approximations transform distributed systems into tractable finite-dimensional models, with accuracy depending on the validity of the uniform-temperature assumption within each zone. These concepts extend far beyond thermal systems to mechanical, electrical, chemical, and biological systems throughout engineering and science.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\rowcolor{UofSCGarnet}
+\textcolor{white}{\textbf{Parameter}} & \textcolor{white}{\textbf{Zone 1}} & \textcolor{white}{\textbf{Zone 2}} & \textcolor{white}{\textbf{Zone 3}} \\
+\hline
+Thermal Capacitance $C_i$ (J/$\!^\circ$C) & 5000 & 3000 & 5000 \\
+\hline
+Environmental Conductance $h_i$ (W/$\!^\circ$C) & 15 & 5 & 15 \\
+\hline
+Coupling to Zone 2 $k_{i2}$ (W/$\!^\circ$C) & 20 & 20 & 20 \\
+\hline
+Initial Temperature $T_i(0)$ ($\!^\circ$C) & 10 & 15 & 10 \\
+\hline
+Heating Input $u_i$ (W) & $u_1$ & $u_2$ & $u_3$ \\
+\hline
+\end{tabular}
+\captionsetup{type=table}
+\caption{Parameters for the three-zone thermal system example. The thermal capacitances represent the energy storage capacity of each zone. Environmental conductances capture heat loss to ambient conditions. Coupling conductances represent conductive heat transfer between adjacent zones.}
+\end{table}

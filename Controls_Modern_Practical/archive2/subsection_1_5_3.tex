@@ -1,0 +1,158 @@
+\subsection{Electrical System Modeling — Kirchhoff's Laws and Loop Analysis}
+
+The systematic analysis of electrical circuits forms the foundation for understanding how electrical systems respond to inputs and disturbances. While resistors, capacitors, and inductors each impose simple relationships between voltage and current, real circuits contain many components interconnected in complex ways. To predict circuit behavior, we must have systematic methods for relating all voltages and currents throughout the network. These methods, based on Kirchhoff's two fundamental laws, provide the mathematical framework that connects individual component characteristics to the overall circuit response. Understanding these laws and the analysis techniques built upon them is essential not only for circuit design but also for recognizing the mathematical structures that appear in control systems more broadly.
+
+Kirchhoff's Current Law, often called KCL, expresses a fundamental conservation principle: the net flow of electric charge into any node (connection point) in a circuit must equal zero. In practical terms, this means that the sum of all currents entering a node equals the sum of all currents leaving that node. This law arises from the physical observation that electric charge cannot accumulate at a node in a steady-state circuit—if more charge flowed into a node than flowed out, charge would accumulate indefinitely, which does not happen in normal circuit operation. Mathematically, we express KCL at node $n$ as $\sum_{k} i_k = 0$, where the currents are taken with appropriate signs depending on whether they enter or leave the node. The convention we adopt is that currents entering a node are positive and currents leaving are negative, though some texts use the opposite convention; what matters is consistency throughout any given analysis. Consider a simple node where three wires meet: if 2 amperes flow into the node through one wire and 1 ampere flows in through a second wire, then exactly 3 amperes must flow out through the third wire. This simple balancing principle applies regardless of how many branches connect to the node, and it remains valid whether the currents are constant or varying with time.
+
+Kirchhoff's Voltage Law, known as KVL, expresses the conservation of energy in electrical circuits. It states that the algebraic sum of all voltage drops around any closed loop in a circuit equals zero. As we traverse a closed path through the circuit, adding up the voltage rises and falls we encounter, we must return to our starting point with no net change in potential. This law follows from the conservative nature of the electric field in circuits—the work done moving a charge around any closed path depends only on the endpoints, so when the endpoints coincide, the net work is zero. For a loop containing a voltage source and several components, KVL might tell us that the source voltage equals the sum of the voltage drops across the resistors in that loop. If we define a consistent direction for traversing the loop (say, clockwise), then voltage drops in the direction of traversal are positive, while voltage rises (or drops against the traversal direction) are negative. The choice of traversal direction is arbitrary, but once chosen it must be maintained consistently throughout the loop equation.
+
+The mesh analysis method applies KVL systematically to circuits that can be drawn as a set of non-overlapping loops called meshes. A mesh is a loop that does not contain any other loops within it, and for planar circuits (circuits that can be drawn without crossing wires), we can identify a set of meshes that cover the entire circuit. The key insight of mesh analysis is that we can write one KVL equation for each mesh, introducing mesh currents as the unknowns. The actual current through any branch equals the algebraic sum of the mesh currents that pass through that branch. This approach reduces the number of equations we need to write because mesh currents automatically satisfy KCL at every node—the mesh current circulating around a mesh enters and leaves each node it encounters, so the net flow at each node is inherently balanced.
+
+To illustrate mesh analysis, consider a simple circuit containing two resistors $R_1$ and $R_2$ in series, connected to a voltage source $V_s$. This circuit has only one mesh, so we write a single KVL equation: $V_s - iR_1 - iR_2 = 0$, where $i$ is the mesh current flowing through both resistors in series. Solving for the current gives $i = V_s / (R_1 + R_2)$, which is the familiar series resistance formula. Now consider a more complex circuit with two meshes sharing a common branch. Suppose we have a voltage source $V_s$ connected to resistor $R_1$, which branches into two parallel paths: one containing resistor $R_2$ and the other containing resistor $R_3$, which then rejoin before returning to the source. We identify two meshes: the left mesh with current $i_1$ and the right mesh with current $i_2$. For the left mesh, KVL gives $V_s - i_1 R_1 - (i_1 - i_2)R_2 = 0$, where $(i_1 - i_2)$ is the current through $R_2$ (the difference of the two mesh currents). For the right mesh, KVL gives $(i_2 - i_1)R_2 - i_2 R_3 = 0$. These two equations in two unknowns can be solved simultaneously to find the mesh currents, from which any branch current or voltage follows directly.
+
+Nodal analysis takes the complementary approach, applying KCL at each node to determine the node voltages (voltages measured with respect to a reference node, usually called ground). In nodal analysis, we identify all nodes in the circuit except the reference node, assign unknown voltages to them, and write KCL equations expressing the conservation of current at each node. The current through any component is expressed in terms of the voltage difference across its terminals, using the appropriate component relationship. For a resistor connecting nodes $a$ and $b$, the current flowing from $a$ to $b$ equals $(v_a - v_b)/R$. For a voltage source, we cannot express current directly in terms of the node voltages, so nodal analysis requires that we handle voltage sources specially—either by combining them with series resistors or by introducing supernodes when voltage sources appear between non-reference nodes.
+
+The power of nodal analysis becomes apparent in circuits with many components sharing common connection points. In our two-mesh example above, we could identify three nodes: the top node where the source and $R_1$ connect, the middle node between $R_2$ and $R_3$, and the bottom reference node. Writing KCL at the top node, we have $i_s = i_1 + i_2$, where $i_s$ is the current supplied by the source, $i_1$ is the current through $R_1$ to the middle node, and $i_2$ is any current flowing directly to ground if such a path existed. Writing KCL at the middle node gives $i_1 = i_2 + i_3$, where $i_2$ flows through $R_2$ to ground and $i_3$ flows through $R_3$ to ground. The resistor currents relate to the node voltages: $i_1 = v_{top}/R_1$, $i_2 = (v_{top} - v_{middle})/R_2$, and $i_3 = v_{middle}/R_3$. Substituting these expressions into the KCL equations yields a system of algebraic equations in the node voltages $v_{top}$ and $v_{middle}$.
+
+The impedance method extends circuit analysis to circuits with time-varying signals, particularly sinusoidal steady-state analysis where all voltages and currents vary sinusoidally at the same frequency. The key insight is that inductors and capacitors introduce frequency-dependent relationships between voltage and current that parallel the resistance relationship in Ohm's law. For an inductor with inductance $L$, the voltage is related to the current by $v_L = L di/dt$. When the current varies sinusoidally as $i(t) = I \cos(\omega t)$, the voltage becomes $v_L(t) = -\omega L I \sin(\omega t) = \omega L I \cos(\omega t + 90^\circ)$. This shows that the inductor voltage leads the current by 90 degrees and that the ratio of voltage amplitude to current amplitude equals $\omega L$. We define the inductive reactance as $X_L = \omega L$, and the complex impedance of an inductor as $Z_L = j\omega L$, where $j = \sqrt{-1}$ is the imaginary unit (electrical engineers use $j$ rather than $i$ to avoid confusion with current). Similarly, for a capacitor with capacitance $C$, the current is related to voltage by $i_C = C dv/dt$. For sinusoidal voltage $v_C(t) = V \cos(\omega t)$, the current is $i_C(t) = -\omega C V \sin(\omega t) = \omega C V \cos(\omega t + 90^\circ)$, showing that the capacitor current leads the voltage by 90 degrees. The capacitive reactance is $X_C = 1/(\omega C)$, and the complex impedance is $Z_C = 1/(j\omega C) = -j/(\omega C)$.
+
+In the Laplace domain, which we use extensively in control systems, these impedance relationships simplify beautifully. The Laplace transform of the derivative $di/dt$ is $sI(s) - i(0^-)$, where $s$ is the complex Laplace variable and $i(0^-)$ is the initial current. Assuming zero initial conditions (which is appropriate for analyzing the forced response or transfer function of a circuit), the voltage across an inductor becomes $V_L(s) = sL I_L(s)$, giving impedance $Z_L = sL$. Similarly, the current through a capacitor relates to voltage by $I_C(s) = sC V_C(s)$, which rearranges to $V_C(s) = I_C(s)/(sC)$, giving impedance $Z_C = 1/(sC)$. The resistor maintains its impedance $Z_R = R$. These expressions reduce to the sinusoidal steady-state results when we substitute $s = j\omega$, since $sL = j\omega L$ and $1/(sC) = 1/(j\omega C)$.
+
+\begin{table}[htbp]
+\centering
+\color{UofSCBlack}
+\begin{tabular}{|c|c|c|c|}
+\hline
+\color{UofSCGarnet}\textbf{Component} & \color{UofSCGarnet}\textbf{Time Domain} & \color{UofSCGarnet}\textbf{Frequency Domain} & \color{UofSCGarnet}\textbf{Laplace Domain} \\
+\hline
+Resistor & $v = Ri$ & $V = RI$ & $V(s) = RI(s)$ \\
+\hline
+Inductor & $v = L \frac{di}{dt}$ & $V = j\omega L I$ & $V(s) = sL I(s)$ \\
+\hline
+Capacitor & $i = C \frac{dv}{dt}$ & $V = \frac{1}{j\omega C} I$ & $V(s) = \frac{1}{sC} I(s)$ \\
+\hline
+\end{tabular}
+\color{UofSCBlack}
+\captionsetup{justification=centering}
+\caption{Impedance relationships for passive components in different domains.}
+\end{table}
+
+The impedance method allows us to apply all the same circuit analysis techniques—Ohm's law, voltage division, current division, mesh analysis, nodal analysis—to circuits with energy storage elements, treating impedance as a generalized resistance. The algebraic operations we perform on impedances (adding them in series, combining them in parallel using $1/Z_{eq} = \sum 1/Z_k$) follow the same rules as for resistances, but the results are complex numbers that capture both magnitude and phase information. When we compute the transfer function of a circuit (the ratio of an output voltage or current to an input voltage or current), the impedance method directly yields a rational function of $s$ that we can analyze using the tools of control theory.
+
+\begin{example}
+\textbf{RC Low-Pass Filter Analysis}
+
+Consider a series RC circuit where a voltage source $V_{in}(t)$ connects through a resistor $R$ to a capacitor $C$, with the output taken across the capacitor terminals. This simple circuit forms a first-order low-pass filter, passing low-frequency signals to the output while attenuating high-frequency signals. We wish to derive the transfer function $H(s) = V_{out}(s)/V_{in}(s)$ and examine its frequency response.
+
+Using the impedance method, we represent the resistor as impedance $Z_R = R$ and the capacitor as impedance $Z_C = 1/(sC)$. The circuit forms a voltage divider, so the output voltage is the input voltage dropped across the capacitor impedance divided by the total series impedance. Thus we write:
+
+\begin{equation}
+V_{out}(s) = V_{in}(s) \frac{Z_C}{Z_R + Z_C} = V_{in}(s) \frac{\frac{1}{sC}}{R + \frac{1}{sC}}
+\end{equation}
+
+Simplifying this expression, we multiply numerator and denominator by $sC$ to clear the fraction:
+
+\begin{equation}
+V_{out}(s) = V_{in}(s) \frac{1}{sCR + 1}
+\end{equation}
+
+The transfer function is therefore:
+
+\begin{equation}
+H(s) = \frac{V_{out}(s)}{V_{in}(s)} = \frac{1}{sRC + 1}
+\end{equation}
+
+To interpret this result, we examine the frequency response by substituting $s = j\omega$:
+
+\begin{equation}
+H(j\omega) = \frac{1}{j\omega RC + 1}
+\end{equation}
+
+At very low frequencies ($\omega \to 0$), the denominator approaches 1 and $|H(j\omega)| \to 1$, meaning low-frequency signals pass through essentially unchanged. At very high frequencies ($\omega \to \infty$), the magnitude $|H(j\omega)| \approx 1/(\omega RC)$ decreases proportionally with frequency, corresponding to a slope of $-20$ dB per decade on a logarithmic frequency scale. The frequency $\omega_c = 1/(RC)$ where $|H(j\omega_c)| = 1/\sqrt{2}$ (approximately $-3$ dB) is called the cutoff frequency. At this frequency, the output voltage magnitude is reduced to about 71\% of the input magnitude, and the phase shift between output and input equals $-45^\circ$. This simple circuit demonstrates how component values determine the frequency-selective behavior of a filter, a concept that extends directly to more complex filter designs and to control systems where we shape the frequency response to meet design specifications.
+
+The time-domain response of this filter to a unit step input $V_{in}(t) = u(t)$ (which has Laplace transform $V_{in}(s) = 1/s$) is:
+
+\begin{equation}
+V_{out}(s) = H(s) \cdot \frac{1}{s} = \frac{1}{s(sRC + 1)}
+\end{equation}
+
+Using partial fraction decomposition:
+
+\begin{equation}
+V_{out}(s) = \frac{1}{s} - \frac{RC}{sRC + 1} = \frac{1}{s} - \frac{1}{s + \frac{1}{RC}}
+\end{equation}
+
+Taking the inverse Laplace transform gives:
+
+\begin{equation}
+v_{out}(t) = 1 - e^{-t/(RC)} \quad \text{for } t \geq 0
+\end{equation}
+
+This exponential rise from 0 to 1 with time constant $\tau = RC$ is the classic first-order step response. The time constant represents the time required for the output to reach approximately 63\% of its final value, and after five time constants the output is within 1\% of steady state. Understanding this transient response is essential because control systems must not only achieve the correct steady-state behavior but must do so within acceptable settling time constraints.
+\end{example}
+
+\begin{example}
+\textbf{Series RLC Resonant Circuit}
+
+A series RLC circuit containing a resistor $R$, inductor $L$, and capacitor $C$ connected in series with a current source exhibits resonant behavior that is fundamental to many applications including radio tuners, filters, and wireless power transfer. We analyze this circuit to find its impedance, current response, and the conditions for resonance.
+
+The total impedance of the series combination is the sum of the individual impedances:
+
+\begin{equation}
+Z_{total}(s) = Z_R + Z_L + Z_C = R + sL + \frac{1}{sC}
+\end{equation}
+
+If we apply a sinusoidal voltage source $V_{in}(t) = V_m \cos(\omega t)$, the steady-state current is $I = V_{in}/Z_{total}(j\omega)$, where:
+
+\begin{equation}
+Z_{total}(j\omega) = R + j\omega L + \frac{1}{j\omega C} = R + j\left(\omega L - \frac{1}{\omega C}\right)
+\end{equation}
+
+The current magnitude is $|I| = |V_{in}| / \sqrt{R^2 + (\omega L - 1/(\omega C))^2}$. Resonance occurs when the imaginary part of the impedance vanishes, which happens when $\omega L = 1/(\omega C)$, or equivalently $\omega^2 = 1/(LC)$. The resonant frequency is $\omega_0 = 1/\sqrt{LC}$, and at this frequency the impedance is purely resistive with value $Z_{total}(j\omega_0) = R$. The current reaches its maximum value $V_{in}/R$ at resonance, and the phase angle between voltage and current is zero.
+
+The quality factor $Q$ characterizes the sharpness of the resonance peak and is defined as $Q = \omega_0 L / R = 1/(\omega_0 RC)$. For a high-Q circuit (small $R$ relative to $\omega_0 L$), the resonance peak is very sharp, and the current response is highly sensitive to frequency in the vicinity of $\omega_0$. The bandwidth of the resonance, defined as the frequency range over which the current exceeds $1/\sqrt{2}$ of its maximum value, is $\Delta\omega = \omega_0 / Q$. A radio receiver uses this property to select a desired station by tuning to a frequency where the desired signal is at resonance while adjacent stations at different frequencies are attenuated by the filter's frequency response.
+
+To find the complete time-domain response including transient effects, we apply a step input $V_{in}(t) = V_0 u(t)$. The Laplace domain current is:
+
+\begin{equation}
+I(s) = \frac{V_0/s}{R + sL + 1/(sC)} = \frac{V_0}{s^2 L + sR + 1/L}
+\end{equation}
+
+The denominator $s^2 + (R/L)s + 1/(LC)$ is the characteristic equation of a second-order system. The roots are:
+
+\begin{equation}
+s_{1,2} = -\frac{R}{2L} \pm \sqrt{\left(\frac{R}{2L}\right)^2 - \frac{1}{LC}}
+\end{equation}
+
+The behavior depends on the damping ratio $\zeta = \frac{R}{2}\sqrt{\frac{C}{L}}$. When $\zeta > 1$, the circuit is overdamped with two distinct real poles and a slow exponential response. When $\zeta = 1$, the circuit is critically damped with a repeated real pole and the fastest response without overshoot. When $\zeta < 1$, the circuit is underdamped with complex conjugate poles and exhibits oscillatory behavior at the damped natural frequency $\omega_d = \omega_0 \sqrt{1 - \zeta^2}$. This classification mirrors the second-order mechanical systems we will encounter in subsequent sections, illustrating the deep connection between electrical and mechanical system dynamics.
+\end{example}
+
+\begin{example}
+\textbf{Operational Amplifier Circuit — Non-Inverting Amplifier}
+
+Operational amplifiers, or op-amps, are active circuit elements that provide high gain and are configured with external components to perform specific functions. The non-inverting amplifier configuration multiplies the input voltage by a constant gain factor determined by resistor values, and it serves as a fundamental building block in signal conditioning and control systems. We analyze this circuit to demonstrate how active elements modify our circuit analysis approach.
+
+The ideal op-amp model assumes three key properties: infinite input impedance (so no current flows into either input terminal), infinite open-loop gain (so the voltage difference between the inputs is forced to zero), and zero output impedance (so the output can source or sink current without voltage drop). In the non-inverting configuration, the input signal connects directly to the non-inverting input (+), while the inverting input (-) connects through a resistor network to both the output and ground. Specifically, resistor $R_1$ connects the inverting input to ground, and resistor $R_2$ connects the inverting input to the output terminal.
+
+Let $v_+$ denote the voltage at the non-inverting input and $v_-$ denote the voltage at the inverting input. By the infinite gain assumption, $v_+ = v_-$ in the ideal model (any finite output would require zero input difference). Since the input connects directly to $v_+$, we have $v_+ = V_{in}$. Therefore $v_- = V_{in}$ as well. The current flowing into the op-amp inputs is zero, so the same current flows through $R_1$ and $R_2$. Applying Ohm's law to resistor $R_1$, the current is $i = (v_- - 0)/R_1 = V_{in}/R_1$. The voltage drop across $R_2$ is $i R_2 = V_{in} R_2 / R_1$. Since $R_2$ connects between the output and the inverting input, the output voltage is:
+
+\begin{equation}
+V_{out} = v_- + i R_2 = V_{in} + V_{in} \frac{R_2}{R_1} = V_{in} \left(1 + \frac{R_2}{R_1}\right)
+\end{equation}
+
+The closed-loop gain is $A_{CL} = V_{out}/V_{in} = 1 + R_2/R_1$. This gain depends only on the external resistor ratio and is independent of the op-amp's internal characteristics, which explains why op-amps are so useful for building precision gain stages.
+
+To extend this analysis to dynamic signals, we replace the resistors with impedances: $R_1$ becomes $Z_1(s)$ and $R_2$ becomes $Z_2(s)$. The same derivation yields the general transfer function:
+
+\begin{equation}
+H(s) = \frac{V_{out}(s)}{V_{in}(s)} = 1 + \frac{Z_2(s)}{Z_1(s)}
+\end{equation}
+
+If $Z_1$ is a capacitor $C$ (impedance $1/(sC)$) and $Z_2$ is a resistor $R$, we obtain an integrating amplifier with transfer function $H(s) = 1 + sRC$. If both are capacitors, we create a differentiator. By choosing appropriate component combinations, we can implement any rational transfer function, which is why op-amp circuits form the analog implementation of control system compensators and filters.
+
+Real op-amps deviate from ideal behavior at high frequencies, exhibiting finite gain-bandwidth product, input and output impedance limitations, and phase lag that can cause instability in feedback configurations. A more realistic model includes a dominant pole in the open-loop transfer function: $A(s) = A_0 / (1 + s/\omega_p)$, where $A_0$ is the DC gain (typically $10^5$ to $10^6$) and $\omega_p$ is the pole frequency (typically a few hertz to a few hundred hertz). This finite bandwidth limits the closed-loop bandwidth to approximately $\omega_{CL} \approx \omega_{GB} / A_{CL}$, where $\omega_{GB}$ is the gain-bandwidth product (typically $1$ to $100$ MHz for general-purpose op-amps). Understanding these non-ideal effects is crucial when designing control systems that must operate at higher frequencies or require precise phase margins.
+
+The analysis techniques demonstrated in these examples—KVL for mesh analysis, KCL for nodal analysis, impedance method for dynamic circuits, and special handling for active elements—extend directly to more complex circuits encountered in control systems. Whether we are analyzing a power supply, a sensor interface, an actuator driver, or a feedback compensator, these fundamental principles provide the mathematical framework for understanding how electrical circuits process signals and perform control functions. As we progress to mechanical and electromechanical systems in subsequent sections, we will discover that the same mathematical structures appear, often with analogous physical interpretations, demonstrating the unified nature of dynamical system analysis.
+\end{example}
+
+The systematic approach to circuit modeling that we have developed in this section—identifying the appropriate variables (currents or voltages), applying conservation laws (KCL and KVL), and using component relationships (Ohm's law generalized through impedance)—provides a template for modeling physical systems across all engineering disciplines. Each step in the analysis corresponds to a physical constraint or property, and the resulting mathematical equations capture the essential dynamics of the system. This pattern of modeling will reappear as we analyze mechanical translation systems, rotational systems, and electromechanical transducers in the following sections, with modifications appropriate to each domain but maintaining the same underlying logical structure of conservation laws, constitutive relationships, and systematic equation formulation.

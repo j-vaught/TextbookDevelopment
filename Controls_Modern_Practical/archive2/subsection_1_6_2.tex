@@ -1,0 +1,199 @@
+\subsection{Taylor Series Linearization --- The Tangent Plane Approximation}
+
+The fundamental technique underlying most control system design rests on a remarkably simple yet powerful idea: any sufficiently smooth nonlinear function can be approximated locally by a linear function. This approximation, called \emph{linearization}, transforms the challenging problem of analyzing nonlinear systems into the well-understood realm of linear system theory. The mathematical foundation for this transformation is the Taylor series expansion, named after the English mathematician Brook Taylor who first published this result in 1715.
+
+To understand linearization, we begin with the simplest case: approximating a function of a single variable near a specific point. Consider a smooth scalar function $f(x)$ that possesses continuous derivatives of all orders in the vicinity of some point $x = a$. The Taylor series expansion of $f(x)$ about the point $a$ states that the function's value at any nearby point $x$ can be expressed as an infinite sum of terms involving the function's derivatives evaluated at $a$. Mathematically, this expansion takes the form
+
+\[
+f(x) = f(a) + f'(a)(x-a) + \frac{f''(a)}{2!}(x-a)^2 + \frac{f'''(a)}{3!}(x-a)^3 + \cdots.
+\]
+
+The beauty of this representation lies in the clear hierarchy of terms. The constant term $f(a)$ represents the function's value at the operating point. The linear term $f'(a)(x-a)$ captures the instantaneous rate of change, or slope, of the function at $a$. The quadratic and higher-order terms encode increasingly subtle aspects of the function's curvature. When we restrict our attention to points $x$ sufficiently close to $a$, the higher-order terms become negligible compared to the constant and linear contributions. Discarding these higher-order terms yields the \emph{first-order Taylor approximation}
+
+\[
+f(x) \approx f(a) + f'(a)(x-a).
+\]
+
+Geometrically, this approximation represents the equation of the tangent line to the curve $y = f(x)$ at the point $x = a$. The tangent line touches the curve at the operating point and shares the same slope as the curve at that instant. As we move away from $a$, the tangent line diverges from the true function, but for small deviations, the approximation remains remarkably accurate.
+
+\begin{example}[Linearizing a Scalar Nonlinear Function]
+Let us apply this concept to a concrete example. Consider the nonlinear function $f(x) = \sin(x)$ and suppose we wish to approximate its behavior near the point $x = 0$. Computing the Taylor expansion about $a = 0$, we find $f(0) = \sin(0) = 0$ and $f'(0) = \cos(0) = 1$. The first-order approximation is therefore
+
+\[
+\sin(x) \approx 0 + 1 \cdot (x - 0) = x.
+\]
+
+This result should come as no surprise to anyone familiar with trigonometry: for small angles measured in radians, the sine of an angle is approximately equal to the angle itself. The error in this approximation can be quantified by examining the next term in the Taylor series, which involves $f''(0) = -\sin(0) = 0$ and $f'''(0) = -\cos(0) = -1$. The second-order approximation would be
+
+\[
+\sin(x) \approx x - \frac{x^3}{6},
+\]
+
+and we observe that the cubic correction term becomes significant only when $x$ is no longer small. This example illustrates both the power and the limitation of linearization: we gain tractable mathematics at the cost of restricting our analysis to a neighborhood of the operating point.
+\end{example}
+
+We now generalize these concepts to functions of multiple variables, which is essential for control systems where we must simultaneously consider multiple states, inputs, and outputs. Consider a smooth vector-valued function $\mathbf{f}: \mathbb{R}^n \to \mathbb{R}^m$ that maps an $n$-dimensional input vector $\mathbf{x} = [x_1, x_2, \ldots, x_n]^T$ to an $m$-dimensional output vector $\mathbf{f}(\mathbf{x}) = [f_1(\mathbf{x}), f_2(\mathbf{x}), \ldots, f_m(\mathbf{x})]^T$. The multivariable Taylor series expansion of $\mathbf{f}(\mathbf{x})$ about an operating point $\mathbf{a} \in \mathbb{R}^n$ takes the form
+
+\[
+\mathbf{f}(\mathbf{x}) = \mathbf{f}(\mathbf{a}) + \mathbf{J}_f(\mathbf{a})(\mathbf{x}-\mathbf{a}) + \text{higher-order terms},
+\]
+
+where $\mathbf{J}_f(\mathbf{a})$ is the \emph{Jacobian matrix} of $\mathbf{f}$ evaluated at $\mathbf{a}$. The Jacobian matrix generalizes the concept of the derivative to vector-valued functions and is defined as the $m \times n$ matrix whose $(i,j)$-th entry is the partial derivative of the $i$-th component function with respect to the $j$-th variable, evaluated at the operating point:
+
+\[
+\mathbf{J}_f(\mathbf{a}) = \begin{bmatrix}
+\frac{\partial f_1}{\partial x_1}(\mathbf{a}) & \frac{\partial f_1}{\partial x_2}(\mathbf{a}) & \cdots & \frac{\partial f_1}{\partial x_n}(\mathbf{a}) \\
+\frac{\partial f_2}{\partial x_1}(\mathbf{a}) & \frac{\partial f_2}{\partial x_2}(\mathbf{a}) & \cdots & \frac{\partial f_2}{\partial x_n}(\mathbf{a}) \\
+\vdots & \vdots & \ddots & \vdots \\
+\frac{\partial f_m}{\partial x_1}(\mathbf{a}) & \frac{\partial f_m}{\partial x_2}(\mathbf{a}) & \cdots & \frac{\partial f_m}{\partial x_n}(\mathbf{a})
+\end{bmatrix}.
+\]
+
+Each row of the Jacobian contains the partial derivatives of one component of the output vector with respect to all components of the input vector. The Jacobian matrix thus encodes complete information about how each output variable responds to changes in each input variable at the specific operating point.
+
+Geometrically, the first-order multivariable Taylor approximation represents the equation of the \emph{tangent hyperplane} to the $m$-dimensional surface defined by $\mathbf{y} = \mathbf{f}(\mathbf{x})$ at the point $\mathbf{x} = \mathbf{a}$. In the special case where $m = 1$, this hyperplane reduces to the familiar tangent plane in three-dimensional space. The tangent hyperplane touches the nonlinear surface at the operating point and shares the same ``slope'' in every direction, captured precisely by the entries of the Jacobian matrix.
+
+Discarding the higher-order terms in the multivariable Taylor series yields the linearized approximation
+
+\[
+\mathbf{f}(\mathbf{x}) \approx \mathbf{f}(\mathbf{a}) + \mathbf{J}_f(\mathbf{a})(\mathbf{x}-\mathbf{a}).
+\]
+
+This expression has a clear interpretation: the output at any point $\mathbf{x}$ is approximated by the output at the operating point $\mathbf{a}$ plus a linear transformation of the deviation $\mathbf{x} - \mathbf{a}$, where the linear transformation is given by the Jacobian evaluated at the operating point.
+
+\begin{example}[Computing the Jacobian Matrix]
+To solidify our understanding, let us compute the Jacobian matrix for a specific function. Consider the nonlinear system defined by
+
+\[
+\mathbf{f}(\mathbf{x}) = \begin{bmatrix} f_1(x_1, x_2) \\ f_2(x_1, x_2) \end{bmatrix} = \begin{bmatrix} x_1^2 + x_2 \\ \sin(x_1) \cdot x_2 \end{bmatrix}.
+\]
+
+We compute the partial derivatives for each component function. For $f_1(x_1, x_2) = x_1^2 + x_2$, we have
+
+\[
+\frac{\partial f_1}{\partial x_1} = 2x_1, \quad \frac{\partial f_1}{\partial x_2} = 1.
+\]
+
+For $f_2(x_1, x_2) = \sin(x_1) \cdot x_2$, we obtain
+
+\[
+\frac{\partial f_2}{\partial x_1} = \cos(x_1) \cdot x_2, \quad \frac{\partial f_2}{\partial x_2} = \sin(x_1).
+\]
+
+Assembling these partial derivatives into the Jacobian matrix yields
+
+\[
+\mathbf{J}_f(\mathbf{x}) = \begin{bmatrix} 2x_1 & 1 \\ x_2\cos(x_1) & \sin(x_1) \end{bmatrix}.
+\]
+
+Suppose we choose the operating point $\mathbf{a} = [\pi/2, 1]^T$. Evaluating the Jacobian at this point gives
+
+\[
+\mathbf{J}_f(\mathbf{a}) = \begin{bmatrix} 2(\pi/2) & 1 \\ (1)\cos(\pi/2) & \sin(\pi/2) \end{bmatrix} = \begin{bmatrix} \pi & 1 \\ 0 & 1 \end{bmatrix}.
+\]
+
+The linearized approximation at this operating point is therefore
+
+\[
+\mathbf{f}(\mathbf{x}) \approx \mathbf{f}(\mathbf{a}) + \mathbf{J}_f(\mathbf{a})(\mathbf{x}-\mathbf{a}) = \begin{bmatrix} (\pi/2)^2 + 1 \\ \sin(\pi/2) \cdot 1 \end{bmatrix} + \begin{bmatrix} \pi & 1 \\ 0 & 1 \end{bmatrix} \begin{bmatrix} x_1 - \pi/2 \\ x_2 - 1 \end{bmatrix} = \begin{bmatrix} \pi^2/4 + 1 \\ 1 \end{bmatrix} + \begin{bmatrix} \pi(x_1 - \pi/2) + (x_2 - 1) \\ x_2 - 1 \end{bmatrix}.
+\]
+
+Simplifying this expression, we find the explicit linear approximation
+
+\[
+\mathbf{f}(\mathbf{x}) \approx \begin{bmatrix} \pi x_1 + x_2 - \pi^2/4 \\ x_2 \end{bmatrix}.
+\]
+
+This approximation is valid only for $\mathbf{x}$ sufficiently close to $[\pi/2, 1]^T$, but within that neighborhood, the nonlinear function is well-approximated by this affine (linear plus constant) transformation.
+\end{example}
+
+The techniques developed above for static nonlinear functions extend directly to the linearization of systems of nonlinear ordinary differential equations. Consider a general nonlinear dynamical system described by
+
+\[
+\dot{\mathbf{x}}(t) = \mathbf{f}(\mathbf{x}(t), \mathbf{u}(t)),
+\]
+
+where $\mathbf{x}(t) \in \mathbb{R}^n$ is the state vector, $\mathbf{u}(t) \in \mathbb{R}^p$ is the input vector, and $\mathbf{f}: \mathbb{R}^n \times \mathbb{R}^p \to \mathbb{R}^n$ is a smooth vector field. Suppose the system operates at an \emph{equilibrium point} or \emph{operating point} $(\mathbf{x}_0, \mathbf{u}_0)$ satisfying $\mathbf{0} = \mathbf{f}(\mathbf{x}_0, \mathbf{u}_0)$. This condition ensures that if the system starts at state $\mathbf{x}_0$ with constant input $\mathbf{u}_0$, it will remain at $\mathbf{x}_0$ indefinitely.
+
+To analyze the system's behavior near this operating point, we introduce small deviations from the equilibrium: let $\delta\mathbf{x}(t) = \mathbf{x}(t) - \mathbf{x}_0$ and $\delta\mathbf{u}(t) = \mathbf{u}(t) - \mathbf{u}_0$ denote the perturbations in state and input, respectively. Substituting $\mathbf{x} = \mathbf{x}_0 + \delta\mathbf{x}$ and $\mathbf{u} = \mathbf{u}_0 + \delta\mathbf{u}$ into the dynamics and applying the multivariable Taylor expansion to $\mathbf{f}$ about $(\mathbf{x}_0, \mathbf{u}_0)$, we obtain
+
+\[
+\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x}_0 + \delta\mathbf{x}, \mathbf{u}_0 + \delta\mathbf{u}) \approx \mathbf{f}(\mathbf{x}_0, \mathbf{u}_0) + \mathbf{J}_f(\mathbf{x}_0, \mathbf{u}_0) \begin{bmatrix} \delta\mathbf{x} \\ \delta\mathbf{u} \end{bmatrix}.
+\]
+
+Since $\mathbf{f}(\mathbf{x}_0, \mathbf{u}_0) = \mathbf{0}$ at equilibrium, this simplifies to
+
+\[
+\dot{\mathbf{x}} \approx \mathbf{J}_f(\mathbf{x}_0, \mathbf{u}_0) \begin{bmatrix} \delta\mathbf{x} \\ \delta\mathbf{u} \end{bmatrix}.
+\]
+
+Decomposing the Jacobian matrix into blocks corresponding to state and input variables, we define the \emph{system matrix} $\mathbf{A} = \frac{\partial \mathbf{f}}{\partial \mathbf{x}}(\mathbf{x}_0, \mathbf{u}_0)$ and the \emph{input matrix} $\mathbf{B} = \frac{\partial \mathbf{f}}{\partial \mathbf{u}}(\mathbf{x}_0, \mathbf{u}_0)$. The linearized dynamics are then expressed as the linear time-invariant system
+
+\[
+\delta\dot{\mathbf{x}}(t) = \mathbf{A} \, \delta\mathbf{x}(t) + \mathbf{B} \, \delta\mathbf{u}(t).
+\]
+
+This is the fundamental linearization result for control systems: a nonlinear system operating near an equilibrium point can be approximated by a linear system whose dynamics are governed by the Jacobian matrices of the vector field with respect to state and input, evaluated at the operating point.
+
+The choice of operating point profoundly influences the properties of the resulting linearized model. Consider how changing the operating point affects the matrices $\mathbf{A}$ and $\mathbf{B}$. Since these matrices are functions of the operating point, different equilibrium points generally yield different linearizations. This should come as no surprise: a system may exhibit dramatically different behaviors at different operating conditions. An aircraft, for instance, behaves very differently at low speed and high angle of attack (where it may stall) compared to its behavior at cruise conditions. Similarly, a chemical reactor operates under distinct dynamic regimes at different temperatures and concentrations.
+
+\begin{example}[Linearizing a Pendulum System]
+The inverted pendulum provides an instructive example of operating point dependence. The dynamics of a simple pendulum of length $L$ with mass $m$ at the end are given by
+
+\[
+\ddot{\theta} = -\frac{g}{L}\sin(\theta),
+\]
+
+where $\theta = 0$ corresponds to the downward hanging position. This system has two equilibrium points: the downward equilibrium at $\theta = 0$ and the inverted equilibrium at $\theta = \pi$.
+
+We linearize the system about each equilibrium in turn. First, consider the downward equilibrium at $\theta = 0$. Let $x_1 = \theta$ and $x_2 = \dot{\theta}$, yielding the state-space representation
+
+\[
+\begin{bmatrix} \dot{x}_1 \\ \dot{x}_2 \end{bmatrix} = \begin{bmatrix} x_2 \\ -\frac{g}{L}\sin(x_1) \end{bmatrix}.
+\]
+
+The Jacobian matrix with respect to state is
+
+\[
+\mathbf{J}_f(\mathbf{x}) = \begin{bmatrix} 0 & 1 \\ -\frac{g}{L}\cos(x_1) & 0 \end{bmatrix}.
+\]
+
+Evaluating at the downward equilibrium $\mathbf{x}_0 = \mathbf{0}$ gives
+
+\[
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ -\frac{g}{L} & 0 \end{bmatrix}.
+\]
+
+The eigenvalues of this matrix are $\lambda = \pm i\sqrt{g/L}$, indicating stable oscillatory behavior with natural frequency $\sqrt{g/L}$. This makes physical sense: a pendulum hanging downward oscillates with small amplitude about the stable equilibrium.
+
+Now consider the inverted equilibrium at $\theta = \pi$. Evaluating the Jacobian at $\mathbf{x}_0 = [\pi, 0]^T$ yields
+
+\[
+\mathbf{A} = \begin{bmatrix} 0 & 1 \\ \frac{g}{L} & 0 \end{bmatrix}.
+\]
+
+The eigenvalues of this matrix are $\lambda = \pm \sqrt{g/L}$, indicating an unstable saddle point. Any small perturbation from the inverted position causes the pendulum to fall away from equilibrium. This stark difference in stability properties---stable oscillations versus unstable divergence---arises solely from the choice of operating point, yet it completely transforms our understanding of the system's behavior.
+
+The lesson here is paramount: when linearizing nonlinear systems, we must carefully specify the operating point about which we are linearizing, as the resulting linear model captures only the local behavior near that particular equilibrium. A controller designed based on the linearization at one operating point may perform poorly or even catastrophically at another operating point.
+\end{example}
+
+The linearization process therefore proceeds through a systematic series of steps that must be executed carefully to ensure valid results. First, we identify the operating point $(\mathbf{x}_0, \mathbf{u}_0)$ at which we wish to linearize, ensuring that this point satisfies the equilibrium condition $\mathbf{f}(\mathbf{x}_0, \mathbf{u}_0) = \mathbf{0}$. Second, we compute the Jacobian matrices $\mathbf{A} = \frac{\partial \mathbf{f}}{\partial \mathbf{x}}(\mathbf{x}_0, \mathbf{u}_0)$ and $\mathbf{B} = \frac{\partial \mathbf{f}}{\partial \mathbf{u}}(\mathbf{x}_0, \mathbf{u}_0)$. Third, we form the linearized state-space model $\delta\dot{\mathbf{x}} = \mathbf{A}\delta\mathbf{x} + \mathbf{B}\delta\mathbf{u}$ and analyze its properties using the tools of linear system theory. Throughout this process, we must remain vigilant about the implicit assumption that the deviations $\delta\mathbf{x}$ and $\delta\mathbf{u}$ remain small enough that higher-order terms in the Taylor expansion are indeed negligible.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary of Linearization Steps}
+\begin{tabular}{|p{0.15\textwidth}|p{0.80\textwidth}|}
+\hline
+\rowcolor{UofSCGarnet}
+\textcolor{white}{\textbf{Step}} & \textcolor{white}{\textbf{Description}} \\ \hline
+1. Identify Operating Point & Choose $(\mathbf{x}_0, \mathbf{u}_0)$ such that $\mathbf{f}(\mathbf{x}_0, \mathbf{u}_0) = \mathbf{0}$. \\ \hline
+2. Define Deviations & Let $\delta\mathbf{x} = \mathbf{x} - \mathbf{x}_0$ and $\delta\mathbf{u} = \mathbf{u} - \mathbf{u}_0$. \\ \hline
+3. Compute Jacobians & Calculate $\mathbf{A} = \frac{\partial \mathbf{f}}{\partial \mathbf{x}}(\mathbf{x}_0, \mathbf{u}_0)$ and $\mathbf{B} = \frac{\partial \mathbf{f}}{\partial \mathbf{u}}(\mathbf{x}_0, \mathbf{u}_0)$. \\ \hline
+4. Form Linear Model & Write $\delta\dot{\mathbf{x}} = \mathbf{A}\delta\mathbf{x} + \mathbf{B}\delta\mathbf{u}$. \\ \hline
+5. Validate Range & Ensure $\|\delta\mathbf{x}\|$ and $\|\delta\mathbf{u}\|$ remain in the region of validity. \\ \hline
+\end{tabular}
+\end{table}
+
+The tangent plane approximation, as captured by the first-order Taylor expansion, provides the mathematical foundation for nearly all subsequent analysis in this textbook. While we have focused on continuous-time systems, the same techniques apply verbatim to discrete-time systems, where the Taylor expansion is applied to the discrete-time dynamics $\mathbf{x}_{k+1} = \mathbf{f}(\mathbf{x}_k, \mathbf{u}_k)$. The resulting linearized model takes the form $\delta\mathbf{x}_{k+1} = \mathbf{A}\delta\mathbf{x}_k + \mathbf{B}\delta\mathbf{u}_k$, identical in structure to the continuous-time case but now describing a discrete-time linear system.
+
+As we proceed through this textbook, we will repeatedly invoke the linearization process to convert nonlinear control problems into the familiar territory of linear system theory. The key takeaway is that linearization is a local approximation: it tells us how the system behaves in a neighborhood of the chosen operating point. For global analysis of strongly nonlinear behavior, or for systems that traverse large regions of the state space, we must employ other techniques beyond the scope of linearization. But for the vast majority of practical control design problems, where we are concerned with maintaining the system near a desired operating point, the tangent plane approximation provides an indispensable tool that transforms the intractable into the tractable.
