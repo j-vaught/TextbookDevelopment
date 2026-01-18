@@ -1,0 +1,1333 @@
+% ============================================================================
+% CHAPTER 0: MATHEMATICAL FOUNDATIONS FOR CONTROL SYSTEMS
+% ============================================================================
+
+\chapter{Mathematical Foundations}
+\label{ch:math_foundations}
+
+\begin{keyconceptbox}[title=Learning Objectives]
+After completing this chapter, you will be able to:
+\begin{itemize}
+    \item Perform arithmetic and algebraic operations with complex numbers
+    \item Apply calculus techniques including differentiation, integration, and differential equations
+    \item Use Laplace and Fourier transforms to analyze systems
+    \item Perform matrix operations and understand eigenvalue analysis
+    \item Apply probability and statistics concepts relevant to stochastic control and machine learning
+    \item Understand optimization fundamentals for control design
+    \item Work with discrete-time mathematics for digital control systems
+\end{itemize}
+\end{keyconceptbox}
+
+Control systems engineering draws upon a rich mathematical foundation spanning calculus, linear algebra, complex analysis, differential equations, and increasingly, probability theory and optimization. This chapter provides a comprehensive review of these mathematical tools, ensuring all readers have the prerequisite knowledge for the chapters that follow.
+
+Whether you are approaching control from a mechanical, electrical, chemical, biomedical, aerospace, or computer science background, mastery of these fundamentals will enable you to understand system behavior, design controllers, and implement modern machine learning-based control strategies.
+
+% ============================================================================
+\section{Complex Numbers and Imaginary Arithmetic}
+\label{sec:complex_numbers}
+% ============================================================================
+
+Complex numbers are fundamental to control systems analysis. They appear naturally in the solution of differential equations, in the Laplace transform, in frequency response analysis, and in stability analysis.
+
+\subsection{Definition and Representation}
+
+\begin{definitionbox}[title=Definition 0.1: Complex Number]
+A \textbf{complex number} $z$ is defined as:
+\begin{equation}
+z = a + \jj b
+\end{equation}
+where $a, b \in \mathbb{R}$, and $\jj = \sqrt{-1}$ is the \textbf{imaginary unit}. The real part is $\Real(z) = a$ and the imaginary part is $\Imag(z) = b$.
+\end{definitionbox}
+
+\begin{note}
+In electrical engineering, $\jj$ is often used instead of $\ii$ for the imaginary unit to avoid confusion with current. We adopt this convention throughout.
+\end{note}
+
+Complex numbers can be represented in multiple forms:
+
+\textbf{Rectangular Form:}
+\begin{equation}
+z = a + \jj b
+\end{equation}
+
+\textbf{Polar Form:}
+\begin{equation}
+z = r(\cos\theta + \jj\sin\theta) = r \angle \theta
+\end{equation}
+where $r = |z| = \sqrt{a^2 + b^2}$ is the \textbf{magnitude} (or modulus) and $\theta = \arg(z) = \arctan(b/a)$ is the \textbf{argument} (or phase angle).
+
+\textbf{Exponential Form (Euler's Formula):}
+\begin{equation}
+z = r \ee^{\jj\theta}
+\end{equation}
+
+Euler's formula, one of the most elegant results in mathematics, states:
+\begin{equation}
+\boxed{\ee^{\jj\theta} = \cos\theta + \jj\sin\theta}
+\end{equation}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=2]
+    % Axes
+    \draw[->] (-1.5,0) -- (2,0) node[right] {$\Real$};
+    \draw[->] (0,-1.2) -- (0,1.5) node[above] {$\Imag$};
+
+    % Complex number
+    \coordinate (Z) at (1.3,0.9);
+    \draw[->,thick,blue] (0,0) -- (Z) node[above right] {$z = a + \jj b$};
+
+    % Components
+    \draw[dashed,gray] (1.3,0) -- (Z);
+    \draw[dashed,gray] (0,0.9) -- (Z);
+
+    % Labels
+    \node[below] at (1.3,0) {$a$};
+    \node[left] at (0,0.9) {$b$};
+
+    % Angle
+    \draw[->] (0.5,0) arc (0:35:0.5) node[midway,right] {$\theta$};
+
+    % Magnitude
+    \node[above left,blue] at (0.65,0.45) {$r = |z|$};
+\end{tikzpicture}
+\caption{Geometric representation of a complex number in the complex plane (Argand diagram).}
+\label{fig:complex_plane}
+\end{figure}
+
+\subsection{Arithmetic Operations}
+
+\textbf{Addition and Subtraction:}
+\begin{equation}
+(a + \jj b) \pm (c + \jj d) = (a \pm c) + \jj(b \pm d)
+\end{equation}
+
+\textbf{Multiplication:}
+\begin{equation}
+(a + \jj b)(c + \jj d) = (ac - bd) + \jj(ad + bc)
+\end{equation}
+In polar form: $r_1 \ee^{\jj\theta_1} \cdot r_2 \ee^{\jj\theta_2} = r_1 r_2 \ee^{\jj(\theta_1 + \theta_2)}$
+
+\textbf{Division:}
+\begin{equation}
+\frac{a + \jj b}{c + \jj d} = \frac{(a + \jj b)(c - \jj d)}{(c + \jj d)(c - \jj d)} = \frac{(ac + bd) + \jj(bc - ad)}{c^2 + d^2}
+\end{equation}
+In polar form: $\frac{r_1 \ee^{\jj\theta_1}}{r_2 \ee^{\jj\theta_2}} = \frac{r_1}{r_2} \ee^{\jj(\theta_1 - \theta_2)}$
+
+\textbf{Complex Conjugate:}
+\begin{equation}
+z^* = \overline{z} = a - \jj b
+\end{equation}
+
+Important property: $z \cdot z^* = |z|^2 = a^2 + b^2$
+
+\textbf{Powers (De Moivre's Theorem):}
+\begin{equation}
+z^n = r^n \ee^{\jj n\theta} = r^n(\cos n\theta + \jj\sin n\theta)
+\end{equation}
+
+\textbf{Roots:}
+The $n$th roots of $z = r\ee^{\jj\theta}$ are:
+\begin{equation}
+z^{1/n} = r^{1/n} \ee^{\jj(\theta + 2\pi k)/n}, \quad k = 0, 1, \ldots, n-1
+\end{equation}
+
+\begin{examplebox}[title=Example 0.1: Complex Number Operations]
+Find the polar form, magnitude, and phase of $z = 3 + 4\jj$.
+
+\textbf{Solution:}
+\begin{align}
+|z| &= \sqrt{3^2 + 4^2} = \sqrt{25} = 5 \\
+\theta &= \arctan\left(\frac{4}{3}\right) \approx 53.13° = 0.927 \text{ rad} \\
+z &= 5\ee^{\jj(0.927)} = 5\angle 53.13°
+\end{align}
+\end{examplebox}
+
+\subsection{Complex Numbers in Control Systems}
+
+Complex numbers appear throughout control theory:
+
+\begin{itemize}
+    \item \textbf{Poles and Zeros:} The roots of transfer function polynomials are generally complex.
+    \item \textbf{Eigenvalues:} System matrices often have complex eigenvalues that determine stability and oscillatory behavior.
+    \item \textbf{Frequency Response:} Evaluating transfer functions at $s = \jj\omega$ yields complex numbers representing magnitude and phase.
+    \item \textbf{Sinusoidal Steady-State:} Complex exponentials simplify analysis of sinusoidal inputs.
+\end{itemize}
+
+% ============================================================================
+\section{Calculus Review}
+\label{sec:calculus}
+% ============================================================================
+
+\subsection{Differential Calculus}
+
+\subsubsection{Derivatives and Rules}
+
+The derivative of a function $f(t)$ represents its instantaneous rate of change:
+\begin{equation}
+\frac{\dd f}{\dd t} = f'(t) = \lim_{\Delta t \to 0} \frac{f(t + \Delta t) - f(t)}{\Delta t}
+\end{equation}
+
+\textbf{Key Differentiation Rules:}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Rule} & \textbf{Formula} \\
+\midrule
+Power Rule & $\frac{\dd}{\dd t}(t^n) = n t^{n-1}$ \\
+Exponential & $\frac{\dd}{\dd t}(\ee^{at}) = a\ee^{at}$ \\
+Logarithm & $\frac{\dd}{\dd t}(\ln t) = \frac{1}{t}$ \\
+Sine & $\frac{\dd}{\dd t}(\sin\omega t) = \omega\cos\omega t$ \\
+Cosine & $\frac{\dd}{\dd t}(\cos\omega t) = -\omega\sin\omega t$ \\
+Product Rule & $\frac{\dd}{\dd t}(fg) = f'g + fg'$ \\
+Quotient Rule & $\frac{\dd}{\dd t}\left(\frac{f}{g}\right) = \frac{f'g - fg'}{g^2}$ \\
+Chain Rule & $\frac{\dd}{\dd t}f(g(t)) = f'(g(t)) \cdot g'(t)$ \\
+\bottomrule
+\end{tabular}
+\caption{Essential differentiation rules for control systems.}
+\label{tab:diff_rules}
+\end{table}
+
+\subsubsection{Partial Derivatives}
+
+For functions of multiple variables $f(x_1, x_2, \ldots, x_n)$, partial derivatives hold all variables constant except one:
+\begin{equation}
+\frac{\partial f}{\partial x_i} = \lim_{\Delta x_i \to 0} \frac{f(x_1, \ldots, x_i + \Delta x_i, \ldots, x_n) - f(x_1, \ldots, x_n)}{\Delta x_i}
+\end{equation}
+
+The \textbf{gradient} is the vector of all partial derivatives:
+\begin{equation}
+\nabla f = \begin{bmatrix} \frac{\partial f}{\partial x_1} & \frac{\partial f}{\partial x_2} & \cdots & \frac{\partial f}{\partial x_n} \end{bmatrix}^\top
+\end{equation}
+
+The \textbf{Hessian} is the matrix of second partial derivatives:
+\begin{equation}
+\mH = \begin{bmatrix}
+\frac{\partial^2 f}{\partial x_1^2} & \frac{\partial^2 f}{\partial x_1 \partial x_2} & \cdots \\
+\frac{\partial^2 f}{\partial x_2 \partial x_1} & \frac{\partial^2 f}{\partial x_2^2} & \cdots \\
+\vdots & \vdots & \ddots
+\end{bmatrix}
+\end{equation}
+
+\subsubsection{Taylor Series Expansion}
+
+Taylor series are essential for linearization of nonlinear systems:
+\begin{equation}
+f(x) = f(a) + f'(a)(x-a) + \frac{f''(a)}{2!}(x-a)^2 + \frac{f'''(a)}{3!}(x-a)^3 + \cdots
+\end{equation}
+
+For multivariate functions about point $\vecx_0$:
+\begin{equation}
+f(\vecx) \approx f(\vecx_0) + \nabla f(\vecx_0)^\top (\vecx - \vecx_0) + \frac{1}{2}(\vecx - \vecx_0)^\top \mH(\vecx_0) (\vecx - \vecx_0)
+\end{equation}
+
+\begin{keyconceptbox}[title=Linearization in Control]
+For nonlinear systems $\dot{\vecx} = \vecf(\vecx, \vecu)$, we linearize about an equilibrium point $(\vecx_0, \vecu_0)$:
+\begin{equation}
+\Delta\dot{\vecx} \approx \mA \Delta\vecx + \mB \Delta\vecu
+\end{equation}
+where $\mA = \frac{\partial \vecf}{\partial \vecx}\big|_{(\vecx_0, \vecu_0)}$ and $\mB = \frac{\partial \vecf}{\partial \vecu}\big|_{(\vecx_0, \vecu_0)}$
+\end{keyconceptbox}
+
+\subsection{Integral Calculus}
+
+\subsubsection{Definite and Indefinite Integrals}
+
+The indefinite integral (antiderivative):
+\begin{equation}
+\int f(t) \, \dd t = F(t) + C \quad \text{where} \quad F'(t) = f(t)
+\end{equation}
+
+The definite integral:
+\begin{equation}
+\int_a^b f(t) \, \dd t = F(b) - F(a)
+\end{equation}
+
+\textbf{Key Integration Formulas:}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Function} & \textbf{Integral} \\
+\midrule
+$t^n$ $(n \neq -1)$ & $\frac{t^{n+1}}{n+1} + C$ \\
+$\frac{1}{t}$ & $\ln|t| + C$ \\
+$\ee^{at}$ & $\frac{1}{a}\ee^{at} + C$ \\
+$\sin\omega t$ & $-\frac{1}{\omega}\cos\omega t + C$ \\
+$\cos\omega t$ & $\frac{1}{\omega}\sin\omega t + C$ \\
+$\frac{1}{a^2 + t^2}$ & $\frac{1}{a}\arctan\frac{t}{a} + C$ \\
+\bottomrule
+\end{tabular}
+\caption{Essential integration formulas.}
+\label{tab:int_rules}
+\end{table}
+
+\subsubsection{Integration by Parts}
+
+\begin{equation}
+\int u \, \dd v = uv - \int v \, \dd u
+\end{equation}
+
+This technique is essential for deriving Laplace transform properties.
+
+\subsubsection{Convolution Integral}
+
+The convolution of two functions $f(t)$ and $g(t)$ is:
+\begin{equation}
+(f \conv g)(t) = \int_{-\infty}^{\infty} f(\tau) g(t - \tau) \, \dd\tau
+\end{equation}
+
+For causal systems (signals zero for $t < 0$):
+\begin{equation}
+(f \conv g)(t) = \int_0^t f(\tau) g(t - \tau) \, \dd\tau
+\end{equation}
+
+\begin{keyconceptbox}[title=Convolution in Control Systems]
+The output $y(t)$ of a linear time-invariant (LTI) system with impulse response $h(t)$ to input $u(t)$ is:
+\begin{equation}
+y(t) = (h \conv u)(t) = \int_0^t h(\tau) u(t - \tau) \, \dd\tau
+\end{equation}
+\end{keyconceptbox}
+
+% ============================================================================
+\section{Differential Equations}
+\label{sec:diff_eq}
+% ============================================================================
+
+Differential equations describe how systems evolve over time and are the mathematical language of dynamics.
+
+\subsection{Ordinary Differential Equations (ODEs)}
+
+\subsubsection{First-Order Linear ODEs}
+
+The general first-order linear ODE:
+\begin{equation}
+\frac{\dd y}{\dd t} + p(t) y = q(t)
+\end{equation}
+
+\textbf{Solution using Integrating Factor:}
+Multiply by $\mu(t) = \ee^{\int p(t) \, \dd t}$:
+\begin{equation}
+y(t) = \frac{1}{\mu(t)} \left[ \int \mu(t) q(t) \, \dd t + C \right]
+\end{equation}
+
+For constant coefficients $\frac{\dd y}{\dd t} + ay = b$:
+\begin{equation}
+y(t) = \frac{b}{a} + \left(y_0 - \frac{b}{a}\right)\ee^{-at}
+\end{equation}
+
+\begin{examplebox}[title=Example 0.2: RC Circuit]
+An RC circuit with voltage source $V_s$ satisfies:
+\begin{equation}
+RC\frac{\dd v_c}{\dd t} + v_c = V_s
+\end{equation}
+With $v_c(0) = 0$, the capacitor voltage is:
+\begin{equation}
+v_c(t) = V_s\left(1 - \ee^{-t/RC}\right)
+\end{equation}
+The time constant $\tau = RC$ determines how quickly the system responds.
+\end{examplebox}
+
+\subsubsection{Second-Order Linear ODEs with Constant Coefficients}
+
+The standard form:
+\begin{equation}
+\frac{\dd^2 y}{\dd t^2} + 2\zeta\omega_n\frac{\dd y}{\dd t} + \omega_n^2 y = \omega_n^2 u(t)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\omega_n$ = natural frequency (rad/s)
+    \item $\zeta$ = damping ratio (dimensionless)
+\end{itemize}
+
+The \textbf{characteristic equation} is:
+\begin{equation}
+\lambda^2 + 2\zeta\omega_n\lambda + \omega_n^2 = 0
+\end{equation}
+
+with roots:
+\begin{equation}
+\lambda_{1,2} = -\zeta\omega_n \pm \omega_n\sqrt{\zeta^2 - 1}
+\end{equation}
+
+\textbf{Cases based on damping ratio:}
+
+\begin{enumerate}
+    \item \textbf{Overdamped} ($\zeta > 1$): Two distinct real roots. Response: $y(t) = C_1\ee^{\lambda_1 t} + C_2\ee^{\lambda_2 t}$
+
+    \item \textbf{Critically Damped} ($\zeta = 1$): Repeated real root $\lambda = -\omega_n$. Response: $y(t) = (C_1 + C_2 t)\ee^{-\omega_n t}$
+
+    \item \textbf{Underdamped} ($0 < \zeta < 1$): Complex conjugate roots $\lambda = -\zeta\omega_n \pm \jj\omega_d$ where $\omega_d = \omega_n\sqrt{1-\zeta^2}$. Response:
+    \begin{equation}
+    y(t) = \ee^{-\zeta\omega_n t}(C_1\cos\omega_d t + C_2\sin\omega_d t)
+    \end{equation}
+
+    \item \textbf{Undamped} ($\zeta = 0$): Pure imaginary roots. Response: $y(t) = C_1\cos\omega_n t + C_2\sin\omega_n t$
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=12cm, height=7cm,
+    xlabel={$\omega_n t$},
+    ylabel={$y(t)/y_{ss}$},
+    xmin=0, xmax=12,
+    ymin=0, ymax=1.8,
+    legend pos=south east,
+    grid=major
+]
+% Underdamped (zeta = 0.2)
+\addplot[blue, thick, domain=0:12, samples=200] {1 - exp(-0.2*x) * (cos(deg(0.98*x)) + 0.2/0.98*sin(deg(0.98*x)))};
+\addlegendentry{$\zeta = 0.2$}
+
+% Underdamped (zeta = 0.5)
+\addplot[red, thick, domain=0:12, samples=200] {1 - exp(-0.5*x) * (cos(deg(0.866*x)) + 0.5/0.866*sin(deg(0.866*x)))};
+\addlegendentry{$\zeta = 0.5$}
+
+% Critically damped (zeta = 1.0)
+\addplot[green!60!black, thick, domain=0:12, samples=200] {1 - exp(-x) * (1 + x)};
+\addlegendentry{$\zeta = 1.0$}
+
+% Overdamped (zeta = 2.0)
+\addplot[orange, thick, domain=0:12, samples=200] {1 - exp(-x) * (2*exp(1.732*x) - exp(-1.732*x))/(2*1.732) - exp(-x)*cosh(deg(1.732*x))};
+\addlegendentry{$\zeta = 2.0$}
+\end{axis}
+\end{tikzpicture}
+\caption{Step response of second-order systems for different damping ratios.}
+\label{fig:second_order_response}
+\end{figure}
+
+\subsubsection{Higher-Order Linear ODEs}
+
+The general $n$th-order linear ODE with constant coefficients:
+\begin{equation}
+a_n\frac{\dd^n y}{\dd t^n} + a_{n-1}\frac{\dd^{n-1} y}{\dd t^{n-1}} + \cdots + a_1\frac{\dd y}{\dd t} + a_0 y = f(t)
+\end{equation}
+
+The solution consists of:
+\begin{itemize}
+    \item \textbf{Homogeneous solution} $y_h(t)$: From the characteristic equation roots
+    \item \textbf{Particular solution} $y_p(t)$: Depends on the forcing function $f(t)$
+\end{itemize}
+
+\subsection{Systems of First-Order ODEs}
+
+Any higher-order ODE can be written as a system of first-order equations. This is the \textbf{state-space} representation:
+\begin{equation}
+\dot{\vecx} = \mA\vecx + \mB\vecu
+\end{equation}
+
+where $\vecx$ is the state vector, $\vecu$ is the input vector, and $\mA$, $\mB$ are system matrices.
+
+The solution is:
+\begin{equation}
+\vecx(t) = \ee^{\mA t}\vecx(0) + \int_0^t \ee^{\mA(t-\tau)}\mB\vecu(\tau) \, \dd\tau
+\end{equation}
+
+where $\ee^{\mA t}$ is the \textbf{matrix exponential} (discussed in Section \ref{sec:linear_algebra}).
+
+% ============================================================================
+\section{Laplace Transforms}
+\label{sec:laplace}
+% ============================================================================
+
+The Laplace transform converts differential equations into algebraic equations, making system analysis much simpler.
+
+\subsection{Definition}
+
+\begin{definitionbox}[title=Definition 0.2: Laplace Transform]
+The \textbf{Laplace transform} of a function $f(t)$ defined for $t \geq 0$ is:
+\begin{equation}
+F(s) = \Laplace\{f(t)\} = \int_0^\infty f(t)\ee^{-st} \, \dd t
+\end{equation}
+where $s = \sigma + \jj\omega$ is a complex variable.
+\end{definitionbox}
+
+The \textbf{inverse Laplace transform} is:
+\begin{equation}
+f(t) = \iLaplace\{F(s)\} = \frac{1}{2\pi\jj} \int_{\sigma-\jj\infty}^{\sigma+\jj\infty} F(s)\ee^{st} \, \dd s
+\end{equation}
+
+In practice, we use tables and partial fraction expansion rather than direct integration.
+
+\subsection{Common Laplace Transform Pairs}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Signal Name} & $f(t)$ for $t \geq 0$ & $F(s)$ \\
+\midrule
+Impulse & $\delta(t)$ & $1$ \\
+Unit step & $u(t) = 1$ & $\frac{1}{s}$ \\
+Ramp & $t$ & $\frac{1}{s^2}$ \\
+Parabolic & $t^2$ & $\frac{2}{s^3}$ \\
+Power & $t^n$ & $\frac{n!}{s^{n+1}}$ \\
+Exponential & $\ee^{-at}$ & $\frac{1}{s+a}$ \\
+Decaying ramp & $t\ee^{-at}$ & $\frac{1}{(s+a)^2}$ \\
+Sine & $\sin\omega t$ & $\frac{\omega}{s^2+\omega^2}$ \\
+Cosine & $\cos\omega t$ & $\frac{s}{s^2+\omega^2}$ \\
+Damped sine & $\ee^{-at}\sin\omega t$ & $\frac{\omega}{(s+a)^2+\omega^2}$ \\
+Damped cosine & $\ee^{-at}\cos\omega t$ & $\frac{s+a}{(s+a)^2+\omega^2}$ \\
+\bottomrule
+\end{tabular}
+\caption{Common Laplace transform pairs.}
+\label{tab:laplace_pairs}
+\end{table}
+
+\subsection{Laplace Transform Properties}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Time Domain} & \textbf{$s$-Domain} \\
+\midrule
+Linearity & $af(t) + bg(t)$ & $aF(s) + bG(s)$ \\
+Differentiation & $\frac{\dd f}{\dd t}$ & $sF(s) - f(0^-)$ \\
+Second derivative & $\frac{\dd^2 f}{\dd t^2}$ & $s^2F(s) - sf(0^-) - f'(0^-)$ \\
+$n$th derivative & $\frac{\dd^n f}{\dd t^n}$ & $s^nF(s) - \sum_{k=0}^{n-1} s^{n-1-k}f^{(k)}(0^-)$ \\
+Integration & $\int_0^t f(\tau)\,\dd\tau$ & $\frac{F(s)}{s}$ \\
+Time delay & $f(t-\tau)u(t-\tau)$ & $\ee^{-\tau s}F(s)$ \\
+Frequency shift & $\ee^{-at}f(t)$ & $F(s+a)$ \\
+Time scaling & $f(at)$ & $\frac{1}{a}F\left(\frac{s}{a}\right)$ \\
+Convolution & $f(t) \conv g(t)$ & $F(s)G(s)$ \\
+Initial value & $\lim_{t\to 0^+} f(t)$ & $\lim_{s\to\infty} sF(s)$ \\
+Final value & $\lim_{t\to\infty} f(t)$ & $\lim_{s\to 0} sF(s)$ \\
+\bottomrule
+\end{tabular}
+\caption{Laplace transform properties.}
+\label{tab:laplace_properties}
+\end{table}
+
+\begin{warningbox}
+The \textbf{Final Value Theorem} only applies if all poles of $sF(s)$ are in the left half-plane (LHP). If any poles are on the imaginary axis or in the right half-plane, the theorem gives incorrect results.
+\end{warningbox}
+
+\subsection{Partial Fraction Expansion}
+
+To find the inverse Laplace transform, we decompose rational functions into simpler terms.
+
+\textbf{Distinct Real Poles:}
+\begin{equation}
+\frac{N(s)}{(s+p_1)(s+p_2)\cdots(s+p_n)} = \frac{A_1}{s+p_1} + \frac{A_2}{s+p_2} + \cdots + \frac{A_n}{s+p_n}
+\end{equation}
+
+The residue $A_i$ is found by:
+\begin{equation}
+A_i = \lim_{s \to -p_i} (s + p_i) F(s)
+\end{equation}
+
+\textbf{Repeated Poles:}
+For a pole of multiplicity $m$ at $s = -p$:
+\begin{equation}
+\frac{N(s)}{(s+p)^m} = \frac{A_1}{s+p} + \frac{A_2}{(s+p)^2} + \cdots + \frac{A_m}{(s+p)^m}
+\end{equation}
+
+\textbf{Complex Conjugate Poles:}
+For poles at $s = -\sigma \pm \jj\omega$:
+\begin{equation}
+\frac{N(s)}{(s+\sigma)^2+\omega^2} = \frac{As + B}{(s+\sigma)^2+\omega^2}
+\end{equation}
+
+\begin{examplebox}[title=Example 0.3: Partial Fraction Expansion]
+Find the inverse Laplace transform of:
+\begin{equation}
+F(s) = \frac{2s + 3}{(s+1)(s+2)}
+\end{equation}
+
+\textbf{Solution:}
+\begin{equation}
+F(s) = \frac{A}{s+1} + \frac{B}{s+2}
+\end{equation}
+
+Residues:
+\begin{align}
+A &= \lim_{s \to -1} (s+1) \cdot \frac{2s+3}{(s+1)(s+2)} = \frac{2(-1)+3}{-1+2} = 1 \\
+B &= \lim_{s \to -2} (s+2) \cdot \frac{2s+3}{(s+1)(s+2)} = \frac{2(-2)+3}{-2+1} = 1
+\end{align}
+
+Therefore:
+\begin{equation}
+f(t) = \ee^{-t} + \ee^{-2t}, \quad t \geq 0
+\end{equation}
+\end{examplebox}
+
+\subsection{Transfer Functions}
+
+\begin{definitionbox}[title=Definition 0.3: Transfer Function]
+The \textbf{transfer function} $G(s)$ of a linear time-invariant system is the ratio of the Laplace transform of the output to the Laplace transform of the input, assuming zero initial conditions:
+\begin{equation}
+G(s) = \frac{Y(s)}{U(s)}
+\end{equation}
+\end{definitionbox}
+
+Transfer functions are typically written as:
+\begin{equation}
+G(s) = \frac{b_ms^m + b_{m-1}s^{m-1} + \cdots + b_1s + b_0}{a_ns^n + a_{n-1}s^{n-1} + \cdots + a_1s + a_0} = K\frac{\prod_{i=1}^m (s-z_i)}{\prod_{j=1}^n (s-p_j)}
+\end{equation}
+
+where $z_i$ are the \textbf{zeros} and $p_j$ are the \textbf{poles} of the transfer function.
+
+% ============================================================================
+\section{Fourier Transform and Frequency Analysis}
+\label{sec:fourier}
+% ============================================================================
+
+\subsection{Fourier Series}
+
+Any periodic function $f(t)$ with period $T$ can be expressed as:
+\begin{equation}
+f(t) = a_0 + \sum_{n=1}^{\infty} \left[ a_n \cos\left(\frac{2\pi nt}{T}\right) + b_n \sin\left(\frac{2\pi nt}{T}\right) \right]
+\end{equation}
+
+where:
+\begin{align}
+a_0 &= \frac{1}{T} \int_0^T f(t) \, \dd t \\
+a_n &= \frac{2}{T} \int_0^T f(t) \cos\left(\frac{2\pi nt}{T}\right) \dd t \\
+b_n &= \frac{2}{T} \int_0^T f(t) \sin\left(\frac{2\pi nt}{T}\right) \dd t
+\end{align}
+
+Complex exponential form:
+\begin{equation}
+f(t) = \sum_{n=-\infty}^{\infty} c_n \ee^{\jj n \omega_0 t}, \quad \omega_0 = \frac{2\pi}{T}
+\end{equation}
+
+where $c_n = \frac{1}{T} \int_0^T f(t) \ee^{-\jj n \omega_0 t} \, \dd t$
+
+\subsection{Fourier Transform}
+
+For non-periodic functions, the Fourier transform extends the series to continuous frequencies:
+
+\begin{definitionbox}[title=Definition 0.4: Fourier Transform]
+\begin{align}
+F(\omega) &= \Fourier\{f(t)\} = \int_{-\infty}^{\infty} f(t) \ee^{-\jj\omega t} \, \dd t \\
+f(t) &= \iFourier\{F(\omega)\} = \frac{1}{2\pi} \int_{-\infty}^{\infty} F(\omega) \ee^{\jj\omega t} \, \dd\omega
+\end{align}
+\end{definitionbox}
+
+\textbf{Relationship to Laplace Transform:}
+For causal signals, $F(\omega) = F(s)|_{s=\jj\omega}$ when the Laplace transform converges on the imaginary axis.
+
+\subsection{Frequency Response}
+
+For a stable LTI system with transfer function $G(s)$, the \textbf{frequency response} is:
+\begin{equation}
+G(\jj\omega) = |G(\jj\omega)| \ee^{\jj\angle G(\jj\omega)}
+\end{equation}
+
+\begin{itemize}
+    \item $|G(\jj\omega)|$ = magnitude (gain) at frequency $\omega$
+    \item $\angle G(\jj\omega)$ = phase shift at frequency $\omega$
+\end{itemize}
+
+For a sinusoidal input $u(t) = A\sin(\omega t)$, the steady-state output is:
+\begin{equation}
+y_{ss}(t) = A|G(\jj\omega)|\sin(\omega t + \angle G(\jj\omega))
+\end{equation}
+
+\subsection{Bode Plots}
+
+Bode plots display magnitude (in dB) and phase versus frequency (on a log scale):
+\begin{equation}
+|G(\jj\omega)|_{\text{dB}} = 20\log_{10}|G(\jj\omega)|
+\end{equation}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{semilogxaxis}[
+    width=10cm, height=5cm,
+    xlabel={Frequency $\omega$ (rad/s)},
+    ylabel={Magnitude (dB)},
+    xmin=0.1, xmax=100,
+    ymin=-40, ymax=20,
+    grid=major,
+    title={First-Order System: $G(s) = \frac{10}{s+1}$}
+]
+\addplot[blue, thick, domain=0.1:100, samples=100] {20*log10(10/sqrt(1+x^2))};
+\addplot[red, dashed, domain=0.1:1] {20*log10(10)};
+\addplot[red, dashed, domain=1:100] {20*log10(10) - 20*log10(x)};
+\end{semilogxaxis}
+\end{tikzpicture}
+
+\vspace{0.5cm}
+
+\begin{tikzpicture}
+\begin{semilogxaxis}[
+    width=10cm, height=5cm,
+    xlabel={Frequency $\omega$ (rad/s)},
+    ylabel={Phase (degrees)},
+    xmin=0.1, xmax=100,
+    ymin=-100, ymax=10,
+    grid=major
+]
+\addplot[blue, thick, domain=0.1:100, samples=100] {-atan(x)*180/pi};
+\end{semilogxaxis}
+\end{tikzpicture}
+\caption{Bode plot for a first-order system.}
+\label{fig:bode_first_order}
+\end{figure}
+
+% ============================================================================
+\section{Linear Algebra}
+\label{sec:linear_algebra}
+% ============================================================================
+
+Linear algebra is essential for state-space control, multi-input multi-output (MIMO) systems, and machine learning.
+
+\subsection{Vectors and Matrices}
+
+\textbf{Vector Operations:}
+\begin{itemize}
+    \item Addition: $\vecx + \vecy = [x_1+y_1, x_2+y_2, \ldots, x_n+y_n]^\top$
+    \item Scalar multiplication: $\alpha\vecx = [\alpha x_1, \alpha x_2, \ldots, \alpha x_n]^\top$
+    \item Dot product: $\vecx \cdot \vecy = \vecx^\top\vecy = \sum_{i=1}^n x_i y_i$
+    \item Norm: $\|\vecx\| = \sqrt{\vecx^\top\vecx}$ (Euclidean norm)
+\end{itemize}
+
+\textbf{Matrix Operations:}
+\begin{itemize}
+    \item Addition: $(\mA + \mB)_{ij} = a_{ij} + b_{ij}$
+    \item Multiplication: $(\mA\mB)_{ij} = \sum_k a_{ik}b_{kj}$
+    \item Transpose: $(\mA^\top)_{ij} = a_{ji}$
+    \item Inverse: $\mA\mA^{-1} = \mA^{-1}\mA = \mI$ (if exists)
+\end{itemize}
+
+\subsection{Special Matrices}
+
+\begin{itemize}
+    \item \textbf{Identity matrix:} $\mI$ with ones on diagonal, zeros elsewhere
+    \item \textbf{Diagonal matrix:} $\mD = \diag(d_1, d_2, \ldots, d_n)$
+    \item \textbf{Symmetric matrix:} $\mA = \mA^\top$
+    \item \textbf{Positive definite:} $\vecx^\top\mA\vecx > 0$ for all $\vecx \neq \mathbf{0}$
+    \item \textbf{Orthogonal matrix:} $\mQ^\top\mQ = \mQ\mQ^\top = \mI$
+\end{itemize}
+
+\subsection{Determinant and Rank}
+
+The \textbf{determinant} of a square matrix:
+\begin{equation}
+\det(\mA) = |\mA| = \sum_{j=1}^n (-1)^{1+j} a_{1j} M_{1j}
+\end{equation}
+where $M_{1j}$ is the minor (determinant of submatrix).
+
+Properties:
+\begin{itemize}
+    \item $\det(\mA\mB) = \det(\mA)\det(\mB)$
+    \item $\det(\mA^{-1}) = 1/\det(\mA)$
+    \item $\det(\mA^\top) = \det(\mA)$
+    \item $\mA$ is invertible if and only if $\det(\mA) \neq 0$
+\end{itemize}
+
+The \textbf{rank} is the number of linearly independent rows (or columns):
+\begin{equation}
+\rank(\mA) \leq \min(m, n) \text{ for } \mA \in \mathbb{R}^{m \times n}
+\end{equation}
+
+\subsection{Eigenvalues and Eigenvectors}
+
+\begin{definitionbox}[title=Definition 0.5: Eigenvalue Problem]
+For a square matrix $\mA$, scalar $\lambda$ is an \textbf{eigenvalue} and non-zero vector $\vecv$ is the corresponding \textbf{eigenvector} if:
+\begin{equation}
+\mA\vecv = \lambda\vecv
+\end{equation}
+\end{definitionbox}
+
+Eigenvalues are roots of the \textbf{characteristic equation}:
+\begin{equation}
+\det(\mA - \lambda\mI) = 0
+\end{equation}
+
+\textbf{Properties:}
+\begin{itemize}
+    \item Sum of eigenvalues = $\trace(\mA) = \sum_i a_{ii}$
+    \item Product of eigenvalues = $\det(\mA)$
+    \item Eigenvalues of $\mA^{-1}$ are $1/\lambda_i$
+    \item Eigenvalues of $\mA^n$ are $\lambda_i^n$
+\end{itemize}
+
+\begin{keyconceptbox}[title=Stability and Eigenvalues]
+A continuous-time system $\dot{\vecx} = \mA\vecx$ is:
+\begin{itemize}
+    \item \textbf{Stable} if all eigenvalues of $\mA$ have negative real parts
+    \item \textbf{Marginally stable} if eigenvalues have non-positive real parts with simple imaginary-axis eigenvalues
+    \item \textbf{Unstable} if any eigenvalue has positive real part
+\end{itemize}
+\end{keyconceptbox}
+
+\subsection{Matrix Decompositions}
+
+\textbf{Eigendecomposition:}
+For diagonalizable matrix $\mA$:
+\begin{equation}
+\mA = \mV\boldsymbol{\Lambda}\mV^{-1}
+\end{equation}
+where $\mV$ contains eigenvectors and $\boldsymbol{\Lambda} = \diag(\lambda_1, \ldots, \lambda_n)$.
+
+\textbf{Singular Value Decomposition (SVD):}
+Any matrix $\mA \in \mathbb{R}^{m \times n}$:
+\begin{equation}
+\mA = \mU\boldsymbol{\Sigma}\mV^\top
+\end{equation}
+where $\mU, \mV$ are orthogonal and $\boldsymbol{\Sigma}$ contains singular values.
+
+\textbf{QR Decomposition:}
+\begin{equation}
+\mA = \mQ\mR
+\end{equation}
+where $\mQ$ is orthogonal and $\mR$ is upper triangular.
+
+\textbf{LU Decomposition:}
+\begin{equation}
+\mA = \mL\mU
+\end{equation}
+where $\mL$ is lower triangular and $\mU$ is upper triangular.
+
+\subsection{Matrix Exponential}
+
+The matrix exponential is crucial for solving state-space equations:
+
+\begin{definitionbox}[title=Definition 0.6: Matrix Exponential]
+\begin{equation}
+\ee^{\mA t} = \mI + \mA t + \frac{(\mA t)^2}{2!} + \frac{(\mA t)^3}{3!} + \cdots = \sum_{k=0}^{\infty} \frac{(\mA t)^k}{k!}
+\end{equation}
+\end{definitionbox}
+
+\textbf{Properties:}
+\begin{itemize}
+    \item $\ee^{\mathbf{0}} = \mI$
+    \item $\frac{\dd}{\dd t}\ee^{\mA t} = \mA\ee^{\mA t}$
+    \item $\ee^{\mA(t_1+t_2)} = \ee^{\mA t_1}\ee^{\mA t_2}$
+    \item $(\ee^{\mA t})^{-1} = \ee^{-\mA t}$
+\end{itemize}
+
+\textbf{Computation via Laplace:}
+\begin{equation}
+\ee^{\mA t} = \iLaplace\{(s\mI - \mA)^{-1}\}
+\end{equation}
+
+\textbf{Computation via eigendecomposition:}
+If $\mA = \mV\boldsymbol{\Lambda}\mV^{-1}$:
+\begin{equation}
+\ee^{\mA t} = \mV\ee^{\boldsymbol{\Lambda} t}\mV^{-1} = \mV\diag(\ee^{\lambda_1 t}, \ldots, \ee^{\lambda_n t})\mV^{-1}
+\end{equation}
+
+\subsection{Linear Systems of Equations}
+
+Solving $\mA\vecx = \vecb$:
+\begin{itemize}
+    \item \textbf{Unique solution} if $\mA$ is square and invertible: $\vecx = \mA^{-1}\vecb$
+    \item \textbf{No solution} if $\vecb \notin \range(\mA)$
+    \item \textbf{Infinite solutions} if $\nullspace(\mA) \neq \{\mathbf{0}\}$
+\end{itemize}
+
+\textbf{Least Squares:} When $\mA\vecx = \vecb$ has no exact solution:
+\begin{equation}
+\hat{\vecx} = (\mA^\top\mA)^{-1}\mA^\top\vecb = \mA^\dagger\vecb
+\end{equation}
+where $\mA^\dagger$ is the Moore-Penrose pseudoinverse.
+
+% ============================================================================
+\section{Probability and Statistics}
+\label{sec:probability}
+% ============================================================================
+
+Probability theory is essential for stochastic control, Kalman filtering, and machine learning.
+
+\subsection{Probability Fundamentals}
+
+\textbf{Axioms of Probability:}
+\begin{enumerate}
+    \item $P(A) \geq 0$ for all events $A$
+    \item $P(\Omega) = 1$ where $\Omega$ is the sample space
+    \item For mutually exclusive events: $P(A \cup B) = P(A) + P(B)$
+\end{enumerate}
+
+\textbf{Conditional Probability:}
+\begin{equation}
+P(A|B) = \frac{P(A \cap B)}{P(B)}
+\end{equation}
+
+\textbf{Bayes' Theorem:}
+\begin{equation}
+P(A|B) = \frac{P(B|A)P(A)}{P(B)}
+\end{equation}
+
+\subsection{Random Variables}
+
+\textbf{Discrete Random Variables:}
+\begin{itemize}
+    \item Probability mass function: $p(x) = P(X = x)$
+    \item Expected value: $E[X] = \sum_x x \cdot p(x)$
+    \item Variance: $\text{Var}(X) = E[(X - E[X])^2] = E[X^2] - (E[X])^2$
+\end{itemize}
+
+\textbf{Continuous Random Variables:}
+\begin{itemize}
+    \item Probability density function: $f(x)$ where $P(a \leq X \leq b) = \int_a^b f(x)\,\dd x$
+    \item Expected value: $E[X] = \int_{-\infty}^{\infty} x f(x)\,\dd x$
+    \item Cumulative distribution: $F(x) = P(X \leq x) = \int_{-\infty}^x f(t)\,\dd t$
+\end{itemize}
+
+\subsection{Common Distributions}
+
+\textbf{Gaussian (Normal) Distribution:}
+\begin{equation}
+f(x) = \frac{1}{\sigma\sqrt{2\pi}} \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)
+\end{equation}
+Notation: $X \sim \mathcal{N}(\mu, \sigma^2)$
+
+\textbf{Multivariate Gaussian:}
+\begin{equation}
+f(\vecx) = \frac{1}{(2\pi)^{n/2}|\boldsymbol{\Sigma}|^{1/2}} \exp\left(-\frac{1}{2}(\vecx-\boldsymbol{\mu})^\top\boldsymbol{\Sigma}^{-1}(\vecx-\boldsymbol{\mu})\right)
+\end{equation}
+where $\boldsymbol{\mu}$ is the mean vector and $\boldsymbol{\Sigma}$ is the covariance matrix.
+
+\textbf{Other Important Distributions:}
+\begin{itemize}
+    \item \textbf{Uniform:} $f(x) = \frac{1}{b-a}$ for $x \in [a,b]$
+    \item \textbf{Exponential:} $f(x) = \lambda\ee^{-\lambda x}$ for $x \geq 0$
+    \item \textbf{Bernoulli:} $P(X=1) = p$, $P(X=0) = 1-p$
+    \item \textbf{Poisson:} $P(X=k) = \frac{\lambda^k \ee^{-\lambda}}{k!}$
+\end{itemize}
+
+\subsection{Stochastic Processes}
+
+A \textbf{stochastic process} is a collection of random variables indexed by time: $\{X(t) : t \in T\}$
+
+\textbf{White Noise:}
+Uncorrelated random sequence with:
+\begin{itemize}
+    \item $E[w(t)] = 0$
+    \item $E[w(t)w(\tau)] = \sigma^2\delta(t-\tau)$
+\end{itemize}
+
+\textbf{Markov Process:}
+Future states depend only on present state:
+\begin{equation}
+P(X_{n+1}|X_n, X_{n-1}, \ldots, X_0) = P(X_{n+1}|X_n)
+\end{equation}
+
+\subsection{Estimation Theory}
+
+\textbf{Maximum Likelihood Estimation (MLE):}
+\begin{equation}
+\hat{\theta}_{ML} = \arg\max_\theta \prod_{i=1}^n f(x_i|\theta) = \arg\max_\theta \sum_{i=1}^n \log f(x_i|\theta)
+\end{equation}
+
+\textbf{Bayesian Estimation:}
+\begin{equation}
+p(\theta|\vecx) \propto p(\vecx|\theta)p(\theta)
+\end{equation}
+(posterior $\propto$ likelihood $\times$ prior)
+
+\textbf{Minimum Mean Square Error (MMSE):}
+\begin{equation}
+\hat{\theta}_{MMSE} = E[\theta|\vecx]
+\end{equation}
+
+% ============================================================================
+\section{Optimization}
+\label{sec:optimization}
+% ============================================================================
+
+Optimization is central to optimal control, parameter estimation, and machine learning.
+
+\subsection{Unconstrained Optimization}
+
+\textbf{Necessary Condition:} At a local minimum $\vecx^*$:
+\begin{equation}
+\nabla f(\vecx^*) = \mathbf{0}
+\end{equation}
+
+\textbf{Sufficient Condition:} Also $\mH(\vecx^*) \succ 0$ (positive definite Hessian).
+
+\textbf{Gradient Descent:}
+\begin{equation}
+\vecx_{k+1} = \vecx_k - \alpha \nabla f(\vecx_k)
+\end{equation}
+where $\alpha > 0$ is the step size (learning rate).
+
+\textbf{Newton's Method:}
+\begin{equation}
+\vecx_{k+1} = \vecx_k - [\mH(\vecx_k)]^{-1} \nabla f(\vecx_k)
+\end{equation}
+
+\subsection{Constrained Optimization}
+
+\textbf{Equality Constraints:} Minimize $f(\vecx)$ subject to $\vecg(\vecx) = \mathbf{0}$
+
+The \textbf{Lagrangian}:
+\begin{equation}
+L(\vecx, \boldsymbol{\lambda}) = f(\vecx) + \boldsymbol{\lambda}^\top \vecg(\vecx)
+\end{equation}
+
+\textbf{Necessary Conditions (KKT):}
+\begin{align}
+\nabla_\vecx L &= \mathbf{0} \\
+\nabla_{\boldsymbol{\lambda}} L &= \vecg(\vecx) = \mathbf{0}
+\end{align}
+
+\textbf{Inequality Constraints:} Minimize $f(\vecx)$ subject to $\vech(\vecx) \leq \mathbf{0}$
+
+The \textbf{Karush-Kuhn-Tucker (KKT) conditions}:
+\begin{align}
+\nabla f(\vecx^*) + \sum_i \mu_i \nabla h_i(\vecx^*) &= \mathbf{0} \\
+h_i(\vecx^*) &\leq 0 \\
+\mu_i &\geq 0 \\
+\mu_i h_i(\vecx^*) &= 0 \quad \text{(complementary slackness)}
+\end{align}
+
+\subsection{Convex Optimization}
+
+\begin{definitionbox}[title=Definition 0.7: Convex Function]
+A function $f: \mathbb{R}^n \to \mathbb{R}$ is \textbf{convex} if for all $\vecx, \vecy$ and $\theta \in [0,1]$:
+\begin{equation}
+f(\theta\vecx + (1-\theta)\vecy) \leq \theta f(\vecx) + (1-\theta)f(\vecy)
+\end{equation}
+\end{definitionbox}
+
+Key property: Any local minimum of a convex function is a global minimum.
+
+\textbf{Examples of Convex Problems:}
+\begin{itemize}
+    \item Linear programming: $\min \vecc^\top\vecx$ s.t. $\mA\vecx \leq \vecb$
+    \item Quadratic programming: $\min \frac{1}{2}\vecx^\top\mQ\vecx + \vecc^\top\vecx$ s.t. $\mA\vecx \leq \vecb$ (if $\mQ \succeq 0$)
+    \item Least squares: $\min \|\mA\vecx - \vecb\|^2$
+\end{itemize}
+
+\subsection{Dynamic Programming}
+
+For sequential decision problems, \textbf{Bellman's Principle of Optimality}:
+
+\begin{quote}
+An optimal policy has the property that whatever the initial state and initial decision are, the remaining decisions must constitute an optimal policy with regard to the state resulting from the first decision.
+\end{quote}
+
+The \textbf{Bellman equation} for discrete-time optimal control:
+\begin{equation}
+V^*(x_k) = \min_{u_k} \left[ L(x_k, u_k) + V^*(f(x_k, u_k)) \right]
+\end{equation}
+
+where $V^*$ is the optimal value function (cost-to-go).
+
+% ============================================================================
+\section{Discrete-Time Mathematics}
+\label{sec:discrete}
+% ============================================================================
+
+Digital control systems operate on sampled data, requiring discrete-time analysis.
+
+\subsection{Sequences and Difference Equations}
+
+A \textbf{sequence} is a function defined on integers: $x[n]$ or $x_n$ for $n \in \mathbb{Z}$.
+
+\textbf{First-order difference equation:}
+\begin{equation}
+x[n+1] = ax[n] + bu[n]
+\end{equation}
+
+Solution:
+\begin{equation}
+x[n] = a^n x[0] + \sum_{k=0}^{n-1} a^{n-1-k} bu[k]
+\end{equation}
+
+\subsection{The Z-Transform}
+
+\begin{definitionbox}[title=Definition 0.8: Z-Transform]
+The \textbf{Z-transform} of a sequence $x[n]$ is:
+\begin{equation}
+X(z) = \ZT\{x[n]\} = \sum_{n=0}^{\infty} x[n] z^{-n}
+\end{equation}
+\end{definitionbox}
+
+\textbf{Common Z-Transform Pairs:}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Sequence} & $x[n]$ for $n \geq 0$ & $X(z)$ \\
+\midrule
+Unit impulse & $\delta[n]$ & $1$ \\
+Unit step & $u[n] = 1$ & $\frac{z}{z-1}$ \\
+Ramp & $n$ & $\frac{z}{(z-1)^2}$ \\
+Exponential & $a^n$ & $\frac{z}{z-a}$ \\
+Exponential ramp & $na^n$ & $\frac{az}{(z-a)^2}$ \\
+Sine & $\sin(\omega n)$ & $\frac{z\sin\omega}{z^2 - 2z\cos\omega + 1}$ \\
+Cosine & $\cos(\omega n)$ & $\frac{z(z-\cos\omega)}{z^2 - 2z\cos\omega + 1}$ \\
+\bottomrule
+\end{tabular}
+\caption{Common Z-transform pairs.}
+\label{tab:z_transform}
+\end{table}
+
+\textbf{Z-Transform Properties:}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Sequence} & \textbf{Z-Domain} \\
+\midrule
+Linearity & $ax[n] + by[n]$ & $aX(z) + bY(z)$ \\
+Time shift (delay) & $x[n-k]$ & $z^{-k}X(z)$ \\
+Time advance & $x[n+1]$ & $zX(z) - zx[0]$ \\
+Convolution & $x[n] \conv y[n]$ & $X(z)Y(z)$ \\
+Initial value & $x[0]$ & $\lim_{z\to\infty} X(z)$ \\
+Final value & $\lim_{n\to\infty} x[n]$ & $\lim_{z\to 1}(z-1)X(z)$ \\
+\bottomrule
+\end{tabular}
+\caption{Z-transform properties.}
+\label{tab:z_properties}
+\end{table}
+
+\subsection{Relationship Between s-Domain and z-Domain}
+
+For a sampled signal with sampling period $T$:
+\begin{equation}
+z = \ee^{sT}
+\end{equation}
+
+Therefore:
+\begin{equation}
+s = \frac{1}{T}\ln z
+\end{equation}
+
+\begin{keyconceptbox}[title=Stability in z-Domain]
+A discrete-time system is stable if and only if all poles of its transfer function $G(z)$ lie \textbf{inside the unit circle} $|z| < 1$.
+\end{keyconceptbox}
+
+The imaginary axis in the $s$-plane maps to the unit circle in the $z$-plane:
+\begin{itemize}
+    \item Left half-plane ($\Real(s) < 0$) $\to$ inside unit circle ($|z| < 1$)
+    \item Right half-plane ($\Real(s) > 0$) $\to$ outside unit circle ($|z| > 1$)
+    \item $s = 0$ $\to$ $z = 1$
+    \item $s = \pm\jj\omega_s/2$ $\to$ $z = -1$ (Nyquist frequency)
+\end{itemize}
+
+\subsection{Discrete-Time State-Space}
+
+The discrete-time state-space representation:
+\begin{align}
+\vecx[k+1] &= \mA_d\vecx[k] + \mB_d\vecu[k] \\
+\vecy[k] &= \mC_d\vecx[k] + \mD_d\vecu[k]
+\end{align}
+
+Conversion from continuous-time (exact discretization with zero-order hold):
+\begin{align}
+\mA_d &= \ee^{\mA T} \\
+\mB_d &= \int_0^T \ee^{\mA\tau}\,\dd\tau \cdot \mB = \mA^{-1}(\ee^{\mA T} - \mI)\mB
+\end{align}
+
+% ============================================================================
+\section{Special Functions and Signals}
+\label{sec:special_functions}
+% ============================================================================
+
+\subsection{Unit Step Function}
+
+\begin{equation}
+u(t) = \begin{cases} 0 & t < 0 \\ 1 & t \geq 0 \end{cases}
+\end{equation}
+
+The discrete-time unit step:
+\begin{equation}
+u[n] = \begin{cases} 0 & n < 0 \\ 1 & n \geq 0 \end{cases}
+\end{equation}
+
+\subsection{Impulse (Dirac Delta) Function}
+
+The \textbf{Dirac delta function} is defined by:
+\begin{align}
+\delta(t) &= 0 \quad \text{for } t \neq 0 \\
+\int_{-\infty}^{\infty} \delta(t) \, \dd t &= 1
+\end{align}
+
+\textbf{Sifting property:}
+\begin{equation}
+\int_{-\infty}^{\infty} f(t)\delta(t-t_0) \, \dd t = f(t_0)
+\end{equation}
+
+Relationship to step function:
+\begin{equation}
+\delta(t) = \frac{\dd u(t)}{\dd t}
+\end{equation}
+
+\subsection{Ramp Function}
+
+\begin{equation}
+r(t) = t \cdot u(t) = \begin{cases} 0 & t < 0 \\ t & t \geq 0 \end{cases}
+\end{equation}
+
+\subsection{Sinusoidal Functions}
+
+General sinusoid:
+\begin{equation}
+x(t) = A\sin(\omega t + \phi) = A\cos(\omega t + \phi - \pi/2)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $A$ = amplitude
+    \item $\omega = 2\pi f$ = angular frequency (rad/s)
+    \item $f$ = frequency (Hz)
+    \item $\phi$ = phase (rad)
+    \item $T = 1/f = 2\pi/\omega$ = period (s)
+\end{itemize}
+
+\textbf{Complex exponential representation:}
+\begin{equation}
+A\cos(\omega t + \phi) = \Real\{A\ee^{\jj(\omega t + \phi)}\}
+\end{equation}
+
+\subsection{Exponential Functions}
+
+\textbf{Real exponential:}
+\begin{equation}
+x(t) = A\ee^{\sigma t}
+\end{equation}
+\begin{itemize}
+    \item $\sigma < 0$: decaying
+    \item $\sigma > 0$: growing
+    \item $\sigma = 0$: constant
+\end{itemize}
+
+\textbf{Complex exponential (damped sinusoid):}
+\begin{equation}
+x(t) = A\ee^{\sigma t}\cos(\omega t + \phi)
+\end{equation}
+
+% ============================================================================
+\section{Numerical Methods}
+\label{sec:numerical}
+% ============================================================================
+
+\subsection{Numerical Integration of ODEs}
+
+\textbf{Euler's Method (Forward):}
+\begin{equation}
+x_{n+1} = x_n + h f(t_n, x_n)
+\end{equation}
+
+\textbf{Runge-Kutta 4th Order (RK4):}
+\begin{align}
+k_1 &= f(t_n, x_n) \\
+k_2 &= f(t_n + h/2, x_n + hk_1/2) \\
+k_3 &= f(t_n + h/2, x_n + hk_2/2) \\
+k_4 &= f(t_n + h, x_n + hk_3) \\
+x_{n+1} &= x_n + \frac{h}{6}(k_1 + 2k_2 + 2k_3 + k_4)
+\end{align}
+
+\subsection{Root Finding}
+
+\textbf{Newton-Raphson:}
+\begin{equation}
+x_{n+1} = x_n - \frac{f(x_n)}{f'(x_n)}
+\end{equation}
+
+\textbf{Bisection Method:}
+For continuous $f$ with $f(a)f(b) < 0$, repeatedly halve the interval containing the root.
+
+\subsection{Numerical Linear Algebra}
+
+Key algorithms:
+\begin{itemize}
+    \item \textbf{Gaussian elimination}: $O(n^3)$ for solving $\mA\vecx = \vecb$
+    \item \textbf{QR iteration}: Computing eigenvalues
+    \item \textbf{SVD algorithms}: Golub-Kahan bidiagonalization
+    \item \textbf{Iterative methods}: Conjugate gradient, GMRES for large sparse systems
+\end{itemize}
+
+% ============================================================================
+\section{Chapter Summary}
+\label{sec:math_summary}
+% ============================================================================
+
+\begin{keyconceptbox}[title=Key Mathematical Concepts for Control Systems]
+\begin{enumerate}
+    \item \textbf{Complex Numbers}: Foundation for frequency analysis and pole-zero locations
+    \item \textbf{Calculus}: Describes system dynamics through derivatives and integrals
+    \item \textbf{Differential Equations}: Mathematical models of physical systems
+    \item \textbf{Laplace Transform}: Converts differential equations to algebraic equations
+    \item \textbf{Fourier Analysis}: Frequency-domain representation and analysis
+    \item \textbf{Linear Algebra}: Essential for state-space methods and MIMO systems
+    \item \textbf{Probability/Statistics}: Stochastic systems, estimation, and machine learning
+    \item \textbf{Optimization}: Controller design and parameter tuning
+    \item \textbf{Discrete Mathematics}: Digital control and sampled systems
+\end{enumerate}
+\end{keyconceptbox}
+
+% ============================================================================
+\section{Exercises}
+\label{sec:math_exercises}
+% ============================================================================
+
+\begin{exercise}
+Convert the following complex numbers to polar form:
+\begin{enumerate}[label=(\alph*)]
+    \item $z_1 = -3 + 4\jj$
+    \item $z_2 = 2 - 2\jj$
+    \item $z_3 = -5$
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Find the Laplace transform of:
+\begin{enumerate}[label=(\alph*)]
+    \item $f(t) = 3\ee^{-2t}\sin(4t)$
+    \item $f(t) = t^2\ee^{-t}$
+    \item $f(t) = (1 - \ee^{-t})u(t)$
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Find the inverse Laplace transform of:
+\begin{enumerate}[label=(\alph*)]
+    \item $F(s) = \frac{5}{s(s+3)}$
+    \item $F(s) = \frac{s+1}{s^2+4s+13}$
+    \item $F(s) = \frac{1}{(s+1)^2(s+2)}$
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+For the matrix $\mA = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}$:
+\begin{enumerate}[label=(\alph*)]
+    \item Find the eigenvalues
+    \item Find the eigenvectors
+    \item Compute $\ee^{\mA t}$
+    \item Is the system $\dot{\vecx} = \mA\vecx$ stable?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Linearize the nonlinear system $\dot{x} = x^2 - u$ about the equilibrium point where $x_0 = 1$, $u_0 = 1$.
+\end{exercise}
+
+\begin{exercise}
+Find the Z-transform and region of convergence for:
+\begin{enumerate}[label=(\alph*)]
+    \item $x[n] = (0.5)^n u[n]$
+    \item $x[n] = n(0.8)^n u[n]$
+    \item $x[n] = \cos(0.2\pi n)u[n]$
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Using gradient descent, find the minimum of $f(x,y) = x^2 + 2y^2 - 2xy - 2x$ starting from $(0,0)$ with step size $\alpha = 0.1$. Perform 5 iterations.
+\end{exercise}
+
+\begin{exercise}
+For a random variable $X \sim \mathcal{N}(5, 4)$:
+\begin{enumerate}[label=(\alph*)]
+    \item Find $P(X > 7)$
+    \item Find $P(3 < X < 7)$
+    \item Find the value $x$ such that $P(X < x) = 0.95$
+\end{enumerate}
+\end{exercise}
