@@ -14,35 +14,7 @@ This section covers systems from manufacturing, process control, and computer sc
 
 \subsubsection{Conveyor Belt System}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}
-    % Belt
-    \draw[thick] (0,0) -- (8,0);
-    \draw[thick] (0,0.3) -- (8,0.3);
-
-    % Rollers
-    \draw[thick] (0.5,0.15) circle (0.4);
-    \draw[thick] (7.5,0.15) circle (0.4);
-
-    % Motor
-    \draw[thick, fill=gray!30] (-0.5,-0.5) rectangle (0.5,0.8);
-    \node at (0,0.15) {M};
-
-    % Items on belt
-    \foreach \x in {2,4,6} {
-        \draw[thick, fill=blue!30] (\x-0.3,0.3) rectangle (\x+0.3,0.8);
-    }
-
-    % Speed
-    \draw[->, thick, red] (4,1.2) -- (5.5,1.2) node[right] {$v$};
-
-    % Position
-    \draw[<->] (0,-0.7) -- (8,-0.7) node[midway, below] {Position $x$};
-\end{tikzpicture}
-\caption{Conveyor belt system with motor drive.}
-\label{fig:conveyor}
-\end{figure}
+\input{figures/fig_ch01i_conveyor.tex}
 
 Motor-driven conveyor dynamics:
 \begin{equation}
@@ -62,25 +34,7 @@ Transfer function (speed control):
 
 Industrial ovens often have multiple zones:
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[scale=0.8]
-    % Zones
-    \foreach \i in {0,1,2} {
-        \draw[thick] (\i*2.5,0) rectangle (\i*2.5+2,2);
-        \node at (\i*2.5+1,1) {$T_\i$};
-        \draw[->, thick, red] (\i*2.5+1,2.3) -- (\i*2.5+1,2) node[above, pos=0] {$Q_\i$};
-    }
-
-    % Product flow
-    \draw[->, thick, blue] (-0.5,1) -- (0,1);
-    \draw[->, thick, blue] (2,1) -- (2.5,1);
-    \draw[->, thick, blue] (4.5,1) -- (5,1);
-    \draw[->, thick, blue] (7,1) -- (7.5,1) node[right] {Product};
-\end{tikzpicture}
-\caption{Multi-zone temperature control.}
-\label{fig:temp_zones}
-\end{figure}
+\input{figures/fig_ch01i_temp_zones.tex}
 
 Each zone:
 \begin{equation}
@@ -94,37 +48,7 @@ C_i\frac{\dd T_i}{\dd t} = Q_i - \frac{T_i - T_{i-1}}{R_{i-1,i}} - \frac{T_i - T
 
 \subsubsection{Single-Link Robot Arm}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}
-    % Base
-    \fill[pattern=north east lines] (-0.5,-0.3) rectangle (0.5,0);
-    \draw[thick] (-0.5,0) -- (0.5,0);
-
-    % Joint
-    \draw[thick, fill=gray!30] (0,0) circle (0.3);
-
-    % Link
-    \draw[thick, fill=blue!20] (0.2,0.2) -- (3,1.5) -- (3.2,1.3) -- (0.4,0) -- cycle;
-
-    % End effector
-    \fill[red] (3.1,1.4) circle (0.15);
-
-    % Angle
-    \draw[->] (1,0) arc (0:25:1) node[midway, right] {$\theta$};
-
-    % Length
-    \node at (1.8,0.5) {$\ell$};
-
-    % Torque
-    \draw[->, thick, green!60!black] (0.5,0.5) arc (45:90:0.5) node[above] {$\tau$};
-
-    % Gravity
-    \draw[->, thick] (3.1,1.2) -- (3.1,0.4) node[below] {$mg$};
-\end{tikzpicture}
-\caption{Single-link robot arm.}
-\label{fig:single_link}
-\end{figure}
+\input{figures/fig_ch01i_single_link.tex}
 
 Equation of motion:
 \begin{equation}
@@ -187,54 +111,7 @@ for well-tuned systems where $K_v = K_p/\tau_p$.
 
 A complete CNC control architecture uses nested feedback loops for position tracking with real-time disturbance rejection:
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[auto, node distance=2.5cm,
-    block/.style={rectangle, draw=UofSCBlack, text width=2cm, text centered, minimum height=0.8cm, sharp corners, line width=1.5pt},
-    sum/.style={circle, draw=UofSCBlack, minimum size=0.8cm, line width=1.5pt},
-    input/.style={},
-    output/.style={}]
-
-    % Reference command
-    \node[input] (ref) {$X_{\text{cmd}}$};
-
-    % First summer (position error)
-    \node[sum, right=of ref] (sum1) {$-$};
-    \draw[thick, UofSCBlack] (ref) -- node[above] {} (sum1.west);
-
-    % Proportional controller
-    \node[block, right=of sum1] (Kp) {$K_p$};
-    \draw[thick, UofSCBlack] (sum1) -- (Kp);
-
-    % Second summer (velocity error)
-    \node[sum, right=of Kp] (sum2) {$-$};
-    \draw[thick, UofSCBlack] (Kp) -- node[above] {$V_{\text{cmd}}$} (sum2.west);
-
-    % Velocity controller
-    \node[block, right=of sum2] (Ki) {$K_i/s$};
-    \draw[thick, UofSCBlack] (sum2) -- (Ki);
-
-    % Motor + mechanical plant
-    \node[block, right=of Ki] (plant) {Motor \& Axis};
-    \draw[thick, UofSCBlack] (Ki) -- node[above] {$F_{\text{motor}}$} (plant);
-
-    % Position output
-    \node[output, right=of plant] (pos_out) {};
-    \draw[thick, UofSCBlack] (plant) -- node[above] {$X$} (pos_out);
-
-    % Position feedback loop (upper path - primary)
-    \draw[thick, UofSCBlack] (pos_out) |- ++(0,1.5) -| (sum1.north) node[pos=0.75, above, font=\small] {Position Feedback};
-
-    % Velocity feedback loop (lower path)
-    \draw[thick, UofSCBlack] (plant.south) |- ++(0,-1.5) node[pos=0.25, below, font=\small] {$\dot{X}$} -| (sum2.south);
-
-    % Disturbance input
-    \draw[thick, UofSCBlack, ->, dashed] ($(plant.north)+(0.3,0)$) -- node[right=0.1cm, font=\small] {$F_{\text{cut}}$} ($(plant.north)+(0.3,0.3)$);
-
-\end{tikzpicture}
-\caption{CNC machine position control loop with nested feedback and disturbance rejection. The proportional controller commands a velocity set-point, while the integrating controller regulates actual velocity feedback to track the commanded profile.}
-\label{fig:cnc_control_loop}
-\end{figure}
+\input{figures/fig_ch01i_cnc_control_loop.tex}
 
 % ============================================================================
 \subsection{Power Systems}
@@ -280,30 +157,7 @@ where $B$ is the frequency bias setting.
 
 \subsubsection{M/M/1 Queue}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}
-    % Arrivals
-    \draw[->, thick] (0,0) -- (1.5,0) node[above, midway] {$\lambda$};
-
-    % Queue
-    \draw[thick] (1.5,-0.5) rectangle (4,0.5);
-    \foreach \x in {2,2.5,3,3.5} {
-        \draw[thick, fill=blue!30] (\x-0.15,-0.3) rectangle (\x+0.15,0.3);
-    }
-    \node[below] at (2.75,-0.7) {Queue};
-
-    % Server
-    \draw[thick, fill=gray!30] (4.5,0) circle (0.5);
-    \node at (4.5,0) {$\mu$};
-    \node[below] at (4.5,-0.7) {Server};
-
-    % Departures
-    \draw[->, thick] (5,0) -- (6.5,0) node[above, midway] {Departures};
-\end{tikzpicture}
-\caption{M/M/1 queue model.}
-\label{fig:mm1_queue}
-\end{figure}
+\input{figures/fig_ch01i_mm1_queue.tex}
 
 Steady-state:
 \begin{align}
@@ -312,48 +166,7 @@ Steady-state:
 \text{Mean waiting time:} \quad W &= \frac{1}{\mu - \lambda}
 \end{align}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[scale=0.95]
-    % Title
-    \node[font=\bfseries, anchor=west] at (0,4.2) {Queueing System Dynamics};
-
-    % Arrivals with Poisson rate
-    \draw[->, thick, UofSCAtlantic] (-0.5,3.5) -- (0.8,3.5) node[above, font=\small] {Arrivals $\sim \text{Poisson}(\lambda)$};
-
-    % Customer representations in queue
-    \draw[ultra thick, UofSCBlack, sharp corners] (1,2.5) rectangle (5,4.2);
-
-    % Customers in queue (arriving customers)
-    \foreach \x in {1.3, 1.9, 2.5, 3.1, 3.7, 4.3} {
-        \draw[fill=UofSCRose, draw=UofSCBlack, line width=1pt, sharp corners] (\x,2.7) rectangle (\x+0.5,3.9);
-    }
-
-    \node[font=\small, anchor=south] at (3,2.4) {Queue ($q$ customers waiting)};
-
-    % Service window/server
-    \draw[fill=UofSCGrass!20, draw=UofSCBlack, line width=1.5pt, sharp corners] (5.5,2.7) rectangle (6.8,3.9);
-    \node[font=\small\bfseries, text=UofSCBlack] at (6.15,3.3) {Server};
-    \node[font=\small, text=UofSCBlack] at (6.15,2.9) {$\mu$};
-
-    % Service time indicator
-    \draw[->, thick, UofSCHorseshoe] (5.5,2.4) -- (6.8,2.4) node[below, font=\small] {Service time};
-
-    % Departures
-    \draw[->, thick, UofSCCongaree] (6.8,3.3) -- (7.8,3.3) node[right, font=\small] {Departures};
-
-    % Performance metrics box
-    \draw[draw=UofSCBlack, line width=1.5pt, sharp corners] (0.5,0.2) rectangle (7.5,1.8);
-    \node[font=\bfseries, anchor=west] at (0.7,1.5) {Key Metrics:};
-
-    \node[font=\small, anchor=west] at (0.7,1.15) {Average customers in queue: $L_q = \frac{\rho^2}{1-\rho}$};
-    \node[font=\small, anchor=west] at (0.7,0.85) {Average time in system: $T = \frac{1}{\mu(1-\rho)}$};
-    \node[font=\small, anchor=west] at (0.7,0.55) {Server utilization: $\rho = \lambda/\mu$ (must be $< 1$)};
-
-\end{tikzpicture}
-\caption{Queueing system flow and performance metrics. Customers arrive according to a Poisson process with rate $\lambda$, wait in queue, and receive service with exponential service time (mean $1/\mu$). System stability requires $\rho < 1$.}
-\label{fig:queueing_dynamics}
-\end{figure}
+\input{figures/fig_ch01i_queueing_dynamics.tex}
 
 \subsubsection{Fluid Flow Model}
 
@@ -406,29 +219,7 @@ where $M$ is allocated memory, $W_s$ is working set size, and $\alpha$ is a work
 \label{subsec:datacenter}
 % ============================================================================
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[scale=0.8]
-    % Server rack
-    \draw[thick, fill=gray!20] (0,0) rectangle (2,4);
-    \node at (1,2) {Servers};
-    \node[below] at (1,0) {$Q_{\text{IT}}$};
-
-    % Air flow
-    \draw[->, thick, blue] (-1,1) -- (0,1) node[left, pos=0] {$T_{\text{in}}$};
-    \draw[->, thick, red] (2,3) -- (3,3) node[right] {$T_{\text{out}}$};
-
-    % CRAC unit
-    \draw[thick, fill=blue!30] (4,0) rectangle (6,3);
-    \node at (5,1.5) {CRAC};
-
-    % Cooling
-    \draw[->, thick, blue] (5,3) -- (5,4) -- (-0.5,4) -- (-0.5,1);
-    \draw[->, thick, red] (3,3) -- (3,3.5) -- (5,3.5) -- (5,3);
-\end{tikzpicture}
-\caption{Data center thermal model.}
-\label{fig:datacenter_thermal}
-\end{figure}
+\input{figures/fig_ch01i_datacenter_thermal.tex}
 
 Thermal dynamics:
 \begin{equation}
