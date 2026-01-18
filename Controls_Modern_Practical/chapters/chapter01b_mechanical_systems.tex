@@ -1,0 +1,701 @@
+% ============================================================================
+% CHAPTER 1B: MECHANICAL SYSTEMS
+% ============================================================================
+
+\section{Mechanical Systems}
+\label{sec:mechanical}
+
+Mechanical systems form the intuitive foundation for understanding dynamics. The physical concepts of mass, springs, and dampers have direct analogs in other domains and provide excellent intuition for system behavior.
+
+% ============================================================================
+\subsection{Translational Mechanical Elements}
+\label{subsec:trans_elements}
+% ============================================================================
+
+\subsubsection{Mass (Inertia)}
+
+Mass resists changes in velocity according to Newton's second law:
+\begin{equation}
+F = m\frac{\dd v}{\dd t} = m\frac{\dd^2 x}{\dd t^2} = m\ddot{x}
+\end{equation}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Mass
+    \draw[thick, fill=blue!20] (0,0) rectangle (2,1);
+    \node at (1,0.5) {$m$};
+
+    % Force arrow
+    \draw[->, thick, red] (2.5,0.5) -- (3.5,0.5) node[right] {$F$};
+
+    % Velocity arrow
+    \draw[->, thick, green!60!black] (1,1.3) -- (2,1.3) node[right] {$v$};
+
+    % Position reference
+    \draw[<->] (0,-0.5) -- (1,-0.5) node[midway, below] {$x$};
+\end{tikzpicture}
+\caption{Mass element with applied force.}
+\label{fig:mass_element}
+\end{figure}
+
+In the Laplace domain:
+\begin{equation}
+F(s) = ms^2 X(s) \quad \Rightarrow \quad \frac{X(s)}{F(s)} = \frac{1}{ms^2}
+\end{equation}
+
+\subsubsection{Spring (Stiffness)}
+
+A linear spring produces a force proportional to displacement:
+\begin{equation}
+F = kx \quad \text{or} \quad F = k(x_1 - x_2)
+\end{equation}
+
+where $k$ is the spring constant (N/m or lb/in).
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Wall
+    \fill[pattern=north east lines] (-0.3,0) rectangle (0,1.5);
+    \draw[thick] (0,0) -- (0,1.5);
+
+    % Spring
+    \draw[thick, decorate, decoration={coil, segment length=4pt, amplitude=4pt}]
+        (0,0.75) -- (2,0.75);
+
+    % Mass
+    \draw[thick, fill=blue!20] (2,0.25) rectangle (3,1.25);
+    \node at (2.5,0.75) {$m$};
+
+    % Labels
+    \node[above] at (1,1) {$k$};
+    \draw[<->] (2,-0.3) -- (3,-0.3) node[midway, below] {$x$};
+\end{tikzpicture}
+\caption{Spring element connecting wall to mass.}
+\label{fig:spring_element}
+\end{figure}
+
+In the Laplace domain:
+\begin{equation}
+F(s) = kX(s) \quad \Rightarrow \quad \frac{X(s)}{F(s)} = \frac{1}{k}
+\end{equation}
+
+\subsubsection{Damper (Viscous Friction)}
+
+A viscous damper produces a force proportional to velocity:
+\begin{equation}
+F = b\dot{x} = b\frac{\dd x}{\dd t} \quad \text{or} \quad F = b(\dot{x}_1 - \dot{x}_2)
+\end{equation}
+
+where $b$ is the damping coefficient (N$\cdot$s/m or lb$\cdot$s/in).
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Wall
+    \fill[pattern=north east lines] (-0.3,0) rectangle (0,1.5);
+    \draw[thick] (0,0) -- (0,1.5);
+
+    % Damper
+    \draw[thick] (0,0.75) -- (0.5,0.75);
+    \draw[thick] (0.5,0.4) rectangle (1.5,1.1);
+    \draw[thick] (1,0.75) -- (2,0.75);
+
+    % Piston
+    \draw[thick] (0.8,0.5) -- (0.8,1);
+
+    % Mass
+    \draw[thick, fill=blue!20] (2,0.25) rectangle (3,1.25);
+    \node at (2.5,0.75) {$m$};
+
+    % Labels
+    \node[above] at (1,1.2) {$b$};
+\end{tikzpicture}
+\caption{Viscous damper element.}
+\label{fig:damper_element}
+\end{figure}
+
+In the Laplace domain:
+\begin{equation}
+F(s) = bsX(s) \quad \Rightarrow \quad \frac{X(s)}{F(s)} = \frac{1}{bs}
+\end{equation}
+
+% ============================================================================
+\subsection{Mass-Spring-Damper System}
+\label{subsec:msd}
+% ============================================================================
+
+The canonical mechanical system combines all three elements.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Wall
+    \fill[pattern=north east lines] (-0.3,-0.5) rectangle (0,2.5);
+    \draw[thick] (0,-0.5) -- (0,2.5);
+
+    % Spring (top)
+    \draw[thick] (0,2) -- (0.3,2);
+    \draw[thick, decorate, decoration={coil, segment length=4pt, amplitude=4pt}]
+        (0.3,2) -- (2.2,2);
+    \draw[thick] (2.2,2) -- (2.5,2);
+    \node[above] at (1.25,2.2) {$k$};
+
+    % Damper (bottom)
+    \draw[thick] (0,0.5) -- (0.5,0.5);
+    \draw[thick] (0.5,0.2) rectangle (1.5,0.8);
+    \draw[thick] (0.8,0.3) -- (0.8,0.7);
+    \draw[thick] (1.5,0.5) -- (2.5,0.5);
+    \node[below] at (1,0.1) {$b$};
+
+    % Mass
+    \draw[thick, fill=blue!20] (2.5,0) rectangle (4,2.5);
+    \node at (3.25,1.25) {$m$};
+
+    % Force
+    \draw[->, thick, red] (4.3,1.25) -- (5.3,1.25) node[right] {$F(t)$};
+
+    % Position
+    \draw[<->] (2.5,-0.7) -- (4,-0.7) node[midway, below] {$x(t)$};
+
+    % Ground
+    \draw[thick] (-0.3,-0.5) -- (5.5,-0.5);
+    \foreach \x in {0,0.5,...,5} {
+        \draw[thick] (\x,-0.5) -- (\x-0.2,-0.8);
+    }
+\end{tikzpicture}
+\caption{Mass-spring-damper system.}
+\label{fig:msd_system}
+\end{figure}
+
+\subsubsection{Equation of Motion}
+
+Applying Newton's second law:
+\begin{equation}
+m\ddot{x} = F(t) - kx - b\dot{x}
+\end{equation}
+
+Rearranging:
+\begin{equation}
+\boxed{m\ddot{x} + b\dot{x} + kx = F(t)}
+\end{equation}
+
+\subsubsection{Transfer Function}
+
+Taking the Laplace transform with zero initial conditions:
+\begin{equation}
+ms^2X(s) + bsX(s) + kX(s) = F(s)
+\end{equation}
+
+\begin{equation}
+G(s) = \frac{X(s)}{F(s)} = \frac{1}{ms^2 + bs + k}
+\end{equation}
+
+In standard second-order form:
+\begin{equation}
+G(s) = \frac{1/k}{(m/k)s^2 + (b/k)s + 1} = \frac{1/k}{\frac{s^2}{\omega_n^2} + \frac{2\zeta}{\omega_n}s + 1}
+\end{equation}
+
+where:
+\begin{align}
+\omega_n &= \sqrt{\frac{k}{m}} \quad \text{(natural frequency)} \\
+\zeta &= \frac{b}{2\sqrt{km}} \quad \text{(damping ratio)}
+\end{align}
+
+\begin{examplebox}[title=Example 1.2: Automobile Shock Absorber Test]
+A shock absorber test rig has $m = 50$ kg, $k = 20{,}000$ N/m, and $b = 1{,}000$ N$\cdot$s/m. Find:
+\begin{enumerate}[label=(\alph*)]
+    \item Natural frequency and damping ratio
+    \item The response to a 100 N step force
+\end{enumerate}
+
+\textbf{Solution:}
+
+(a) Natural frequency and damping ratio:
+\begin{align}
+\omega_n &= \sqrt{\frac{20{,}000}{50}} = \sqrt{400} = 20 \text{ rad/s} = 3.18 \text{ Hz} \\
+\zeta &= \frac{1{,}000}{2\sqrt{20{,}000 \times 50}} = \frac{1{,}000}{2{,}000} = 0.5
+\end{align}
+
+The system is underdamped.
+
+(b) Transfer function:
+\begin{equation}
+G(s) = \frac{1}{50s^2 + 1000s + 20000} = \frac{0.00005}{s^2 + 20s + 400}
+\end{equation}
+
+For a 100 N step: $Y(s) = \frac{100}{s} \cdot G(s)$
+
+Using partial fractions and inverse Laplace:
+\begin{equation}
+x(t) = \frac{100}{20000}\left[1 - \frac{\ee^{-10t}}{\sqrt{1-0.25}}\sin(17.32t + 1.047)\right]
+\end{equation}
+
+Steady-state displacement: $x_{ss} = \frac{F}{k} = \frac{100}{20000} = 5$ mm
+\end{examplebox}
+
+% ============================================================================
+\subsection{Vehicle Suspension System}
+\label{subsec:vehicle_suspension}
+% ============================================================================
+
+A quarter-car model represents one corner of a vehicle suspension.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.9]
+    % Sprung mass (body)
+    \draw[thick, fill=blue!20] (0,4) rectangle (4,5);
+    \node at (2,4.5) {$m_s$ (body)};
+
+    % Suspension spring
+    \draw[thick, decorate, decoration={coil, segment length=5pt, amplitude=5pt}]
+        (1,2.5) -- (1,4);
+    \node[left] at (0.7,3.25) {$k_s$};
+
+    % Suspension damper
+    \draw[thick] (3,2.5) -- (3,3);
+    \draw[thick] (2.7,3) rectangle (3.3,3.7);
+    \draw[thick] (3,3.7) -- (3,4);
+    \node[right] at (3.4,3.35) {$b_s$};
+
+    % Unsprung mass (wheel)
+    \draw[thick, fill=gray!30] (0.5,1.5) rectangle (3.5,2.5);
+    \node at (2,2) {$m_u$ (wheel)};
+
+    % Tire spring
+    \draw[thick, decorate, decoration={coil, segment length=4pt, amplitude=4pt}]
+        (2,0.5) -- (2,1.5);
+    \node[right] at (2.2,1) {$k_t$};
+
+    % Road
+    \draw[thick] (-0.5,0.5) -- (4.5,0.5);
+    \draw[thick, decorate, decoration={snake, segment length=10pt, amplitude=2pt}]
+        (-0.5,0.3) -- (4.5,0.3);
+
+    % Displacements
+    \draw[<->] (4.5,4.5) -- (4.5,5.5) node[right, midway] {$x_s$};
+    \draw[<->] (4.5,2) -- (4.5,3) node[right, midway] {$x_u$};
+    \draw[<->] (4.5,0.3) -- (4.5,1) node[right, midway] {$x_r$};
+\end{tikzpicture}
+\caption{Quarter-car suspension model.}
+\label{fig:quarter_car}
+\end{figure}
+
+\subsubsection{Equations of Motion}
+
+For the sprung mass (body):
+\begin{equation}
+m_s\ddot{x}_s = -k_s(x_s - x_u) - b_s(\dot{x}_s - \dot{x}_u)
+\end{equation}
+
+For the unsprung mass (wheel):
+\begin{equation}
+m_u\ddot{x}_u = k_s(x_s - x_u) + b_s(\dot{x}_s - \dot{x}_u) - k_t(x_u - x_r)
+\end{equation}
+
+\subsubsection{State-Space Representation}
+
+Defining state variables: $\vecx = [x_s - x_u, \dot{x}_s, x_u - x_r, \dot{x}_u]^\top$
+
+\begin{equation}
+\dot{\vecx} = \begin{bmatrix}
+0 & 1 & 0 & -1 \\
+-k_s/m_s & -b_s/m_s & 0 & b_s/m_s \\
+0 & 0 & 0 & 1 \\
+k_s/m_u & b_s/m_u & -k_t/m_u & -b_s/m_u
+\end{bmatrix} \vecx + \begin{bmatrix} 0 \\ 0 \\ -1 \\ 0 \end{bmatrix} \dot{x}_r
+\end{equation}
+
+\subsubsection{Transfer Functions}
+
+From road input $X_r(s)$ to body displacement $X_s(s)$:
+\begin{equation}
+\frac{X_s(s)}{X_r(s)} = \frac{(b_s s + k_s)k_t}{m_s m_u s^4 + (m_s + m_u)b_s s^3 + [m_s k_t + (m_s + m_u)k_s]s^2 + b_s k_t s + k_s k_t}
+\end{equation}
+
+\begin{examplebox}[title=Example 1.3: Quarter-Car Parameters]
+Typical values for a passenger car:
+\begin{itemize}
+    \item Sprung mass: $m_s = 250$ kg (quarter of body mass)
+    \item Unsprung mass: $m_u = 35$ kg (wheel, brake, suspension links)
+    \item Suspension stiffness: $k_s = 16{,}000$ N/m
+    \item Suspension damping: $b_s = 1{,}000$ N$\cdot$s/m
+    \item Tire stiffness: $k_t = 160{,}000$ N/m
+\end{itemize}
+
+The body bounce frequency: $f_s = \frac{1}{2\pi}\sqrt{\frac{k_s}{m_s}} = 1.27$ Hz
+
+The wheel hop frequency: $f_u = \frac{1}{2\pi}\sqrt{\frac{k_t}{m_u}} = 10.8$ Hz
+\end{examplebox}
+
+% ============================================================================
+\subsection{Rotational Mechanical Systems}
+\label{subsec:rotational}
+% ============================================================================
+
+Rotational systems follow analogous laws with angular quantities.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Translational} & \textbf{Rotational} & \textbf{Unit} \\
+\midrule
+Displacement $x$ & Angle $\theta$ & rad \\
+Velocity $v = \dot{x}$ & Angular velocity $\omega = \dot{\theta}$ & rad/s \\
+Acceleration $a = \ddot{x}$ & Angular acceleration $\alpha = \ddot{\theta}$ & rad/s$^2$ \\
+Force $F$ & Torque $\tau$ & N$\cdot$m \\
+Mass $m$ & Moment of inertia $J$ & kg$\cdot$m$^2$ \\
+Spring constant $k$ & Torsional stiffness $\kappa$ & N$\cdot$m/rad \\
+Damping $b$ & Rotational damping $B$ & N$\cdot$m$\cdot$s/rad \\
+\bottomrule
+\end{tabular}
+\caption{Translational-rotational analogies.}
+\label{tab:rot_analogies}
+\end{table}
+
+\subsubsection{Rotational Inertia}
+
+\begin{equation}
+\tau = J\ddot{\theta} = J\dot{\omega}
+\end{equation}
+
+\subsubsection{Torsional Spring}
+
+\begin{equation}
+\tau = \kappa\theta \quad \text{or} \quad \tau = \kappa(\theta_1 - \theta_2)
+\end{equation}
+
+\subsubsection{Rotational Damper}
+
+\begin{equation}
+\tau = B\dot{\theta} = B\omega
+\end{equation}
+
+\begin{examplebox}[title=Example 1.4: Rotating Shaft System]
+A motor drives a load through a flexible shaft. The motor inertia is $J_m = 0.01$ kg$\cdot$m$^2$, load inertia is $J_L = 0.1$ kg$\cdot$m$^2$, shaft stiffness is $\kappa = 100$ N$\cdot$m/rad, and bearing friction is $B = 0.5$ N$\cdot$m$\cdot$s/rad.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Motor
+    \draw[thick, fill=gray!30] (0,0) circle (0.8);
+    \node at (0,0) {$J_m$};
+
+    % Shaft (spring)
+    \draw[thick, decorate, decoration={coil, segment length=5pt, amplitude=3pt}]
+        (0.8,0) -- (3.2,0);
+    \node[above] at (2,0.3) {$\kappa$};
+
+    % Load
+    \draw[thick, fill=blue!20] (4,0) circle (1);
+    \node at (4,0) {$J_L$};
+
+    % Damper on load
+    \draw[thick] (5,0) -- (5.5,0);
+    \draw[thick] (5.5,-0.3) rectangle (6.2,0.3);
+    \node[above] at (5.85,0.4) {$B$};
+    \draw[thick] (6.2,0) -- (6.5,0);
+    \fill[pattern=north east lines] (6.5,-0.5) rectangle (6.8,0.5);
+    \draw[thick] (6.5,-0.5) -- (6.5,0.5);
+
+    % Torque
+    \draw[->, thick, red] (-1.5,0) arc (180:90:0.5) node[above] {$\tau_m$};
+
+    % Angles
+    \draw[->, thick, green!60!black] (0,-1.2) arc (-90:0:0.3) node[right] {$\theta_m$};
+    \draw[->, thick, green!60!black] (4,-1.5) arc (-90:0:0.3) node[right] {$\theta_L$};
+\end{tikzpicture}
+\caption{Two-inertia system with flexible coupling.}
+\label{fig:two_inertia}
+\end{figure}
+
+Equations of motion:
+\begin{align}
+J_m\ddot{\theta}_m &= \tau_m - \kappa(\theta_m - \theta_L) \\
+J_L\ddot{\theta}_L &= \kappa(\theta_m - \theta_L) - B\dot{\theta}_L
+\end{align}
+
+Transfer function from motor torque to load angle:
+\begin{equation}
+\frac{\Theta_L(s)}{\tau_m(s)} = \frac{\kappa}{J_m J_L s^4 + J_m B s^3 + (J_m + J_L)\kappa s^2 + B\kappa s}
+\end{equation}
+\end{examplebox}
+
+% ============================================================================
+\subsection{Gear Trains}
+\label{subsec:gears}
+% ============================================================================
+
+Gears transform speed and torque between shafts.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Gear 1
+    \draw[thick] (0,0) circle (1);
+    \draw[thick, fill=white] (0,0) circle (0.15);
+    \node at (0,-1.5) {$N_1$ teeth};
+    \node at (0,0.5) {$r_1$};
+
+    % Gear 2
+    \draw[thick] (2.5,0) circle (1.5);
+    \draw[thick, fill=white] (2.5,0) circle (0.15);
+    \node at (2.5,-2) {$N_2$ teeth};
+    \node at (2.5,0.7) {$r_2$};
+
+    % Mesh point
+    \draw[thick, dashed] (1,0) -- (1,0);
+
+    % Angular velocities
+    \draw[->, thick, blue] (0,1.3) arc (90:180:0.5) node[above left] {$\omega_1$};
+    \draw[->, thick, blue] (2.5,1.8) arc (90:0:0.5) node[above right] {$\omega_2$};
+\end{tikzpicture}
+\caption{Gear pair.}
+\label{fig:gear_pair}
+\end{figure}
+
+\textbf{Gear Ratio:}
+\begin{equation}
+n = \frac{N_2}{N_1} = \frac{r_2}{r_1} = \frac{\omega_1}{\omega_2} = \frac{\tau_2}{\tau_1}
+\end{equation}
+
+\textbf{Reflected Inertia:}
+When reflecting load inertia $J_L$ to the motor side:
+\begin{equation}
+J_{\text{reflected}} = \frac{J_L}{n^2}
+\end{equation}
+
+\textbf{Reflected Damping:}
+\begin{equation}
+B_{\text{reflected}} = \frac{B_L}{n^2}
+\end{equation}
+
+\begin{keyconceptbox}[title=Gear Ratio Selection]
+The gear ratio affects both speed and torque:
+\begin{itemize}
+    \item High gear ratio ($n > 1$): Reduces speed, increases torque, reduces reflected inertia
+    \item Low gear ratio ($n < 1$): Increases speed, reduces torque, increases reflected inertia
+\end{itemize}
+Optimal gear ratio often maximizes acceleration: $n_{\text{opt}} = \sqrt{J_L/J_m}$
+\end{keyconceptbox}
+
+% ============================================================================
+\subsection{Multi-Body Mechanical Systems}
+\label{subsec:multibody}
+% ============================================================================
+
+\begin{examplebox}[title=Example 1.5: Two-Mass System]
+Consider two masses connected by springs and dampers:
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.85]
+    % Wall
+    \fill[pattern=north east lines] (-0.3,0) rectangle (0,2);
+    \draw[thick] (0,0) -- (0,2);
+
+    % Spring k1
+    \draw[thick, decorate, decoration={coil, segment length=4pt, amplitude=4pt}]
+        (0,1.5) -- (1.5,1.5);
+    \node[above] at (0.75,1.7) {$k_1$};
+
+    % Damper b1
+    \draw[thick] (0,0.5) -- (0.3,0.5);
+    \draw[thick] (0.3,0.2) rectangle (1.2,0.8);
+    \draw[thick] (0.6,0.3) -- (0.6,0.7);
+    \draw[thick] (1.2,0.5) -- (1.5,0.5);
+    \node[below] at (0.75,0.1) {$b_1$};
+
+    % Mass 1
+    \draw[thick, fill=blue!20] (1.5,0) rectangle (3,2);
+    \node at (2.25,1) {$m_1$};
+
+    % Spring k2
+    \draw[thick, decorate, decoration={coil, segment length=4pt, amplitude=4pt}]
+        (3,1.5) -- (4.5,1.5);
+    \node[above] at (3.75,1.7) {$k_2$};
+
+    % Damper b2
+    \draw[thick] (3,0.5) -- (3.3,0.5);
+    \draw[thick] (3.3,0.2) rectangle (4.2,0.8);
+    \draw[thick] (3.6,0.3) -- (3.6,0.7);
+    \draw[thick] (4.2,0.5) -- (4.5,0.5);
+    \node[below] at (3.75,0.1) {$b_2$};
+
+    % Mass 2
+    \draw[thick, fill=blue!20] (4.5,0) rectangle (6,2);
+    \node at (5.25,1) {$m_2$};
+
+    % Force
+    \draw[->, thick, red] (6.3,1) -- (7.3,1) node[right] {$F$};
+
+    % Displacements
+    \draw[<->] (1.5,-0.5) -- (2.25,-0.5) node[midway, below] {$x_1$};
+    \draw[<->] (4.5,-0.5) -- (5.25,-0.5) node[midway, below] {$x_2$};
+\end{tikzpicture}
+\caption{Two-mass mechanical system.}
+\label{fig:two_mass}
+\end{figure}
+
+Equations of motion:
+\begin{align}
+m_1\ddot{x}_1 &= -k_1 x_1 - b_1\dot{x}_1 + k_2(x_2 - x_1) + b_2(\dot{x}_2 - \dot{x}_1) \\
+m_2\ddot{x}_2 &= F - k_2(x_2 - x_1) - b_2(\dot{x}_2 - \dot{x}_1)
+\end{align}
+
+State-space form with $\vecx = [x_1, \dot{x}_1, x_2, \dot{x}_2]^\top$:
+\begin{equation}
+\mA = \begin{bmatrix}
+0 & 1 & 0 & 0 \\
+-(k_1+k_2)/m_1 & -(b_1+b_2)/m_1 & k_2/m_1 & b_2/m_1 \\
+0 & 0 & 0 & 1 \\
+k_2/m_2 & b_2/m_2 & -k_2/m_2 & -b_2/m_2
+\end{bmatrix}
+\end{equation}
+\end{examplebox}
+
+% ============================================================================
+\subsection{Pendulum Systems}
+\label{subsec:pendulum}
+% ============================================================================
+
+\subsubsection{Simple Pendulum}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Pivot
+    \fill (0,0) circle (0.08);
+
+    % Rod
+    \draw[thick] (0,0) -- (2,-3);
+
+    % Mass
+    \fill[blue!60] (2,-3) circle (0.3);
+    \node[right] at (2.4,-3) {$m$};
+
+    % Angle
+    \draw[dashed] (0,0) -- (0,-3);
+    \draw[->] (0,-1.5) arc (-90:-56:1.5) node[midway, left] {$\theta$};
+
+    % Length
+    \node[above right] at (1,-1.5) {$L$};
+
+    % Gravity
+    \draw[->, thick] (2,-3.5) -- (2,-4.3) node[right] {$mg$};
+\end{tikzpicture}
+\caption{Simple pendulum.}
+\label{fig:simple_pendulum}
+\end{figure}
+
+The equation of motion (nonlinear):
+\begin{equation}
+mL^2\ddot{\theta} + mgL\sin\theta = \tau
+\end{equation}
+
+For small angles ($\sin\theta \approx \theta$), the linearized equation:
+\begin{equation}
+\ddot{\theta} + \frac{g}{L}\theta = \frac{\tau}{mL^2}
+\end{equation}
+
+Natural frequency: $\omega_n = \sqrt{g/L}$
+
+\subsubsection{Inverted Pendulum on Cart}
+
+The classic control benchmark problem:
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Ground
+    \draw[thick] (-2,0) -- (4,0);
+
+    % Cart
+    \draw[thick, fill=gray!30] (-1,0.3) rectangle (2,1);
+    \node at (0.5,0.65) {$M$};
+
+    % Wheels
+    \draw[thick, fill=white] (-0.5,0.15) circle (0.15);
+    \draw[thick, fill=white] (1.5,0.15) circle (0.15);
+
+    % Pivot
+    \fill (0.5,1) circle (0.08);
+
+    % Pendulum rod
+    \draw[thick] (0.5,1) -- (1.5,3.5);
+
+    % Pendulum mass
+    \fill[blue!60] (1.5,3.5) circle (0.25);
+    \node[right] at (1.8,3.5) {$m$};
+
+    % Angle
+    \draw[dashed] (0.5,1) -- (0.5,3.5);
+    \draw[->] (0.5,2.5) arc (90:70:1.5) node[midway, above] {$\theta$};
+
+    % Length
+    \node[left] at (0.8,2.25) {$\ell$};
+
+    % Force
+    \draw[->, thick, red] (-1.5,0.65) -- (-0.5,0.65) node[above, midway] {$F$};
+
+    % Position
+    \draw[<->] (0,-0.5) -- (0.5,-0.5) node[midway, below] {$x$};
+\end{tikzpicture}
+\caption{Inverted pendulum on cart.}
+\label{fig:inverted_pendulum}
+\end{figure}
+
+Linearized equations about the upright position ($\theta = 0$):
+\begin{align}
+(M + m)\ddot{x} + m\ell\ddot{\theta} &= F \\
+m\ell\ddot{x} + m\ell^2\ddot{\theta} - mg\ell\theta &= 0
+\end{align}
+
+Transfer function from force to angle:
+\begin{equation}
+\frac{\Theta(s)}{F(s)} = \frac{1}{(M\ell)s^2 - (M+m)g}
+\end{equation}
+
+This system is \textbf{open-loop unstable} (pole in the right half-plane) and requires feedback control for stabilization.
+
+% ============================================================================
+\subsection{Exercises: Mechanical Systems}
+% ============================================================================
+
+\begin{exercise}
+A spring-mass system has $m = 2$ kg and $k = 200$ N/m. Find:
+\begin{enumerate}[label=(\alph*)]
+    \item The natural frequency in rad/s and Hz
+    \item The transfer function $X(s)/F(s)$
+    \item The response to a 10 N step force
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Add a damper with $b = 8$ N$\cdot$s/m to the system in Exercise 1.
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the damping ratio
+    \item Find the damped natural frequency
+    \item Determine if the system is underdamped, critically damped, or overdamped
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A motor with $J_m = 0.005$ kg$\cdot$m$^2$ drives a load with $J_L = 0.5$ kg$\cdot$m$^2$ through a 10:1 gear ratio.
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the reflected load inertia at the motor
+    \item Find the total effective inertia seen by the motor
+    \item Derive the transfer function from motor torque to load angle
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+For the quarter-car model, derive the transfer function from road velocity $\dot{X}_r(s)$ to body acceleration $s^2 X_s(s)$. This represents the acceleration felt by passengers.
+\end{exercise}
+
+\begin{exercise}
+Linearize the simple pendulum equation about $\theta_0 = \pi/6$ (30 degrees). Find the equilibrium torque and the linearized dynamics.
+\end{exercise}
