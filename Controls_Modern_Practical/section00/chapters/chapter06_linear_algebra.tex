@@ -14,6 +14,9 @@ Linear algebra is essential for state-space control, multi-input multi-output (M
     \item Norm: $\|\vecx\| = \sqrt{\vecx^\top\vecx}$ (Euclidean norm)
 \end{itemize}
 
+% Vector operations figure
+\input{figures/fig_ch00_vector_operations.tex}
+
 \subsubsection{Matrix Operations}
 \begin{itemize}
     \item Addition: $(\mA + \mB)_{ij} = a_{ij} + b_{ij}$
@@ -21,6 +24,9 @@ Linear algebra is essential for state-space control, multi-input multi-output (M
     \item Transpose: $(\mA^\top)_{ij} = a_{ji}$
     \item Inverse: $\mA\mA^{-1} = \mA^{-1}\mA = \mI$ (if exists)
 \end{itemize}
+
+% Matrix transformation figure
+\input{figures/fig_ch00_matrix_transformation.tex}
 
 \section{Special Matrices}
 
@@ -67,6 +73,9 @@ Eigenvalues are roots of the \textbf{characteristic equation}:
 \det(\mA - \lambda\mI) = 0
 \end{equation}
 
+% Eigenvalue visualization figure
+\input{figures/fig_ch00_eigenvalue_visualization.tex}
+
 \subsubsection{Properties}
 \begin{itemize}
     \item Sum of eigenvalues = $\trace(\mA) = \sum_i a_{ii}$
@@ -81,6 +90,64 @@ A continuous-time system $\dot{\vecx} = \mA\vecx$ is:
     \item \textbf{Stable} if all eigenvalues of $\mA$ have negative real parts
     \item \textbf{Marginally stable} if eigenvalues have non-positive real parts with simple imaginary-axis eigenvalues
     \item \textbf{Unstable} if any eigenvalue has positive real part
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example: Eigenvalues and Eigenvectors of a 2x2 Matrix]
+Find the eigenvalues and eigenvectors of:
+\[
+\mA = \begin{bmatrix} 4 & 1 \\ 2 & 3 \end{bmatrix}
+\]
+
+\textbf{Solution:}
+
+\textbf{Step 1: Find eigenvalues} by solving $\det(\mA - \lambda\mI) = 0$:
+\[
+\det\begin{bmatrix} 4-\lambda & 1 \\ 2 & 3-\lambda \end{bmatrix} = (4-\lambda)(3-\lambda) - 2 = 0
+\]
+\[
+\lambda^2 - 7\lambda + 12 - 2 = \lambda^2 - 7\lambda + 10 = 0
+\]
+\[
+(\lambda - 5)(\lambda - 2) = 0 \quad \Rightarrow \quad \lambda_1 = 5, \quad \lambda_2 = 2
+\]
+
+\textbf{Step 2: Find eigenvector for $\lambda_1 = 5$}:
+\[
+(\mA - 5\mI)\vecv_1 = \begin{bmatrix} -1 & 1 \\ 2 & -2 \end{bmatrix}\vecv_1 = \mathbf{0}
+\]
+From $-v_1 + v_2 = 0$, we get $v_2 = v_1$. Choosing $v_1 = 1$:
+\[
+\vecv_1 = \begin{bmatrix} 1 \\ 1 \end{bmatrix}
+\]
+
+\textbf{Step 3: Find eigenvector for $\lambda_2 = 2$}:
+\[
+(\mA - 2\mI)\vecv_2 = \begin{bmatrix} 2 & 1 \\ 2 & 1 \end{bmatrix}\vecv_2 = \mathbf{0}
+\]
+From $2v_1 + v_2 = 0$, we get $v_2 = -2v_1$. Choosing $v_1 = 1$:
+\[
+\vecv_2 = \begin{bmatrix} 1 \\ -2 \end{bmatrix}
+\]
+
+\textbf{Verification:} $\mA\vecv_1 = \begin{bmatrix} 5 \\ 5 \end{bmatrix} = 5\vecv_1$ \checkmark \quad and \quad $\mA\vecv_2 = \begin{bmatrix} 2 \\ -4 \end{bmatrix} = 2\vecv_2$ \checkmark
+\end{examplebox}
+
+\begin{keyconceptbox}[title=Cayley-Hamilton Theorem]
+Every square matrix satisfies its own characteristic equation. If the characteristic polynomial of $\mA$ is:
+\[
+p(\lambda) = \det(\lambda\mI - \mA) = \lambda^n + a_{n-1}\lambda^{n-1} + \cdots + a_1\lambda + a_0
+\]
+then:
+\[
+p(\mA) = \mA^n + a_{n-1}\mA^{n-1} + \cdots + a_1\mA + a_0\mI = \mathbf{0}
+\]
+
+\textbf{Applications:}
+\begin{itemize}
+    \item Computing $\mA^{-1}$ from powers of $\mA$
+    \item Expressing high powers of $\mA$ in terms of lower powers
+    \item Computing the matrix exponential $\ee^{\mA t}$
 \end{itemize}
 \end{keyconceptbox}
 
@@ -99,6 +166,47 @@ Any matrix $\mA \in \mathbb{R}^{m \times n}$:
 \mA = \mU\boldsymbol{\Sigma}\mV^\top
 \end{equation}
 where $\mU, \mV$ are orthogonal and $\boldsymbol{\Sigma}$ contains singular values.
+
+\begin{examplebox}[title=Example: Computing SVD for a Simple Matrix]
+Find the SVD of:
+\[
+\mA = \begin{bmatrix} 3 & 0 \\ 0 & 2 \end{bmatrix}
+\]
+
+\textbf{Solution:}
+
+\textbf{Step 1: Compute $\mA^\top\mA$}:
+\[
+\mA^\top\mA = \begin{bmatrix} 3 & 0 \\ 0 & 2 \end{bmatrix}\begin{bmatrix} 3 & 0 \\ 0 & 2 \end{bmatrix} = \begin{bmatrix} 9 & 0 \\ 0 & 4 \end{bmatrix}
+\]
+
+\textbf{Step 2: Find eigenvalues of $\mA^\top\mA$} (these are $\sigma_i^2$):
+
+Since this is diagonal, eigenvalues are $\sigma_1^2 = 9$ and $\sigma_2^2 = 4$.
+
+Singular values: $\sigma_1 = 3$, $\sigma_2 = 2$.
+
+\textbf{Step 3: Form $\boldsymbol{\Sigma}$}:
+\[
+\boldsymbol{\Sigma} = \begin{bmatrix} 3 & 0 \\ 0 & 2 \end{bmatrix}
+\]
+
+\textbf{Step 4: Find $\mV$} (eigenvectors of $\mA^\top\mA$):
+
+For diagonal matrix, eigenvectors are standard basis vectors:
+\[
+\mV = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} = \mI
+\]
+
+\textbf{Step 5: Find $\mU$} from $\mU = \mA\mV\boldsymbol{\Sigma}^{-1}$:
+\[
+\mU = \begin{bmatrix} 3 & 0 \\ 0 & 2 \end{bmatrix}\begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}\begin{bmatrix} 1/3 & 0 \\ 0 & 1/2 \end{bmatrix} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} = \mI
+\]
+
+\textbf{Result:} $\mA = \mU\boldsymbol{\Sigma}\mV^\top = \mI \cdot \boldsymbol{\Sigma} \cdot \mI = \boldsymbol{\Sigma}$ (as expected for a diagonal matrix).
+
+For non-diagonal matrices, the procedure involves more computation but follows the same principles.
+\end{examplebox}
 
 \subsubsection{QR Decomposition}
 \begin{equation}
@@ -122,6 +230,9 @@ The matrix exponential is crucial for solving state-space equations:
 \end{equation}
 \end{definitionbox}
 
+% Matrix exponential figure
+\input{figures/fig_ch00_matrix_exponential.tex}
+
 \subsubsection{Properties}
 \begin{itemize}
     \item $\ee^{\mathbf{0}} = \mI$
@@ -141,6 +252,34 @@ If $\mA = \mV\boldsymbol{\Lambda}\mV^{-1}$:
 \ee^{\mA t} = \mV\ee^{\boldsymbol{\Lambda} t}\mV^{-1} = \mV\diag(\ee^{\lambda_1 t}, \ldots, \ee^{\lambda_n t})\mV^{-1}
 \end{equation}
 
+\begin{examplebox}[title=Example: Computing Matrix Exponential for a Simple System]
+Compute $\ee^{\mA t}$ for the system matrix:
+\[
+\mA = \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix}
+\]
+
+\textbf{Solution:}
+
+\textbf{Method 1: Direct computation (diagonal matrix)}
+
+For a diagonal matrix, the matrix exponential is simply:
+\[
+\ee^{\mA t} = \begin{bmatrix} \ee^{-t} & 0 \\ 0 & \ee^{-2t} \end{bmatrix}
+\]
+
+\textbf{Method 2: Using the Laplace transform}
+\[
+(s\mI - \mA)^{-1} = \begin{bmatrix} s+1 & 0 \\ 0 & s+2 \end{bmatrix}^{-1} = \begin{bmatrix} \frac{1}{s+1} & 0 \\ 0 & \frac{1}{s+2} \end{bmatrix}
+\]
+
+Taking the inverse Laplace transform:
+\[
+\ee^{\mA t} = \iLaplace\left\{\begin{bmatrix} \frac{1}{s+1} & 0 \\ 0 & \frac{1}{s+2} \end{bmatrix}\right\} = \begin{bmatrix} \ee^{-t} & 0 \\ 0 & \ee^{-2t} \end{bmatrix}
+\]
+
+\textbf{Interpretation:} The state transition matrix $\ee^{\mA t}$ shows that both modes decay exponentially, with eigenvalues $\lambda_1 = -1$ and $\lambda_2 = -2$ determining the decay rates. The system is stable since both eigenvalues have negative real parts.
+\end{examplebox}
+
 \section{Linear Systems of Equations}
 
 Solving $\mA\vecx = \vecb$:
@@ -150,11 +289,109 @@ Solving $\mA\vecx = \vecb$:
     \item \textbf{Infinite solutions} if $\nullspace(\mA) \neq \{\mathbf{0}\}$
 \end{itemize}
 
+\begin{examplebox}[title=Example: Solving a System Using Gaussian Elimination]
+Solve the system $\mA\vecx = \vecb$ where:
+\[
+\begin{bmatrix} 2 & 1 & -1 \\ -3 & -1 & 2 \\ -2 & 1 & 2 \end{bmatrix}\begin{bmatrix} x_1 \\ x_2 \\ x_3 \end{bmatrix} = \begin{bmatrix} 8 \\ -11 \\ -3 \end{bmatrix}
+\]
+
+\textbf{Solution:}
+
+\textbf{Step 1: Form augmented matrix}
+\[
+\left[\begin{array}{ccc|c} 2 & 1 & -1 & 8 \\ -3 & -1 & 2 & -11 \\ -2 & 1 & 2 & -3 \end{array}\right]
+\]
+
+\textbf{Step 2: Forward elimination}
+
+$R_2 \leftarrow R_2 + \frac{3}{2}R_1$:
+\[
+\left[\begin{array}{ccc|c} 2 & 1 & -1 & 8 \\ 0 & 1/2 & 1/2 & 1 \\ -2 & 1 & 2 & -3 \end{array}\right]
+\]
+
+$R_3 \leftarrow R_3 + R_1$:
+\[
+\left[\begin{array}{ccc|c} 2 & 1 & -1 & 8 \\ 0 & 1/2 & 1/2 & 1 \\ 0 & 2 & 1 & 5 \end{array}\right]
+\]
+
+$R_3 \leftarrow R_3 - 4R_2$:
+\[
+\left[\begin{array}{ccc|c} 2 & 1 & -1 & 8 \\ 0 & 1/2 & 1/2 & 1 \\ 0 & 0 & -1 & 1 \end{array}\right]
+\]
+
+\textbf{Step 3: Back substitution}
+
+From Row 3: $-x_3 = 1 \Rightarrow x_3 = -1$
+
+From Row 2: $\frac{1}{2}x_2 + \frac{1}{2}(-1) = 1 \Rightarrow x_2 = 3$
+
+From Row 1: $2x_1 + 3 - (-1) = 8 \Rightarrow 2x_1 = 4 \Rightarrow x_1 = 2$
+
+\textbf{Solution:} $\vecx = \begin{bmatrix} 2 \\ 3 \\ -1 \end{bmatrix}$
+
+\textbf{Verification:} $\mA\vecx = \begin{bmatrix} 4+3+1 \\ -6-3-2 \\ -4+3-2 \end{bmatrix} = \begin{bmatrix} 8 \\ -11 \\ -3 \end{bmatrix} = \vecb$ \checkmark
+\end{examplebox}
+
 \subsubsection{Least Squares}
 When $\mA\vecx = \vecb$ has no exact solution:
 \begin{equation}
 \hat{\vecx} = (\mA^\top\mA)^{-1}\mA^\top\vecb = \mA^\dagger\vecb
 \end{equation}
 where $\mA^\dagger$ is the Moore-Penrose pseudoinverse.
+
+\section{Controllability and Observability}
+
+Two fundamental concepts in state-space control theory determine whether a system can be fully controlled and whether its internal states can be determined from measurements.
+
+\begin{definitionbox}[title=Definition 0.7: Controllability Matrix]
+For a linear time-invariant system $\dot{\vecx} = \mA\vecx + \mB\vecu$, the \textbf{controllability matrix} is:
+\begin{equation}
+\mathcal{C} = \begin{bmatrix} \mB & \mA\mB & \mA^2\mB & \cdots & \mA^{n-1}\mB \end{bmatrix}
+\end{equation}
+where $n$ is the dimension of the state vector $\vecx$.
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Controllability Condition]
+A system is \textbf{controllable} (or reachable) if and only if the controllability matrix has full row rank:
+\[
+\rank(\mathcal{C}) = n
+\]
+
+Physical interpretation: The system is controllable if the input $\vecu$ can drive the state from any initial condition to any desired final state in finite time.
+\end{keyconceptbox}
+
+\begin{definitionbox}[title=Definition 0.8: Observability Matrix]
+For a linear time-invariant system with output $\vecy = \mC\vecx$, the \textbf{observability matrix} is:
+\begin{equation}
+\mathcal{O} = \begin{bmatrix} \mC \\ \mC\mA \\ \mC\mA^2 \\ \vdots \\ \mC\mA^{n-1} \end{bmatrix}
+\end{equation}
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Observability Condition]
+A system is \textbf{observable} if and only if the observability matrix has full column rank:
+\[
+\rank(\mathcal{O}) = n
+\]
+
+Physical interpretation: The system is observable if the initial state $\vecx(0)$ can be uniquely determined from knowledge of the input $\vecu(t)$ and output $\vecy(t)$ over a finite time interval.
+\end{keyconceptbox}
+
+\subsubsection{Connection to State-Space Control}
+
+\begin{warningbox}[title=Importance for Control Design]
+\begin{itemize}
+    \item \textbf{Pole placement} (state feedback): Requires controllability. If the system is not controllable, some eigenvalues cannot be moved by state feedback.
+    \item \textbf{Observer design}: Requires observability. If the system is not observable, some states cannot be estimated from output measurements.
+    \item \textbf{Kalman decomposition}: Any LTI system can be decomposed into controllable/uncontrollable and observable/unobservable subsystems.
+\end{itemize}
+\end{warningbox}
+
+The duality between controllability and observability is a fundamental result:
+\begin{itemize}
+    \item The pair $(\mA, \mB)$ is controllable if and only if $(\mA^\top, \mB^\top)$ is observable.
+    \item The pair $(\mA, \mC)$ is observable if and only if $(\mA^\top, \mC^\top)$ is controllable.
+\end{itemize}
+
+This duality is essential for understanding the relationship between controller design and observer design in modern control theory.
 
 % ============================================================================
