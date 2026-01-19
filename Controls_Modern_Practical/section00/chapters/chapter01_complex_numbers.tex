@@ -2,26 +2,6 @@
 % CHAPTER 0: MATHEMATICAL FOUNDATIONS FOR CONTROL SYSTEMS
 % ============================================================================
 
-% \chapter{Mathematical Foundations}
-% \label{ch:math_foundations}
-
-\begin{keyconceptbox}[title=Learning Objectives]
-After completing this chapter, you will be able to:
-\begin{itemize}
-    \item Perform arithmetic and algebraic operations with complex numbers
-    \item Apply calculus techniques including differentiation, integration, and differential equations
-    \item Use Laplace and Fourier transforms to analyze systems
-    \item Perform matrix operations and understand eigenvalue analysis
-    \item Apply probability and statistics concepts relevant to stochastic control and machine learning
-    \item Understand optimization fundamentals for control design
-    \item Work with discrete-time mathematics for digital control systems
-\end{itemize}
-\end{keyconceptbox}
-
-Control systems engineering draws upon a rich mathematical foundation spanning calculus, linear algebra, complex analysis, differential equations, and increasingly, probability theory and optimization. This chapter provides a comprehensive review of these mathematical tools, ensuring all readers have the prerequisite knowledge for the chapters that follow.
-
-Whether you are approaching control from a mechanical, electrical, chemical, biomedical, aerospace, or computer science background, mastery of these fundamentals will enable you to understand system behavior, design controllers, and implement modern machine learning-based control strategies.
-
 % ============================================================================
 \chapter{Complex Numbers and Imaginary Arithmetic}
 \label{ch:complex_numbers}
@@ -67,6 +47,9 @@ Euler's formula, one of the most elegant results in mathematics, states:
 \end{equation}
 
 \input{figures/fig_ch00_complex_plane.tex}
+\input{figures/fig_ch00_complex_multiplication.tex}
+\input{figures/fig_ch00_complex_conjugate.tex}
+\input{figures/fig_ch00_roots_of_unity.tex}
 
 \section{Arithmetic Operations}
 
@@ -115,6 +98,167 @@ Find the polar form, magnitude, and phase of $z = 3 + 4\jj$.
 z &= 5\ee^{\jj(0.927)} = 5\angle 53.13°
 \end{align}
 \end{examplebox}
+
+\begin{examplebox}[title=Example 0.2: Multiplication and Division in Polar Form]
+Given $z_1 = 2\ee^{\jj\pi/6}$ and $z_2 = 3\ee^{\jj\pi/4}$, compute $z_1 \cdot z_2$ and $z_1 / z_2$.
+
+\textbf{Solution:}
+
+For multiplication, we multiply magnitudes and add angles:
+\begin{align}
+z_1 \cdot z_2 &= (2)(3) \ee^{\jj(\pi/6 + \pi/4)} = 6\ee^{\jj(5\pi/12)}
+\end{align}
+Converting to rectangular form: $z_1 \cdot z_2 = 6\cos(5\pi/12) + 6\jj\sin(5\pi/12) \approx 1.55 + 5.80\jj$.
+
+For division, we divide magnitudes and subtract angles:
+\begin{align}
+\frac{z_1}{z_2} &= \frac{2}{3} \ee^{\jj(\pi/6 - \pi/4)} = \frac{2}{3}\ee^{-\jj\pi/12}
+\end{align}
+Converting to rectangular form: $z_1/z_2 = \frac{2}{3}\cos(-\pi/12) + \frac{2}{3}\jj\sin(-\pi/12) \approx 0.644 - 0.173\jj$.
+
+\textbf{Key insight:} Polar form makes multiplication and division much simpler than rectangular form, which is why it is preferred in frequency response analysis.
+\end{examplebox}
+
+\begin{examplebox}[title=Example 0.3: Finding All Cube Roots of a Complex Number]
+Find all cube roots of $z = 8$.
+
+\textbf{Solution:}
+
+First, write $z = 8$ in polar form: $z = 8\ee^{\jj \cdot 0} = 8\ee^{\jj \cdot 2\pi k}$ for any integer $k$.
+
+The $n$th roots of $z = r\ee^{\jj\theta}$ are given by:
+\begin{equation*}
+z^{1/n} = r^{1/n} \ee^{\jj(\theta + 2\pi k)/n}, \quad k = 0, 1, \ldots, n-1
+\end{equation*}
+
+For the cube roots ($n = 3$) of $8\ee^{\jj \cdot 0}$:
+\begin{align}
+z_0 &= 8^{1/3} \ee^{\jj(0 + 2\pi \cdot 0)/3} = 2\ee^{\jj \cdot 0} = 2 \\
+z_1 &= 8^{1/3} \ee^{\jj(0 + 2\pi \cdot 1)/3} = 2\ee^{\jj 2\pi/3} = 2\left(-\frac{1}{2} + \jj\frac{\sqrt{3}}{2}\right) = -1 + \jj\sqrt{3} \\
+z_2 &= 8^{1/3} \ee^{\jj(0 + 2\pi \cdot 2)/3} = 2\ee^{\jj 4\pi/3} = 2\left(-\frac{1}{2} - \jj\frac{\sqrt{3}}{2}\right) = -1 - \jj\sqrt{3}
+\end{align}
+
+\textbf{Verification:} We can verify $(2)^3 = 8$, $(-1 + \jj\sqrt{3})^3 = 8$, and $(-1 - \jj\sqrt{3})^3 = 8$.
+
+\textbf{Geometric interpretation:} The three roots are equally spaced on a circle of radius $2$ in the complex plane, separated by $120°$ (i.e., $2\pi/3$ radians).
+\end{examplebox}
+
+\begin{examplebox}[title=Example 0.4: Deriving Trigonometric Identities Using Euler's Formula]
+Use Euler's formula to derive the double-angle formulas for $\cos(2\theta)$ and $\sin(2\theta)$.
+
+\textbf{Solution:}
+
+From Euler's formula: $\ee^{\jj\theta} = \cos\theta + \jj\sin\theta$.
+
+Consider $\ee^{\jj(2\theta)}$. We can write this in two ways:
+
+\textbf{Method 1:} Direct application of Euler's formula:
+\begin{equation*}
+\ee^{\jj(2\theta)} = \cos(2\theta) + \jj\sin(2\theta)
+\end{equation*}
+
+\textbf{Method 2:} Using properties of exponents:
+\begin{align*}
+\ee^{\jj(2\theta)} &= \left(\ee^{\jj\theta}\right)^2 = (\cos\theta + \jj\sin\theta)^2 \\
+&= \cos^2\theta + 2\jj\cos\theta\sin\theta + \jj^2\sin^2\theta \\
+&= (\cos^2\theta - \sin^2\theta) + \jj(2\cos\theta\sin\theta)
+\end{align*}
+
+Equating real and imaginary parts from both methods:
+\begin{align}
+\Real: \quad \cos(2\theta) &= \cos^2\theta - \sin^2\theta \\
+\Imag: \quad \sin(2\theta) &= 2\cos\theta\sin\theta
+\end{align}
+
+\textbf{Extension:} This technique can be used to derive any multiple-angle formula. For example, expanding $(\ee^{\jj\theta})^3$ yields the triple-angle formulas.
+\end{examplebox}
+
+\section{Properties of Complex Operations}
+
+This section provides formal proofs of fundamental properties of complex number operations. These properties are essential for understanding frequency response analysis and stability theory.
+
+\begin{keyconceptbox}[title=Key Property: Magnitude of a Product]
+For any two complex numbers $z_1$ and $z_2$:
+\begin{equation}
+|z_1 \cdot z_2| = |z_1| \cdot |z_2|
+\end{equation}
+The magnitude of a product equals the product of the magnitudes.
+\end{keyconceptbox}
+
+\begin{proof}
+Let $z_1 = r_1 \ee^{\jj\theta_1}$ and $z_2 = r_2 \ee^{\jj\theta_2}$ be two complex numbers in polar form, where $r_1 = |z_1|$ and $r_2 = |z_2|$.
+
+The product is:
+\begin{equation*}
+z_1 \cdot z_2 = r_1 \ee^{\jj\theta_1} \cdot r_2 \ee^{\jj\theta_2} = r_1 r_2 \ee^{\jj(\theta_1 + \theta_2)}
+\end{equation*}
+
+Taking the magnitude:
+\begin{equation*}
+|z_1 \cdot z_2| = |r_1 r_2 \ee^{\jj(\theta_1 + \theta_2)}| = r_1 r_2 = |z_1| \cdot |z_2|
+\end{equation*}
+
+where we used the fact that $|\ee^{\jj\phi}| = 1$ for any real $\phi$.
+\end{proof}
+
+\begin{keyconceptbox}[title=Key Property: Argument of a Product]
+For any two complex numbers $z_1$ and $z_2$ (with $z_1, z_2 \neq 0$):
+\begin{equation}
+\arg(z_1 \cdot z_2) = \arg(z_1) + \arg(z_2) \pmod{2\pi}
+\end{equation}
+The argument of a product equals the sum of the arguments (modulo $2\pi$).
+\end{keyconceptbox}
+
+\begin{proof}
+Let $z_1 = r_1 \ee^{\jj\theta_1}$ and $z_2 = r_2 \ee^{\jj\theta_2}$, where $\theta_1 = \arg(z_1)$ and $\theta_2 = \arg(z_2)$.
+
+The product is:
+\begin{equation*}
+z_1 \cdot z_2 = r_1 r_2 \ee^{\jj(\theta_1 + \theta_2)}
+\end{equation*}
+
+By definition of the argument (the angle in polar form):
+\begin{equation*}
+\arg(z_1 \cdot z_2) = \theta_1 + \theta_2 = \arg(z_1) + \arg(z_2) \pmod{2\pi}
+\end{equation*}
+
+The modulo $2\pi$ accounts for the fact that angles differing by $2\pi$ represent the same direction.
+\end{proof}
+
+\begin{keyconceptbox}[title=Key Property: Magnitude Squared via Conjugate]
+For any complex number $z$:
+\begin{equation}
+|z|^2 = z \cdot z^*
+\end{equation}
+The squared magnitude equals the product of a number and its complex conjugate.
+\end{keyconceptbox}
+
+\begin{proof}
+Let $z = a + \jj b$ where $a, b \in \mathbb{R}$.
+
+The complex conjugate is $z^* = a - \jj b$.
+
+Computing the product:
+\begin{align*}
+z \cdot z^* &= (a + \jj b)(a - \jj b) \\
+&= a^2 - \jj ab + \jj ab - \jj^2 b^2 \\
+&= a^2 - (-1)b^2 \\
+&= a^2 + b^2
+\end{align*}
+
+By definition of magnitude: $|z|^2 = (\sqrt{a^2 + b^2})^2 = a^2 + b^2$.
+
+Therefore: $|z|^2 = z \cdot z^*$.
+
+\textbf{Alternative proof using polar form:} Let $z = r\ee^{\jj\theta}$. Then $z^* = r\ee^{-\jj\theta}$, and:
+\begin{equation*}
+z \cdot z^* = r\ee^{\jj\theta} \cdot r\ee^{-\jj\theta} = r^2 \ee^{\jj \cdot 0} = r^2 = |z|^2
+\end{equation*}
+\end{proof}
+
+\begin{note}
+The property $|z|^2 = z \cdot z^*$ is particularly useful in control systems when computing power spectral densities and when rationalizing complex-valued transfer functions for frequency response analysis.
+\end{note}
 
 \section{Complex Numbers in Control Systems}
 
