@@ -2,77 +2,700 @@
 \label{ch:special_functions}
 % ============================================================================
 
-\section{Unit Step Function}
+Special functions and standard test signals form the foundation of control systems analysis. Understanding these functions allows engineers to characterize system behavior, predict responses to various inputs, and design controllers that meet performance specifications.
 
+% ============================================================================
+\section{Standard Test Inputs}
+% ============================================================================
+
+Control systems are analyzed using a set of canonical test inputs. These inputs are chosen because they represent fundamental building blocks from which more complex signals can be constructed, and because they have straightforward Laplace transforms that simplify analysis.
+
+\input{figures/fig_ch00_test_signals.tex}
+
+% ----------------------------------------------------------------------------
+\subsection{Impulse Function (Dirac Delta)}
+
+\begin{definitionbox}[title=Definition 10.1: Dirac Delta Function]
+The \textbf{Dirac delta function} (or unit impulse) $\delta(t)$ is a generalized function defined by:
 \begin{equation}
-u(t) = \begin{cases} 0 & t < 0 \\ 1 & t \geq 0 \end{cases}
+\delta(t) = 0 \quad \text{for } t \neq 0
+\end{equation}
+with the property that:
+\begin{equation}
+\int_{-\infty}^{\infty} \delta(t) \, \dd t = 1
+\end{equation}
+\end{definitionbox}
+
+The delta function can be understood as the limit of a sequence of increasingly narrow, tall pulses whose area remains unity. One common representation is:
+\begin{equation}
+\delta(t) = \lim_{\epsilon \to 0} \begin{cases} \frac{1}{\epsilon} & 0 \leq t < \epsilon \\ 0 & \text{otherwise} \end{cases}
 \end{equation}
 
-The discrete-time unit step:
-\begin{equation}
-u[n] = \begin{cases} 0 & n < 0 \\ 1 & n \geq 0 \end{cases}
-\end{equation}
-
-\section{Impulse (Dirac Delta) Function}
-
-The \textbf{Dirac delta function} is defined by:
-\begin{align}
-\delta(t) &= 0 \quad \text{for } t \neq 0 \\
-\int_{-\infty}^{\infty} \delta(t) \, \dd t &= 1
-\end{align}
-
-\subsubsection{Sifting property}
+\begin{keyconceptbox}[title=Sifting Property]
+The most important property of the delta function is the \textbf{sifting property}:
 \begin{equation}
 \int_{-\infty}^{\infty} f(t)\delta(t-t_0) \, \dd t = f(t_0)
 \end{equation}
+This property ``sifts out'' the value of $f(t)$ at the point $t = t_0$.
+\end{keyconceptbox}
 
-Relationship to step function:
+\subsubsection{Properties of the Delta Function}
+
+\begin{enumerate}
+    \item \textbf{Scaling:} $\delta(at) = \frac{1}{|a|}\delta(t)$ for $a \neq 0$
+    \item \textbf{Symmetry:} $\delta(-t) = \delta(t)$
+    \item \textbf{Multiplication:} $f(t)\delta(t-t_0) = f(t_0)\delta(t-t_0)$
+    \item \textbf{Derivative sifting:} $\int_{-\infty}^{\infty} f(t)\delta'(t) \, \dd t = -f'(0)$
+\end{enumerate}
+
+\subsubsection{Laplace Transform}
+
 \begin{equation}
-\delta(t) = \frac{\dd u(t)}{\dd t}
+\boxed{\Laplace\{\delta(t)\} = 1}
 \end{equation}
 
-\section{Ramp Function}
+\begin{proof}
+Using the definition of the Laplace transform and the sifting property:
+\begin{equation}
+\Laplace\{\delta(t)\} = \int_0^\infty \delta(t)\ee^{-st} \, \dd t = \ee^{-s \cdot 0} = 1
+\end{equation}
+\end{proof}
 
+For a delayed impulse:
+\begin{equation}
+\Laplace\{\delta(t-t_0)\} = \ee^{-st_0} \quad \text{for } t_0 \geq 0
+\end{equation}
+
+\begin{note}
+The impulse response of a system is the output when the input is a unit impulse $\delta(t)$. Since $\Laplace\{\delta(t)\} = 1$, the impulse response $h(t)$ has Laplace transform $H(s)$, which is the system's transfer function. This makes the impulse response fundamental to system characterization.
+\end{note}
+
+% ----------------------------------------------------------------------------
+\subsection{Unit Step Function}
+
+\begin{definitionbox}[title=Definition 10.2: Unit Step Function]
+The \textbf{unit step function} (Heaviside function) is defined as:
+\begin{equation}
+u(t) = \begin{cases} 0 & t < 0 \\ 1 & t \geq 0 \end{cases}
+\end{equation}
+\end{definitionbox}
+
+The unit step function is essential for representing signals that ``turn on'' at a specific time. A delayed step function $u(t-t_0)$ turns on at time $t = t_0$.
+
+\subsubsection{Laplace Transform}
+
+\begin{equation}
+\boxed{\Laplace\{u(t)\} = \frac{1}{s}}
+\end{equation}
+
+\begin{proof}
+\begin{equation}
+\Laplace\{u(t)\} = \int_0^\infty 1 \cdot \ee^{-st} \, \dd t = \left[-\frac{1}{s}\ee^{-st}\right]_0^\infty = 0 - \left(-\frac{1}{s}\right) = \frac{1}{s}
+\end{equation}
+for $\Real(s) > 0$.
+\end{proof}
+
+For a delayed step:
+\begin{equation}
+\Laplace\{u(t-t_0)\} = \frac{\ee^{-st_0}}{s} \quad \text{for } t_0 \geq 0
+\end{equation}
+
+\begin{examplebox}[title=Example 10.1: Step Response of a First-Order System]
+Find the step response of the first-order system $G(s) = \frac{1}{s+a}$.
+
+\textbf{Solution:}
+The output in the $s$-domain is:
+\begin{equation}
+Y(s) = G(s) \cdot U(s) = \frac{1}{s+a} \cdot \frac{1}{s} = \frac{1}{s(s+a)}
+\end{equation}
+
+Using partial fraction expansion:
+\begin{equation}
+\frac{1}{s(s+a)} = \frac{A}{s} + \frac{B}{s+a}
+\end{equation}
+
+Applying the cover-up method:
+\begin{align}
+A &= \left.\frac{1}{s+a}\right|_{s=0} = \frac{1}{a} \\
+B &= \left.\frac{1}{s}\right|_{s=-a} = -\frac{1}{a}
+\end{align}
+
+Therefore:
+\begin{equation}
+Y(s) = \frac{1}{a}\left(\frac{1}{s} - \frac{1}{s+a}\right)
+\end{equation}
+
+Taking the inverse Laplace transform:
+\begin{equation}
+\boxed{y(t) = \frac{1}{a}(1 - \ee^{-at})u(t)}
+\end{equation}
+
+This shows the characteristic exponential approach to a final value of $1/a$ with time constant $\tau = 1/a$.
+\end{examplebox}
+
+% ----------------------------------------------------------------------------
+\subsection{Ramp Function}
+
+\begin{definitionbox}[title=Definition 10.3: Ramp Function]
+The \textbf{ramp function} is defined as:
 \begin{equation}
 r(t) = t \cdot u(t) = \begin{cases} 0 & t < 0 \\ t & t \geq 0 \end{cases}
 \end{equation}
+\end{definitionbox}
 
-\section{Sinusoidal Functions}
+The ramp function represents a signal that increases linearly with time. It is used to test how well a system can track constantly changing inputs (velocity inputs in position control systems).
 
-General sinusoid:
+\subsubsection{Laplace Transform}
+
 \begin{equation}
-x(t) = A\sin(\omega t + \phi) = A\cos(\omega t + \phi - \pi/2)
+\boxed{\Laplace\{r(t)\} = \Laplace\{t \cdot u(t)\} = \frac{1}{s^2}}
 \end{equation}
 
-where:
+\begin{proof}
+Using integration by parts with $u = t$ and $\dd v = \ee^{-st}\dd t$:
+\begin{align}
+\Laplace\{t\} &= \int_0^\infty t\ee^{-st} \, \dd t \\
+&= \left[-\frac{t}{s}\ee^{-st}\right]_0^\infty + \frac{1}{s}\int_0^\infty \ee^{-st} \, \dd t \\
+&= 0 + \frac{1}{s} \cdot \frac{1}{s} = \frac{1}{s^2}
+\end{align}
+\end{proof}
+
+For a ramp of slope $K$:
+\begin{equation}
+\Laplace\{Kt \cdot u(t)\} = \frac{K}{s^2}
+\end{equation}
+
+% ----------------------------------------------------------------------------
+\subsection{Parabolic Function}
+
+\begin{definitionbox}[title=Definition 10.4: Parabolic Function]
+The \textbf{parabolic function} (or quadratic ramp) is defined as:
+\begin{equation}
+p(t) = \frac{1}{2}t^2 \cdot u(t) = \begin{cases} 0 & t < 0 \\ \frac{1}{2}t^2 & t \geq 0 \end{cases}
+\end{equation}
+\end{definitionbox}
+
+The parabolic input represents constant acceleration. It tests a system's ability to track accelerating inputs.
+
+\subsubsection{Laplace Transform}
+
+\begin{equation}
+\boxed{\Laplace\left\{\frac{1}{2}t^2 \cdot u(t)\right\} = \frac{1}{s^3}}
+\end{equation}
+
+More generally:
+\begin{equation}
+\Laplace\{t^n \cdot u(t)\} = \frac{n!}{s^{n+1}}
+\end{equation}
+
+\begin{keyconceptbox}[title=Standard Test Input Hierarchy]
+The standard test inputs form a hierarchy related by differentiation:
+\begin{equation}
+\text{Parabolic} \xrightarrow{\frac{\dd}{\dd t}} \text{Ramp} \xrightarrow{\frac{\dd}{\dd t}} \text{Step} \xrightarrow{\frac{\dd}{\dd t}} \text{Impulse}
+\end{equation}
+Equivalently, in the $s$-domain:
+\begin{equation}
+\frac{1}{s^3} \xrightarrow{\times s} \frac{1}{s^2} \xrightarrow{\times s} \frac{1}{s} \xrightarrow{\times s} 1
+\end{equation}
+\end{keyconceptbox}
+
+% ----------------------------------------------------------------------------
+\subsection{Sinusoidal Input}
+
+\begin{definitionbox}[title=Definition 10.5: Sinusoidal Functions]
+The fundamental sinusoidal functions are:
+\begin{align}
+x(t) &= A\sin(\omega t + \phi) \\
+x(t) &= A\cos(\omega t + \phi)
+\end{align}
+where $A$ is the amplitude, $\omega$ is the angular frequency (rad/s), and $\phi$ is the phase (rad).
+\end{definitionbox}
+
+Key parameters:
 \begin{itemize}
-    \item $A$ = amplitude
-    \item $\omega = 2\pi f$ = angular frequency (rad/s)
-    \item $f$ = frequency (Hz)
-    \item $\phi$ = phase (rad)
-    \item $T = 1/f = 2\pi/\omega$ = period (s)
+    \item \textbf{Amplitude:} $A$ (peak value)
+    \item \textbf{Angular frequency:} $\omega = 2\pi f$ (rad/s)
+    \item \textbf{Frequency:} $f = \omega/(2\pi)$ (Hz)
+    \item \textbf{Period:} $T = 1/f = 2\pi/\omega$ (s)
+    \item \textbf{Phase:} $\phi$ (rad or degrees)
 \end{itemize}
 
-\subsubsection{Complex exponential representation}
+\subsubsection{Laplace Transforms}
+
+\begin{align}
+\Laplace\{\sin\omega t\} &= \frac{\omega}{s^2 + \omega^2} \\
+\Laplace\{\cos\omega t\} &= \frac{s}{s^2 + \omega^2}
+\end{align}
+
+For damped sinusoids:
+\begin{align}
+\Laplace\{\ee^{-at}\sin\omega t\} &= \frac{\omega}{(s+a)^2 + \omega^2} \\
+\Laplace\{\ee^{-at}\cos\omega t\} &= \frac{s+a}{(s+a)^2 + \omega^2}
+\end{align}
+
+\subsubsection{Complex Exponential Representation}
+
+Using Euler's formula, sinusoids can be expressed as:
+\begin{align}
+\cos\omega t &= \Real\{\ee^{\jj\omega t}\} = \frac{\ee^{\jj\omega t} + \ee^{-\jj\omega t}}{2} \\
+\sin\omega t &= \Imag\{\ee^{\jj\omega t}\} = \frac{\ee^{\jj\omega t} - \ee^{-\jj\omega t}}{2\jj}
+\end{align}
+
+\begin{note}
+Sinusoidal inputs are fundamental for frequency response analysis. When a sinusoidal input $A\sin(\omega t)$ is applied to a stable LTI system with transfer function $G(s)$, the steady-state output is:
 \begin{equation}
-A\cos(\omega t + \phi) = \Real\{A\ee^{\jj(\omega t + \phi)}\}
+y_{ss}(t) = A|G(\jj\omega)|\sin(\omega t + \angle G(\jj\omega))
+\end{equation}
+The magnitude $|G(\jj\omega)|$ and phase $\angle G(\jj\omega)$ characterize the system's frequency response.
+\end{note}
+
+% ----------------------------------------------------------------------------
+\subsection{Summary of Standard Test Inputs}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Signal} & \textbf{Time Domain} & \textbf{Laplace Transform} & \textbf{Physical Meaning} \\
+\midrule
+Impulse & $\delta(t)$ & $1$ & Instantaneous shock \\
+Step & $u(t)$ & $\frac{1}{s}$ & Sudden constant input \\
+Ramp & $t \cdot u(t)$ & $\frac{1}{s^2}$ & Constant velocity \\
+Parabolic & $\frac{1}{2}t^2 \cdot u(t)$ & $\frac{1}{s^3}$ & Constant acceleration \\
+Sine & $\sin\omega t$ & $\frac{\omega}{s^2+\omega^2}$ & Oscillatory input \\
+Cosine & $\cos\omega t$ & $\frac{s}{s^2+\omega^2}$ & Oscillatory input \\
+Exponential & $\ee^{-at}$ & $\frac{1}{s+a}$ & Decay/growth \\
+\bottomrule
+\end{tabular}
+\caption{Summary of standard test inputs and their Laplace transforms.}
+\label{tab:test_inputs}
+\end{table}
+
+% ============================================================================
+\section{Singularity Functions}
+% ============================================================================
+
+The standard test inputs are related through differentiation and integration, forming a family called \textbf{singularity functions}. Understanding these relationships provides powerful tools for signal analysis.
+
+\begin{definitionbox}[title=Definition 10.6: Singularity Functions]
+The \textbf{singularity functions} are a family of functions related by differentiation:
+\begin{align}
+u_{-2}(t) &= \delta'(t) \quad \text{(doublet)} \\
+u_{-1}(t) &= \delta(t) \quad \text{(impulse)} \\
+u_0(t) &= u(t) \quad \text{(step)} \\
+u_1(t) &= r(t) = tu(t) \quad \text{(ramp)} \\
+u_2(t) &= \frac{t^2}{2}u(t) \quad \text{(parabolic)}
+\end{align}
+In general: $u_n(t) = \frac{t^n}{n!}u(t)$ for $n \geq 0$.
+\end{definitionbox}
+
+\subsection{Differentiation and Integration Relationships}
+
+The singularity functions satisfy:
+\begin{align}
+\frac{\dd}{\dd t}u_n(t) &= u_{n-1}(t) \\
+\int_{-\infty}^t u_n(\tau) \, \dd\tau &= u_{n+1}(t)
+\end{align}
+
+This gives the important relationships:
+\begin{equation}
+\boxed{\delta(t) = \frac{\dd u(t)}{\dd t}, \qquad u(t) = \int_{-\infty}^t \delta(\tau) \, \dd\tau}
 \end{equation}
 
-\section{Exponential Functions}
-
-\subsubsection{Real exponential}
 \begin{equation}
-x(t) = A\ee^{\sigma t}
+\boxed{u(t) = \frac{\dd r(t)}{\dd t}, \qquad r(t) = \int_{-\infty}^t u(\tau) \, \dd\tau}
 \end{equation}
+
+\subsection{Laplace Transform Relationships}
+
+In the $s$-domain, differentiation corresponds to multiplication by $s$:
+\begin{equation}
+\Laplace\{u_n(t)\} = \frac{1}{s^{n+1}} \quad \text{for } n \geq -1
+\end{equation}
+
+This gives:
+\begin{align}
+\Laplace\{\delta(t)\} &= 1 \\
+\Laplace\{u(t)\} &= \frac{1}{s} \\
+\Laplace\{r(t)\} &= \frac{1}{s^2} \\
+\Laplace\{p(t)\} &= \frac{1}{s^3}
+\end{align}
+
+\begin{examplebox}[title=Example 10.2: Using Singularity Function Relationships]
+Given that the impulse response of a system is $h(t) = \ee^{-2t}u(t)$, find the step response.
+
+\textbf{Solution:}
+Since the step function is the integral of the impulse:
+\begin{equation}
+\text{Step response} = \int_0^t h(\tau) \, \dd\tau = \int_0^t \ee^{-2\tau} \, \dd\tau
+\end{equation}
+
+Evaluating:
+\begin{equation}
+y(t) = \left[-\frac{1}{2}\ee^{-2\tau}\right]_0^t = -\frac{1}{2}\ee^{-2t} + \frac{1}{2} = \frac{1}{2}(1 - \ee^{-2t})
+\end{equation}
+
+\textbf{Alternative approach using Laplace transforms:}
+
+The transfer function is $H(s) = \frac{1}{s+2}$.
+
+Step response: $Y(s) = H(s) \cdot \frac{1}{s} = \frac{1}{s(s+2)} = \frac{1}{2}\left(\frac{1}{s} - \frac{1}{s+2}\right)$
+
+Therefore: $\boxed{y(t) = \frac{1}{2}(1 - \ee^{-2t})u(t)}$
+\end{examplebox}
+
+\subsection{Use in System Analysis}
+
+Singularity functions are used extensively in control systems:
+
+\begin{enumerate}
+    \item \textbf{Impulse Response:} The response to $\delta(t)$ is the system's impulse response $h(t)$, whose Laplace transform is the transfer function $H(s)$.
+
+    \item \textbf{Step Response:} The response to $u(t)$ reveals the system's transient behavior and steady-state characteristics.
+
+    \item \textbf{Ramp Response:} The response to $r(t)$ shows the system's tracking ability for linearly varying inputs.
+
+    \item \textbf{Error Constants:} The position, velocity, and acceleration error constants ($K_p$, $K_v$, $K_a$) are defined using step, ramp, and parabolic inputs respectively.
+\end{enumerate}
+
+\input{figures/fig_ch00_pulse_signals.tex}
+
+% ============================================================================
+\section{The Gamma Function}
+% ============================================================================
+
+The gamma function extends the concept of factorial to non-integer and complex arguments, making it essential for generalizing Laplace transform pairs.
+
+\begin{definitionbox}[title=Definition 10.7: Gamma Function]
+The \textbf{gamma function} is defined for $\Real(z) > 0$ by:
+\begin{equation}
+\Gamma(z) = \int_0^\infty t^{z-1}\ee^{-t} \, \dd t
+\end{equation}
+\end{definitionbox}
+
+\input{figures/fig_ch00_gamma_function.tex}
+
+\subsection{Fundamental Properties}
+
+\begin{keyconceptbox}[title=Gamma Function Recurrence]
+The gamma function satisfies the fundamental recurrence relation:
+\begin{equation}
+\boxed{\Gamma(z+1) = z\Gamma(z)}
+\end{equation}
+\end{keyconceptbox}
+
+\begin{proof}
+Using integration by parts with $u = t^z$ and $\dd v = \ee^{-t}\dd t$:
+\begin{align}
+\Gamma(z+1) &= \int_0^\infty t^z \ee^{-t} \, \dd t \\
+&= \left[-t^z\ee^{-t}\right]_0^\infty + z\int_0^\infty t^{z-1}\ee^{-t} \, \dd t \\
+&= 0 + z\Gamma(z) = z\Gamma(z)
+\end{align}
+where the boundary term vanishes for $\Real(z) > 0$.
+\end{proof}
+
+\subsubsection{Relation to Factorial}
+
+For positive integers:
+\begin{equation}
+\boxed{\Gamma(n+1) = n!}
+\end{equation}
+
+This follows from the recurrence relation and $\Gamma(1) = 1$:
+\begin{align}
+\Gamma(1) &= \int_0^\infty \ee^{-t} \, \dd t = 1 \\
+\Gamma(2) &= 1 \cdot \Gamma(1) = 1 = 1! \\
+\Gamma(3) &= 2 \cdot \Gamma(2) = 2 = 2! \\
+\Gamma(n+1) &= n \cdot (n-1) \cdots 2 \cdot 1 = n!
+\end{align}
+
+\subsubsection{Special Values}
+
+\begin{align}
+\Gamma(1) &= 1 \\
+\Gamma(2) &= 1 \\
+\Gamma(1/2) &= \sqrt{\pi} \\
+\Gamma(3/2) &= \frac{1}{2}\sqrt{\pi} \\
+\Gamma(n+1/2) &= \frac{(2n)!}{4^n n!}\sqrt{\pi}
+\end{align}
+
+\begin{examplebox}[title=Example 10.3: Computing $\Gamma(1/2)$]
+Show that $\Gamma(1/2) = \sqrt{\pi}$.
+
+\textbf{Solution:}
+\begin{equation}
+\Gamma(1/2) = \int_0^\infty t^{-1/2}\ee^{-t} \, \dd t
+\end{equation}
+
+Substitute $t = u^2$, so $\dd t = 2u\,\dd u$:
+\begin{equation}
+\Gamma(1/2) = \int_0^\infty \frac{1}{u}\ee^{-u^2} \cdot 2u \, \dd u = 2\int_0^\infty \ee^{-u^2} \, \dd u
+\end{equation}
+
+The Gaussian integral $\int_0^\infty \ee^{-u^2} \, \dd u = \frac{\sqrt{\pi}}{2}$, therefore:
+\begin{equation}
+\boxed{\Gamma(1/2) = 2 \cdot \frac{\sqrt{\pi}}{2} = \sqrt{\pi}}
+\end{equation}
+\end{examplebox}
+
+\subsection{Use in Laplace Transforms}
+
+The gamma function appears in the Laplace transform of power functions:
+
+\begin{equation}
+\boxed{\Laplace\{t^{\alpha}\} = \frac{\Gamma(\alpha+1)}{s^{\alpha+1}} \quad \text{for } \alpha > -1}
+\end{equation}
+
+For integer $\alpha = n$, this reduces to:
+\begin{equation}
+\Laplace\{t^n\} = \frac{n!}{s^{n+1}}
+\end{equation}
+
+\begin{examplebox}[title=Example 10.4: Laplace Transform of $t^{1/2}$]
+Find $\Laplace\{t^{1/2}\}$.
+
+\textbf{Solution:}
+Using the generalized formula:
+\begin{equation}
+\Laplace\{t^{1/2}\} = \frac{\Gamma(1/2 + 1)}{s^{1/2 + 1}} = \frac{\Gamma(3/2)}{s^{3/2}}
+\end{equation}
+
+Since $\Gamma(3/2) = \frac{1}{2}\Gamma(1/2) = \frac{\sqrt{\pi}}{2}$:
+\begin{equation}
+\boxed{\Laplace\{t^{1/2}\} = \frac{\sqrt{\pi}}{2s^{3/2}}}
+\end{equation}
+\end{examplebox}
+
+\subsection{Other Properties}
+
+\subsubsection{Reflection Formula}
+\begin{equation}
+\Gamma(z)\Gamma(1-z) = \frac{\pi}{\sin(\pi z)}
+\end{equation}
+
+\subsubsection{Duplication Formula}
+\begin{equation}
+\Gamma(z)\Gamma(z+1/2) = \frac{\sqrt{\pi}}{2^{2z-1}}\Gamma(2z)
+\end{equation}
+
+\subsubsection{Stirling's Approximation}
+For large $|z|$:
+\begin{equation}
+\Gamma(z+1) \approx \sqrt{2\pi z}\left(\frac{z}{\ee}\right)^z
+\end{equation}
+
+% ============================================================================
+\section{Bessel Functions}
+% ============================================================================
+
+Bessel functions arise in problems with cylindrical or spherical symmetry and appear in control systems involving wave propagation, heat conduction, and vibration analysis.
+
+\begin{definitionbox}[title=Definition 10.8: Bessel Functions of the First Kind]
+The \textbf{Bessel function of the first kind} of order $n$ is defined by:
+\begin{equation}
+J_n(x) = \sum_{k=0}^{\infty} \frac{(-1)^k}{k!\Gamma(n+k+1)}\left(\frac{x}{2}\right)^{n+2k}
+\end{equation}
+\end{definitionbox}
+
+\input{figures/fig_ch00_bessel_functions.tex}
+
+\subsection{Properties of Bessel Functions}
+
+\subsubsection{Recurrence Relations}
+\begin{align}
+J_{n-1}(x) + J_{n+1}(x) &= \frac{2n}{x}J_n(x) \\
+J_{n-1}(x) - J_{n+1}(x) &= 2J_n'(x)
+\end{align}
+
+\subsubsection{Derivative Relations}
+\begin{align}
+\frac{\dd}{\dd x}[x^n J_n(x)] &= x^n J_{n-1}(x) \\
+\frac{\dd}{\dd x}[x^{-n} J_n(x)] &= -x^{-n} J_{n+1}(x)
+\end{align}
+
+\subsubsection{Special Values}
+\begin{align}
+J_0(0) &= 1 \\
+J_n(0) &= 0 \quad \text{for } n > 0
+\end{align}
+
+\subsubsection{Integral Representation}
+\begin{equation}
+J_n(x) = \frac{1}{\pi}\int_0^\pi \cos(x\sin\theta - n\theta) \, \dd\theta
+\end{equation}
+
+\subsection{Bessel Functions of the Second Kind}
+
+The \textbf{Bessel function of the second kind} (Weber function or Neumann function) is defined as:
+\begin{equation}
+Y_n(x) = \frac{J_n(x)\cos(n\pi) - J_{-n}(x)}{\sin(n\pi)}
+\end{equation}
+
+For integer $n$, this is defined by a limit process. Unlike $J_n(x)$, $Y_n(x)$ is singular at $x = 0$.
+
+\subsection{Modified Bessel Functions}
+
+For problems with real exponential rather than oscillatory behavior:
+
+\begin{definitionbox}[title=Definition 10.9: Modified Bessel Functions]
+The \textbf{modified Bessel functions} are:
+\begin{align}
+I_n(x) &= \jj^{-n}J_n(\jj x) = \sum_{k=0}^{\infty} \frac{1}{k!\Gamma(n+k+1)}\left(\frac{x}{2}\right)^{n+2k} \\
+K_n(x) &= \frac{\pi}{2}\frac{I_{-n}(x) - I_n(x)}{\sin(n\pi)}
+\end{align}
+\end{definitionbox}
+
+$I_n(x)$ grows exponentially for large $x$, while $K_n(x)$ decays exponentially.
+
+\subsection{Physical Applications}
+
+Bessel functions appear in control-relevant applications:
+
+\begin{enumerate}
+    \item \textbf{Vibrating Circular Membranes:} The radial modes of a drum are described by $J_n$.
+
+    \item \textbf{Heat Conduction in Cylinders:} Temperature distribution in cylindrical coordinates involves Bessel functions.
+
+    \item \textbf{Electromagnetic Waveguides:} Field distributions in circular waveguides use $J_n$ and $Y_n$.
+
+    \item \textbf{FM Signal Analysis:} The spectrum of frequency-modulated signals involves $J_n$.
+
+    \item \textbf{Diffusion Processes:} Radial diffusion in cylindrical geometry uses modified Bessel functions.
+\end{enumerate}
+
+\begin{examplebox}[title=Example 10.5: Bessel Functions in Vibration Analysis]
+The deflection $w(r,t)$ of a circular membrane satisfies:
+\begin{equation}
+\frac{\partial^2 w}{\partial t^2} = c^2 \left(\frac{\partial^2 w}{\partial r^2} + \frac{1}{r}\frac{\partial w}{\partial r}\right)
+\end{equation}
+
+For a membrane clamped at radius $a$, the natural frequencies are determined by the zeros of $J_0$:
+\begin{equation}
+\omega_n = \frac{c \cdot z_n}{a}
+\end{equation}
+where $z_n$ are the zeros of $J_0(x)$: $z_1 \approx 2.405$, $z_2 \approx 5.520$, $z_3 \approx 8.654$, etc.
+\end{examplebox}
+
+\subsection{Laplace Transforms Involving Bessel Functions}
+
+\begin{align}
+\Laplace\{J_0(at)\} &= \frac{1}{\sqrt{s^2 + a^2}} \\
+\Laplace\{J_1(at)\} &= \frac{\sqrt{s^2 + a^2} - s}{a\sqrt{s^2 + a^2}} \\
+\Laplace\{I_0(at)\} &= \frac{1}{\sqrt{s^2 - a^2}} \quad \text{for } s > a
+\end{align}
+
+% ============================================================================
+\section{Other Special Functions}
+% ============================================================================
+
+Several other special functions appear in control systems and signal processing.
+
+\subsection{Error Function}
+
+\begin{definitionbox}[title=Definition 10.10: Error Function]
+The \textbf{error function} is defined as:
+\begin{equation}
+\erf(x) = \frac{2}{\sqrt{\pi}}\int_0^x \ee^{-t^2} \, \dd t
+\end{equation}
+The \textbf{complementary error function} is:
+\begin{equation}
+\erfc(x) = 1 - \erf(x) = \frac{2}{\sqrt{\pi}}\int_x^\infty \ee^{-t^2} \, \dd t
+\end{equation}
+\end{definitionbox}
+
+Properties:
 \begin{itemize}
-    \item $\sigma < 0$: decaying
-    \item $\sigma > 0$: growing
-    \item $\sigma = 0$: constant
+    \item $\erf(0) = 0$, $\erf(\infty) = 1$
+    \item $\erf(-x) = -\erf(x)$ (odd function)
+    \item $\erf'(x) = \frac{2}{\sqrt{\pi}}\ee^{-x^2}$
 \end{itemize}
 
-\subsubsection{Complex exponential (damped sinusoid)}
+The error function appears in:
+\begin{itemize}
+    \item Diffusion and heat transfer problems
+    \item Probability calculations with normal distributions
+    \item Communications systems (bit error rates)
+\end{itemize}
+
+Laplace transform:
 \begin{equation}
-x(t) = A\ee^{\sigma t}\cos(\omega t + \phi)
+\Laplace\left\{\erf\left(\frac{a}{2\sqrt{t}}\right)\right\} = \frac{1 - \ee^{-a\sqrt{s}}}{s}
 \end{equation}
+
+\subsection{Sinc Function}
+
+\begin{definitionbox}[title=Definition 10.11: Sinc Function]
+The \textbf{sinc function} (normalized) is defined as:
+\begin{equation}
+\sinc(x) = \begin{cases} \frac{\sin(\pi x)}{\pi x} & x \neq 0 \\ 1 & x = 0 \end{cases}
+\end{equation}
+The unnormalized version is $\sinc_u(x) = \frac{\sin x}{x}$.
+\end{definitionbox}
+
+Properties:
+\begin{itemize}
+    \item $\sinc(n) = 0$ for all nonzero integers $n$
+    \item $\int_{-\infty}^{\infty} \sinc(x) \, \dd x = 1$
+    \item The Fourier transform of a rectangular pulse is a sinc function
+\end{itemize}
+
+The sinc function is fundamental in:
+\begin{itemize}
+    \item Signal reconstruction (Shannon interpolation)
+    \item Ideal low-pass filter impulse response
+    \item Antenna pattern analysis
+\end{itemize}
+
+\subsection{Gaussian Function}
+
+\begin{definitionbox}[title=Definition 10.12: Gaussian Function]
+The \textbf{Gaussian function} is:
+\begin{equation}
+g(t) = \ee^{-at^2}
+\end{equation}
+The normalized Gaussian (probability density) is:
+\begin{equation}
+f(t) = \frac{1}{\sigma\sqrt{2\pi}}\ee^{-\frac{(t-\mu)^2}{2\sigma^2}}
+\end{equation}
+\end{definitionbox}
+
+Properties:
+\begin{itemize}
+    \item The Fourier transform of a Gaussian is another Gaussian
+    \item $\int_{-\infty}^{\infty} \ee^{-at^2} \, \dd t = \sqrt{\frac{\pi}{a}}$
+    \item The Gaussian minimizes the time-bandwidth product
+\end{itemize}
+
+The Gaussian appears in:
+\begin{itemize}
+    \item Noise modeling (thermal noise is Gaussian distributed)
+    \item Pulse shaping in communications
+    \item Uncertainty principles
+    \item Smoothing filters
+\end{itemize}
+
+Laplace transform (one-sided, causal approximation):
+\begin{equation}
+\Laplace\{\ee^{-at^2}u(t)\} = \frac{1}{2}\sqrt{\frac{\pi}{a}}\ee^{s^2/(4a)}\erfc\left(\frac{s}{2\sqrt{a}}\right)
+\end{equation}
+
+\subsection{Summary of Special Functions}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Function} & \textbf{Definition} & \textbf{Primary Applications} \\
+\midrule
+Gamma $\Gamma(z)$ & $\int_0^\infty t^{z-1}\ee^{-t}\dd t$ & Generalizing factorials \\
+Bessel $J_n(x)$ & Series expansion & Cylindrical problems \\
+Error $\erf(x)$ & $\frac{2}{\sqrt{\pi}}\int_0^x \ee^{-t^2}\dd t$ & Diffusion, statistics \\
+Sinc $\sinc(x)$ & $\frac{\sin(\pi x)}{\pi x}$ & Signal reconstruction \\
+Gaussian $\ee^{-at^2}$ & Exponential of $-t^2$ & Noise, uncertainty \\
+\bottomrule
+\end{tabular}
+\caption{Summary of special functions and their applications.}
+\label{tab:special_functions}
+\end{table}
 
 % ============================================================================
