@@ -1,41 +1,850 @@
-\chapter{Numerical Methods}
-\label{ch:numerical}
+% ============================================================================
+% CHAPTER 11: NUMERICAL METHODS FOR CONTROL SYSTEMS
 % ============================================================================
 
-\section{Numerical Integration of ODEs}
+\chapter{Numerical Methods}
+\label{ch:numerical}
 
-\subsubsection{Euler's Method (Forward)}
+Numerical methods form the computational backbone of modern control systems. While analytical solutions provide elegant insights, the vast majority of real-world control problems require numerical computation---from simulating system dynamics to finding controller gains that satisfy stability constraints. This chapter develops the fundamental numerical techniques that underpin control system analysis and design.
+
+\section{Introduction to Numerical Methods}
+
+\subsection{Why Numerical Methods Matter}
+
+Control systems engineering presents numerous problems that cannot be solved analytically:
+
+\begin{itemize}
+    \item \textbf{Simulation:} Time-domain simulation of nonlinear systems requires numerical integration of differential equations.
+    \item \textbf{Root finding:} Determining closed-loop poles involves finding roots of high-order polynomials.
+    \item \textbf{Optimization:} Tuning controller gains to minimize a performance index requires iterative numerical algorithms.
+    \item \textbf{Frequency response:} Computing Bode plots and Nyquist diagrams involves evaluating transfer functions at many frequencies.
+    \item \textbf{State estimation:} Implementing Kalman filters requires numerical solution of Riccati equations.
+\end{itemize}
+
+\begin{keyconceptbox}[title=The Role of Numerical Methods in Control]
+Numerical methods bridge the gap between mathematical theory and practical implementation. Every modern control system---from autopilots to industrial process controllers---relies on numerical algorithms running on digital computers to compute control actions in real time.
+\end{keyconceptbox}
+
+\subsection{Sources of Error}
+
+All numerical computations introduce errors. Understanding these errors is essential for reliable engineering calculations.
+
+\begin{definitionbox}[title=Definition 11.1: Truncation Error]
+\textbf{Truncation error} arises from approximating a mathematical procedure. For example, approximating a derivative by a finite difference or truncating an infinite series introduces truncation error:
 \begin{equation}
-x_{n+1} = x_n + h f(t_n, x_n)
+f'(x) \approx \frac{f(x+h) - f(x)}{h}
+\end{equation}
+The exact derivative involves the limit $h \to 0$, but numerically we must use finite $h$.
+\end{definitionbox}
+
+\begin{definitionbox}[title=Definition 11.2: Round-off Error]
+\textbf{Round-off error} arises from representing real numbers with finite precision. Computers typically use IEEE 754 floating-point representation with approximately 15-16 significant decimal digits (double precision).
+\end{definitionbox}
+
+\begin{warningbox}[title=The Truncation-Round-off Trade-off]
+Reducing step size $h$ decreases truncation error but increases round-off error (more operations accumulate errors). There exists an optimal $h$ that minimizes total error---typically around $h \sim \sqrt{\epsilon_{\text{machine}}}$ for first-order methods, where $\epsilon_{\text{machine}} \approx 10^{-16}$ for double precision.
+\end{warningbox}
+
+\begin{definitionbox}[title=Definition 11.3: Order of Accuracy]
+A numerical method has \textbf{order of accuracy} $p$ if the local error behaves as $O(h^{p+1})$, meaning the global error over a fixed interval is $O(h^p)$. Higher-order methods achieve the same accuracy with larger step sizes, requiring fewer computations.
+\end{definitionbox}
+
+% ============================================================================
+\section{Root Finding}
+\label{sec:root_finding}
+% ============================================================================
+
+Finding roots of nonlinear equations is fundamental to control systems analysis. Applications include:
+\begin{itemize}
+    \item Finding poles and zeros of transfer functions
+    \item Solving characteristic equations for stability analysis
+    \item Computing equilibrium points of nonlinear systems
+    \item Determining gain and phase margins
+\end{itemize}
+
+\input{figures/fig_ch00_root_finding.tex}
+
+\subsection{Bisection Method}
+
+The bisection method is the simplest root-finding algorithm. It is guaranteed to converge for continuous functions but is relatively slow.
+
+\begin{definitionbox}[title=Definition 11.4: Bisection Method]
+Given a continuous function $f$ with $f(a) \cdot f(b) < 0$ (a sign change indicating a root), the bisection method repeatedly halves the interval:
+\begin{enumerate}
+    \item Compute midpoint: $c = \frac{a + b}{2}$
+    \item If $f(a) \cdot f(c) < 0$, the root is in $[a, c]$; set $b = c$
+    \item Otherwise, the root is in $[c, b]$; set $a = c$
+    \item Repeat until $|b - a| < \epsilon$ (tolerance)
+\end{enumerate}
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Bisection Convergence]
+The bisection method has \textbf{linear convergence} with rate $1/2$. After $n$ iterations, the interval width is $(b-a)/2^n$. To achieve tolerance $\epsilon$, we need:
+\begin{equation}
+n \geq \log_2\left(\frac{b-a}{\epsilon}\right)
+\end{equation}
+This is predictable but slow---each iteration gains only one binary digit of accuracy.
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 11.1: Bisection Method for Finding a Closed-Loop Pole]
+Find the positive real root of $f(x) = x^3 - 2x - 5$ using bisection on $[2, 3]$.
+
+\textbf{Solution:}
+
+First, verify the sign change: $f(2) = 8 - 4 - 5 = -1 < 0$ and $f(3) = 27 - 6 - 5 = 16 > 0$. \checkmark
+
+\begin{center}
+\begin{tabular}{cccccc}
+\toprule
+$n$ & $a$ & $b$ & $c = (a+b)/2$ & $f(c)$ & New interval \\
+\midrule
+1 & 2.0000 & 3.0000 & 2.5000 & 5.125 & $[2, 2.5]$ \\
+2 & 2.0000 & 2.5000 & 2.2500 & 1.891 & $[2, 2.25]$ \\
+3 & 2.0000 & 2.2500 & 2.1250 & 0.346 & $[2, 2.125]$ \\
+4 & 2.0000 & 2.1250 & 2.0625 & $-0.351$ & $[2.0625, 2.125]$ \\
+5 & 2.0625 & 2.1250 & 2.0938 & $-0.009$ & $[2.0938, 2.125]$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+After 5 iterations: $x \approx 2.094$ with error bound $|b-a|/2 = 0.016$.
+
+The exact root is $x^* \approx 2.0946$.
+\end{examplebox}
+
+\subsection{Newton-Raphson Method}
+
+The Newton-Raphson method uses local linearization to achieve much faster convergence than bisection, but requires the derivative $f'(x)$.
+
+\begin{definitionbox}[title=Definition 11.5: Newton-Raphson Method]
+Given an initial guess $x_0$ and a differentiable function $f$, the Newton-Raphson iteration is:
+\begin{equation}
+\boxed{x_{n+1} = x_n - \frac{f(x_n)}{f'(x_n)}}
+\end{equation}
+Geometrically, this finds where the tangent line to $f$ at $x_n$ crosses zero.
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Newton-Raphson Convergence]
+Near a simple root (where $f'(x^*) \neq 0$), Newton-Raphson has \textbf{quadratic convergence}:
+\begin{equation}
+|x_{n+1} - x^*| \approx \frac{|f''(x^*)|}{2|f'(x^*)|} |x_n - x^*|^2
+\end{equation}
+The number of correct digits approximately doubles with each iteration.
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 11.2: Newton-Raphson for the Same Problem]
+Find the positive real root of $f(x) = x^3 - 2x - 5$ using Newton-Raphson with $x_0 = 2$.
+
+\textbf{Solution:}
+
+We have $f(x) = x^3 - 2x - 5$ and $f'(x) = 3x^2 - 2$.
+
+The iteration formula is:
+\begin{equation*}
+x_{n+1} = x_n - \frac{x_n^3 - 2x_n - 5}{3x_n^2 - 2}
+\end{equation*}
+
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$n$ & $x_n$ & $f(x_n)$ & $f'(x_n)$ & $x_{n+1}$ \\
+\midrule
+0 & 2.000000 & $-1.000$ & 10.00 & 2.100000 \\
+1 & 2.100000 & 0.061 & 11.23 & 2.094569 \\
+2 & 2.094569 & 0.000086 & 11.16 & 2.094551 \\
+3 & 2.094551 & $< 10^{-10}$ & 11.16 & 2.094551 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Newton-Raphson converges to 6-digit accuracy in only 3 iterations, compared to bisection needing about 20 iterations for similar accuracy.
+
+\textbf{Observation:} Note the quadratic convergence---the error decreases from $\sim 0.1$ to $\sim 0.005$ to $\sim 10^{-5}$ to $\sim 10^{-10}$, roughly squaring each time.
+\end{examplebox}
+
+\begin{warningbox}[title=Newton-Raphson Failure Modes]
+Newton-Raphson can fail or diverge when:
+\begin{itemize}
+    \item $f'(x_n) = 0$ (division by zero)
+    \item The initial guess is too far from the root
+    \item Multiple roots exist ($f'(x^*) = 0$), causing only linear convergence
+    \item The function has inflection points that send iterates far away
+\end{itemize}
+Always verify convergence and consider bisection as a backup.
+\end{warningbox}
+
+\subsection{Secant Method}
+
+The secant method approximates the derivative using finite differences, avoiding the need to compute $f'(x)$ analytically.
+
+\begin{definitionbox}[title=Definition 11.6: Secant Method]
+Given two initial guesses $x_0$ and $x_1$, the secant iteration is:
+\begin{equation}
+\boxed{x_{n+1} = x_n - f(x_n) \frac{x_n - x_{n-1}}{f(x_n) - f(x_{n-1})}}
+\end{equation}
+This uses the secant line through $(x_{n-1}, f(x_{n-1}))$ and $(x_n, f(x_n))$ instead of the tangent line.
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Secant Method Convergence]
+The secant method has \textbf{superlinear convergence} with order $\phi = (1 + \sqrt{5})/2 \approx 1.618$ (the golden ratio):
+\begin{equation}
+|x_{n+1} - x^*| \approx C |x_n - x^*|^{1.618}
+\end{equation}
+While slower than Newton-Raphson's quadratic rate, each iteration requires only one function evaluation instead of two (function and derivative).
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 11.3: Secant Method Iteration]
+Find the root of $f(x) = x^3 - 2x - 5$ using the secant method with $x_0 = 2$ and $x_1 = 3$.
+
+\textbf{Solution:}
+
+The secant iteration is:
+\begin{equation*}
+x_{n+1} = x_n - f(x_n) \frac{x_n - x_{n-1}}{f(x_n) - f(x_{n-1})}
+\end{equation*}
+
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+$n$ & $x_n$ & $f(x_n)$ & Error $|x_n - x^*|$ \\
+\midrule
+0 & 2.000000 & $-1.000$ & 0.0946 \\
+1 & 3.000000 & 16.000 & 0.9054 \\
+2 & 2.058824 & $-0.390$ & 0.0358 \\
+3 & 2.096559 & 0.022 & 0.0020 \\
+4 & 2.094511 & $-0.0004$ & 0.00004 \\
+5 & 2.094551 & $< 10^{-7}$ & $< 10^{-6}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The secant method converges in 5 iterations without requiring derivative computation.
+\end{examplebox}
+
+\subsection{Comparison of Root-Finding Methods}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Convergence Order} & \textbf{Evaluations/Iter} & \textbf{Robustness} \\
+\midrule
+Bisection & 1 (linear) & 1 & Guaranteed \\
+Newton-Raphson & 2 (quadratic) & 2 ($f$ and $f'$) & May diverge \\
+Secant & 1.618 (superlinear) & 1 & May diverge \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{keyconceptbox}[title=Practical Root-Finding Strategy]
+A robust approach combines methods:
+\begin{enumerate}
+    \item Use bisection to bracket the root and get a reasonable initial guess
+    \item Switch to Newton-Raphson or secant for rapid convergence
+    \item Monitor for divergence and fall back to bisection if needed
+\end{enumerate}
+This hybrid approach is implemented in MATLAB's \texttt{fzero} function.
+\end{keyconceptbox}
+
+% ============================================================================
+\section{Numerical Integration}
+\label{sec:numerical_integration}
+% ============================================================================
+
+Numerical integration (quadrature) computes definite integrals that cannot be evaluated analytically. In control systems, this arises when:
+\begin{itemize}
+    \item Computing integral performance indices (ISE, IAE, ITAE)
+    \item Evaluating convolution integrals for system response
+    \item Calculating areas under probability density functions
+\end{itemize}
+
+\input{figures/fig_ch00_numerical_integration.tex}
+
+\subsection{Rectangle Rules}
+
+The simplest integration methods approximate the integrand as piecewise constant.
+
+\begin{definitionbox}[title=Definition 11.7: Rectangle Rules]
+For integrating $f(x)$ over $[a, b]$ with $n$ subintervals of width $h = (b-a)/n$:
+
+\textbf{Left Rectangle Rule:}
+\begin{equation}
+\int_a^b f(x)\,dx \approx h \sum_{i=0}^{n-1} f(x_i), \quad x_i = a + ih
 \end{equation}
 
-\subsubsection{Runge-Kutta 4th Order (RK4)}
+\textbf{Right Rectangle Rule:}
+\begin{equation}
+\int_a^b f(x)\,dx \approx h \sum_{i=1}^{n} f(x_i), \quad x_i = a + ih
+\end{equation}
+
+\textbf{Midpoint Rule:}
+\begin{equation}
+\int_a^b f(x)\,dx \approx h \sum_{i=0}^{n-1} f\left(x_i + \frac{h}{2}\right)
+\end{equation}
+\end{definitionbox}
+
+The left and right rules have error $O(h)$, while the midpoint rule has error $O(h^2)$ due to symmetry.
+
+\subsection{Trapezoidal Rule}
+
+The trapezoidal rule approximates the integrand with piecewise linear functions.
+
+\begin{definitionbox}[title=Definition 11.8: Trapezoidal Rule]
+\begin{equation}
+\boxed{\int_a^b f(x)\,dx \approx h\left[\frac{f(a)}{2} + \sum_{i=1}^{n-1} f(x_i) + \frac{f(b)}{2}\right]}
+\end{equation}
+where $x_i = a + ih$ and $h = (b-a)/n$.
+
+The error is $O(h^2)$:
+\begin{equation}
+E_{\text{trap}} = -\frac{(b-a)h^2}{12} f''(\xi), \quad \xi \in (a, b)
+\end{equation}
+\end{definitionbox}
+
+\begin{examplebox}[title=Example 11.4: Trapezoidal Rule for Integral Performance Index]
+Compute $\int_0^2 t \cdot e^{-t}\,dt$ (related to ITAE) using the trapezoidal rule with $n = 4$ subintervals.
+
+\textbf{Solution:}
+
+We have $h = (2-0)/4 = 0.5$ and $f(t) = t \cdot e^{-t}$.
+
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+$i$ & $t_i$ & $f(t_i) = t_i e^{-t_i}$ \\
+\midrule
+0 & 0.0 & 0.0000 \\
+1 & 0.5 & 0.3033 \\
+2 & 1.0 & 0.3679 \\
+3 & 1.5 & 0.3347 \\
+4 & 2.0 & 0.2707 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Applying the trapezoidal rule:
 \begin{align}
-k_1 &= f(t_n, x_n) \\
-k_2 &= f(t_n + h/2, x_n + hk_1/2) \\
-k_3 &= f(t_n + h/2, x_n + hk_2/2) \\
-k_4 &= f(t_n + h, x_n + hk_3) \\
-x_{n+1} &= x_n + \frac{h}{6}(k_1 + 2k_2 + 2k_3 + k_4)
+\int_0^2 te^{-t}\,dt &\approx 0.5 \left[\frac{0}{2} + 0.3033 + 0.3679 + 0.3347 + \frac{0.2707}{2}\right] \\
+&= 0.5 [0 + 0.3033 + 0.3679 + 0.3347 + 0.1354] \\
+&= 0.5 \times 1.1413 = 0.5707
 \end{align}
 
-\section{Root Finding}
+The exact value is $1 - 3e^{-2} \approx 0.5940$. Our approximation has relative error of about 4\%.
+\end{examplebox}
 
-\subsubsection{Newton-Raphson}
+\subsection{Simpson's Rule}
+
+Simpson's rule uses quadratic interpolation, achieving higher accuracy.
+
+\begin{definitionbox}[title=Definition 11.9: Simpson's Rule]
+For an even number of subintervals $n$:
 \begin{equation}
-x_{n+1} = x_n - \frac{f(x_n)}{f'(x_n)}
+\boxed{\int_a^b f(x)\,dx \approx \frac{h}{3}\left[f(a) + 4\sum_{\text{odd } i} f(x_i) + 2\sum_{\text{even } i} f(x_i) + f(b)\right]}
 \end{equation}
 
-\subsubsection{Bisection Method}
-For continuous $f$ with $f(a)f(b) < 0$, repeatedly halve the interval containing the root.
+The error is $O(h^4)$:
+\begin{equation}
+E_{\text{Simpson}} = -\frac{(b-a)h^4}{180} f^{(4)}(\xi), \quad \xi \in (a, b)
+\end{equation}
+\end{definitionbox}
 
-\section{Numerical Linear Algebra}
+\begin{keyconceptbox}[title=Why Simpson's Rule is $O(h^4)$]
+Although Simpson's rule uses quadratic polynomials (which would suggest $O(h^3)$ error), symmetry causes the cubic error term to cancel, resulting in $O(h^4)$ accuracy. Simpson's rule is exact for polynomials up to degree 3.
+\end{keyconceptbox}
 
-Key algorithms:
+\begin{examplebox}[title=Example 11.5: Simpson's Rule Comparison]
+Recompute $\int_0^2 te^{-t}\,dt$ using Simpson's rule with $n = 4$.
+
+\textbf{Solution:}
+
+Using the same function values as before:
+\begin{align}
+\int_0^2 te^{-t}\,dt &\approx \frac{0.5}{3}[f(0) + 4f(0.5) + 2f(1.0) + 4f(1.5) + f(2.0)] \\
+&= \frac{0.5}{3}[0 + 4(0.3033) + 2(0.3679) + 4(0.3347) + 0.2707] \\
+&= \frac{0.5}{3}[0 + 1.2132 + 0.7358 + 1.3388 + 0.2707] \\
+&= \frac{0.5}{3} \times 3.5585 = 0.5931
+\end{align}
+
+Simpson's rule gives 0.5931, compared to the exact value 0.5940---a relative error of only 0.15\%, much better than the trapezoidal rule with the same number of points.
+\end{examplebox}
+
+\subsection{Error Analysis Summary}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Error Order} & \textbf{To Halve Error} \\
+\midrule
+Left/Right Rectangle & $O(h)$ & Double $n$ \\
+Midpoint & $O(h^2)$ & Multiply $n$ by $\sqrt{2}$ \\
+Trapezoidal & $O(h^2)$ & Multiply $n$ by $\sqrt{2}$ \\
+Simpson's & $O(h^4)$ & Multiply $n$ by $\sqrt[4]{2} \approx 1.19$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================================
+\section{ODE Solvers}
+\label{sec:ode_solvers}
+% ============================================================================
+
+Numerical integration of ordinary differential equations (ODEs) is perhaps the most important numerical method in control systems. Given an initial value problem:
+\begin{equation}
+\frac{d\vecx}{dt} = \vecf(t, \vecx), \quad \vecx(t_0) = \vecx_0
+\end{equation}
+we seek to compute $\vecx(t)$ at discrete times $t_n = t_0 + nh$.
+
+\input{figures/fig_ch00_ode_solver_comparison.tex}
+
+\subsection{Euler's Method (Forward Euler)}
+
+The simplest ODE solver uses forward difference approximation of the derivative.
+
+\begin{definitionbox}[title=Definition 11.10: Forward Euler Method]
+\begin{equation}
+\boxed{\vecx_{n+1} = \vecx_n + h\vecf(t_n, \vecx_n)}
+\end{equation}
+This is an \textbf{explicit method}---$\vecx_{n+1}$ is computed directly from known quantities.
+
+Local truncation error: $O(h^2)$. Global error: $O(h)$ (first-order method).
+\end{definitionbox}
+
+\begin{examplebox}[title=Example 11.6: Euler's Method for a First-Order System]
+Simulate $\dot{x} = -2x$ with $x(0) = 1$ from $t = 0$ to $t = 2$ using Euler's method with $h = 0.5$.
+
+\textbf{Solution:}
+
+The exact solution is $x(t) = e^{-2t}$.
+
+Euler iteration: $x_{n+1} = x_n + h(-2x_n) = x_n(1 - 2h) = x_n(1 - 1) = 0$
+
+Wait---this is wrong! With $h = 0.5$, we have $1 - 2h = 0$, so:
+
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$n$ & $t_n$ & $x_n$ (Euler) & $x(t_n)$ (exact) & Error \\
+\midrule
+0 & 0.0 & 1.000 & 1.000 & 0.000 \\
+1 & 0.5 & 0.000 & 0.368 & 0.368 \\
+2 & 1.0 & 0.000 & 0.135 & 0.135 \\
+3 & 1.5 & 0.000 & 0.050 & 0.050 \\
+4 & 2.0 & 0.000 & 0.018 & 0.018 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This example shows Euler's method with too large a step size. Let's try $h = 0.25$:
+
+With $h = 0.25$: $x_{n+1} = x_n(1 - 0.5) = 0.5 x_n$
+
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$n$ & $t_n$ & $x_n$ (Euler) & $x(t_n)$ (exact) & Error \\
+\midrule
+0 & 0.0 & 1.000 & 1.000 & 0.000 \\
+2 & 0.5 & 0.250 & 0.368 & 0.118 \\
+4 & 1.0 & 0.0625 & 0.135 & 0.073 \\
+6 & 1.5 & 0.0156 & 0.050 & 0.034 \\
+8 & 2.0 & 0.0039 & 0.018 & 0.014 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Better, but still significant error. Euler's method requires very small step sizes for accuracy.
+\end{examplebox}
+
+\subsection{Improved Euler (Heun's Method)}
+
+Heun's method improves accuracy by averaging slopes at both ends of the interval.
+
+\begin{definitionbox}[title=Definition 11.11: Heun's Method (Improved Euler)]
+\begin{align}
+\tilde{\vecx}_{n+1} &= \vecx_n + h\vecf(t_n, \vecx_n) \quad \text{(predictor)} \\
+\vecx_{n+1} &= \vecx_n + \frac{h}{2}\left[\vecf(t_n, \vecx_n) + \vecf(t_{n+1}, \tilde{\vecx}_{n+1})\right] \quad \text{(corrector)}
+\end{align}
+This is a second-order method with global error $O(h^2)$.
+\end{definitionbox}
+
+\begin{examplebox}[title=Example 11.7: Heun's Method Comparison]
+Repeat Example 11.6 using Heun's method with $h = 0.5$.
+
+\textbf{Solution:}
+
+For $\dot{x} = -2x$:
+\begin{align}
+\tilde{x}_{n+1} &= x_n + 0.5(-2x_n) = 0 \cdot x_n = 0 \\
+x_{n+1} &= x_n + 0.25[(-2x_n) + (-2 \cdot 0)] = x_n - 0.5x_n = 0.5x_n
+\end{align}
+
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$n$ & $t_n$ & $x_n$ (Heun) & $x(t_n)$ (exact) & Error \\
+\midrule
+0 & 0.0 & 1.000 & 1.000 & 0.000 \\
+1 & 0.5 & 0.500 & 0.368 & 0.132 \\
+2 & 1.0 & 0.250 & 0.135 & 0.115 \\
+3 & 1.5 & 0.125 & 0.050 & 0.075 \\
+4 & 2.0 & 0.0625 & 0.018 & 0.044 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Heun's method gives non-zero values (unlike Euler with $h=0.5$), but still has noticeable error. For this problem, the predictor step gives zero, which limits the method's effectiveness.
+\end{examplebox}
+
+\subsection{Runge-Kutta 4th Order (RK4)}
+
+The fourth-order Runge-Kutta method is the workhorse of ODE simulation, offering an excellent balance of accuracy and computational cost.
+
+\begin{definitionbox}[title=Definition 11.12: Classical RK4 Method]
+\begin{align}
+k_1 &= \vecf(t_n, \vecx_n) \\
+k_2 &= \vecf\left(t_n + \frac{h}{2}, \vecx_n + \frac{h}{2}k_1\right) \\
+k_3 &= \vecf\left(t_n + \frac{h}{2}, \vecx_n + \frac{h}{2}k_2\right) \\
+k_4 &= \vecf(t_n + h, \vecx_n + hk_3) \\[6pt]
+\vecx_{n+1} &= \vecx_n + \frac{h}{6}(k_1 + 2k_2 + 2k_3 + k_4)
+\end{align}
+This fourth-order method has global error $O(h^4)$.
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Why RK4 is Popular]
+RK4 requires 4 function evaluations per step but achieves $O(h^4)$ accuracy. This means:
 \begin{itemize}
-    \item \textbf{Gaussian elimination}: $O(n^3)$ for solving $\mA\vecx = \vecb$
-    \item \textbf{QR iteration}: Computing eigenvalues
-    \item \textbf{SVD algorithms}: Golub-Kahan bidiagonalization
-    \item \textbf{Iterative methods}: Conjugate gradient, GMRES for large sparse systems
+    \item Halving the step size reduces error by factor of 16
+    \item Often allows 10-100$\times$ larger steps than Euler for same accuracy
+    \item Self-starting (unlike multistep methods)
+    \item Easy to implement and understand
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 11.8: RK4 for a Second-Order System]
+Simulate the damped oscillator $\ddot{y} + 2\zeta\omega_n\dot{y} + \omega_n^2 y = 0$ with $\zeta = 0.3$, $\omega_n = 2$ rad/s, $y(0) = 1$, $\dot{y}(0) = 0$ using RK4 with $h = 0.1$ s for one step.
+
+\textbf{Solution:}
+
+First, convert to state-space form. Let $x_1 = y$ and $x_2 = \dot{y}$:
+\begin{equation*}
+\begin{bmatrix} \dot{x}_1 \\ \dot{x}_2 \end{bmatrix} = \begin{bmatrix} 0 & 1 \\ -4 & -1.2 \end{bmatrix} \begin{bmatrix} x_1 \\ x_2 \end{bmatrix}
+\end{equation*}
+
+Initial condition: $\vecx_0 = [1, 0]^\top$.
+
+Computing the $k$ values:
+\begin{align*}
+k_1 &= \vecf(0, [1, 0]^\top) = [0, -4]^\top \\
+k_2 &= \vecf(0.05, [1, 0]^\top + 0.05[0, -4]^\top) = \vecf(0.05, [1, -0.2]^\top) \\
+    &= [-0.2, -4 + 0.24]^\top = [-0.2, -3.76]^\top \\
+k_3 &= \vecf(0.05, [1, 0]^\top + 0.05[-0.2, -3.76]^\top) = \vecf(0.05, [0.99, -0.188]^\top) \\
+    &= [-0.188, -3.96 + 0.226]^\top = [-0.188, -3.734]^\top \\
+k_4 &= \vecf(0.1, [1, 0]^\top + 0.1[-0.188, -3.734]^\top) = \vecf(0.1, [0.981, -0.373]^\top) \\
+    &= [-0.373, -3.924 + 0.448]^\top = [-0.373, -3.476]^\top
+\end{align*}
+
+Final update:
+\begin{align*}
+\vecx_1 &= \vecx_0 + \frac{0.1}{6}(k_1 + 2k_2 + 2k_3 + k_4) \\
+&= [1, 0]^\top + \frac{0.1}{6}([0, -4] + 2[-0.2, -3.76] + 2[-0.188, -3.734] + [-0.373, -3.476])^\top \\
+&= [1, 0]^\top + \frac{0.1}{6}[-1.149, -22.464]^\top \\
+&= [1, 0]^\top + [-0.0192, -0.374]^\top = [0.981, -0.374]^\top
+\end{align*}
+
+After one RK4 step: $y(0.1) \approx 0.981$, $\dot{y}(0.1) \approx -0.374$.
+
+The exact solution gives $y(0.1) \approx 0.9805$---RK4 is accurate to 3 decimal places with just one step!
+\end{examplebox}
+
+\subsection{Stability Regions}
+
+Not all step sizes lead to stable numerical solutions. Each method has a \textbf{stability region} in the complex $h\lambda$ plane, where $\lambda$ is an eigenvalue of the system.
+
+\begin{definitionbox}[title=Definition 11.13: Absolute Stability Region]
+For the test equation $\dot{x} = \lambda x$ (where $\lambda$ may be complex), a numerical method is \textbf{absolutely stable} if $|x_n| \to 0$ as $n \to \infty$ when $\Real(\lambda) < 0$.
+
+The \textbf{stability region} is the set of $z = h\lambda \in \mathbb{C}$ for which the method is stable.
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Stability Regions of Common Methods]
+\begin{itemize}
+    \item \textbf{Forward Euler:} Stable for $|1 + z| < 1$, i.e., a disk of radius 1 centered at $z = -1$.
+    \item \textbf{RK4:} A larger region extending to about $z \approx -2.8$ on the real axis.
+    \item \textbf{Backward Euler:} Stable for $|1/(1-z)| < 1$, i.e., the entire left half-plane (A-stable).
+\end{itemize}
+
+For a stable system ($\Real(\lambda) < 0$), the step size must satisfy $h|\lambda| < C$ where $C$ depends on the method.
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 11.9: Stability Constraint on Step Size]
+A system has eigenvalues $\lambda = -10$ and $\lambda = -0.1$. What is the maximum step size for forward Euler to remain stable?
+
+\textbf{Solution:}
+
+Forward Euler is stable for $|1 + h\lambda| < 1$. For real negative $\lambda$:
+\begin{equation*}
+|1 + h\lambda| < 1 \implies -1 < 1 + h\lambda < 1 \implies -2 < h\lambda < 0
+\end{equation*}
+
+For $\lambda = -10$: $-2 < -10h < 0 \implies h < 0.2$
+
+For $\lambda = -0.1$: $-2 < -0.1h < 0 \implies h < 20$
+
+The stability is limited by the fast mode: $h < 0.2$ s.
+
+\textbf{Note:} The slow mode ($\lambda = -0.1$, time constant 10 s) requires simulation for many time constants to see behavior, but stability forces small steps due to the fast mode. This is characteristic of \textit{stiff} systems.
+\end{examplebox}
+
+\subsection{Stiff Equations}
+
+\begin{definitionbox}[title=Definition 11.14: Stiff ODEs]
+An ODE system is \textbf{stiff} if its eigenvalues span a wide range of magnitudes, typically with stiffness ratio:
+\begin{equation}
+\text{Stiffness ratio} = \frac{\max_i |\lambda_i|}{\min_i |\lambda_i|} \gg 1
+\end{equation}
+Stiff systems have widely separated time scales.
+\end{definitionbox}
+
+\begin{warningbox}[title=The Stiffness Problem]
+For stiff systems, explicit methods (Euler, RK4) require tiny step sizes for stability, even when accuracy would permit larger steps. This makes simulation extremely slow.
+
+\textbf{Solution:} Use implicit methods (backward Euler, implicit Runge-Kutta) or specialized stiff solvers (MATLAB's \texttt{ode15s}, \texttt{ode23s}).
+\end{warningbox}
+
+Stiff systems commonly arise in control when:
+\begin{itemize}
+    \item Mixing fast actuator dynamics with slow plant dynamics
+    \item Systems with parasitic capacitances or inductances
+    \item Chemical reaction networks with fast and slow reactions
+    \item Multiphysics simulations (electrical-mechanical-thermal)
 \end{itemize}
 
 % ============================================================================
+\section{Interpolation and Approximation}
+\label{sec:interpolation}
+% ============================================================================
+
+Interpolation constructs a function passing through given data points. This is essential for:
+\begin{itemize}
+    \item Reconstructing continuous signals from sampled data
+    \item Look-up tables in embedded controllers
+    \item Generating smooth trajectories for motion control
+    \item Approximating transfer functions from frequency response data
+\end{itemize}
+
+\input{figures/fig_ch00_interpolation.tex}
+
+\subsection{Linear Interpolation}
+
+The simplest interpolation connects data points with straight lines.
+
+\begin{definitionbox}[title=Definition 11.15: Linear Interpolation]
+Given points $(x_0, y_0)$ and $(x_1, y_1)$, the linear interpolant at $x \in [x_0, x_1]$ is:
+\begin{equation}
+\boxed{y(x) = y_0 + \frac{y_1 - y_0}{x_1 - x_0}(x - x_0) = y_0(1-t) + y_1 t}
+\end{equation}
+where $t = (x - x_0)/(x_1 - x_0) \in [0, 1]$.
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Properties of Linear Interpolation]
+\begin{itemize}
+    \item \textbf{Simplicity:} Easy to compute and implement in real-time systems
+    \item \textbf{Continuity:} The piecewise linear function is $C^0$ (continuous)
+    \item \textbf{Not smooth:} Derivative is discontinuous at data points ($C^0$ but not $C^1$)
+    \item \textbf{Error:} $O(h^2)$ where $h$ is the spacing between points
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 11.10: Linear Interpolation for Gain Scheduling]
+A gain-scheduled controller uses the following gain table:
+
+\begin{center}
+\begin{tabular}{cc}
+\toprule
+Velocity $v$ (m/s) & Gain $K$ \\
+\midrule
+0 & 10.0 \\
+5 & 8.0 \\
+10 & 5.0 \\
+15 & 3.5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Find $K$ at $v = 7$ m/s using linear interpolation.
+
+\textbf{Solution:}
+
+The point $v = 7$ lies between $v = 5$ and $v = 10$.
+
+\begin{align}
+t &= \frac{7 - 5}{10 - 5} = \frac{2}{5} = 0.4 \\
+K(7) &= K(5)(1 - t) + K(10) \cdot t = 8.0(0.6) + 5.0(0.4) = 4.8 + 2.0 = 6.8
+\end{align}
+
+The interpolated gain is $K = 6.8$.
+\end{examplebox}
+
+\subsection{Polynomial Interpolation}
+
+Higher-order polynomials can pass exactly through more data points.
+
+\begin{definitionbox}[title=Definition 11.16: Lagrange Interpolation]
+Given $n+1$ points $(x_0, y_0), \ldots, (x_n, y_n)$ with distinct $x_i$, the unique polynomial of degree $\leq n$ through these points is:
+\begin{equation}
+P(x) = \sum_{i=0}^{n} y_i L_i(x), \quad L_i(x) = \prod_{j \neq i} \frac{x - x_j}{x_i - x_j}
+\end{equation}
+where $L_i(x)$ are the Lagrange basis polynomials satisfying $L_i(x_j) = \delta_{ij}$.
+\end{definitionbox}
+
+\begin{warningbox}[title=Runge's Phenomenon]
+High-degree polynomial interpolation on equally-spaced points can exhibit large oscillations between data points, especially near the boundaries. This is called \textbf{Runge's phenomenon}.
+
+\textbf{Mitigation strategies:}
+\begin{itemize}
+    \item Use Chebyshev nodes (clustered near boundaries) instead of uniform spacing
+    \item Use piecewise polynomials (splines) instead of a single high-degree polynomial
+    \item Limit polynomial degree to 5-7 even with many data points
+\end{itemize}
+\end{warningbox}
+
+\begin{examplebox}[title=Example 11.11: Quadratic Interpolation]
+Fit a quadratic through $(0, 1)$, $(1, 3)$, $(2, 2)$ and evaluate at $x = 1.5$.
+
+\textbf{Solution:}
+
+Using Lagrange interpolation with $n = 2$:
+\begin{align*}
+L_0(x) &= \frac{(x-1)(x-2)}{(0-1)(0-2)} = \frac{(x-1)(x-2)}{2} \\
+L_1(x) &= \frac{(x-0)(x-2)}{(1-0)(1-2)} = \frac{x(x-2)}{-1} = -x(x-2) \\
+L_2(x) &= \frac{(x-0)(x-1)}{(2-0)(2-1)} = \frac{x(x-1)}{2}
+\end{align*}
+
+The interpolating polynomial:
+\begin{equation*}
+P(x) = 1 \cdot L_0(x) + 3 \cdot L_1(x) + 2 \cdot L_2(x)
+\end{equation*}
+
+At $x = 1.5$:
+\begin{align*}
+L_0(1.5) &= \frac{(0.5)(-0.5)}{2} = -0.125 \\
+L_1(1.5) &= -(1.5)(-0.5) = 0.75 \\
+L_2(1.5) &= \frac{(1.5)(0.5)}{2} = 0.375
+\end{align*}
+
+Therefore:
+\begin{equation*}
+P(1.5) = 1(-0.125) + 3(0.75) + 2(0.375) = -0.125 + 2.25 + 0.75 = 2.875
+\end{equation*}
+\end{examplebox}
+
+\subsection{Spline Interpolation}
+
+Splines are piecewise polynomials that provide smoothness while avoiding the oscillation problems of high-degree polynomials.
+
+\begin{definitionbox}[title=Definition 11.17: Cubic Spline]
+A \textbf{cubic spline} $S(x)$ through points $(x_0, y_0), \ldots, (x_n, y_n)$ is a piecewise cubic polynomial satisfying:
+\begin{enumerate}
+    \item $S(x_i) = y_i$ for all $i$ (interpolation)
+    \item $S(x)$ is $C^2$ (continuous second derivative)
+    \item On each interval $[x_i, x_{i+1}]$, $S(x)$ is a cubic polynomial
+\end{enumerate}
+
+The most common boundary conditions are:
+\begin{itemize}
+    \item \textbf{Natural spline:} $S''(x_0) = S''(x_n) = 0$
+    \item \textbf{Clamped spline:} $S'(x_0) = y'_0$ and $S'(x_n) = y'_n$ (specified slopes)
+    \item \textbf{Not-a-knot:} Third derivative continuous at $x_1$ and $x_{n-1}$
+\end{itemize}
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Why Splines are Preferred for Control]
+Cubic splines are widely used in trajectory generation and motion control because:
+\begin{itemize}
+    \item \textbf{Position continuity} ($C^0$): No jumps in position
+    \item \textbf{Velocity continuity} ($C^1$): Smooth velocity profiles
+    \item \textbf{Acceleration continuity} ($C^2$): Bounded jerk, reducing mechanical stress
+    \item \textbf{Local control:} Changing one data point only affects nearby segments
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 11.12: Spline vs. Linear Interpolation for Trajectory]
+A robot arm must move through waypoints at $t = 0, 1, 2$ s with positions $\theta = 0, 90, 45$ degrees. Compare linear interpolation with cubic spline.
+
+\textbf{Linear interpolation:}
+\begin{itemize}
+    \item Segment 1 ($0 \leq t < 1$): $\theta(t) = 90t$ degrees
+    \item Segment 2 ($1 \leq t \leq 2$): $\theta(t) = 90 - 45(t-1) = 135 - 45t$ degrees
+\end{itemize}
+
+Velocity: $\dot{\theta} = 90$ deg/s for $t < 1$, then $\dot{\theta} = -45$ deg/s for $t > 1$.
+
+\textbf{Problem:} At $t = 1$, velocity jumps from $+90$ to $-45$ deg/s---an instantaneous change of 135 deg/s requiring infinite acceleration!
+
+\textbf{Cubic spline} (natural boundary conditions):
+
+The spline ensures $\ddot{\theta}$ is continuous. The velocity smoothly transitions through $t = 1$, requiring finite, bounded acceleration. This is essential for real motors with limited torque.
+\end{examplebox}
+
+\subsection{Comparison of Interpolation Methods}
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{Continuity} & \textbf{Local} & \textbf{Oscillation} & \textbf{Computation} \\
+\midrule
+Linear & $C^0$ & Yes & None & Trivial \\
+Polynomial (Lagrange) & $C^\infty$ & No & High (Runge) & Moderate \\
+Cubic Spline & $C^2$ & Yes & Low & Solve tridiag. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================================
+\section{Numerical Linear Algebra}
+\label{sec:numerical_linalg}
+% ============================================================================
+
+Control systems rely heavily on linear algebra computations. This section summarizes key algorithms.
+
+\subsection{Solving Linear Systems}
+
+For $\mA\vecx = \vecb$:
+
+\begin{itemize}
+    \item \textbf{Gaussian elimination with pivoting:} $O(n^3)$ operations, numerically stable
+    \item \textbf{LU decomposition:} Factor $\mA = \mL\mU$ once, then solve for multiple right-hand sides
+    \item \textbf{Cholesky decomposition:} For symmetric positive definite $\mA = \mL\mL^\top$, half the work of LU
+    \item \textbf{Iterative methods:} Conjugate gradient, GMRES for large sparse systems
+\end{itemize}
+
+\subsection{Eigenvalue Computation}
+
+For finding eigenvalues of $\mA$:
+
+\begin{itemize}
+    \item \textbf{QR iteration:} The standard algorithm, $O(n^3)$ per iteration, typically $O(n^3)$ total with shifts
+    \item \textbf{Power iteration:} Finds dominant eigenvalue only, $O(n^2)$ per iteration
+    \item \textbf{Arnoldi/Lanczos:} For large sparse matrices, find a few eigenvalues
+\end{itemize}
+
+\subsection{Singular Value Decomposition}
+
+The SVD $\mA = \mU\mSigma\mV^\top$ is computed by:
+
+\begin{itemize}
+    \item \textbf{Golub-Kahan bidiagonalization:} Reduce to bidiagonal form
+    \item \textbf{Implicit QR on bidiagonal:} Compute singular values and vectors
+\end{itemize}
+
+\begin{keyconceptbox}[title=Numerical Stability in Control]
+When computing feedback gains, poles, or system responses, always use numerically stable algorithms:
+\begin{itemize}
+    \item Use SVD-based methods for rank determination and pseudoinverse
+    \item Avoid forming $\mA^\top\mA$ explicitly (use QR instead)
+    \item Work in balanced coordinates for eigenvalue computation
+    \item Use state-space representations rather than high-order polynomials
+\end{itemize}
+\end{keyconceptbox}
+
+% ============================================================================
+
