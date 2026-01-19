@@ -1,0 +1,179 @@
+\begin{figure}[htbp]
+\centering
+\textbf{Frequency Spectrum of a Damped Sinusoid}
+
+\vspace{0.3cm}
+
+% Time domain signal
+\begin{tikzpicture}
+\begin{axis}[
+    width=13cm, height=4.5cm,
+    xlabel={Time $t$ (seconds)},
+    ylabel={$f(t)$},
+    xmin=0, xmax=5,
+    ymin=-1.1, ymax=1.1,
+    grid=major,
+    grid style={gray!30},
+    title={\normalsize Time Domain: $f(t) = \ee^{-\sigma t}\cos(\omega_0 t)$ \quad ($\sigma = 0.5$, $\omega_0 = 4\pi$ rad/s)},
+    title style={at={(0.5,1.05)}, anchor=south}
+]
+
+% Damped sinusoid: exp(-0.5*t)*cos(4*pi*t) = exp(-0.5*t)*cos(2*pi*2*t), f_0 = 2 Hz
+\addplot[UofSCAtlantic, very thick, domain=0:5, samples=500]
+    {exp(-0.5*x)*cos(deg(4*pi*x))};
+
+% Envelope (positive)
+\addplot[UofSCGarnet, dashed, thick, domain=0:5, samples=100]
+    {exp(-0.5*x)};
+
+% Envelope (negative)
+\addplot[UofSCGarnet, dashed, thick, domain=0:5, samples=100]
+    {-exp(-0.5*x)};
+
+% Annotation
+\node[UofSCGarnet, font=\small] at (3.2, 0.35) {Envelope: $\ee^{-\sigma t}$};
+\draw[UofSCGarnet, thin, ->] (2.7, 0.3) -- (2.0, 0.38);
+
+\node[UofSCAtlantic, font=\small] at (1.5, -0.65) {$f_0 = 2$ Hz};
+
+\end{axis}
+\end{tikzpicture}
+
+\vspace{0.6cm}
+
+% Magnitude spectrum
+\begin{tikzpicture}
+\begin{axis}[
+    width=6.2cm, height=5cm,
+    xlabel={Frequency $f$ (Hz)},
+    ylabel={$|F(\jj\omega)|$},
+    xmin=-6, xmax=6,
+    ymin=0, ymax=1.2,
+    grid=major,
+    grid style={gray!30},
+    title={\normalsize Magnitude Spectrum},
+    title style={at={(0.5,1.05)}, anchor=south},
+    xtick={-6,-4,-2,0,2,4,6},
+    ytick={0, 0.5, 1}
+]
+
+% Magnitude spectrum: |F(jw)| = 0.5 * [sigma/((sigma)^2 + (w-w0)^2) + sigma/((sigma)^2 + (w+w0)^2)]
+% For damped cosine: peaks at +/- f_0 with width determined by sigma
+% Using Lorentzian-like shape centered at f0=2 Hz
+
+% Peak at +f_0 = 2 Hz
+\addplot[UofSCAtlantic, very thick, domain=-6:6, samples=300]
+    {0.5*0.5/((0.5)^2 + (2*pi*(x-2))^2) + 0.5*0.5/((0.5)^2 + (2*pi*(x+2))^2)};
+
+% Mark the center frequencies
+\draw[UofSCGarnet, dashed, thick] (2, 0) -- (2, 1.1);
+\draw[UofSCGarnet, dashed, thick] (-2, 0) -- (-2, 1.1);
+
+% Annotations
+\node[UofSCGarnet, font=\footnotesize, anchor=south] at (2, 1.12) {$f_0$};
+\node[UofSCGarnet, font=\footnotesize, anchor=south] at (-2, 1.12) {$-f_0$};
+
+% Half-power bandwidth annotation
+\draw[UofSCHorseshoe, thick, <->] (1.84, 0.5) -- (2.16, 0.5);
+\node[UofSCHorseshoe, font=\tiny, anchor=west] at (2.2, 0.5) {$\Delta f$};
+
+\end{axis}
+\end{tikzpicture}
+\hfill
+% Phase spectrum
+\begin{tikzpicture}
+\begin{axis}[
+    width=6.2cm, height=5cm,
+    xlabel={Frequency $f$ (Hz)},
+    ylabel={$\angle F(\jj\omega)$ (degrees)},
+    xmin=-6, xmax=6,
+    ymin=-100, ymax=100,
+    grid=major,
+    grid style={gray!30},
+    title={\normalsize Phase Spectrum},
+    title style={at={(0.5,1.05)}, anchor=south},
+    xtick={-6,-4,-2,0,2,4,6},
+    ytick={-90, -45, 0, 45, 90},
+    yticklabels={$-90$, $-45$, $0$, $45$, $90$}
+]
+
+% Phase spectrum: transitions through the resonance frequencies
+% Phase = atan2(Im, Re) for the transform
+% Near +f_0: phase transitions from +90 to -90
+% Near -f_0: phase transitions from -90 to +90
+
+% Approximate phase behavior (simplified for visualization)
+\addplot[UofSCCongaree, very thick, domain=-6:-2.3, samples=50] {-90 + 90*2/pi*atan(deg(5*(x+2)))};
+\addplot[UofSCCongaree, very thick, domain=-1.7:1.7, samples=50] {0};
+\addplot[UofSCCongaree, very thick, domain=1.7:6, samples=50] {90 - 90*2/pi*atan(deg(5*(x-2)))};
+
+% Transition regions
+\addplot[UofSCCongaree, very thick, domain=-2.3:-1.7, samples=30]
+    {-90*tanh(3*(x+2))};
+\addplot[UofSCCongaree, very thick, domain=1.7:2.3, samples=30]
+    {-90*tanh(3*(x-2))};
+
+% Mark center frequencies
+\draw[UofSCGarnet, dashed, thick] (2, -100) -- (2, 100);
+\draw[UofSCGarnet, dashed, thick] (-2, -100) -- (-2, 100);
+
+% Annotations
+\node[UofSCGarnet, font=\footnotesize, anchor=south] at (2, 92) {$f_0$};
+\node[UofSCGarnet, font=\footnotesize, anchor=south] at (-2, 92) {$-f_0$};
+
+\end{axis}
+\end{tikzpicture}
+
+\vspace{0.4cm}
+
+% Discrete spectrum example (for periodic signal)
+\begin{tikzpicture}
+\begin{axis}[
+    width=13cm, height=4cm,
+    xlabel={Harmonic Number $n$},
+    ylabel={$|c_n|$},
+    xmin=-0.5, xmax=12.5,
+    ymin=0, ymax=1.4,
+    grid=major,
+    grid style={gray!30},
+    title={\normalsize Discrete Magnitude Spectrum of Square Wave (Fourier Series Coefficients)},
+    title style={at={(0.5,1.05)}, anchor=south},
+    xtick={0,1,2,3,4,5,6,7,8,9,10,11,12},
+    ytick={0, 0.5, 1, 1.27},
+    yticklabels={$0$, $0.5$, $1$, $4/\pi$}
+]
+
+% Magnitude of Fourier coefficients for square wave: |c_n| = 4/(n*pi) for odd n, 0 for even n
+% Plot as stem plot using ycomb
+
+\addplot+[UofSCAtlantic, very thick, ycomb, mark=*, mark options={fill=UofSCAtlantic, scale=1.2}]
+    coordinates {
+        (0, 0)
+        (1, 1.273)
+        (2, 0)
+        (3, 0.424)
+        (4, 0)
+        (5, 0.255)
+        (6, 0)
+        (7, 0.182)
+        (8, 0)
+        (9, 0.141)
+        (10, 0)
+        (11, 0.116)
+        (12, 0)
+    };
+
+% Envelope curve (1/n decay)
+\addplot[UofSCGarnet, dashed, thick, domain=0.8:12, samples=50]
+    {4/(pi*x)};
+
+% Annotations
+\node[UofSCGarnet, font=\footnotesize] at (8, 0.65) {Envelope: $4/(n\pi)$};
+\node[UofSCAtlantic, font=\footnotesize] at (6.5, 0.12) {Even harmonics = 0};
+
+\end{axis}
+\end{tikzpicture}
+
+\caption{Frequency domain representation of signals. \textbf{Top:} Time-domain damped sinusoid $f(t) = \ee^{-\sigma t}\cos(\omega_0 t)$ with decay rate $\sigma = 0.5$ s$^{-1}$ and frequency $f_0 = 2$ Hz. The dashed Garnet lines show the exponential envelope. \textbf{Middle:} Magnitude spectrum (Atlantic blue) shows peaks at $\pm f_0$ with bandwidth $\Delta f$ proportional to $\sigma$. Phase spectrum (Congaree teal) shows $\pm 90°$ phase transitions at the resonance frequencies. \textbf{Bottom:} Discrete spectrum for a periodic square wave showing only odd harmonics with magnitude decreasing as $4/(n\pi)$.}
+\label{fig:spectrum_visualization}
+\end{figure}
