@@ -1,0 +1,356 @@
+% ============================================================================
+% CHAPTER 1H: BIOMEDICAL SYSTEMS
+% ============================================================================
+
+\chapter{Biomedical Systems}
+\label{ch:biomedical}
+
+Biomedical control systems interface with the human body, requiring special consideration for safety, variability between patients, and the inherent complexity of biological processes.
+
+% ============================================================================
+\section{Pharmacokinetics: Drug Distribution}
+\label{sec:pharmacokinetics}
+% ============================================================================
+
+Pharmacokinetics describes how drugs move through the body.
+
+\subsection{One-Compartment Model}
+
+\input{figures/fig_ch01h_one_compartment.tex}
+
+Mass balance:
+\begin{equation}
+V\frac{\dd C}{\dd t} = u(t) - k_e V C
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $V$ = volume of distribution (L)
+    \item $C$ = drug concentration (mg/L)
+    \item $u(t)$ = infusion rate (mg/min)
+    \item $k_e$ = elimination rate constant (1/min)
+\end{itemize}
+
+Transfer function:
+\begin{equation}
+\frac{C(s)}{U(s)} = \frac{1/V}{s + k_e}
+\end{equation}
+
+Half-life: $t_{1/2} = \ln(2)/k_e$
+
+\begin{examplebox}[title=Example 1.15: IV Drug Infusion]
+A drug has $V = 50$ L and $k_e = 0.1$ min$^{-1}$. Find:
+\begin{enumerate}[label=(\alph*)]
+    \item The half-life
+    \item The infusion rate needed for steady-state concentration of 10 mg/L
+    \item Time to reach 90\% of steady-state
+\end{enumerate}
+
+\textbf{Solution:}
+
+(a) Half-life: $t_{1/2} = \ln(2)/0.1 = 6.93$ min
+
+(b) At steady-state: $u_{ss} = k_e V C_{ss} = 0.1 \times 50 \times 10 = 50$ mg/min
+
+(c) Time constant: $\tau = 1/k_e = 10$ min
+
+Time to 90\%: $t = -\tau\ln(0.1) = 10 \times 2.3 = 23$ min
+\end{examplebox}
+
+\subsection{Two-Compartment Model}
+
+\input{figures/fig_ch01h_two_compartment.tex}
+
+Mass balances:
+\begin{align}
+V_1\frac{\dd C_1}{\dd t} &= u(t) - (k_{10} + k_{12})V_1 C_1 + k_{21}V_2 C_2 \\
+V_2\frac{\dd C_2}{\dd t} &= k_{12}V_1 C_1 - k_{21}V_2 C_2
+\end{align}
+
+This yields a second-order system with two exponential phases:
+\begin{itemize}
+    \item \textbf{Distribution phase} ($\alpha$): rapid initial decline
+    \item \textbf{Elimination phase} ($\beta$): slower terminal decline
+\end{itemize}
+
+% ============================================================================
+\section{Glucose-Insulin Dynamics}
+\label{sec:glucose}
+% ============================================================================
+
+\input{figures/fig_ch01h_glucose_insulin.tex}
+
+\subsection{Minimal Model (Bergman)}
+
+\begin{align}
+\frac{\dd G}{\dd t} &= -p_1 G - X(G + G_b) + D(t) \\
+\frac{\dd X}{\dd t} &= -p_2 X + p_3(I - I_b) \\
+\frac{\dd I}{\dd t} &= -n(I - I_b) + \gamma(G - h)^+ + u(t)
+\end{align}
+
+where:
+\begin{itemize}
+    \item $G$ = glucose concentration (mg/dL)
+    \item $I$ = insulin concentration ($\mu$U/mL)
+    \item $X$ = insulin action (remote compartment)
+    \item $D(t)$ = meal disturbance
+    \item $u(t)$ = insulin infusion (for artificial pancreas)
+\end{itemize}
+
+\subsection{Linearized Model for Control Design}
+
+Near operating point $(G_0, I_0)$:
+\begin{equation}
+\begin{bmatrix} \Delta\dot{G} \\ \Delta\dot{I} \end{bmatrix} =
+\begin{bmatrix} -p_1 - X_0 & -K_G \\ K_I & -n \end{bmatrix}
+\begin{bmatrix} \Delta G \\ \Delta I \end{bmatrix} +
+\begin{bmatrix} 1 \\ 0 \end{bmatrix} \Delta D +
+\begin{bmatrix} 0 \\ 1 \end{bmatrix} \Delta u
+\end{equation}
+
+% ============================================================================
+\section{Cardiovascular System}
+\label{sec:cardiovascular}
+% ============================================================================
+
+\subsection{Windkessel Model}
+
+The arterial system can be modeled as an electrical analog:
+
+\input{figures/fig_ch01h_windkessel.tex}
+
+Governing equation:
+\begin{equation}
+C\frac{\dd P}{\dd t} + \frac{P}{R} = Q(t)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $P$ = arterial pressure (mmHg)
+    \item $Q$ = cardiac output (mL/s)
+    \item $C$ = arterial compliance (mL/mmHg)
+    \item $R$ = systemic vascular resistance (mmHg$\cdot$s/mL)
+\end{itemize}
+
+\subsection{Blood Pressure Control}
+
+The baroreflex regulates blood pressure:
+\begin{equation}
+\frac{\dd P}{\dd t} = -\frac{1}{\tau_P}(P - P_{\text{set}}) + K_u u(t)
+\end{equation}
+
+where $u(t)$ represents vasoactive drug infusion.
+
+% ============================================================================
+\section{Respiratory System}
+\label{sec:respiratory}
+% ============================================================================
+
+\subsection{Mechanical Ventilation Model}
+
+\input{figures/fig_ch01h_lung_model.tex}
+
+Equation of motion:
+\begin{equation}
+P_{aw} = R_{aw}\dot{V} + \frac{V}{C_L} + P_{\text{PEEP}}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $P_{aw}$ = airway pressure (cmH$_2$O)
+    \item $R_{aw}$ = airway resistance (cmH$_2$O$\cdot$s/L)
+    \item $C_L$ = lung compliance (L/cmH$_2$O)
+    \item $V$ = lung volume (L)
+    \item $P_{\text{PEEP}}$ = positive end-expiratory pressure
+\end{itemize}
+
+Transfer function:
+\begin{equation}
+\frac{V(s)}{P_{aw}(s)} = \frac{C_L}{R_{aw}C_L s + 1}
+\end{equation}
+
+% ============================================================================
+\section{Anesthesia Delivery}
+\label{sec:anesthesia}
+% ============================================================================
+
+\subsection{Propofol Pharmacokinetics}
+
+Three-compartment mammillary model:
+\begin{align}
+V_1\dot{C}_1 &= u - k_{10}V_1 C_1 - k_{12}V_1 C_1 + k_{21}V_2 C_2 - k_{13}V_1 C_1 + k_{31}V_3 C_3 \\
+V_2\dot{C}_2 &= k_{12}V_1 C_1 - k_{21}V_2 C_2 \\
+V_3\dot{C}_3 &= k_{13}V_1 C_1 - k_{31}V_3 C_3
+\end{align}
+
+\subsection{Pharmacodynamic Effect}
+
+The effect-site concentration $C_e$ relates to the measured output (e.g., BIS index):
+\begin{equation}
+\frac{\dd C_e}{\dd t} = k_{e0}(C_1 - C_e)
+\end{equation}
+
+Hill equation for effect:
+\begin{equation}
+\text{Effect} = E_0 - E_{\max}\frac{C_e^\gamma}{C_e^\gamma + EC_{50}^\gamma}
+\end{equation}
+
+% ============================================================================
+\section{Medical Device Examples}
+\label{sec:medical_devices}
+% ============================================================================
+
+\subsection{Infusion Pump}
+
+Transfer function (actuator dynamics):
+\begin{equation}
+\frac{Q(s)}{V_{\text{cmd}}(s)} = \frac{K_p}{\tau_p s + 1}
+\end{equation}
+
+where $Q$ is flow rate and $V_{\text{cmd}}$ is the command voltage.
+
+\subsection{Pacemaker Rate Response}
+
+Activity-based pacing rate:
+\begin{equation}
+\tau\frac{\dd R}{\dd t} + R = R_{\text{base}} + K \cdot A(t)
+\end{equation}
+
+where $A(t)$ is the activity sensor signal and $R$ is the pacing rate.
+
+\subsection{Cochlear Implant Signal Processing}
+
+Filter bank model:
+\begin{equation}
+H_k(s) = \frac{\omega_k^2}{s^2 + 2\zeta\omega_k s + \omega_k^2}
+\end{equation}
+
+for frequency band $k$ centered at $\omega_k$.
+
+% ============================================================================
+\section{Neural Systems}
+\label{sec:neural}
+% ============================================================================
+
+\subsection{Hodgkin-Huxley Neuron Model}
+
+\begin{equation}
+C_m\frac{\dd V}{\dd t} = I_{\text{ext}} - g_{Na}m^3h(V - E_{Na}) - g_K n^4(V - E_K) - g_L(V - E_L)
+\end{equation}
+
+with gating variables $m$, $h$, $n$ following first-order kinetics.
+
+\subsection{Simplified Integrate-and-Fire Model}
+
+\begin{equation}
+\tau_m\frac{\dd V}{\dd t} = -(V - V_{\text{rest}}) + R_m I_{\text{ext}}
+\end{equation}
+
+When $V$ reaches threshold $V_{th}$, the neuron fires and resets.
+
+% ============================================================================
+\section{Exercises: Biomedical Systems}
+% ============================================================================
+
+\begin{exercise}
+A drug has one-compartment kinetics with $V = 35$ L and $t_{1/2} = 4$ hours.
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the elimination rate constant
+    \item Find the loading dose to achieve 20 mg/L immediately
+    \item Find the maintenance infusion rate
+    \item Write the transfer function from infusion rate to concentration
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A patient's arterial compliance is $C = 2$ mL/mmHg and peripheral resistance is $R = 1$ mmHg$\cdot$s/mL.
+\begin{enumerate}[label=(\alph*)]
+    \item Find the time constant of the arterial system
+    \item If cardiac output steps from 80 to 100 mL/s, find the new steady-state pressure
+    \item Sketch the pressure response to the step change
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A mechanical ventilator delivers pressure to a patient with $R_{aw} = 10$ cmH$_2$O$\cdot$s/L and $C_L = 0.05$ L/cmH$_2$O.
+\begin{enumerate}[label=(\alph*)]
+    \item Find the time constant
+    \item If inspiratory pressure is 20 cmH$_2$O above PEEP, find the tidal volume
+    \item Find the inspiratory time needed to achieve 95\% of the tidal volume
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+An artificial pancreas controller must regulate glucose. The simplified model has:
+\begin{equation}
+\frac{G(s)}{U(s)} = \frac{-2}{(10s+1)(50s+1)}
+\end{equation}
+where $G$ is glucose (mg/dL) and $U$ is insulin (U/hr), with time in minutes.
+\begin{enumerate}[label=(\alph*)]
+    \item Find the steady-state glucose change for 1 U/hr insulin increase
+    \item Find the system poles and time constants
+    \item Sketch the glucose response to a step insulin input
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A two-compartment drug delivery system has: $V_1 = 10$ L, $V_2 = 40$ L, $k_{10} = 0.2$ hr$^{-1}$, $k_{12} = 0.15$ hr$^{-1}$, and $k_{21} = 0.1$ hr$^{-1}$.
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the drug concentration in both compartments at 4 hours following a 500 mg IV bolus dose
+    \item Find the half-lives for the distribution and elimination phases
+    \item If the drug is continuously infused at 10 mg/hr, find the steady-state concentrations in both compartments
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A patient receiving mechanical ventilation has measured respiratory mechanics: $R_{aw} = 8$ cmH$_2$O$\cdot$s/L, $C_L = 0.04$ L/cmH$_2$O, $I_r = 0.03$ L/cmH$_2$O (chest wall compliance).
+\begin{enumerate}[label=(\alph*)]
+    \item Find the total respiratory system compliance and time constant
+    \item For a constant inspiratory pressure of 15 cmH$_2$O (above PEEP), calculate tidal volume after 5 time constants
+    \item Design a pressure control strategy to deliver 0.5 L tidal volume in 1 second
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A pacemaker rate-response control system regulates heart rate based on activity. The transfer function from activity sensor voltage to pacing rate is:
+\begin{equation}
+\frac{R(s)}{A(s)} = \frac{K}{0.5s + 1}, \quad K = 100 \text{ bpm/V}
+\end{equation}
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the steady-state pacing rate for activity input of 0.5 V
+    \item Find the time to reach 90\% of steady-state rate
+    \item Design a controller to achieve 0 to 120 bpm range with sensor output of 0 to 1 V
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+An infusion pump delivers IV medications with first-order actuator dynamics: $\frac{Q(s)}{V_{\text{cmd}}(s)} = \frac{K_p}{\tau_p s + 1}$, where $K_p = 5$ mL/min/V and $\tau_p = 0.1$ s.
+\begin{enumerate}[label=(\alph*)]
+    \item For a step command of 2 V, find the steady-state flow rate
+    \item Calculate the actual flow rate at time $t = 0.2$ s
+    \item If a patient needs 50 mL of drug infused in exactly 10 minutes, determine the required command voltage accounting for actuator dynamics
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A prosthetic limb controller uses proportional myoelectric control, with muscle EMG signal driving joint angle:
+\begin{equation}
+\theta(s) = \frac{G(s)}{1 + G(s)H(s)}E(s)
+\end{equation}
+where $G(s) = \frac{K}{\tau s + 1}$ (actuator), $H(s) = K_f s$ (feedback with damping), $K = 45$ deg/V, $\tau = 0.2$ s, and $K_f = 0.1$ V$\cdot$s/deg.
+\begin{enumerate}[label=(\alph*)]
+    \item Find the closed-loop transfer function $\theta(s)/E(s)$
+    \item For a step EMG input of 0.5 V, calculate steady-state joint angle
+    \item Sketch the response and identify if overshoot or oscillation occurs
+    \item Design a proportional controller to add to $G(s)$ that achieves 1 deg/V steady-state sensitivity with damping ratio 0.8
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A glucose-insulin model for artificial pancreas design is based on the Bergman minimal model. Patient parameters are: $p_1 = 0.03$ min$^{-1}$, $p_2 = 0.02$ min$^{-1}$, $p_3 = 1.2 \times 10^{-5}$ mL$/$($\mu$U$\cdot$min$)$, $n = 0.1$ min$^{-1}$, $\gamma = 0.5$ mg$/$dL$/min$/($\mu$U$/mL$)$, with $G_b = 95$ mg/dL and $I_b = 12$ $\mu$U/mL.
+\begin{enumerate}[label=(\alph*)]
+    \item Linearize the system about the basal operating point $(G_0, I_0) = (G_b, I_b)$
+    \item Find the transfer functions $G(s)/U(s)$ and $G(s)/D(s)$
+    \item Design a proportional insulin infusion controller: $u(t) = K_p(G_{\text{ref}} - G(t))$ that regulates glucose to 100 mg/dL with settling time under 3 hours
+\end{enumerate}
+\end{exercise}

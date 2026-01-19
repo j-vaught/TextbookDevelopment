@@ -1,0 +1,48 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[auto, node distance=2.5cm,
+    block/.style={rectangle, draw=UofSCBlack, text width=2cm, text centered, minimum height=0.8cm, sharp corners, line width=1.5pt},
+    sum/.style={circle, draw=UofSCBlack, minimum size=0.8cm, line width=1.5pt},
+    input/.style={},
+    output/.style={}]
+
+    % Reference command
+    \node[input] (ref) {$X_{\text{cmd}}$};
+
+    % First summer (position error)
+    \node[sum, right=of ref] (sum1) {$-$};
+    \draw[thick, UofSCBlack] (ref) -- node[above] {} (sum1.west);
+
+    % Proportional controller
+    \node[block, right=of sum1] (Kp) {$K_p$};
+    \draw[thick, UofSCBlack] (sum1) -- (Kp);
+
+    % Second summer (velocity error)
+    \node[sum, right=of Kp] (sum2) {$-$};
+    \draw[thick, UofSCBlack] (Kp) -- node[above] {$V_{\text{cmd}}$} (sum2.west);
+
+    % Velocity controller
+    \node[block, right=of sum2] (Ki) {$K_i/s$};
+    \draw[thick, UofSCBlack] (sum2) -- (Ki);
+
+    % Motor + mechanical plant
+    \node[block, right=of Ki] (plant) {Motor \& Axis};
+    \draw[thick, UofSCBlack] (Ki) -- node[above] {$F_{\text{motor}}$} (plant);
+
+    % Position output
+    \node[output, right=of plant] (pos_out) {};
+    \draw[thick, UofSCBlack] (plant) -- node[above] {$X$} (pos_out);
+
+    % Position feedback loop (upper path - primary)
+    \draw[thick, UofSCBlack] (pos_out) |- ++(0,1.5) -| (sum1.north) node[pos=0.75, above, font=\small] {Position Feedback};
+
+    % Velocity feedback loop (lower path)
+    \draw[thick, UofSCBlack] (plant.south) |- ++(0,-1.5) node[pos=0.25, below, font=\small] {$\dot{X}$} -| (sum2.south);
+
+    % Disturbance input
+    \draw[thick, UofSCBlack, ->, dashed] ($(plant.north)+(0.3,0)$) -- node[right=0.1cm, font=\small] {$F_{\text{cut}}$} ($(plant.north)+(0.3,0.3)$);
+
+\end{tikzpicture}
+\caption{CNC machine position control loop with nested feedback and disturbance rejection. The proportional controller commands a velocity set-point, while the integrating controller regulates actual velocity feedback to track the commanded profile.}
+\label{fig:cnc_control_loop}
+\end{figure}

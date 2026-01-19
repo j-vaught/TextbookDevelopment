@@ -1,0 +1,481 @@
+% ============================================================================
+% CHAPTER 1B: MECHANICAL SYSTEMS
+% ============================================================================
+
+\chapter{Mechanical Systems}
+\label{ch:mechanical}
+
+Mechanical systems form the intuitive foundation for understanding dynamics. The physical concepts of mass, springs, and dampers have direct analogs in other domains and provide excellent intuition for system behavior.
+
+% ============================================================================
+\section{Translational Mechanical Elements}
+\label{sec:trans_elements}
+% ============================================================================
+
+\subsection{Mass (Inertia)}
+
+Mass resists changes in velocity according to Newton's second law:
+\begin{equation}
+F = m\frac{\dd v}{\dd t} = m\frac{\dd^2 x}{\dd t^2} = m\ddot{x}
+\end{equation}
+
+\input{figures/fig_ch01b_mass_element.tex}
+
+In the Laplace domain:
+\begin{equation}
+F(s) = ms^2 X(s) \quad \Rightarrow \quad \frac{X(s)}{F(s)} = \frac{1}{ms^2}
+\end{equation}
+
+\subsection{Spring (Stiffness)}
+
+A linear spring produces a force proportional to displacement:
+\begin{equation}
+F = kx \quad \text{or} \quad F = k(x_1 - x_2)
+\end{equation}
+
+where $k$ is the spring constant (N/m or lb/in).
+
+\input{figures/fig_ch01b_spring_element.tex}
+
+In the Laplace domain:
+\begin{equation}
+F(s) = kX(s) \quad \Rightarrow \quad \frac{X(s)}{F(s)} = \frac{1}{k}
+\end{equation}
+
+\subsection{Damper (Viscous Friction)}
+
+A viscous damper produces a force proportional to velocity:
+\begin{equation}
+F = b\dot{x} = b\frac{\dd x}{\dd t} \quad \text{or} \quad F = b(\dot{x}_1 - \dot{x}_2)
+\end{equation}
+
+where $b$ is the damping coefficient (N$\cdot$s/m or lb$\cdot$s/in).
+
+\input{figures/fig_ch01b_damper_element.tex}
+
+In the Laplace domain:
+\begin{equation}
+F(s) = bsX(s) \quad \Rightarrow \quad \frac{X(s)}{F(s)} = \frac{1}{bs}
+\end{equation}
+
+% ============================================================================
+\section{Mass-Spring-Damper System}
+\label{sec:msd}
+% ============================================================================
+
+The canonical mechanical system combines all three elements.
+
+\input{figures/fig_ch01b_msd_system.tex}
+
+\subsection{Equation of Motion}
+
+Applying Newton's second law:
+\begin{equation}
+m\ddot{x} = F(t) - kx - b\dot{x}
+\end{equation}
+
+Rearranging:
+\begin{equation}
+\boxed{m\ddot{x} + b\dot{x} + kx = F(t)}
+\end{equation}
+
+\subsection{Transfer Function}
+
+Taking the Laplace transform with zero initial conditions:
+\begin{equation}
+ms^2X(s) + bsX(s) + kX(s) = F(s)
+\end{equation}
+
+\begin{equation}
+G(s) = \frac{X(s)}{F(s)} = \frac{1}{ms^2 + bs + k}
+\end{equation}
+
+In standard second-order form:
+\begin{equation}
+G(s) = \frac{1/k}{(m/k)s^2 + (b/k)s + 1} = \frac{1/k}{\frac{s^2}{\omega_n^2} + \frac{2\zeta}{\omega_n}s + 1}
+\end{equation}
+
+where:
+\begin{align}
+\omega_n &= \sqrt{\frac{k}{m}} \quad \text{(natural frequency)} \\
+\zeta &= \frac{b}{2\sqrt{km}} \quad \text{(damping ratio)}
+\end{align}
+
+\subsection{Pole-Zero Map for Different Damping Ratios}
+
+The location of poles in the complex s-plane determines the system's response characteristics. For a second-order system, the poles are located at:
+\begin{equation}
+s = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2}
+\end{equation}
+
+The poles move along a circular locus as the damping ratio changes, creating three distinct response regions.
+
+\input{figures/fig_ch01b_pz_damping.tex}
+
+Key observations from the pole-zero map:
+\begin{itemize}
+    \item \textbf{Underdamped} ($\zeta < 1$): Complex conjugate poles create oscillatory response with overshoot.
+    \item \textbf{Critically damped} ($\zeta = 1$): Repeated real pole gives fastest non-oscillatory response.
+    \item \textbf{Overdamped} ($\zeta > 1$): Two distinct real poles result in sluggish response without oscillation.
+\end{itemize}
+
+\begin{examplebox}[title=Example 1.2: Automobile Shock Absorber Test]
+A shock absorber test rig has $m = 50$ kg, $k = 20{,}000$ N/m, and $b = 1{,}000$ N$\cdot$s/m. Find:
+\begin{enumerate}[label=(\alph*)]
+    \item Natural frequency and damping ratio
+    \item The response to a 100 N step force
+\end{enumerate}
+
+\textbf{Solution:}
+
+(a) Natural frequency and damping ratio:
+\begin{align}
+\omega_n &= \sqrt{\frac{20{,}000}{50}} = \sqrt{400} = 20 \text{ rad/s} = 3.18 \text{ Hz} \\
+\zeta &= \frac{1{,}000}{2\sqrt{20{,}000 \times 50}} = \frac{1{,}000}{2{,}000} = 0.5
+\end{align}
+
+The system is underdamped.
+
+(b) Transfer function:
+\begin{equation}
+G(s) = \frac{1}{50s^2 + 1000s + 20000} = \frac{0.00005}{s^2 + 20s + 400}
+\end{equation}
+
+For a 100 N step: $Y(s) = \frac{100}{s} \cdot G(s)$
+
+Using partial fractions and inverse Laplace:
+\begin{equation}
+x(t) = \frac{100}{20000}\left[1 - \frac{\ee^{-10t}}{\sqrt{1-0.25}}\sin(17.32t + 1.047)\right]
+\end{equation}
+
+Steady-state displacement: $x_{ss} = \frac{F}{k} = \frac{100}{20000} = 5$ mm
+\end{examplebox}
+
+\begin{historicalbox}[title=Historical Context: Hooke's Law, Newton's Mechanics, and Vibration Analysis]
+The spring, one of the most fundamental control components, was mathematically described by Robert Hooke in 1660 when he published his law of elasticity: the force in a spring is proportional to its extension (Hooke stated it in Latin: ``Ut tensio, sic vis''---as the extension, so the force). This simple linear relationship, $F = kx$, became the foundation for modeling elastic systems for centuries. Combined with Isaac Newton's laws of motion (published in 1687), Hooke's law enabled the prediction of oscillatory behavior in mechanical systems. The mass-spring system's equation of motion, $m\ddot{x} + kx = F$, is perhaps the most important differential equation in all of engineering.
+
+The systematic analysis of mechanical vibrations emerged in the 18th and 19th centuries as engineers faced resonance problems in machinery, bridges, and vehicles. Understanding that vibrations depended on mass, stiffness, and damping---and that underdamped systems could produce dangerous oscillations---drove the development of stability analysis methods. Vibration analysis, grounded in Hooke's and Newton's laws, ultimately led to the Nyquist and Bode analysis techniques that dominate modern control design, making the humble spring-mass-damper system the pedagogical gateway to control theory.
+\end{historicalbox}
+
+% ============================================================================
+\section{Vehicle Suspension System}
+\label{sec:vehicle_suspension}
+% ============================================================================
+
+A quarter-car model represents one corner of a vehicle suspension.
+
+\input{figures/fig_ch01b_quarter_car.tex}
+
+\subsection{Equations of Motion}
+
+For the sprung mass (body):
+\begin{equation}
+m_s\ddot{x}_s = -k_s(x_s - x_u) - b_s(\dot{x}_s - \dot{x}_u)
+\end{equation}
+
+For the unsprung mass (wheel):
+\begin{equation}
+m_u\ddot{x}_u = k_s(x_s - x_u) + b_s(\dot{x}_s - \dot{x}_u) - k_t(x_u - x_r)
+\end{equation}
+
+\subsection{State-Space Representation}
+
+Defining state variables: $\vecx = [x_s - x_u, \dot{x}_s, x_u - x_r, \dot{x}_u]^\top$
+
+\begin{equation}
+\dot{\vecx} = \begin{bmatrix}
+0 & 1 & 0 & -1 \\
+-k_s/m_s & -b_s/m_s & 0 & b_s/m_s \\
+0 & 0 & 0 & 1 \\
+k_s/m_u & b_s/m_u & -k_t/m_u & -b_s/m_u
+\end{bmatrix} \vecx + \begin{bmatrix} 0 \\ 0 \\ -1 \\ 0 \end{bmatrix} \dot{x}_r
+\end{equation}
+
+\subsection{Transfer Functions}
+
+From road input $X_r(s)$ to body displacement $X_s(s)$:
+\begin{equation}
+\frac{X_s(s)}{X_r(s)} = \frac{(b_s s + k_s)k_t}{m_s m_u s^4 + (m_s + m_u)b_s s^3 + [m_s k_t + (m_s + m_u)k_s]s^2 + b_s k_t s + k_s k_t}
+\end{equation}
+
+\begin{examplebox}[title=Example 1.3: Quarter-Car Parameters]
+Typical values for a passenger car:
+\begin{itemize}
+    \item Sprung mass: $m_s = 250$ kg (quarter of body mass)
+    \item Unsprung mass: $m_u = 35$ kg (wheel, brake, suspension links)
+    \item Suspension stiffness: $k_s = 16{,}000$ N/m
+    \item Suspension damping: $b_s = 1{,}000$ N$\cdot$s/m
+    \item Tire stiffness: $k_t = 160{,}000$ N/m
+\end{itemize}
+
+The body bounce frequency: $f_s = \frac{1}{2\pi}\sqrt{\frac{k_s}{m_s}} = 1.27$ Hz
+
+The wheel hop frequency: $f_u = \frac{1}{2\pi}\sqrt{\frac{k_t}{m_u}} = 10.8$ Hz
+\end{examplebox}
+
+Figure~\ref{fig:pickup_truck_profile} shows a pickup truck profile that can be analyzed using the quarter-car model at each wheel.
+
+\input{figures/fig_ch01b_truck_suspension.tex}
+
+% ============================================================================
+\section{Rotational Mechanical Systems}
+\label{sec:rotational}
+% ============================================================================
+
+Rotational systems follow analogous laws with angular quantities.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Translational} & \textbf{Rotational} & \textbf{Unit} \\
+\midrule
+Displacement $x$ & Angle $\theta$ & rad \\
+Velocity $v = \dot{x}$ & Angular velocity $\omega = \dot{\theta}$ & rad/s \\
+Acceleration $a = \ddot{x}$ & Angular acceleration $\alpha = \ddot{\theta}$ & rad/s$^2$ \\
+Force $F$ & Torque $\tau$ & N$\cdot$m \\
+Mass $m$ & Moment of inertia $J$ & kg$\cdot$m$^2$ \\
+Spring constant $k$ & Torsional stiffness $\kappa$ & N$\cdot$m/rad \\
+Damping $b$ & Rotational damping $B$ & N$\cdot$m$\cdot$s/rad \\
+\bottomrule
+\end{tabular}
+\caption{Translational-rotational analogies.}
+\label{tab:rot_analogies}
+\end{table}
+
+\subsection{Rotational Inertia}
+
+\begin{equation}
+\tau = J\ddot{\theta} = J\dot{\omega}
+\end{equation}
+
+\subsection{Torsional Spring}
+
+\begin{equation}
+\tau = \kappa\theta \quad \text{or} \quad \tau = \kappa(\theta_1 - \theta_2)
+\end{equation}
+
+\subsection{Rotational Damper}
+
+\begin{equation}
+\tau = B\dot{\theta} = B\omega
+\end{equation}
+
+\begin{examplebox}[title=Example 1.4: Rotating Shaft System]
+A motor drives a load through a flexible shaft. The motor inertia is $J_m = 0.01$ kg$\cdot$m$^2$, load inertia is $J_L = 0.1$ kg$\cdot$m$^2$, shaft stiffness is $\kappa = 100$ N$\cdot$m/rad, and bearing friction is $B = 0.5$ N$\cdot$m$\cdot$s/rad.
+
+\input{figures/fig_ch01b_two_inertia.tex}
+
+Equations of motion:
+\begin{align}
+J_m\ddot{\theta}_m &= \tau_m - \kappa(\theta_m - \theta_L) \\
+J_L\ddot{\theta}_L &= \kappa(\theta_m - \theta_L) - B\dot{\theta}_L
+\end{align}
+
+Transfer function from motor torque to load angle:
+\begin{equation}
+\frac{\Theta_L(s)}{\tau_m(s)} = \frac{\kappa}{J_m J_L s^4 + J_m B s^3 + (J_m + J_L)\kappa s^2 + B\kappa s}
+\end{equation}
+\end{examplebox}
+
+% ============================================================================
+\section{Gear Trains}
+\label{sec:gears}
+% ============================================================================
+
+Gears transform speed and torque between shafts.
+
+\input{figures/fig_ch01b_gear_pair.tex}
+
+\textbf{Gear Ratio:}
+\begin{equation}
+n = \frac{N_2}{N_1} = \frac{r_2}{r_1} = \frac{\omega_1}{\omega_2} = \frac{\tau_2}{\tau_1}
+\end{equation}
+
+\textbf{Reflected Inertia:}
+When reflecting load inertia $J_L$ to the motor side:
+\begin{equation}
+J_{\text{reflected}} = \frac{J_L}{n^2}
+\end{equation}
+
+\textbf{Reflected Damping:}
+\begin{equation}
+B_{\text{reflected}} = \frac{B_L}{n^2}
+\end{equation}
+
+\begin{keyconceptbox}[title=Gear Ratio Selection]
+The gear ratio affects both speed and torque:
+\begin{itemize}
+    \item High gear ratio ($n > 1$): Reduces speed, increases torque, reduces reflected inertia
+    \item Low gear ratio ($n < 1$): Increases speed, reduces torque, increases reflected inertia
+\end{itemize}
+Optimal gear ratio often maximizes acceleration: $n_{\text{opt}} = \sqrt{J_L/J_m}$
+\end{keyconceptbox}
+
+% ============================================================================
+\section{Multi-Body Mechanical Systems}
+\label{sec:multibody}
+% ============================================================================
+
+\begin{examplebox}[title=Example 1.5: Two-Mass System]
+Consider two masses connected by springs and dampers:
+
+\input{figures/fig_ch01b_two_mass.tex}
+
+Equations of motion:
+\begin{align}
+m_1\ddot{x}_1 &= -k_1 x_1 - b_1\dot{x}_1 + k_2(x_2 - x_1) + b_2(\dot{x}_2 - \dot{x}_1) \\
+m_2\ddot{x}_2 &= F - k_2(x_2 - x_1) - b_2(\dot{x}_2 - \dot{x}_1)
+\end{align}
+
+State-space form with $\vecx = [x_1, \dot{x}_1, x_2, \dot{x}_2]^\top$:
+\begin{equation}
+\mA = \begin{bmatrix}
+0 & 1 & 0 & 0 \\
+-(k_1+k_2)/m_1 & -(b_1+b_2)/m_1 & k_2/m_1 & b_2/m_1 \\
+0 & 0 & 0 & 1 \\
+k_2/m_2 & b_2/m_2 & -k_2/m_2 & -b_2/m_2
+\end{bmatrix}
+\end{equation}
+\end{examplebox}
+
+% ============================================================================
+\section{Pendulum Systems}
+\label{sec:pendulum}
+% ============================================================================
+
+\subsection{Simple Pendulum}
+
+\input{figures/fig_ch01b_simple_pendulum.tex}
+
+The equation of motion (nonlinear):
+\begin{equation}
+mL^2\ddot{\theta} + mgL\sin\theta = \tau
+\end{equation}
+
+For small angles ($\sin\theta \approx \theta$), the linearized equation:
+\begin{equation}
+\ddot{\theta} + \frac{g}{L}\theta = \frac{\tau}{mL^2}
+\end{equation}
+
+Natural frequency: $\omega_n = \sqrt{g/L}$
+
+\subsection{Inverted Pendulum on Cart}
+
+The classic control benchmark problem:
+
+\input{figures/fig_ch01b_inverted_pendulum.tex}
+
+Linearized equations about the upright position ($\theta = 0$):
+\begin{align}
+(M + m)\ddot{x} + m\ell\ddot{\theta} &= F \\
+m\ell\ddot{x} + m\ell^2\ddot{\theta} - mg\ell\theta &= 0
+\end{align}
+
+Transfer function from force to angle:
+\begin{equation}
+\frac{\Theta(s)}{F(s)} = \frac{1}{(M\ell)s^2 - (M+m)g}
+\end{equation}
+
+This system is \textbf{open-loop unstable} (pole in the right half-plane) and requires feedback control for stabilization.
+
+% ============================================================================
+\section{Exercises: Mechanical Systems}
+% ============================================================================
+
+\begin{exercise}
+A spring-mass system has $m = 2$ kg and $k = 200$ N/m. Find:
+\begin{enumerate}[label=(\alph*)]
+    \item The natural frequency in rad/s and Hz
+    \item The transfer function $X(s)/F(s)$
+    \item The response to a 10 N step force
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Add a damper with $b = 8$ N$\cdot$s/m to the system in Exercise 1.
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the damping ratio
+    \item Find the damped natural frequency
+    \item Determine if the system is underdamped, critically damped, or overdamped
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A motor with $J_m = 0.005$ kg$\cdot$m$^2$ drives a load with $J_L = 0.5$ kg$\cdot$m$^2$ through a 10:1 gear ratio.
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the reflected load inertia at the motor
+    \item Find the total effective inertia seen by the motor
+    \item Derive the transfer function from motor torque to load angle
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+For the quarter-car model, derive the transfer function from road velocity $\dot{X}_r(s)$ to body acceleration $s^2 X_s(s)$. This represents the acceleration felt by passengers.
+\end{exercise}
+
+\begin{exercise}
+Linearize the simple pendulum equation about $\theta_0 = \pi/6$ (30 degrees). Find the equilibrium torque and the linearized dynamics.
+\end{exercise}
+
+\begin{exercise}
+A tuned mass damper for building vibration control has the following parameters:
+\begin{itemize}
+    \item Building mass: $M = 1000$ kg
+    \item Damper mass: $m = 20$ kg
+    \item Damper spring constant: $k = 5000$ N/m
+    \item Damper coefficient: $b = 500$ N$\cdot$s/m
+\end{itemize}
+
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the natural frequency of the tuned damper
+    \item If the building is excited at 2 Hz, find the phase lag of the damper response
+    \item Design the spring constant to match the building frequency of 1.5 Hz
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+Consider a flexible robot arm modeled as a two-inertia system: motor inertia $J_m = 0.01$ kg$\cdot$m$^2$, link inertia $J_L = 0.5$ kg$\cdot$m$^2$, shaft torsional stiffness $\kappa = 50$ N$\cdot$m/rad, and bearing friction $B = 0.1$ N$\cdot$m$\cdot$s/rad.
+
+\begin{enumerate}[label=(\alph*)]
+    \item Derive the transfer function from motor torque to link angle
+    \item Find the natural frequencies (radians and Hz)
+    \item Explain why this system exhibits vibration and how to suppress it
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+\textbf{Concept:} Compare the responses of three second-order mechanical systems with the same natural frequency ($\omega_n = 10$ rad/s) but different damping ratios: $\zeta_1 = 0.3$, $\zeta_2 = 0.7$, $\zeta_3 = 1.0$.
+
+\begin{enumerate}[label=(\alph*)]
+    \item For each, describe the qualitative step response: overshoot, oscillations, settling time
+    \item Rank them by settling time (2\% criterion)
+    \item Which would you choose for a robotics application and why?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+\textbf{Design:} A vibration isolator for precision equipment must satisfy:
+\begin{itemize}
+    \item Support mass: $m = 50$ kg
+    \item Isolation efficiency $> 80\%$ at 10 Hz (reduce vibration amplitude by factor of 5)
+    \item Static deflection $< 10$ cm at rated load
+\end{itemize}
+
+\begin{enumerate}[label=(\alph*)]
+    \item Calculate the required spring constant
+    \item Find the natural frequency
+    \item Verify the isolation efficiency at 10 Hz (calculate transmissibility)
+    \item Specify a damping ratio for practical implementation
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+\textbf{Concept:} The inverted pendulum on a cart is fundamentally unstable. Explain:
+
+\begin{enumerate}[label=(\alph*)]
+    \item Why feedback control is necessary (discuss the pole locations)
+    \item What happens to the system response without control when perturbed
+    \item Why a cart-based solution is simpler than a balance-wheel solution
+\end{enumerate}
+\end{exercise}
