@@ -1,0 +1,355 @@
+% ============================================================================
+% CHAPTER 1F: CHEMICAL SYSTEMS
+% ============================================================================
+
+\chapter{Chemical Systems}
+\label{ch:chemical}
+
+Chemical processes involve mass and energy balances coupled with reaction kinetics. These systems often exhibit nonlinear behavior, time delays, and complex interactions, making them challenging but important control applications.
+
+% ============================================================================
+\section{Continuous Stirred-Tank Reactor (CSTR)}
+\label{sec:cstr}
+% ============================================================================
+
+The CSTR is a fundamental unit in chemical engineering and a classic control problem.
+
+\input{figures/fig_ch01f_cstr.tex}
+
+\subsection{Assumptions}
+
+\begin{itemize}
+    \item Perfect mixing (uniform concentration and temperature)
+    \item Constant volume $V$ and density $\rho$
+    \item Constant flow rate $F$ (in = out)
+    \item Single first-order irreversible reaction: $A \to B$
+\end{itemize}
+
+\subsection{Component Mass Balance}
+
+\begin{equation}
+V\frac{\dd C_A}{\dd t} = F(C_{A,\text{in}} - C_A) - Vk(T)C_A
+\end{equation}
+
+where $k(T)$ is the temperature-dependent reaction rate constant.
+
+\subsection{Arrhenius Equation}
+
+\begin{equation}
+k(T) = k_0 \exp\left(-\frac{E_a}{RT}\right)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $k_0$ = pre-exponential factor (1/s)
+    \item $E_a$ = activation energy (J/mol)
+    \item $R$ = universal gas constant (8.314 J/mol$\cdot$K)
+\end{itemize}
+
+\subsection{Energy Balance}
+
+\begin{equation}
+\rho V C_p\frac{\dd T}{\dd t} = F\rho C_p(T_{\text{in}} - T) + (-\Delta H_r)Vk(T)C_A - UA(T - T_j)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\Delta H_r$ = heat of reaction (J/mol, negative for exothermic)
+    \item $UA$ = heat transfer coefficient times area (W/K)
+    \item $T_j$ = jacket temperature (K)
+\end{itemize}
+
+\subsection{Linearized Model}
+
+Linearizing about steady-state $(C_{A0}, T_0)$:
+\begin{align}
+\frac{\dd \Delta C_A}{\dd t} &= a_{11}\Delta C_A + a_{12}\Delta T + b_1\Delta C_{A,\text{in}} \\
+\frac{\dd \Delta T}{\dd t} &= a_{21}\Delta C_A + a_{22}\Delta T + b_2\Delta T_j
+\end{align}
+
+State-space form:
+\begin{equation}
+\begin{bmatrix} \Delta\dot{C}_A \\ \Delta\dot{T} \end{bmatrix} = \mA \begin{bmatrix} \Delta C_A \\ \Delta T \end{bmatrix} + \mB \begin{bmatrix} \Delta C_{A,\text{in}} \\ \Delta T_j \end{bmatrix}
+\end{equation}
+
+\begin{examplebox}[title=Example 1.12: CSTR Linearization]
+A CSTR operates at steady-state with:
+\begin{itemize}
+    \item $V = 1$ m$^3$, $F = 0.1$ m$^3$/min
+    \item $C_{A0} = 2$ mol/L, $T_0 = 350$ K
+    \item $k_0 = 10^{10}$ min$^{-1}$, $E_a/R = 8750$ K
+\end{itemize}
+
+The linearized $\mA$ matrix elements are:
+\begin{align}
+a_{11} &= -\frac{F}{V} - k(T_0) = -0.1 - k_0\ee^{-8750/350} = -0.1 - 1.2 = -1.3 \text{ min}^{-1} \\
+a_{12} &= -C_{A0}\frac{\dd k}{\dd T}\bigg|_{T_0} = -C_{A0}k(T_0)\frac{E_a}{RT_0^2} = -0.17 \text{ mol/L$\cdot$K$\cdot$min}
+\end{align}
+
+The negative $a_{12}$ indicates that increased temperature increases reaction rate, consuming more $C_A$.
+\end{examplebox}
+
+% ============================================================================
+\section{Mixing Tank}
+\label{sec:mixing}
+% ============================================================================
+
+\input{figures/fig_ch01f_mixing_tank.tex}
+
+\subsection{Mass Balance (Total)}
+
+\begin{equation}
+\frac{\dd(\rho V)}{\dd t} = \rho_1 F_1 + \rho_2 F_2 - \rho F_{\text{out}}
+\end{equation}
+
+For constant density and volume: $F_{\text{out}} = F_1 + F_2$
+
+\subsection{Component Balance}
+
+\begin{equation}
+V\frac{\dd C}{\dd t} = F_1 C_1 + F_2 C_2 - (F_1 + F_2)C
+\end{equation}
+
+Transfer function (for constant $F_1$, $F_2$):
+\begin{equation}
+\frac{C(s)}{C_1(s)} = \frac{F_1/V}{s + (F_1+F_2)/V} = \frac{F_1/(F_1+F_2)}{\tau s + 1}
+\end{equation}
+
+where $\tau = V/(F_1 + F_2)$ is the residence time.
+
+% ============================================================================
+\section{pH Neutralization}
+\label{sec:ph}
+% ============================================================================
+
+pH control is notoriously difficult due to the highly nonlinear relationship between acid/base concentration and pH.
+
+\begin{equation}
+\text{pH} = -\log_{10}[H^+]
+\end{equation}
+
+For a strong acid-strong base system:
+\begin{equation}
+[H^+] = \frac{C_a - C_b + \sqrt{(C_a - C_b)^2 + 4K_w}}{2}
+\end{equation}
+
+where $K_w = 10^{-14}$ at 25°C.
+
+\subsubsection{Titration curve}
+The pH changes dramatically near the equivalence point, creating a high-gain nonlinearity.
+
+\input{figures/fig_ch01f_ph_titration.tex}
+
+% ============================================================================
+\section{Distillation Column}
+\label{sec:distillation}
+% ============================================================================
+
+Distillation separates mixtures based on volatility differences.
+
+\input{figures/fig_ch01f_distillation.tex}
+
+\subsection{Simplified Model}
+
+For a binary mixture, the composition dynamics on tray $n$:
+\begin{equation}
+M_n\frac{\dd x_n}{\dd t} = L_{n-1}x_{n-1} + V_{n+1}y_{n+1} - L_n x_n - V_n y_n
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $M_n$ = liquid holdup on tray
+    \item $L_n$ = liquid flow rate
+    \item $V_n$ = vapor flow rate
+    \item $x_n$ = liquid composition (mole fraction)
+    \item $y_n$ = vapor composition
+\end{itemize}
+
+Vapor-liquid equilibrium:
+\begin{equation}
+y_n = \frac{\alpha x_n}{1 + (\alpha - 1)x_n}
+\end{equation}
+
+where $\alpha$ is the relative volatility.
+
+% ============================================================================
+\section{Batch Reactor}
+\label{sec:batch}
+% ============================================================================
+
+Unlike continuous reactors, batch reactors have no flow during reaction:
+
+\begin{align}
+\frac{\dd C_A}{\dd t} &= -k(T)C_A \\
+\frac{\dd T}{\dd t} &= \frac{(-\Delta H_r)k(T)C_A}{\rho C_p} - \frac{UA(T - T_j)}{\rho V C_p}
+\end{align}
+
+The concentration decreases exponentially (for first-order kinetics):
+\begin{equation}
+C_A(t) = C_{A0}\exp\left(-\int_0^t k(T(\tau))\,\dd\tau\right)
+\end{equation}
+
+% ============================================================================
+\section{Reaction Kinetics}
+\label{sec:kinetics}
+% ============================================================================
+
+\subsection{Zero-Order Reaction}
+
+\begin{equation}
+\frac{\dd C}{\dd t} = -k
+\end{equation}
+
+Solution: $C(t) = C_0 - kt$
+
+\subsection{First-Order Reaction}
+
+\begin{equation}
+\frac{\dd C}{\dd t} = -kC
+\end{equation}
+
+Solution: $C(t) = C_0\ee^{-kt}$
+
+Half-life: $t_{1/2} = \ln(2)/k$
+
+\subsection{Second-Order Reaction}
+
+\begin{equation}
+\frac{\dd C}{\dd t} = -kC^2
+\end{equation}
+
+Solution: $\frac{1}{C(t)} = \frac{1}{C_0} + kt$
+
+\subsection{Enzyme Kinetics (Michaelis-Menten)}
+
+\begin{equation}
+\frac{\dd C}{\dd t} = -\frac{V_{\max}C}{K_m + C}
+\end{equation}
+
+where $V_{\max}$ is maximum rate and $K_m$ is the Michaelis constant.
+
+% ============================================================================
+\section{Process Dead Time}
+\label{sec:dead_time}
+% ============================================================================
+
+Many chemical processes exhibit significant time delays (dead time, transport lag):
+
+\begin{equation}
+y(t) = u(t - \theta)
+\end{equation}
+
+Transfer function:
+\begin{equation}
+G(s) = \ee^{-\theta s}
+\end{equation}
+
+Dead time makes control more challenging. Common approximations:
+
+\subsubsection{First-order Pade}
+\begin{equation}
+\ee^{-\theta s} \approx \frac{1 - \theta s/2}{1 + \theta s/2}
+\end{equation}
+
+\subsubsection{Second-order Pade}
+\begin{equation}
+\ee^{-\theta s} \approx \frac{1 - \theta s/2 + (\theta s)^2/12}{1 + \theta s/2 + (\theta s)^2/12}
+\end{equation}
+
+\begin{examplebox}[title=Example 1.13: First-Order Plus Dead Time (FOPDT)]
+Many chemical processes can be approximated as:
+\begin{equation}
+G(s) = \frac{K\ee^{-\theta s}}{\tau s + 1}
+\end{equation}
+
+For a heat exchanger with $K = 2$ °C/\%, $\tau = 60$ s, $\theta = 10$ s:
+\begin{equation}
+G(s) = \frac{2\ee^{-10s}}{60s + 1}
+\end{equation}
+
+The dead-time-to-time-constant ratio $\theta/\tau = 10/60 = 0.17$ indicates this system is relatively easy to control.
+\end{examplebox}
+
+% ============================================================================
+\section{CSTR Schematic and Inlet/Outlet Configuration}
+\label{sec:cstr_schematic_detailed}
+% ============================================================================
+
+\input{figures/fig_ch01f_cstr_detailed_schematic.tex}
+
+The inlet provides fresh reactant at concentration $C_{A,\text{in}}$ and temperature $T_{\text{in}}$, while the outlet removes mixture at the reactor conditions $(C_A, T)$ since perfect mixing is assumed. The cooling jacket maintains temperature control through $T_j$.
+
+% ============================================================================
+\section{Reaction Rate vs. Temperature: Arrhenius Behavior}
+\label{sec:reaction_rate_temperature}
+% ============================================================================
+
+\input{figures/fig_ch01f_arrhenius_curve.tex}
+
+The exponential dependence means small temperature changes can dramatically affect reaction rate. For a 50 K increase from 350 K to 400 K, the reaction rate increases approximately 7-fold. This nonlinear behavior is fundamental to exothermic reaction dynamics and runaway concerns.
+
+% ============================================================================
+\section{Exercises: Chemical Systems}
+% ============================================================================
+
+\begin{exercise}
+A CSTR with volume 500 L and flow rate 50 L/min processes a first-order reaction with $k = 0.1$ min$^{-1}$. Feed concentration is 2 mol/L.
+\begin{enumerate}[label=(\alph*)]
+    \item Find the steady-state exit concentration
+    \item Find the residence time
+    \item Write the transfer function from $C_{\text{in}}$ to $C$
+    \item Find the time constant
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A mixing tank blends two streams: Stream 1 at 100 L/min with 10\% salt, and Stream 2 at 50 L/min with 2\% salt. Tank volume is 1000 L.
+\begin{enumerate}[label=(\alph*)]
+    \item Find the steady-state exit concentration
+    \item If Stream 1 concentration suddenly changes to 15\%, find the new steady-state and the time to reach 90\% of the change
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+An exothermic batch reactor starts at 25°C with 1000 mol of reactant. Heat of reaction is $-50$ kJ/mol, heat capacity is 4 kJ/kg$\cdot$K, mass is 1000 kg, and reaction rate constant is $k = 0.01$ min$^{-1}$ at 25°C with $E_a/R = 5000$ K.
+\begin{enumerate}[label=(\alph*)]
+    \item Write the coupled ODEs for concentration and temperature (adiabatic case)
+    \item Estimate the adiabatic temperature rise if reaction goes to completion
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+\textbf{CSTR Reaction Kinetics:} A CSTR operates with a second-order reaction $2A \to B$ having rate law $r = kC_A^2$ with $k = 0.1$ L/(mol$\cdot$min). The reactor volume is 100 L and inlet concentration is 1 mol/L.
+\begin{enumerate}[label=(\alph*)]
+    \item For inlet flow 10 L/min, calculate the steady-state concentration
+    \item If temperature increases causing $k$ to double, find the new steady-state
+    \item Compare reaction rates at both operating points
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+\textbf{CSTR Temperature Control:} An exothermic reaction in a CSTR generates heat at rate $\dot{Q}_{\text{gen}} = (-\Delta H_r)k(T)C_A \cdot V$ where $-\Delta H_r = 50$ kJ/mol, $k(T)$ follows Arrhenius with $E_a/R = 8750$ K. The cooling jacket removes heat at $\dot{Q}_{\text{cool}} = UA(T - T_j)$ with $UA = 5$ kW/K.
+\begin{enumerate}[label=(\alph*)]
+    \item Write the energy balance ODE
+    \item For $T_j = 350$ K (set at nominal operating point), find the steady-state temperature
+    \item If $T_j$ suddenly drops to 300 K, predict the qualitative response
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+A process has FOPDT model with $K = 1.5$, $\tau = 120$ s, and $\theta = 30$ s.
+\begin{enumerate}[label=(\alph*)]
+    \item Write the transfer function
+    \item Calculate $\theta/\tau$ and comment on controllability
+    \item Use first-order Padé approximation and find the system poles
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}
+\textbf{pH Control Challenge:} A strong acid-strong base neutralization uses $[H^+] = \frac{C_a - C_b + \sqrt{(C_a - C_b)^2 + 4K_w}}{2}$ where $K_w = 10^{-14}$.
+\begin{enumerate}[label=(\alph*)]
+    \item With acid concentration 0.1 M flowing at 100 mL/min and base 0.1 M at 95 mL/min, find pH at steady-state
+    \item Calculate the sensitivity $\frac{d(\text{pH})}{dC_b}$ at this point
+    \item If base flow increases to 100.5 mL/min, estimate the new pH and explain the control difficulty
+\end{enumerate}
+\end{exercise}
