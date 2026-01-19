@@ -1,0 +1,223 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+% ========== Common function definition ==========
+% f(x) = 1 + 0.5*sin(x) + 0.1*x^2 for a nice curved function
+\pgfmathsetmacro{\aval}{0.5}
+\pgfmathsetmacro{\bval}{4.5}
+
+% ========== Left Rectangle Rule ==========
+\begin{axis}[
+    name=leftrect,
+    width=7cm, height=5.5cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=0, xmax=5,
+    ymin=0, ymax=4,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={1,2,3,4},
+    ytick={1,2,3},
+    title={\textbf{Left Rectangle Rule}},
+    title style={at={(0.5,1.02)}, font=\bfseries},
+    clip=false
+]
+
+% Left rectangles (n=4)
+\pgfmathsetmacro{\dx}{1.0}
+\foreach \i in {0,1,2,3} {
+    \pgfmathsetmacro{\xleft}{\aval + \i*\dx}
+    \pgfmathsetmacro{\xright}{\xleft + \dx}
+    \pgfmathsetmacro{\fleft}{1 + 0.5*sin((\xleft) r) + 0.1*\xleft*\xleft}
+    \addplot[fill=UofSCAtlantic!30, draw=UofSCAtlantic, thick, forget plot]
+        coordinates {(\xleft,0) (\xleft,\fleft) (\xright,\fleft) (\xright,0) (\xleft,0)};
+}
+
+% The function curve
+\addplot[UofSCBlack, very thick, domain=0:5, samples=100] {1 + 0.5*sin((x) r) + 0.1*x^2};
+
+% Bounds
+\draw[UofSCGarnet, thick, dashed] (axis cs:\aval,0) -- (axis cs:\aval,{1 + 0.5*sin((\aval) r) + 0.1*\aval*\aval});
+\draw[UofSCGarnet, thick, dashed] (axis cs:\bval,0) -- (axis cs:\bval,{1 + 0.5*sin((\bval) r) + 0.1*\bval*\bval});
+
+% Left point markers
+\foreach \i in {0,1,2,3} {
+    \pgfmathsetmacro{\xleft}{\aval + \i*\dx}
+    \pgfmathsetmacro{\fleft}{1 + 0.5*sin((\xleft) r) + 0.1*\xleft*\xleft}
+    \node[circle, fill=UofSCGarnet, minimum size=4pt, inner sep=0pt] at (axis cs:\xleft,\fleft) {};
+}
+
+\end{axis}
+
+% ========== Right Rectangle Rule ==========
+\begin{axis}[
+    name=rightrect,
+    at={(leftrect.south east)},
+    anchor=south west,
+    xshift=1.2cm,
+    width=7cm, height=5.5cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=0, xmax=5,
+    ymin=0, ymax=4,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={1,2,3,4},
+    ytick={1,2,3},
+    title={\textbf{Right Rectangle Rule}},
+    title style={at={(0.5,1.02)}, font=\bfseries},
+    clip=false
+]
+
+% Right rectangles (n=4)
+\pgfmathsetmacro{\dx}{1.0}
+\foreach \i in {0,1,2,3} {
+    \pgfmathsetmacro{\xleft}{\aval + \i*\dx}
+    \pgfmathsetmacro{\xright}{\xleft + \dx}
+    \pgfmathsetmacro{\fright}{1 + 0.5*sin((\xright) r) + 0.1*\xright*\xright}
+    \addplot[fill=UofSCHorseshoe!30, draw=UofSCHorseshoe, thick, forget plot]
+        coordinates {(\xleft,0) (\xleft,\fright) (\xright,\fright) (\xright,0) (\xleft,0)};
+}
+
+% The function curve
+\addplot[UofSCBlack, very thick, domain=0:5, samples=100] {1 + 0.5*sin((x) r) + 0.1*x^2};
+
+% Bounds
+\draw[UofSCGarnet, thick, dashed] (axis cs:\aval,0) -- (axis cs:\aval,{1 + 0.5*sin((\aval) r) + 0.1*\aval*\aval});
+\draw[UofSCGarnet, thick, dashed] (axis cs:\bval,0) -- (axis cs:\bval,{1 + 0.5*sin((\bval) r) + 0.1*\bval*\bval});
+
+% Right point markers
+\foreach \i in {0,1,2,3} {
+    \pgfmathsetmacro{\xright}{\aval + (\i+1)*\dx}
+    \pgfmathsetmacro{\fright}{1 + 0.5*sin((\xright) r) + 0.1*\xright*\xright}
+    \node[circle, fill=UofSCGarnet, minimum size=4pt, inner sep=0pt] at (axis cs:\xright,\fright) {};
+}
+
+\end{axis}
+
+% ========== Trapezoidal Rule ==========
+\begin{axis}[
+    name=trap,
+    at={(leftrect.south west)},
+    anchor=north west,
+    yshift=-1.5cm,
+    width=7cm, height=5.5cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=0, xmax=5,
+    ymin=0, ymax=4,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={1,2,3,4},
+    ytick={1,2,3},
+    title={\textbf{Trapezoidal Rule}},
+    title style={at={(0.5,1.02)}, font=\bfseries},
+    clip=false
+]
+
+% Trapezoids (n=4)
+\pgfmathsetmacro{\dx}{1.0}
+\foreach \i in {0,1,2,3} {
+    \pgfmathsetmacro{\xleft}{\aval + \i*\dx}
+    \pgfmathsetmacro{\xright}{\xleft + \dx}
+    \pgfmathsetmacro{\fleft}{1 + 0.5*sin((\xleft) r) + 0.1*\xleft*\xleft}
+    \pgfmathsetmacro{\fright}{1 + 0.5*sin((\xright) r) + 0.1*\xright*\xright}
+    \addplot[fill=UofSCCongaree!30, draw=UofSCCongaree, thick, forget plot]
+        coordinates {(\xleft,0) (\xleft,\fleft) (\xright,\fright) (\xright,0) (\xleft,0)};
+}
+
+% The function curve
+\addplot[UofSCBlack, very thick, domain=0:5, samples=100] {1 + 0.5*sin((x) r) + 0.1*x^2};
+
+% Bounds
+\draw[UofSCGarnet, thick, dashed] (axis cs:\aval,0) -- (axis cs:\aval,{1 + 0.5*sin((\aval) r) + 0.1*\aval*\aval});
+\draw[UofSCGarnet, thick, dashed] (axis cs:\bval,0) -- (axis cs:\bval,{1 + 0.5*sin((\bval) r) + 0.1*\bval*\bval});
+
+% Point markers at both ends
+\foreach \i in {0,1,2,3,4} {
+    \pgfmathsetmacro{\xpt}{\aval + \i*\dx}
+    \pgfmathsetmacro{\fpt}{1 + 0.5*sin((\xpt) r) + 0.1*\xpt*\xpt}
+    \node[circle, fill=UofSCGarnet, minimum size=4pt, inner sep=0pt] at (axis cs:\xpt,\fpt) {};
+}
+
+\end{axis}
+
+% ========== Simpson's Rule ==========
+\begin{axis}[
+    name=simp,
+    at={(trap.south east)},
+    anchor=south west,
+    xshift=1.2cm,
+    width=7cm, height=5.5cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=0, xmax=5,
+    ymin=0, ymax=4,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={1,2,3,4},
+    ytick={1,2,3},
+    title={\textbf{Simpson's Rule}},
+    title style={at={(0.5,1.02)}, font=\bfseries},
+    clip=false
+]
+
+% Simpson's parabolic segments (n=4, 2 parabolas)
+% First parabola: x0 to x2
+\pgfmathsetmacro{\xa}{\aval}
+\pgfmathsetmacro{\xb}{\aval + 1.0}
+\pgfmathsetmacro{\xc}{\aval + 2.0}
+\addplot[fill=UofSCRose!30, draw=none, domain=\xa:\xc, samples=50, forget plot]
+    {1 + 0.5*sin((x) r) + 0.1*x^2} \closedcycle;
+
+% Second parabola: x2 to x4
+\pgfmathsetmacro{\xd}{\aval + 2.0}
+\pgfmathsetmacro{\xe}{\aval + 3.0}
+\pgfmathsetmacro{\xf}{\aval + 4.0}
+\addplot[fill=UofSCRose!30, draw=none, domain=\xd:\xf, samples=50, forget plot]
+    {1 + 0.5*sin((x) r) + 0.1*x^2} \closedcycle;
+
+% Outline for Simpson regions
+\draw[UofSCRose, thick] (axis cs:\xa,0) -- (axis cs:\xa,{1 + 0.5*sin((\xa) r) + 0.1*\xa*\xa});
+\draw[UofSCRose, thick] (axis cs:\xf,0) -- (axis cs:\xf,{1 + 0.5*sin((\xf) r) + 0.1*\xf*\xf});
+
+% The function curve
+\addplot[UofSCBlack, very thick, domain=0:5, samples=100] {1 + 0.5*sin((x) r) + 0.1*x^2};
+
+% Bounds
+\draw[UofSCGarnet, thick, dashed] (axis cs:\aval,0) -- (axis cs:\aval,{1 + 0.5*sin((\aval) r) + 0.1*\aval*\aval});
+\draw[UofSCGarnet, thick, dashed] (axis cs:\bval,0) -- (axis cs:\bval,{1 + 0.5*sin((\bval) r) + 0.1*\bval*\bval});
+
+% Point markers at all nodes
+\foreach \i in {0,1,2,3,4} {
+    \pgfmathsetmacro{\xpt}{\aval + \i*\dx}
+    \pgfmathsetmacro{\fpt}{1 + 0.5*sin((\xpt) r) + 0.1*\xpt*\xpt}
+    \node[circle, fill=UofSCGarnet, minimum size=4pt, inner sep=0pt] at (axis cs:\xpt,\fpt) {};
+}
+
+\end{axis}
+
+% ========== Formula annotations ==========
+\node[anchor=north west, align=left, font=\small] at (0,-8.5) {
+    \textcolor{UofSCAtlantic}{\textbf{Left Rectangle:}} $\displaystyle\int_a^b f(x)\,\dd x \approx h\sum_{i=0}^{n-1} f(x_i)$
+    \hspace{1cm}
+    \textcolor{UofSCHorseshoe}{\textbf{Right Rectangle:}} $\displaystyle\int_a^b f(x)\,\dd x \approx h\sum_{i=1}^{n} f(x_i)$
+};
+
+\node[anchor=north west, align=left, font=\small] at (0,-9.3) {
+    \textcolor{UofSCCongaree}{\textbf{Trapezoidal:}} $\displaystyle\int_a^b f(x)\,\dd x \approx \frac{h}{2}\left[f(x_0) + 2\sum_{i=1}^{n-1} f(x_i) + f(x_n)\right]$
+};
+
+\node[anchor=north west, align=left, font=\small] at (0,-10.1) {
+    \textcolor{UofSCRose}{\textbf{Simpson's:}} $\displaystyle\int_a^b f(x)\,\dd x \approx \frac{h}{3}\left[f(x_0) + 4\sum_{\text{odd }i} f(x_i) + 2\sum_{\text{even }i} f(x_i) + f(x_n)\right]$
+};
+
+\end{tikzpicture}
+\caption{Comparison of numerical integration methods for approximating $\int_a^b f(x)\,\dd x$. \textbf{Top left}: Left rectangle rule uses function values at left endpoints, typically underestimating for increasing functions. \textbf{Top right}: Right rectangle rule uses function values at right endpoints. \textbf{Bottom left}: Trapezoidal rule connects adjacent function values with straight lines, achieving second-order accuracy $O(h^2)$. \textbf{Bottom right}: Simpson's rule fits parabolas through triplets of points, achieving fourth-order accuracy $O(h^4)$ when $n$ is even. The step size is $h = (b-a)/n$ where $n$ is the number of subintervals.}
+\label{fig:numerical_integration}
+\end{figure}
