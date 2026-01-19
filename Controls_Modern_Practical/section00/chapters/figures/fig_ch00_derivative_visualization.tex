@@ -1,0 +1,71 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=12cm, height=8cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=-0.5, xmax=4.5,
+    ymin=-0.5, ymax=5.5,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={1,2,3,4},
+    ytick={1,2,3,4,5},
+    clip=false
+]
+
+% The function f(x) = 0.3x^2 + 0.5
+\addplot[UofSCBlack, very thick, domain=0:4.2, samples=100] {0.3*x^2 + 0.5};
+\addlegendentry{$f(x)$}
+
+% Point x_0 at x=1.5
+\pgfmathsetmacro{\xzero}{1.5}
+\pgfmathsetmacro{\yzero}{0.3*\xzero*\xzero + 0.5}
+\pgfmathsetmacro{\slope}{0.6*\xzero}
+
+% Point x_0 + Delta x at x=3.0
+\pgfmathsetmacro{\xone}{3.0}
+\pgfmathsetmacro{\yone}{0.3*\xone*\xone + 0.5}
+
+% Secant line between the two points
+\pgfmathsetmacro{\secantslope}{(\yone-\yzero)/(\xone-\xzero)}
+\addplot[UofSCAtlantic, thick, dashed, domain=0.5:4, samples=2] {\yzero + \secantslope*(x-\xzero)};
+\addlegendentry{Secant line}
+
+% Tangent line at x_0 (derivative)
+\addplot[UofSCGarnet, very thick, domain=0:3.5, samples=2] {\yzero + \slope*(x-\xzero)};
+\addlegendentry{Tangent line}
+
+% Points on curve
+\node[circle, fill=UofSCGarnet, minimum size=6pt, inner sep=0pt] at (axis cs:\xzero,\yzero) {};
+\node[circle, fill=UofSCAtlantic, minimum size=6pt, inner sep=0pt] at (axis cs:\xone,\yone) {};
+
+% Labels for points
+\node[below left, UofSCGarnet, font=\small\bfseries] at (axis cs:\xzero,\yzero) {$(x_0, f(x_0))$};
+\node[above right, UofSCAtlantic, font=\small\bfseries] at (axis cs:\xone,\yone) {$(x_0 + \Delta x, f(x_0 + \Delta x))$};
+
+% Delta x bracket
+\draw[UofSCHorseshoe, thick, |<->|] (axis cs:\xzero,0.2) -- (axis cs:\xone,0.2);
+\node[below, UofSCHorseshoe, font=\bfseries] at (axis cs:{(\xzero+\xone)/2},0.2) {$\Delta x$};
+
+% Delta f bracket (vertical)
+\draw[UofSCCongaree, thick, |<->|] (axis cs:3.3,\yzero) -- (axis cs:3.3,\yone);
+\node[right, UofSCCongaree, font=\bfseries] at (axis cs:3.3,{(\yzero+\yone)/2}) {$\Delta f$};
+
+% Horizontal and vertical dashed lines for visualization
+\draw[UofSC50Black, thin, dashed] (axis cs:\xzero,\yzero) -- (axis cs:\xone,\yzero);
+\draw[UofSC50Black, thin, dashed] (axis cs:\xone,\yzero) -- (axis cs:\xone,\yone);
+
+\end{axis}
+
+% Derivative formula annotation
+\node[anchor=north west, align=left, font=\small] at (0.5,1.5) {
+    \textcolor{UofSCAtlantic}{Secant slope:} $\displaystyle\frac{\Delta f}{\Delta x} = \frac{f(x_0 + \Delta x) - f(x_0)}{\Delta x}$\\[8pt]
+    \textcolor{UofSCGarnet}{Derivative:} $\displaystyle f'(x_0) = \lim_{\Delta x \to 0} \frac{\Delta f}{\Delta x}$
+};
+
+\end{tikzpicture}
+\caption{Visualization of the derivative as the limit of secant line slopes. The curve $f(x)$ is shown in black. The secant line (dashed Atlantic blue) connects two points separated by $\Delta x$, with slope $\Delta f/\Delta x$. As $\Delta x \to 0$, the secant line approaches the tangent line (Garnet red) at $x_0$, whose slope equals the derivative $f'(x_0)$. The intervals $\Delta x$ (Horseshoe green) and $\Delta f$ (Congaree teal) are marked.}
+\label{fig:derivative_visualization}
+\end{figure}

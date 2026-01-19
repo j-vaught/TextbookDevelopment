@@ -1,0 +1,144 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+% === First subplot: f(tau) ===
+\begin{axis}[
+    name=plot1,
+    width=8cm, height=5cm,
+    xlabel={$\tau$},
+    ylabel={},
+    xmin=-1, xmax=5,
+    ymin=-0.3, ymax=1.5,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={0,1,2,3,4},
+    ytick={0,0.5,1},
+    title={\textbf{(a) Input function $f(\tau)$}},
+    title style={at={(0.5,1.05)}, anchor=south}
+]
+
+% f(tau) = exp(-tau) * u(tau) - decaying exponential starting at tau=0
+\addplot[UofSCGarnet, very thick, domain=0:4.5, samples=100] {exp(-0.5*x)};
+\addplot[UofSCGarnet, very thick, domain=-1:0, samples=10] {0};
+\node[above right, UofSCGarnet, font=\bfseries] at (axis cs:1.5,0.47) {$f(\tau) = \ee^{-\alpha\tau}u(\tau)$};
+
+% Point at origin
+\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:0,1) {};
+
+\end{axis}
+
+% === Second subplot: g(tau) original ===
+\begin{axis}[
+    name=plot2,
+    at={(plot1.south east)},
+    anchor=south west,
+    xshift=1.5cm,
+    width=8cm, height=5cm,
+    xlabel={$\tau$},
+    ylabel={},
+    xmin=-1, xmax=5,
+    ymin=-0.3, ymax=1.5,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={0,1,2,3,4},
+    ytick={0,0.5,1},
+    title={\textbf{(b) Impulse response $g(\tau)$}},
+    title style={at={(0.5,1.05)}, anchor=south}
+]
+
+% g(tau) = rectangular pulse from 0 to 2
+\addplot[UofSCAtlantic, very thick] coordinates {(-1,0) (0,0) (0,1) (2,1) (2,0) (5,0)};
+\node[above, UofSCAtlantic, font=\bfseries] at (axis cs:1,1.1) {$g(\tau)$};
+
+\end{axis}
+
+% === Third subplot: g(t-tau) flipped and shifted ===
+\begin{axis}[
+    name=plot3,
+    at={(plot1.south west)},
+    anchor=north west,
+    yshift=-1.5cm,
+    width=8cm, height=5cm,
+    xlabel={$\tau$},
+    ylabel={},
+    xmin=-1, xmax=5,
+    ymin=-0.3, ymax=1.5,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={0,1,2,3,4},
+    ytick={0,0.5,1},
+    title={\textbf{(c) Flipped and shifted: $g(t-\tau)$ for $t=3$}},
+    title style={at={(0.5,1.05)}, anchor=south}
+]
+
+% g(t-tau) for t=3: rectangle from t-2=1 to t=3
+\addplot[UofSCHorseshoe, very thick] coordinates {(-1,0) (1,0) (1,1) (3,1) (3,0) (5,0)};
+\node[above, UofSCHorseshoe, font=\bfseries] at (axis cs:2,1.1) {$g(t-\tau)$};
+
+% Mark t and t-2
+\node[below, UofSCHorseshoe, font=\small] at (axis cs:1,-0.15) {$t-2$};
+\node[below, UofSCHorseshoe, font=\small] at (axis cs:3,-0.15) {$t$};
+
+% Arrow showing shift direction
+\draw[->, UofSCCongaree, thick] (axis cs:0.2,1.3) -- (axis cs:0.8,1.3);
+\node[above, UofSCCongaree, font=\small] at (axis cs:0.5,1.3) {shift};
+
+\end{axis}
+
+% === Fourth subplot: Product and convolution integral ===
+\begin{axis}[
+    name=plot4,
+    at={(plot3.south east)},
+    anchor=south west,
+    xshift=1.5cm,
+    width=8cm, height=5cm,
+    xlabel={$\tau$},
+    ylabel={},
+    xmin=-1, xmax=5,
+    ymin=-0.3, ymax=1.5,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={0,1,2,3,4},
+    ytick={0,0.5,1},
+    title={\textbf{(d) Product $f(\tau) \cdot g(t-\tau)$ at $t=3$}},
+    title style={at={(0.5,1.05)}, anchor=south}
+]
+
+% Shaded area representing the convolution integral
+\addplot[fill=UofSCRose!40, draw=none, domain=1:3, samples=50] {exp(-0.5*x)} \closedcycle;
+
+% The product function (only nonzero where both are nonzero: tau in [1,3])
+\addplot[UofSCRose, very thick, domain=1:3, samples=50] {exp(-0.5*x)};
+\addplot[UofSCRose, very thick, domain=-1:1, samples=10] {0};
+\addplot[UofSCRose, very thick, domain=3:5, samples=10] {0};
+
+% Original f(tau) for reference (dashed)
+\addplot[UofSCGarnet, thick, dashed, domain=0:4.5, samples=100] {exp(-0.5*x)};
+
+% g(t-tau) outline for reference (dashed)
+\addplot[UofSCHorseshoe, thick, dashed] coordinates {(1,0) (1,1) (3,1) (3,0)};
+
+\node[above right, UofSCRose, font=\bfseries] at (axis cs:1.8,0.5) {$f(\tau)g(t-\tau)$};
+
+% Convolution value annotation
+\node[anchor=west, align=left, font=\small] at (axis cs:3.3,0.8) {
+    \textcolor{UofSCRose}{\textbf{Shaded area:}}\\
+    $(f * g)(t)$ at $t=3$
+};
+
+\end{axis}
+
+% Main convolution formula at bottom
+\node[anchor=north, align=center, font=\normalsize] at (8,-8.5) {
+    \textbf{Convolution Integral:} $\displaystyle (f * g)(t) = \int_{-\infty}^{\infty} f(\tau)\, g(t-\tau)\, \dd\tau$
+};
+
+\end{tikzpicture}
+\caption{Visualization of the convolution operation $(f * g)(t)$. (a) The input function $f(\tau) = \ee^{-\alpha\tau}u(\tau)$ in Garnet. (b) The impulse response $g(\tau)$, a rectangular pulse, in Atlantic blue. (c) The flipped and shifted function $g(t-\tau)$ for $t=3$ in Horseshoe green---convolution involves sliding this function across $f$. (d) The product $f(\tau) \cdot g(t-\tau)$ in Rose; the shaded area equals the convolution value $(f*g)(3)$. As $t$ varies, this area traces out the complete convolution.}
+\label{fig:convolution_visual}
+\end{figure}
