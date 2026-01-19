@@ -7,45 +7,36 @@
     \node[font=\bfseries] at (3.5, 4.5) {(a) Stable Spiral};
     \node[font=\footnotesize, UofSCHorseshoe] at (3.5, 4.0) {$\lambda = -0.3 \pm 0.8\jj$};
 
-    \begin{axis}[
-        name=spiral,
-        at={(0cm, 0cm)},
-        width=7cm, height=7cm,
-        xlabel={$x_1$},
-        ylabel={$x_2$},
-        xmin=-2.5, xmax=2.5,
-        ymin=-2.5, ymax=2.5,
-        axis lines=middle,
-        axis line style={thick, ->, >=stealth},
-        grid=major,
-        grid style={UofSC50Black!30},
-        ticks=none,
-        xlabel style={at={(axis description cs:1.02,0.5)}, anchor=west},
-        ylabel style={at={(axis description cs:0.5,1.02)}, anchor=south}
-    ]
-        % Trajectory 1 - Garnet
-        \addplot[UofSCGarnet, very thick, domain=0:12, samples=300, smooth, variable=\t,
-            decoration={markings, mark=at position 0.2 with {\arrow{>}}, mark=at position 0.5 with {\arrow{>}}, mark=at position 0.8 with {\arrow{>}}}, postaction={decorate}]
-            ({2*exp(-0.3*\t)*cos(deg(0.8*\t))}, {2*exp(-0.3*\t)*sin(deg(0.8*\t))});
+    % Use TikZ directly for the spiral instead of pgfplots
+    \begin{scope}[xshift=0.5cm, yshift=0.5cm, scale=1.3]
+        % Grid and axes
+        \draw[help lines, gray!20] (-2,-2) grid (2,2);
+        \draw[thick, ->, >=stealth] (-2.3,0) -- (2.3,0) node[right, font=\small] {$x_1$};
+        \draw[thick, ->, >=stealth] (0,-2.3) -- (0,2.3) node[above, font=\small] {$x_2$};
 
-        % Trajectory 2 - Atlantic
-        \addplot[UofSCAtlantic, very thick, domain=0:12, samples=300, smooth, variable=\t,
-            decoration={markings, mark=at position 0.2 with {\arrow{>}}, mark=at position 0.5 with {\arrow{>}}, mark=at position 0.8 with {\arrow{>}}}, postaction={decorate}]
-            ({1.8*exp(-0.3*\t)*cos(deg(0.8*\t + 120))}, {1.8*exp(-0.3*\t)*sin(deg(0.8*\t + 120))});
+        % Spiral trajectory 1 - Garnet (using parametric with radians)
+        \draw[UofSCGarnet, very thick, smooth, samples=100, domain=0:6.28]
+            plot ({2*exp(-0.25*\x)*cos(\x r)}, {2*exp(-0.25*\x)*sin(\x r)});
+        \draw[UofSCGarnet, thick, ->] (1.2, 0.8) -- (1.1, 0.9);
 
-        % Trajectory 3 - Horseshoe
-        \addplot[UofSCHorseshoe, very thick, domain=0:12, samples=300, smooth, variable=\t,
-            decoration={markings, mark=at position 0.2 with {\arrow{>}}, mark=at position 0.5 with {\arrow{>}}, mark=at position 0.8 with {\arrow{>}}}, postaction={decorate}]
-            ({1.6*exp(-0.3*\t)*cos(deg(0.8*\t + 240))}, {1.6*exp(-0.3*\t)*sin(deg(0.8*\t + 240))});
+        % Spiral trajectory 2 - Atlantic
+        \draw[UofSCAtlantic, very thick, smooth, samples=100, domain=0:6.28]
+            plot ({1.8*exp(-0.25*\x)*cos(\x r + 2.09)}, {1.8*exp(-0.25*\x)*sin(\x r + 2.09)});
+        \draw[UofSCAtlantic, thick, ->] (-0.6, 1.2) -- (-0.7, 1.15);
+
+        % Spiral trajectory 3 - Horseshoe
+        \draw[UofSCHorseshoe, very thick, smooth, samples=100, domain=0:6.28]
+            plot ({1.6*exp(-0.25*\x)*cos(\x r + 4.19)}, {1.6*exp(-0.25*\x)*sin(\x r + 4.19)});
+        \draw[UofSCHorseshoe, thick, ->] (-0.5, -0.9) -- (-0.4, -0.95);
 
         % Equilibrium point
-        \node[circle, fill=UofSCBlack, minimum size=6pt, inner sep=0pt] at (axis cs:0,0) {};
+        \node[circle, fill=UofSCBlack, minimum size=5pt, inner sep=0pt] at (0,0) {};
 
         % Initial condition markers
-        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:2,0) {};
-        \node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:-0.9,1.56) {};
-        \node[circle, fill=UofSCHorseshoe, minimum size=5pt, inner sep=0pt] at (axis cs:-0.8,-1.39) {};
-    \end{axis}
+        \node[circle, fill=UofSCGarnet, minimum size=4pt, inner sep=0pt] at (2,0) {};
+        \node[circle, fill=UofSCAtlantic, minimum size=4pt, inner sep=0pt] at (-0.9,1.56) {};
+        \node[circle, fill=UofSCHorseshoe, minimum size=4pt, inner sep=0pt] at (-0.8,-1.39) {};
+    \end{scope}
 
     % s-plane inset
     \begin{scope}[xshift=5.5cm, yshift=0.5cm, scale=0.4]
@@ -64,54 +55,42 @@
     \node[font=\bfseries] at (3.5, 4.5) {(b) Unstable Node};
     \node[font=\footnotesize, UofSCRose] at (3.5, 4.0) {$\lambda_1 = 0.5$, $\lambda_2 = 1.2$};
 
-    \begin{axis}[
-        name=unstable,
-        at={(0cm, 0cm)},
-        width=7cm, height=7cm,
-        xlabel={$x_1$},
-        ylabel={$x_2$},
-        xmin=-2.5, xmax=2.5,
-        ymin=-2.5, ymax=2.5,
-        axis lines=middle,
-        axis line style={thick, ->, >=stealth},
-        grid=major,
-        grid style={UofSC50Black!30},
-        ticks=none,
-        xlabel style={at={(axis description cs:1.02,0.5)}, anchor=west},
-        ylabel style={at={(axis description cs:0.5,1.02)}, anchor=south}
-    ]
-        % For unstable node: trajectories move AWAY from origin
-        % Using eigenvalues 0.5 and 1.2, eigenvectors [1;0] and [0;1]
+    % Use TikZ directly
+    \begin{scope}[xshift=0.5cm, yshift=0.5cm, scale=1.3]
+        % Grid and axes
+        \draw[help lines, gray!20] (-2,-2) grid (2,2);
+        \draw[thick, ->, >=stealth] (-2.3,0) -- (2.3,0) node[right, font=\small] {$x_1$};
+        \draw[thick, ->, >=stealth] (0,-2.3) -- (0,2.3) node[above, font=\small] {$x_2$};
 
-        % Trajectory 1 - starting near origin, moving outward (Garnet)
-        \addplot[UofSCGarnet, very thick, domain=0:1.5, samples=100, smooth, variable=\t,
-            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-            ({0.3*exp(0.5*\t)}, {0.2*exp(1.2*\t)});
+        % Trajectory 1 - Garnet (outward from origin)
+        \draw[UofSCGarnet, very thick, smooth, samples=50, domain=0:1.4]
+            plot ({0.3*exp(0.5*\x)}, {0.2*exp(1.2*\x)});
+        \draw[UofSCGarnet, thick, ->] (0.4, 0.5) -- (0.45, 0.7);
 
-        % Trajectory 2 (Atlantic)
-        \addplot[UofSCAtlantic, very thick, domain=0:1.5, samples=100, smooth, variable=\t,
-            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-            ({-0.25*exp(0.5*\t)}, {0.15*exp(1.2*\t)});
+        % Trajectory 2 - Atlantic
+        \draw[UofSCAtlantic, very thick, smooth, samples=50, domain=0:1.4]
+            plot ({-0.25*exp(0.5*\x)}, {0.15*exp(1.2*\x)});
+        \draw[UofSCAtlantic, thick, ->] (-0.35, 0.4) -- (-0.38, 0.55);
 
-        % Trajectory 3 (Horseshoe)
-        \addplot[UofSCHorseshoe, very thick, domain=0:1.5, samples=100, smooth, variable=\t,
-            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-            ({0.2*exp(0.5*\t)}, {-0.3*exp(1.2*\t)});
+        % Trajectory 3 - Horseshoe
+        \draw[UofSCHorseshoe, very thick, smooth, samples=50, domain=0:1.4]
+            plot ({0.2*exp(0.5*\x)}, {-0.3*exp(1.2*\x)});
+        \draw[UofSCHorseshoe, thick, ->] (0.3, -0.7) -- (0.32, -0.9);
 
-        % Trajectory 4 (Rose)
-        \addplot[UofSCRose, very thick, domain=0:1.5, samples=100, smooth, variable=\t,
-            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-            ({-0.35*exp(0.5*\t)}, {-0.2*exp(1.2*\t)});
+        % Trajectory 4 - Rose
+        \draw[UofSCRose, very thick, smooth, samples=50, domain=0:1.4]
+            plot ({-0.35*exp(0.5*\x)}, {-0.2*exp(1.2*\x)});
+        \draw[UofSCRose, thick, ->] (-0.5, -0.5) -- (-0.55, -0.7);
 
         % Equilibrium point
-        \node[circle, fill=UofSCBlack, minimum size=6pt, inner sep=0pt] at (axis cs:0,0) {};
+        \node[circle, fill=UofSCBlack, minimum size=5pt, inner sep=0pt] at (0,0) {};
 
         % Initial condition markers
-        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:0.3,0.2) {};
-        \node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:-0.25,0.15) {};
-        \node[circle, fill=UofSCHorseshoe, minimum size=5pt, inner sep=0pt] at (axis cs:0.2,-0.3) {};
-        \node[circle, fill=UofSCRose, minimum size=5pt, inner sep=0pt] at (axis cs:-0.35,-0.2) {};
-    \end{axis}
+        \node[circle, fill=UofSCGarnet, minimum size=4pt, inner sep=0pt] at (0.3,0.2) {};
+        \node[circle, fill=UofSCAtlantic, minimum size=4pt, inner sep=0pt] at (-0.25,0.15) {};
+        \node[circle, fill=UofSCHorseshoe, minimum size=4pt, inner sep=0pt] at (0.2,-0.3) {};
+        \node[circle, fill=UofSCRose, minimum size=4pt, inner sep=0pt] at (-0.35,-0.2) {};
+    \end{scope}
 
     % s-plane inset
     \begin{scope}[xshift=5.5cm, yshift=0.5cm, scale=0.4]
@@ -119,7 +98,7 @@
         \draw[->, thick] (-1,0) -- (2.2,0) node[right, font=\tiny] {$\Real$};
         \draw[->, thick] (0,-2.2) -- (0,2.2) node[above, font=\tiny] {$\Imag$};
         \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (1,0) {};
-        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (2.4,0) {};
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (2,0) {};
         \draw[thick, UofSCCongaree] (0,-2) -- (0,2);
         \node[font=\tiny, UofSCRose] at (1.2,-1.8) {RHP};
     \end{scope}
@@ -130,53 +109,41 @@
     \node[font=\bfseries] at (3.5, 4.5) {(c) Saddle Point};
     \node[font=\footnotesize, UofSCCongaree] at (3.5, 4.0) {$\lambda_1 = -1$, $\lambda_2 = 0.8$};
 
-    \begin{axis}[
-        name=saddle,
-        at={(0cm, 0cm)},
-        width=7cm, height=7cm,
-        xlabel={$x_1$},
-        ylabel={$x_2$},
-        xmin=-2.5, xmax=2.5,
-        ymin=-2.5, ymax=2.5,
-        axis lines=middle,
-        axis line style={thick, ->, >=stealth},
-        grid=major,
-        grid style={UofSC50Black!30},
-        ticks=none,
-        xlabel style={at={(axis description cs:1.02,0.5)}, anchor=west},
-        ylabel style={at={(axis description cs:0.5,1.02)}, anchor=south}
-    ]
+    % Use TikZ directly
+    \begin{scope}[xshift=0.5cm, yshift=0.5cm, scale=1.3]
+        % Grid and axes
+        \draw[help lines, gray!20] (-2,-2) grid (2,2);
+        \draw[thick, ->, >=stealth] (-2.3,0) -- (2.3,0) node[right, font=\small] {$x_1$};
+        \draw[thick, ->, >=stealth] (0,-2.3) -- (0,2.3) node[above, font=\small] {$x_2$};
+
         % Stable manifold (along x1 axis, lambda = -1)
-        \draw[UofSCHorseshoe, very thick, dashed] (axis cs:-2.3,0) -- (axis cs:2.3,0);
-        \node[UofSCHorseshoe, font=\footnotesize] at (axis cs:2,0.3) {stable};
+        \draw[UofSCHorseshoe, very thick, dashed] (-2.2,0) -- (2.2,0);
+        \node[UofSCHorseshoe, font=\footnotesize] at (2,0.25) {stable};
 
         % Unstable manifold (along x2 axis, lambda = 0.8)
-        \draw[UofSCRose, very thick, dashed] (axis cs:0,-2.3) -- (axis cs:0,2.3);
-        \node[UofSCRose, font=\footnotesize, rotate=90] at (axis cs:0.35,2) {unstable};
+        \draw[UofSCRose, very thick, dashed] (0,-2.2) -- (0,2.2);
+        \node[UofSCRose, font=\footnotesize, rotate=90] at (0.3,1.8) {unstable};
 
-        % Trajectory 1 - Garnet (approaching stable manifold, then diverging)
-        \addplot[UofSCGarnet, very thick, domain=-1.5:1.5, samples=100, smooth, variable=\t,
-            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-            ({1.5*exp(-1*\t)}, {0.3*exp(0.8*\t)});
+        % Saddle trajectories - hyperbolic curves
+        \draw[UofSCGarnet, very thick, smooth, samples=50, domain=-1:1]
+            plot ({1.5*exp(-\x)}, {0.3*exp(0.8*\x)});
+        \draw[UofSCGarnet, thick, ->] (0.8, 0.4) -- (0.65, 0.5);
 
-        % Trajectory 2 - Atlantic
-        \addplot[UofSCAtlantic, very thick, domain=-1.5:1.5, samples=100, smooth, variable=\t,
-            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-            ({-1.5*exp(-1*\t)}, {0.25*exp(0.8*\t)});
+        \draw[UofSCAtlantic, very thick, smooth, samples=50, domain=-1:1]
+            plot ({-1.5*exp(-\x)}, {0.25*exp(0.8*\x)});
+        \draw[UofSCAtlantic, thick, ->] (-0.7, 0.35) -- (-0.55, 0.45);
 
-        % Trajectory 3 - Congaree
-        \addplot[UofSCCongaree, very thick, domain=-1.5:1.5, samples=100, smooth, variable=\t,
-            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-            ({1.2*exp(-1*\t)}, {-0.35*exp(0.8*\t)});
+        \draw[UofSCCongaree, very thick, smooth, samples=50, domain=-1:1]
+            plot ({1.2*exp(-\x)}, {-0.35*exp(0.8*\x)});
+        \draw[UofSCCongaree, thick, ->] (0.65, -0.45) -- (0.5, -0.55);
 
-        % Trajectory 4
-        \addplot[UofSCRose, very thick, domain=-1.5:1.5, samples=100, smooth, variable=\t,
-            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-            ({-1.3*exp(-1*\t)}, {-0.28*exp(0.8*\t)});
+        \draw[UofSCRose, very thick, smooth, samples=50, domain=-1:1]
+            plot ({-1.3*exp(-\x)}, {-0.28*exp(0.8*\x)});
+        \draw[UofSCRose, thick, ->] (-0.7, -0.35) -- (-0.55, -0.45);
 
         % Equilibrium point
-        \node[circle, fill=UofSCBlack, minimum size=6pt, inner sep=0pt] at (axis cs:0,0) {};
-    \end{axis}
+        \node[circle, fill=UofSCBlack, minimum size=5pt, inner sep=0pt] at (0,0) {};
+    \end{scope}
 
     % s-plane inset
     \begin{scope}[xshift=5.5cm, yshift=0.5cm, scale=0.4]

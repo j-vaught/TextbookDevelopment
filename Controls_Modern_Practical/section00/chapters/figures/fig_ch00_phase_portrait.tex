@@ -1,82 +1,60 @@
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}
+\begin{tikzpicture}[scale=1.2]
 % Second-order system phase portrait: x'' + 2*zeta*omega_n*x' + omega_n^2*x = 0
 % Using zeta = 0.3, omega_n = 1 for underdamped case (stable focus)
 
-\begin{axis}[
-    name=mainplot,
-    width=11cm, height=10cm,
-    xlabel={Position $x$},
-    ylabel={Velocity $\dot{x}$},
-    xmin=-2.5, xmax=2.5,
-    ymin=-2.5, ymax=2.5,
-    axis lines=middle,
-    axis line style={thick, ->, >=stealth},
-    grid=major,
-    grid style={gray!20},
-    ticks=none,
-    xlabel style={at={(axis description cs:1.05,0.5)}, anchor=west},
-    ylabel style={at={(axis description cs:0.5,1.05)}, anchor=south},
-    title={\textbf{Stable Focus (Spiral Sink)}},
-    title style={at={(0.5,1.02)}, font=\bfseries}
-]
+% Draw axes and grid
+\draw[help lines, gray!30] (-2.5,-2.5) grid (2.5,2.5);
+\draw[thick, ->, >=stealth] (-2.7,0) -- (2.7,0) node[right] {$x$};
+\draw[thick, ->, >=stealth] (0,-2.7) -- (0,2.7) node[above] {$\dot{x}$};
 
-% Phase portrait trajectories for underdamped system (zeta = 0.3, omega_n = 1)
-% Eigenvalues: lambda = -0.3 +/- j*0.954
-% Spiral trajectories converging to origin
+% Title
+\node[font=\bfseries] at (0, 3.0) {Stable Focus (Spiral Sink)};
 
-% Trajectory 1 - starting from (2, 0) - Garnet
-\addplot[UofSCGarnet, very thick, domain=0:15, samples=300, smooth, variable=\t,
-    decoration={markings, mark=at position 0.15 with {\arrow{>}}, mark=at position 0.4 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-    ({2*exp(-0.3*\t)*cos(deg(0.954*\t))}, {-2*exp(-0.3*\t)*(0.3*cos(deg(0.954*\t)) + 0.954*sin(deg(0.954*\t)))});
+% Draw spiral trajectories using TikZ plot - Trajectory 1 (Garnet)
+\draw[UofSCGarnet, very thick, smooth, samples=200, domain=0:6.28]
+    plot ({2*exp(-0.3*\x)*cos(\x r)}, {2*exp(-0.3*\x)*sin(\x r)});
+% Arrows
+\draw[UofSCGarnet, thick, ->] (1.2, 1.1) -- (1.15, 1.15);
+\draw[UofSCGarnet, thick, ->] (0.3, -0.35) -- (0.25, -0.3);
 
-% Trajectory 2 - starting from (0, 2) - Atlantic
-\addplot[UofSCAtlantic, very thick, domain=0:15, samples=300, smooth, variable=\t,
-    decoration={markings, mark=at position 0.15 with {\arrow{>}}, mark=at position 0.4 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-    ({2*exp(-0.3*\t)*cos(deg(0.954*\t - 90))}, {-2*exp(-0.3*\t)*(0.3*cos(deg(0.954*\t - 90)) + 0.954*sin(deg(0.954*\t - 90)))});
+% Trajectory 2 (Atlantic) - phase shifted
+\draw[UofSCAtlantic, very thick, smooth, samples=200, domain=0:6.28]
+    plot ({2*exp(-0.3*\x)*cos(\x r + 90)}, {2*exp(-0.3*\x)*sin(\x r + 90)});
+\draw[UofSCAtlantic, thick, ->] (-1.1, 1.2) -- (-1.15, 1.15);
+\draw[UofSCAtlantic, thick, ->] (0.35, 0.3) -- (0.3, 0.25);
 
-% Trajectory 3 - starting from (-1.5, 1) - Horseshoe
-\addplot[UofSCHorseshoe, very thick, domain=0:15, samples=300, smooth, variable=\t,
-    decoration={markings, mark=at position 0.15 with {\arrow{>}}, mark=at position 0.4 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-    ({1.8*exp(-0.3*\t)*cos(deg(0.954*\t + 146))}, {-1.8*exp(-0.3*\t)*(0.3*cos(deg(0.954*\t + 146)) + 0.954*sin(deg(0.954*\t + 146)))});
+% Trajectory 3 (Horseshoe) - phase shifted
+\draw[UofSCHorseshoe, very thick, smooth, samples=200, domain=0:6.28]
+    plot ({1.8*exp(-0.3*\x)*cos(\x r + 180)}, {1.8*exp(-0.3*\x)*sin(\x r + 180)});
+\draw[UofSCHorseshoe, thick, ->] (-1.0, -1.0) -- (-0.95, -1.05);
+\draw[UofSCHorseshoe, thick, ->] (-0.2, 0.35) -- (-0.15, 0.3);
 
-% Trajectory 4 - starting from (-1, -1.8) - Rose
-\addplot[UofSCRose, very thick, domain=0:15, samples=300, smooth, variable=\t,
-    decoration={markings, mark=at position 0.15 with {\arrow{>}}, mark=at position 0.4 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
-    ({2.05*exp(-0.3*\t)*cos(deg(0.954*\t + 240))}, {-2.05*exp(-0.3*\t)*(0.3*cos(deg(0.954*\t + 240)) + 0.954*sin(deg(0.954*\t + 240)))});
-
-% Direction field arrows (showing flow direction)
-\foreach \xi in {-2,-1,1,2} {
-    \foreach \yi in {-2,-1,1,2} {
-        % State equations: dx/dt = y, dy/dt = -x - 0.6*y
-        \edef\temp{\noexpand\draw[->, UofSC70Black, thin]
-            (axis cs:\xi,\yi) --
-            (axis cs:{\xi + 0.15*\yi},{\yi + 0.15*(-\xi - 0.6*\yi)});}
-        \temp
-    }
-}
+% Trajectory 4 (Rose) - phase shifted
+\draw[UofSCRose, very thick, smooth, samples=200, domain=0:6.28]
+    plot ({1.6*exp(-0.3*\x)*cos(\x r + 270)}, {1.6*exp(-0.3*\x)*sin(\x r + 270)});
+\draw[UofSCRose, thick, ->] (0.9, -1.0) -- (0.95, -0.95);
+\draw[UofSCRose, thick, ->] (-0.25, -0.3) -- (-0.2, -0.25);
 
 % Equilibrium point at origin
-\node[circle, fill=UofSCBlack, minimum size=6pt, inner sep=0pt] at (axis cs:0,0) {};
-\node[font=\footnotesize, below right] at (axis cs:0.1,-0.15) {Equilibrium};
+\node[circle, fill=UofSCBlack, minimum size=6pt, inner sep=0pt] at (0,0) {};
+\node[font=\footnotesize, below right] at (0.1,-0.15) {Equilibrium};
 
 % Initial condition markers
-\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:2,0) {};
-\node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:0,2) {};
-\node[circle, fill=UofSCHorseshoe, minimum size=5pt, inner sep=0pt] at (axis cs:-1.5,1) {};
-\node[circle, fill=UofSCRose, minimum size=5pt, inner sep=0pt] at (axis cs:-1,-1.8) {};
+\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (2,0) {};
+\node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (0,2) {};
+\node[circle, fill=UofSCHorseshoe, minimum size=5pt, inner sep=0pt] at (-1.8,0) {};
+\node[circle, fill=UofSCRose, minimum size=5pt, inner sep=0pt] at (0,-1.6) {};
 
 % Annotations for initial conditions
-\node[UofSCGarnet, font=\footnotesize, above right] at (axis cs:2,0.1) {$\vecx_0$};
-\node[UofSCAtlantic, font=\footnotesize, above left] at (axis cs:0.1,2) {$\vecx_0$};
-\node[UofSCHorseshoe, font=\footnotesize, above left] at (axis cs:-1.5,1.1) {$\vecx_0$};
-\node[UofSCRose, font=\footnotesize, below left] at (axis cs:-1,-1.9) {$\vecx_0$};
-
-\end{axis}
+\node[UofSCGarnet, font=\footnotesize, above right] at (2,0.1) {$\vecx_0$};
+\node[UofSCAtlantic, font=\footnotesize, above left] at (-0.1,2) {$\vecx_0$};
+\node[UofSCHorseshoe, font=\footnotesize, above left] at (-1.8,0.1) {$\vecx_0$};
+\node[UofSCRose, font=\footnotesize, below right] at (0.1,-1.6) {$\vecx_0$};
 
 % ========== Inset: Eigenvalue Location in s-plane ==========
-\begin{scope}[xshift=8.2cm, yshift=6.5cm, scale=0.55]
+\begin{scope}[xshift=4.5cm, yshift=1.5cm, scale=0.5]
     % Box background
     \fill[white] (-3.2,-2.4) rectangle (1.2,2.8);
     \draw[thick, UofSC70Black] (-3.2,-2.4) rectangle (1.2,2.8);
@@ -115,7 +93,7 @@
 \end{scope}
 
 % ========== Legend ==========
-\begin{scope}[xshift=8.2cm, yshift=1.5cm]
+\begin{scope}[xshift=4.5cm, yshift=-1.5cm]
     \draw[thick, UofSC70Black] (-0.2,-0.2) rectangle (2.8,2.0);
     \node[font=\footnotesize\bfseries] at (1.3, 1.75) {Trajectories};
     \draw[very thick, UofSCGarnet] (0, 1.35) -- (0.8, 1.35);
@@ -123,18 +101,15 @@
     \draw[very thick, UofSCAtlantic] (0, 1.0) -- (0.8, 1.0);
     \node[right, font=\tiny] at (0.9, 1.0) {IC 2: $(0, 2)$};
     \draw[very thick, UofSCHorseshoe] (0, 0.65) -- (0.8, 0.65);
-    \node[right, font=\tiny] at (0.9, 0.65) {IC 3: $(-1.5, 1)$};
+    \node[right, font=\tiny] at (0.9, 0.65) {IC 3: $(-1.8, 0)$};
     \draw[very thick, UofSCRose] (0, 0.3) -- (0.8, 0.3);
-    \node[right, font=\tiny] at (0.9, 0.3) {IC 4: $(-1, -1.8)$};
+    \node[right, font=\tiny] at (0.9, 0.3) {IC 4: $(0, -1.6)$};
 \end{scope}
 
 % ========== Eigenvalue influence annotation ==========
-\begin{scope}[xshift=0.5cm, yshift=0.8cm]
-    \node[font=\footnotesize, align=left, text width=4cm] at (0,0) {
-        $|\sigma|$ controls \textbf{decay rate}\\
-        $\omega_d$ controls \textbf{spiral frequency}
-    };
-\end{scope}
+\node[font=\footnotesize, align=left] at (-1, -3.3) {
+    $|\sigma|$ controls \textbf{decay rate}, $\omega_d$ controls \textbf{spiral frequency}
+};
 
 \end{tikzpicture}
 \caption{Phase portrait for a stable second-order system (stable focus, $\zeta = 0.3$, $\omega_n = 1$). Trajectories in the state space $(x, \dot{x})$ spiral inward toward the equilibrium at the origin, demonstrating asymptotic stability. The spiral pattern results from complex conjugate eigenvalues $\lambda = \sigma \pm \jj\omega_d$ with negative real part ($\sigma < 0$). The inset shows eigenvalue locations in the $s$-plane: the real part $\sigma$ determines the decay rate (how quickly spirals shrink), while the imaginary part $\omega_d$ determines the oscillation frequency (how tightly spirals wind). All trajectories from different initial conditions converge to the stable equilibrium.}
