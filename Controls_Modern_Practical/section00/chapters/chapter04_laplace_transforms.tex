@@ -14,12 +14,75 @@ F(s) = \Laplace\{f(t)\} = \int_0^\infty f(t)\ee^{-st} \, \dd t
 where $s = \sigma + \jj\omega$ is a complex variable.
 \end{definitionbox}
 
+The complex variable $s = \sigma + \jj\omega$ defines a plane called the \textbf{$s$-plane} or \textbf{complex frequency plane}. The real part $\sigma$ determines exponential growth or decay, while the imaginary part $\omega$ determines oscillation frequency.
+
+% Figure: s-plane visualization
+\input{figures/fig_ch00_s_plane_visualization.tex}
+
 The \textbf{inverse Laplace transform} is:
 \begin{equation}
 f(t) = \iLaplace\{F(s)\} = \frac{1}{2\pi\jj} \int_{\sigma-\jj\infty}^{\sigma+\jj\infty} F(s)\ee^{st} \, \dd s
 \end{equation}
 
 In practice, we use tables and partial fraction expansion rather than direct integration.
+
+\begin{examplebox}[title=Example: Deriving the Laplace Transform of $t\ee^{-at}$ from Definition]
+Derive the Laplace transform of $f(t) = t\ee^{-at}$ directly from the definition.
+
+\textbf{Solution:}
+Applying the definition:
+\begin{equation}
+F(s) = \int_0^\infty t\ee^{-at}\ee^{-st} \, \dd t = \int_0^\infty t\ee^{-(s+a)t} \, \dd t
+\end{equation}
+
+Use integration by parts with $u = t$ and $\dd v = \ee^{-(s+a)t} \dd t$:
+\begin{align}
+\dd u &= \dd t \\
+v &= \frac{-1}{s+a}\ee^{-(s+a)t}
+\end{align}
+
+Applying integration by parts:
+\begin{align}
+F(s) &= \left[ \frac{-t}{s+a}\ee^{-(s+a)t} \right]_0^\infty + \frac{1}{s+a}\int_0^\infty \ee^{-(s+a)t} \, \dd t \\
+&= 0 + \frac{1}{s+a} \cdot \frac{1}{s+a} \\
+&= \frac{1}{(s+a)^2}
+\end{align}
+
+where we used the fact that $\lim_{t\to\infty} t\ee^{-(s+a)t} = 0$ for $\Real(s) > -a$.
+
+Therefore:
+\begin{equation}
+\boxed{\Laplace\{t\ee^{-at}\} = \frac{1}{(s+a)^2}}
+\end{equation}
+\end{examplebox}
+
+\section{Region of Convergence}
+
+The Laplace transform integral does not converge for all values of $s$. The set of $s$ values for which the integral converges is called the \textbf{Region of Convergence (ROC)}.
+
+\begin{definitionbox}[title=Definition: Region of Convergence]
+The \textbf{Region of Convergence (ROC)} of a Laplace transform $F(s)$ is the set of all complex values $s$ for which the integral $\int_0^\infty f(t)\ee^{-st} \, \dd t$ converges (exists and is finite).
+\end{definitionbox}
+
+% Figure: Region of convergence
+\input{figures/fig_ch00_region_of_convergence.tex}
+
+For most signals encountered in control systems, the ROC is a half-plane of the form $\Real(s) > \sigma_0$, where $\sigma_0$ is called the \textbf{abscissa of convergence}.
+
+\begin{keyconceptbox}[title=ROC and Causality]
+The ROC determines the causality of the corresponding time-domain signal:
+\begin{itemize}
+    \item \textbf{Right-sided signals} (causal, $f(t) = 0$ for $t < 0$): ROC is a right half-plane $\Real(s) > \sigma_0$
+    \item \textbf{Left-sided signals} (anti-causal): ROC is a left half-plane $\Real(s) < \sigma_0$
+    \item \textbf{Two-sided signals}: ROC is a vertical strip $\sigma_1 < \Real(s) < \sigma_2$
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{warningbox}
+In control systems, we \textbf{always assume causal (right-sided) signals}. This means we work with ROCs that are right half-planes extending to $\Real(s) \to +\infty$. This assumption is implicit in all transform pair tables and partial fraction methods.
+\end{warningbox}
+
+For example, the transform pair $\ee^{-at} \leftrightarrow \frac{1}{s+a}$ assumes causality. The same $F(s) = \frac{1}{s+a}$ with a left half-plane ROC would correspond to $-\ee^{-at}u(-t)$, an anti-causal signal.
 
 \section{Common Laplace Transform Pairs}
 
@@ -36,6 +99,7 @@ Parabolic & $t^2$ & $\frac{2}{s^3}$ \\
 Power & $t^n$ & $\frac{n!}{s^{n+1}}$ \\
 Exponential & $\ee^{-at}$ & $\frac{1}{s+a}$ \\
 Decaying ramp & $t\ee^{-at}$ & $\frac{1}{(s+a)^2}$ \\
+Decaying power & $t^n\ee^{-at}$ & $\frac{n!}{(s+a)^{n+1}}$ \\
 Sine & $\sin\omega t$ & $\frac{\omega}{s^2+\omega^2}$ \\
 Cosine & $\cos\omega t$ & $\frac{s}{s^2+\omega^2}$ \\
 Damped sine & $\ee^{-at}\sin\omega t$ & $\frac{\omega}{(s+a)^2+\omega^2}$ \\
@@ -45,6 +109,9 @@ Damped cosine & $\ee^{-at}\cos\omega t$ & $\frac{s+a}{(s+a)^2+\omega^2}$ \\
 \caption{Common Laplace transform pairs.}
 \label{tab:laplace_pairs}
 \end{table}
+
+% Figure: Time-domain and Laplace-domain pairs visualization
+\input{figures/fig_ch00_laplace_time_domain_pairs.tex}
 
 \section{Laplace Transform Properties}
 
@@ -62,6 +129,7 @@ Integration & $\int_0^t f(\tau)\,\dd\tau$ & $\frac{F(s)}{s}$ \\
 Time delay & $f(t-\tau)u(t-\tau)$ & $\ee^{-\tau s}F(s)$ \\
 Frequency shift & $\ee^{-at}f(t)$ & $F(s+a)$ \\
 Time scaling & $f(at)$ & $\frac{1}{a}F\left(\frac{s}{a}\right)$ \\
+Multiplication by $t$ & $tf(t)$ & $-\frac{\dd F}{\dd s}$ \\
 Convolution & $f(t) \conv g(t)$ & $F(s)G(s)$ \\
 Initial value & $\lim_{t\to 0^+} f(t)$ & $\lim_{s\to\infty} sF(s)$ \\
 Final value & $\lim_{t\to\infty} f(t)$ & $\lim_{s\to 0} sF(s)$ \\
@@ -71,9 +139,69 @@ Final value & $\lim_{t\to\infty} f(t)$ & $\lim_{s\to 0} sF(s)$ \\
 \label{tab:laplace_properties}
 \end{table}
 
-\begin{warningbox}
+\begin{examplebox}[title=Example: Using the Differentiation Property to Find $\Laplace\{t^2\}$]
+Use the differentiation property of Laplace transforms to find $\Laplace\{t^2\}$.
+
+\textbf{Solution:}
+The ``multiplication by $t$'' property states:
+\begin{equation}
+\Laplace\{tf(t)\} = -\frac{\dd F(s)}{\dd s}
+\end{equation}
+
+We know that $\Laplace\{t\} = \frac{1}{s^2}$.
+
+Apply the property to find $\Laplace\{t \cdot t\} = \Laplace\{t^2\}$:
+\begin{align}
+\Laplace\{t^2\} &= \Laplace\{t \cdot t\} = -\frac{\dd}{\dd s}\left( \frac{1}{s^2} \right) \\
+&= -\left( \frac{-2}{s^3} \right) \\
+&= \frac{2}{s^3}
+\end{align}
+
+Therefore:
+\begin{equation}
+\boxed{\Laplace\{t^2\} = \frac{2}{s^3}}
+\end{equation}
+
+This pattern generalizes: applying the property $n$ times gives $\Laplace\{t^n\} = \frac{n!}{s^{n+1}}$.
+\end{examplebox}
+
+\begin{warningbox}[title=Limitations of the Final Value Theorem]
 The \textbf{Final Value Theorem} only applies if all poles of $sF(s)$ are in the left half-plane (LHP). If any poles are on the imaginary axis or in the right half-plane, the theorem gives incorrect results.
+
+\textbf{Examples of invalid applications:}
+\begin{itemize}
+    \item $F(s) = \frac{\omega}{s^2 + \omega^2}$ (sine wave): Poles at $s = \pm\jj\omega$ on imaginary axis. FVT would incorrectly give 0.
+    \item $F(s) = \frac{1}{s-1}$ (exponentially growing): Pole at $s = 1$ in RHP. FVT would incorrectly give $-1$.
+    \item $F(s) = \frac{1}{s^2}$ (ramp): Double pole at $s = 0$. Limit does not exist.
+\end{itemize}
 \end{warningbox}
+
+\begin{examplebox}[title=Example: Initial and Final Value Theorems]
+For the transfer function $F(s) = \frac{10(s+2)}{s(s+1)(s+5)}$, find the initial and final values of $f(t)$.
+
+\textbf{Solution:}
+
+\textbf{Initial Value Theorem:}
+\begin{align}
+f(0^+) &= \lim_{s \to \infty} sF(s) = \lim_{s \to \infty} s \cdot \frac{10(s+2)}{s(s+1)(s+5)} \\
+&= \lim_{s \to \infty} \frac{10(s+2)}{(s+1)(s+5)} \\
+&= \lim_{s \to \infty} \frac{10s + 20}{s^2 + 6s + 5} \\
+&= \lim_{s \to \infty} \frac{10/s + 20/s^2}{1 + 6/s + 5/s^2} = 0
+\end{align}
+
+\textbf{Final Value Theorem:}
+First, check validity: the poles of $sF(s)$ are at $s = -1$ and $s = -5$, both in the LHP. The theorem is valid.
+\begin{align}
+f(\infty) &= \lim_{s \to 0} sF(s) = \lim_{s \to 0} s \cdot \frac{10(s+2)}{s(s+1)(s+5)} \\
+&= \lim_{s \to 0} \frac{10(s+2)}{(s+1)(s+5)} \\
+&= \frac{10(0+2)}{(0+1)(0+5)} = \frac{20}{5} = 4
+\end{align}
+
+Therefore:
+\begin{equation}
+\boxed{f(0^+) = 0, \quad f(\infty) = 4}
+\end{equation}
+\end{examplebox}
 
 \section{Partial Fraction Expansion}
 
@@ -95,13 +223,20 @@ For a pole of multiplicity $m$ at $s = -p$:
 \frac{N(s)}{(s+p)^m} = \frac{A_1}{s+p} + \frac{A_2}{(s+p)^2} + \cdots + \frac{A_m}{(s+p)^m}
 \end{equation}
 
+The coefficients are found by:
+\begin{align}
+A_m &= \lim_{s \to -p} (s+p)^m F(s) \\
+A_{m-1} &= \lim_{s \to -p} \frac{\dd}{\dd s}\left[(s+p)^m F(s)\right] \\
+A_{m-k} &= \lim_{s \to -p} \frac{1}{k!}\frac{\dd^k}{\dd s^k}\left[(s+p)^m F(s)\right]
+\end{align}
+
 \subsubsection{Complex Conjugate Poles}
 For poles at $s = -\sigma \pm \jj\omega$:
 \begin{equation}
 \frac{N(s)}{(s+\sigma)^2+\omega^2} = \frac{As + B}{(s+\sigma)^2+\omega^2}
 \end{equation}
 
-\begin{examplebox}[title=Example 0.3: Partial Fraction Expansion]
+\begin{examplebox}[title=Example 0.3: Partial Fraction Expansion with Distinct Real Poles]
 Find the inverse Laplace transform of:
 \begin{equation}
 F(s) = \frac{2s + 3}{(s+1)(s+2)}
@@ -124,6 +259,240 @@ f(t) = \ee^{-t} + \ee^{-2t}, \quad t \geq 0
 \end{equation}
 \end{examplebox}
 
+\begin{examplebox}[title=Example: Partial Fraction Expansion with Complex Poles]
+Find the inverse Laplace transform of:
+\begin{equation}
+F(s) = \frac{s + 3}{s^2 + 2s + 5}
+\end{equation}
+
+\textbf{Solution:}
+First, identify the poles by factoring the denominator:
+\begin{equation}
+s^2 + 2s + 5 = (s+1)^2 + 4
+\end{equation}
+The poles are at $s = -1 \pm 2\jj$ (complex conjugates with $\sigma = 1$, $\omega = 2$).
+
+Rewrite the numerator to match standard forms. Complete the square in the numerator relative to $(s+1)$:
+\begin{equation}
+s + 3 = (s + 1) + 2
+\end{equation}
+
+Therefore:
+\begin{align}
+F(s) &= \frac{(s+1) + 2}{(s+1)^2 + 4} \\
+&= \frac{s+1}{(s+1)^2 + 4} + \frac{2}{(s+1)^2 + 4} \\
+&= \frac{s+1}{(s+1)^2 + 2^2} + \frac{2}{(s+1)^2 + 2^2}
+\end{align}
+
+Using transform pairs for damped cosine and damped sine:
+\begin{itemize}
+    \item $\frac{s+a}{(s+a)^2+\omega^2} \leftrightarrow \ee^{-at}\cos\omega t$
+    \item $\frac{\omega}{(s+a)^2+\omega^2} \leftrightarrow \ee^{-at}\sin\omega t$
+\end{itemize}
+
+Therefore:
+\begin{equation}
+\boxed{f(t) = \ee^{-t}\cos 2t + \ee^{-t}\sin 2t = \ee^{-t}(\cos 2t + \sin 2t), \quad t \geq 0}
+\end{equation}
+
+\textbf{Alternative form:} Using the identity $A\cos\theta + B\sin\theta = \sqrt{A^2+B^2}\cos(\theta - \phi)$ where $\phi = \arctan(B/A)$:
+\begin{equation}
+f(t) = \sqrt{2}\ee^{-t}\cos(2t - \pi/4), \quad t \geq 0
+\end{equation}
+\end{examplebox}
+
+\section{Inverse Laplace Transform Techniques}
+
+While the formal inverse Laplace transform involves a complex contour integral, practical methods rely on partial fractions and transform tables.
+
+\subsection{The Cover-Up Method (Heaviside Expansion)}
+
+For distinct poles, the \textbf{cover-up method} (also called Heaviside's expansion theorem) provides a quick way to find residues.
+
+\begin{keyconceptbox}[title=Cover-Up Method]
+For $F(s) = \frac{N(s)}{(s+p_1)(s+p_2)\cdots(s+p_n)}$ with distinct poles, the residue at pole $-p_i$ is:
+\begin{equation}
+A_i = \left. \frac{N(s)}{(s+p_1)\cdots\cancel{(s+p_i)}\cdots(s+p_n)} \right|_{s=-p_i}
+\end{equation}
+That is: ``cover up'' the factor $(s+p_i)$ in the denominator and evaluate the rest at $s = -p_i$.
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example: Cover-Up Method]
+Find $\iLaplace\left\{ \frac{5s + 7}{(s+1)(s+2)(s+3)} \right\}$.
+
+\textbf{Solution:}
+Using the cover-up method:
+\begin{align}
+A_1 &= \left. \frac{5s+7}{(s+2)(s+3)} \right|_{s=-1} = \frac{5(-1)+7}{(-1+2)(-1+3)} = \frac{2}{1 \cdot 2} = 1 \\[6pt]
+A_2 &= \left. \frac{5s+7}{(s+1)(s+3)} \right|_{s=-2} = \frac{5(-2)+7}{(-2+1)(-2+3)} = \frac{-3}{(-1)(1)} = 3 \\[6pt]
+A_3 &= \left. \frac{5s+7}{(s+1)(s+2)} \right|_{s=-3} = \frac{5(-3)+7}{(-3+1)(-3+2)} = \frac{-8}{(-2)(-1)} = -4
+\end{align}
+
+Therefore:
+\begin{equation}
+F(s) = \frac{1}{s+1} + \frac{3}{s+2} - \frac{4}{s+3}
+\end{equation}
+
+And the inverse transform is:
+\begin{equation}
+\boxed{f(t) = \ee^{-t} + 3\ee^{-2t} - 4\ee^{-3t}, \quad t \geq 0}
+\end{equation}
+\end{examplebox}
+
+\subsection{Completing the Square for Complex Poles}
+
+When the denominator has complex poles, completing the square converts the quadratic to a form matching standard transform pairs.
+
+\begin{keyconceptbox}[title=Completing the Square]
+For a quadratic $s^2 + bs + c$, complete the square:
+\begin{equation}
+s^2 + bs + c = \left(s + \frac{b}{2}\right)^2 + \left(c - \frac{b^2}{4}\right) = (s+\sigma)^2 + \omega^2
+\end{equation}
+where $\sigma = b/2$ and $\omega = \sqrt{c - b^2/4}$ (assuming $c > b^2/4$ for complex poles).
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example: Completing the Square]
+Find $\iLaplace\left\{ \frac{3}{s^2 + 4s + 13} \right\}$.
+
+\textbf{Solution:}
+Complete the square in the denominator:
+\begin{equation}
+s^2 + 4s + 13 = (s+2)^2 - 4 + 13 = (s+2)^2 + 9 = (s+2)^2 + 3^2
+\end{equation}
+
+Rewrite $F(s)$:
+\begin{equation}
+F(s) = \frac{3}{(s+2)^2 + 3^2}
+\end{equation}
+
+This matches the damped sine form $\frac{\omega}{(s+a)^2+\omega^2} \leftrightarrow \ee^{-at}\sin\omega t$, but we have 3 in the numerator and need $\omega = 3$.
+
+\begin{equation}
+F(s) = \frac{3}{(s+2)^2 + 3^2} = 1 \cdot \frac{3}{(s+2)^2 + 3^2}
+\end{equation}
+
+Therefore:
+\begin{equation}
+\boxed{f(t) = \ee^{-2t}\sin 3t, \quad t \geq 0}
+\end{equation}
+\end{examplebox}
+
+\subsection{Using the Frequency Shifting Theorem}
+
+The frequency shifting property $\Laplace\{\ee^{-at}f(t)\} = F(s+a)$ allows us to handle damped signals systematically.
+
+\begin{keyconceptbox}[title=Inverse Frequency Shift]
+If $\Laplace\{f(t)\} = F(s)$, then:
+\begin{equation}
+\iLaplace\{F(s+a)\} = \ee^{-at}f(t)
+\end{equation}
+To use this: identify the shift $a$, find the unshifted inverse transform, then multiply by $\ee^{-at}$.
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example: Frequency Shifting]
+Find $\iLaplace\left\{ \frac{1}{(s+3)^3} \right\}$.
+
+\textbf{Solution:}
+Recognize this as a shifted version of $\frac{1}{s^3}$:
+\begin{equation}
+F(s) = \frac{1}{(s+3)^3} = G(s+3) \quad \text{where} \quad G(s) = \frac{1}{s^3}
+\end{equation}
+
+The inverse of $G(s) = \frac{1}{s^3}$ is:
+\begin{equation}
+g(t) = \iLaplace\left\{\frac{1}{s^3}\right\} = \frac{t^2}{2}
+\end{equation}
+
+By the frequency shift theorem:
+\begin{equation}
+\boxed{f(t) = \ee^{-3t} \cdot \frac{t^2}{2} = \frac{t^2\ee^{-3t}}{2}, \quad t \geq 0}
+\end{equation}
+\end{examplebox}
+
+\section{Solving ODEs with Laplace Transforms}
+
+The Laplace transform provides a systematic method for solving linear ODEs with constant coefficients.
+
+\begin{keyconceptbox}[title=Procedure for Solving ODEs with Laplace Transforms]
+\begin{enumerate}
+    \item Take the Laplace transform of both sides of the ODE
+    \item Use the differentiation property to handle derivatives, substituting initial conditions
+    \item Solve algebraically for $Y(s)$
+    \item Find $y(t)$ by taking the inverse Laplace transform
+\end{enumerate}
+\end{keyconceptbox}
+
+Key formulas for incorporating initial conditions:
+\begin{align}
+\Laplace\{y'\} &= sY(s) - y(0) \\
+\Laplace\{y''\} &= s^2Y(s) - sy(0) - y'(0) \\
+\Laplace\{y'''\} &= s^3Y(s) - s^2y(0) - sy'(0) - y''(0)
+\end{align}
+
+\begin{examplebox}[title=Example: Solving a Second-Order ODE]
+Solve the initial value problem:
+\begin{equation}
+y'' + 3y' + 2y = \ee^{-t}, \quad y(0) = 1, \quad y'(0) = 0
+\end{equation}
+
+\textbf{Solution:}
+
+\textbf{Step 1: Take the Laplace transform of both sides.}
+\begin{equation}
+\Laplace\{y'' + 3y' + 2y\} = \Laplace\{\ee^{-t}\}
+\end{equation}
+
+\textbf{Step 2: Apply differentiation property with initial conditions.}
+\begin{align}
+\Laplace\{y''\} &= s^2Y(s) - sy(0) - y'(0) = s^2Y(s) - s - 0 = s^2Y(s) - s \\
+\Laplace\{y'\} &= sY(s) - y(0) = sY(s) - 1 \\
+\Laplace\{y\} &= Y(s)
+\end{align}
+
+Substituting:
+\begin{equation}
+[s^2Y(s) - s] + 3[sY(s) - 1] + 2Y(s) = \frac{1}{s+1}
+\end{equation}
+
+\textbf{Step 3: Solve for $Y(s)$.}
+\begin{align}
+s^2Y(s) - s + 3sY(s) - 3 + 2Y(s) &= \frac{1}{s+1} \\
+(s^2 + 3s + 2)Y(s) &= \frac{1}{s+1} + s + 3 \\
+(s+1)(s+2)Y(s) &= \frac{1}{s+1} + \frac{(s+3)(s+1)}{s+1} \\
+(s+1)(s+2)Y(s) &= \frac{1 + (s+3)(s+1)}{s+1} \\
+(s+1)(s+2)Y(s) &= \frac{1 + s^2 + 4s + 3}{s+1} = \frac{s^2 + 4s + 4}{s+1} = \frac{(s+2)^2}{s+1}
+\end{align}
+
+Therefore:
+\begin{equation}
+Y(s) = \frac{(s+2)^2}{(s+1)^2(s+2)} = \frac{s+2}{(s+1)^2}
+\end{equation}
+
+\textbf{Step 4: Find the inverse Laplace transform.}
+
+Perform partial fraction expansion:
+\begin{equation}
+Y(s) = \frac{s+2}{(s+1)^2} = \frac{(s+1) + 1}{(s+1)^2} = \frac{1}{s+1} + \frac{1}{(s+1)^2}
+\end{equation}
+
+Using transform pairs:
+\begin{itemize}
+    \item $\frac{1}{s+1} \leftrightarrow \ee^{-t}$
+    \item $\frac{1}{(s+1)^2} \leftrightarrow t\ee^{-t}$
+\end{itemize}
+
+\textbf{Final Answer:}
+\begin{equation}
+\boxed{y(t) = \ee^{-t} + t\ee^{-t} = (1+t)\ee^{-t}, \quad t \geq 0}
+\end{equation}
+
+\textbf{Verification:} We can verify by checking initial conditions:
+\begin{itemize}
+    \item $y(0) = (1+0)\ee^0 = 1$ \checkmark
+    \item $y'(t) = \ee^{-t} - (1+t)\ee^{-t} = -t\ee^{-t}$, so $y'(0) = 0$ \checkmark
+\end{itemize}
+\end{examplebox}
+
 \section{Transfer Functions}
 
 \begin{definitionbox}[title=Definition 0.3: Transfer Function]
@@ -139,5 +508,20 @@ G(s) = \frac{b_ms^m + b_{m-1}s^{m-1} + \cdots + b_1s + b_0}{a_ns^n + a_{n-1}s^{n
 \end{equation}
 
 where $z_i$ are the \textbf{zeros} and $p_j$ are the \textbf{poles} of the transfer function.
+
+% Figure: Pole-zero map
+\input{figures/fig_ch00_pole_zero_map.tex}
+
+\begin{keyconceptbox}[title=Poles and System Behavior]
+The \textbf{poles} of a transfer function determine the system's natural response:
+\begin{itemize}
+    \item \textbf{Real negative poles} ($s = -a$, $a > 0$): Decaying exponentials $\ee^{-at}$
+    \item \textbf{Complex poles} ($s = -\sigma \pm \jj\omega$, $\sigma > 0$): Damped oscillations $\ee^{-\sigma t}\sin(\omega t + \phi)$
+    \item \textbf{Poles on imaginary axis} ($s = \pm\jj\omega$): Sustained oscillations
+    \item \textbf{Positive real poles} ($s = a$, $a > 0$): Unstable exponential growth $\ee^{at}$
+\end{itemize}
+\end{keyconceptbox}
+
+The \textbf{zeros} affect the relative magnitude of different response modes and the transient shape, but do not directly determine stability.
 
 % ============================================================================
