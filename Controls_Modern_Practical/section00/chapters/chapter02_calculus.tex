@@ -11,6 +11,8 @@ The derivative of a function $f(t)$ represents its instantaneous rate of change:
 \frac{\dd f}{\dd t} = f'(t) = \lim_{\Delta t \to 0} \frac{f(t + \Delta t) - f(t)}{\Delta t}
 \end{equation}
 
+\input{figures/fig_ch00_derivative_visualization.tex}
+
 \subsubsection{Key Differentiation Rules}
 
 \begin{table}[htbp]
@@ -32,6 +34,19 @@ Chain Rule & $\frac{\dd}{\dd t}f(g(t)) = f'(g(t)) \cdot g'(t)$ \\
 \caption{Essential differentiation rules for control systems.}
 \label{tab:diff_rules}
 \end{table}
+
+\begin{examplebox}[title=Product Rule Application]
+Differentiate $f(t) = t^2 \ee^{-at}$ where $a > 0$ is a constant.
+
+\textbf{Solution:} Using the product rule with $u = t^2$ and $v = \ee^{-at}$:
+\begin{align}
+\frac{\dd f}{\dd t} &= \frac{\dd}{\dd t}(t^2) \cdot \ee^{-at} + t^2 \cdot \frac{\dd}{\dd t}(\ee^{-at}) \\
+&= 2t \cdot \ee^{-at} + t^2 \cdot (-a\ee^{-at}) \\
+&= \ee^{-at}(2t - at^2) \\
+&= t\ee^{-at}(2 - at)
+\end{align}
+This type of function appears frequently in control systems as a damped response with a time-varying amplitude.
+\end{examplebox}
 
 \subsection{Partial Derivatives}
 
@@ -74,6 +89,28 @@ For nonlinear systems $\dot{\vecx} = \vecf(\vecx, \vecu)$, we linearize about an
 where $\mA = \frac{\partial \vecf}{\partial \vecx}\big|_{(\vecx_0, \vecu_0)}$ and $\mB = \frac{\partial \vecf}{\partial \vecu}\big|_{(\vecx_0, \vecu_0)}$
 \end{keyconceptbox}
 
+\begin{examplebox}[title=Taylor Expansion of Sine Function]
+Find the Taylor expansion of $\sin(x)$ about $x = 0$ (Maclaurin series) to fourth order.
+
+\textbf{Solution:} We need the derivatives of $f(x) = \sin(x)$ evaluated at $x = 0$:
+\begin{align}
+f(x) &= \sin(x) & f(0) &= 0 \\
+f'(x) &= \cos(x) & f'(0) &= 1 \\
+f''(x) &= -\sin(x) & f''(0) &= 0 \\
+f'''(x) &= -\cos(x) & f'''(0) &= -1 \\
+f^{(4)}(x) &= \sin(x) & f^{(4)}(0) &= 0
+\end{align}
+
+Substituting into the Taylor series formula:
+\begin{equation}
+\sin(x) = 0 + 1 \cdot x + \frac{0}{2!}x^2 + \frac{-1}{3!}x^3 + \frac{0}{4!}x^4 + \cdots = x - \frac{x^3}{6} + \mathcal{O}(x^5)
+\end{equation}
+
+For small angles ($|x| \ll 1$), we often use the approximation $\sin(x) \approx x$, which is the first-order Taylor expansion. This is the ``small angle approximation'' commonly used in linearizing pendulum and rotational dynamics.
+\end{examplebox}
+
+\input{figures/fig_ch00_taylor_convergence.tex}
+
 \section{Integral Calculus}
 
 \subsection{Definite and Indefinite Integrals}
@@ -87,6 +124,8 @@ The definite integral:
 \begin{equation}
 \int_a^b f(t) \, \dd t = F(b) - F(a)
 \end{equation}
+
+\input{figures/fig_ch00_integral_area.tex}
 
 \subsubsection{Key Integration Formulas}
 
@@ -116,6 +155,72 @@ $\frac{1}{a^2 + t^2}$ & $\frac{1}{a}\arctan\frac{t}{a} + C$ \\
 
 This technique is essential for deriving Laplace transform properties.
 
+\begin{examplebox}[title=Integration by Parts]
+Evaluate the integral $\displaystyle\int t \ee^{-t} \, \dd t$.
+
+\textbf{Solution:} Choose $u = t$ and $\dd v = \ee^{-t} \, \dd t$. Then:
+\begin{align}
+u &= t & \dd u &= \dd t \\
+\dd v &= \ee^{-t} \, \dd t & v &= -\ee^{-t}
+\end{align}
+
+Applying integration by parts:
+\begin{align}
+\int t \ee^{-t} \, \dd t &= uv - \int v \, \dd u \\
+&= t(-\ee^{-t}) - \int (-\ee^{-t}) \, \dd t \\
+&= -t\ee^{-t} + \int \ee^{-t} \, \dd t \\
+&= -t\ee^{-t} - \ee^{-t} + C \\
+&= -\ee^{-t}(t + 1) + C
+\end{align}
+
+This integral appears when computing Laplace transforms of polynomial-exponential products.
+\end{examplebox}
+
+\subsection{Integration Techniques}
+
+\subsubsection{Substitution (u-Substitution)}
+
+When an integrand contains a composite function, substitution can simplify the integral:
+\begin{equation}
+\int f(g(t)) g'(t) \, \dd t = \int f(u) \, \dd u \quad \text{where } u = g(t)
+\end{equation}
+
+\begin{keyconceptbox}[title=Choosing a Substitution]
+Look for an ``inner function'' $u = g(t)$ whose derivative $g'(t)$ also appears in the integrand. Common patterns include:
+\begin{itemize}
+    \item $\int \ee^{at} \cdot a \, \dd t$: let $u = at$
+    \item $\int \frac{f'(t)}{f(t)} \, \dd t$: let $u = f(t)$, giving $\ln|f(t)| + C$
+    \item $\int t^n f(t^{n+1}) \, \dd t$: let $u = t^{n+1}$
+\end{itemize}
+\end{keyconceptbox}
+
+\subsubsection{Partial Fraction Decomposition}
+
+For rational functions $\frac{P(s)}{Q(s)}$ where $\deg(P) < \deg(Q)$, partial fractions decompose the integrand into simpler terms. This is essential for inverse Laplace transforms.
+
+\textbf{Case 1: Distinct real roots.} If $Q(s) = (s - p_1)(s - p_2)\cdots(s - p_n)$:
+\begin{equation}
+\frac{P(s)}{Q(s)} = \frac{A_1}{s - p_1} + \frac{A_2}{s - p_2} + \cdots + \frac{A_n}{s - p_n}
+\end{equation}
+
+\textbf{Case 2: Repeated real roots.} If $Q(s) = (s - p)^n$:
+\begin{equation}
+\frac{P(s)}{(s - p)^n} = \frac{A_1}{s - p} + \frac{A_2}{(s - p)^2} + \cdots + \frac{A_n}{(s - p)^n}
+\end{equation}
+
+\textbf{Case 3: Complex conjugate roots.} If $Q(s)$ contains $(s^2 + as + b)$ with $a^2 - 4b < 0$:
+\begin{equation}
+\frac{P(s)}{s^2 + as + b} = \frac{As + B}{s^2 + as + b}
+\end{equation}
+
+\begin{keyconceptbox}[title=Cover-Up Method for Residues]
+For distinct real poles, the residue $A_k$ can be found by:
+\begin{equation}
+A_k = \lim_{s \to p_k} (s - p_k) \frac{P(s)}{Q(s)} = \frac{P(p_k)}{Q'(p_k)}
+\end{equation}
+This ``cover-up'' method is faster than solving systems of equations.
+\end{keyconceptbox}
+
 \subsection{Convolution Integral}
 
 The convolution of two functions $f(t)$ and $g(t)$ is:
@@ -134,5 +239,29 @@ The output $y(t)$ of a linear time-invariant (LTI) system with impulse response 
 y(t) = (h \conv u)(t) = \int_0^t h(\tau) u(t - \tau) \, \dd\tau
 \end{equation}
 \end{keyconceptbox}
+
+\begin{examplebox}[title=Convolution of Two Exponentials]
+Compute the convolution $(f \conv g)(t)$ for $t \geq 0$ where $f(t) = \ee^{-at}$ and $g(t) = \ee^{-bt}$ with $a \neq b$ and both signals are zero for $t < 0$.
+
+\textbf{Solution:} Using the causal convolution formula:
+\begin{align}
+(f \conv g)(t) &= \int_0^t f(\tau) g(t - \tau) \, \dd\tau \\
+&= \int_0^t \ee^{-a\tau} \ee^{-b(t-\tau)} \, \dd\tau \\
+&= \ee^{-bt} \int_0^t \ee^{-a\tau} \ee^{b\tau} \, \dd\tau \\
+&= \ee^{-bt} \int_0^t \ee^{(b-a)\tau} \, \dd\tau
+\end{align}
+
+Evaluating the integral:
+\begin{align}
+(f \conv g)(t) &= \ee^{-bt} \left[ \frac{\ee^{(b-a)\tau}}{b-a} \right]_0^t \\
+&= \ee^{-bt} \cdot \frac{\ee^{(b-a)t} - 1}{b-a} \\
+&= \frac{\ee^{-bt} \ee^{(b-a)t} - \ee^{-bt}}{b-a} \\
+&= \frac{\ee^{-at} - \ee^{-bt}}{b-a}
+\end{align}
+
+This result is symmetric in the sense that swapping $a$ and $b$ gives the same answer (note the sign change in both numerator and denominator). This convolution appears when analyzing cascaded first-order systems.
+\end{examplebox}
+
+\input{figures/fig_ch00_convolution_visual.tex}
 
 % ============================================================================
