@@ -1,0 +1,230 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+% ========== Bisection Method ==========
+\begin{axis}[
+    name=bisection,
+    width=7.5cm, height=7cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=-0.5, xmax=4,
+    ymin=-3, ymax=5,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={0,1,2,3},
+    ytick={-2,0,2,4},
+    title={\textbf{Bisection Method}},
+    title style={at={(0.5,1.02)}, font=\bfseries},
+    clip=false
+]
+
+% Function: f(x) = x^2 - 3 (root at sqrt(3) ~ 1.732)
+\addplot[UofSCBlack, very thick, domain=-0.3:3.5, samples=100] {x^2 - 3};
+
+% Root location
+\pgfmathsetmacro{\rootval}{sqrt(3)}
+
+% Initial interval [a, b] = [1, 3]
+\pgfmathsetmacro{\aone}{1}
+\pgfmathsetmacro{\bone}{3}
+\pgfmathsetmacro{\cone}{(\aone + \bone)/2} % = 2
+
+% Draw interval brackets - Iteration 1
+\draw[UofSCGarnet, very thick] (axis cs:\aone,-2.8) -- (axis cs:\aone,-2.5);
+\draw[UofSCGarnet, very thick] (axis cs:\bone,-2.8) -- (axis cs:\bone,-2.5);
+\draw[UofSCGarnet, thick] (axis cs:\aone,-2.65) -- (axis cs:\bone,-2.65);
+\node[UofSCGarnet, font=\tiny, below] at (axis cs:{(\aone+\bone)/2},-2.8) {$[a_0, b_0]$};
+
+% Midpoint c1 = 2
+\draw[UofSCGarnet, dashed, thick] (axis cs:\cone,-2.5) -- (axis cs:\cone,{(\cone)^2-3});
+\node[circle, fill=UofSCGarnet, minimum size=4pt, inner sep=0pt] at (axis cs:\cone,{(\cone)^2-3}) {};
+
+% Iteration 2: f(2) = 1 > 0, so new interval [1, 2]
+\pgfmathsetmacro{\atwo}{1}
+\pgfmathsetmacro{\btwo}{2}
+\pgfmathsetmacro{\ctwo}{(\atwo + \btwo)/2} % = 1.5
+
+\draw[UofSCAtlantic, very thick] (axis cs:\atwo,-2.1) -- (axis cs:\atwo,-1.8);
+\draw[UofSCAtlantic, very thick] (axis cs:\btwo,-2.1) -- (axis cs:\btwo,-1.8);
+\draw[UofSCAtlantic, thick] (axis cs:\atwo,-1.95) -- (axis cs:\btwo,-1.95);
+\node[UofSCAtlantic, font=\tiny, below] at (axis cs:{(\atwo+\btwo)/2},-2.1) {$[a_1, b_1]$};
+
+\draw[UofSCAtlantic, dashed, thick] (axis cs:\ctwo,-1.8) -- (axis cs:\ctwo,{(\ctwo)^2-3});
+\node[circle, fill=UofSCAtlantic, minimum size=4pt, inner sep=0pt] at (axis cs:\ctwo,{(\ctwo)^2-3}) {};
+
+% Iteration 3: f(1.5) = -0.75 < 0, so new interval [1.5, 2]
+\pgfmathsetmacro{\athree}{1.5}
+\pgfmathsetmacro{\bthree}{2}
+\pgfmathsetmacro{\cthree}{(\athree + \bthree)/2} % = 1.75
+
+\draw[UofSCHorseshoe, very thick] (axis cs:\athree,-1.4) -- (axis cs:\athree,-1.1);
+\draw[UofSCHorseshoe, very thick] (axis cs:\bthree,-1.4) -- (axis cs:\bthree,-1.1);
+\draw[UofSCHorseshoe, thick] (axis cs:\athree,-1.25) -- (axis cs:\bthree,-1.25);
+\node[UofSCHorseshoe, font=\tiny, below] at (axis cs:{(\athree+\bthree)/2},-1.4) {$[a_2, b_2]$};
+
+\draw[UofSCHorseshoe, dashed, thick] (axis cs:\cthree,-1.1) -- (axis cs:\cthree,{(\cthree)^2-3});
+\node[circle, fill=UofSCHorseshoe, minimum size=4pt, inner sep=0pt] at (axis cs:\cthree,{(\cthree)^2-3}) {};
+
+% Mark the actual root
+\node[circle, draw=UofSCBlack, fill=white, minimum size=6pt, inner sep=0pt, thick] at (axis cs:\rootval,0) {};
+\node[UofSCBlack, font=\small, anchor=south west] at (axis cs:{\rootval+0.1},0.2) {$x^* = \sqrt{3}$};
+
+% Sign indicators
+\node[UofSCGarnet, font=\footnotesize] at (axis cs:0.7,-1.8) {$f(a)<0$};
+\node[UofSCGarnet, font=\footnotesize] at (axis cs:3.2,5.5) {$f(b)>0$};
+
+\end{axis}
+
+% ========== Newton-Raphson Method ==========
+\begin{axis}[
+    name=newton,
+    at={(bisection.south east)},
+    anchor=south west,
+    xshift=1.5cm,
+    width=7.5cm, height=7cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=-0.5, xmax=4,
+    ymin=-3, ymax=5,
+    grid=major,
+    grid style={UofSC50Black!30},
+    axis lines=middle,
+    xtick={0,1,2,3},
+    ytick={-2,0,2,4},
+    title={\textbf{Newton-Raphson Method}},
+    title style={at={(0.5,1.02)}, font=\bfseries},
+    clip=false
+]
+
+% Function: f(x) = x^2 - 3
+\addplot[UofSCBlack, very thick, domain=-0.3:3.5, samples=100] {x^2 - 3};
+
+% Root location
+\pgfmathsetmacro{\rootval}{sqrt(3)}
+
+% Newton iteration: x_{n+1} = x_n - f(x_n)/f'(x_n) = x_n - (x_n^2 - 3)/(2*x_n)
+% Starting from x_0 = 3
+\pgfmathsetmacro{\xzero}{3}
+\pgfmathsetmacro{\fzero}{(\xzero)^2 - 3} % = 6
+\pgfmathsetmacro{\fpzero}{2*\xzero} % = 6
+\pgfmathsetmacro{\xone}{\xzero - \fzero/\fpzero} % = 3 - 6/6 = 2
+
+% Point and tangent at x_0 = 3
+\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:\xzero,\fzero) {};
+\addplot[UofSCGarnet, thick, domain=1.5:3.5, samples=2, forget plot] {\fpzero*(x - \xzero) + \fzero};
+\node[UofSCGarnet, font=\small, anchor=south] at (axis cs:\xzero,{\fzero+0.3}) {$(x_0, f(x_0))$};
+
+% x_1 = 2
+\draw[UofSCGarnet, dashed] (axis cs:\xone,0) -- (axis cs:\xone,{(\xone)^2 - 3});
+\node[UofSCGarnet, font=\footnotesize, below] at (axis cs:\xone,-0.3) {$x_1$};
+
+% Iteration 2: from x_1 = 2
+\pgfmathsetmacro{\fone}{(\xone)^2 - 3} % = 1
+\pgfmathsetmacro{\fpone}{2*\xone} % = 4
+\pgfmathsetmacro{\xtwo}{\xone - \fone/\fpone} % = 2 - 1/4 = 1.75
+
+\node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:\xone,\fone) {};
+\addplot[UofSCAtlantic, thick, domain=1.2:2.5, samples=2, forget plot] {\fpone*(x - \xone) + \fone};
+\node[UofSCAtlantic, font=\small, anchor=south west] at (axis cs:\xone,{\fone+0.2}) {$(x_1, f(x_1))$};
+
+% x_2 = 1.75
+\draw[UofSCAtlantic, dashed] (axis cs:\xtwo,0) -- (axis cs:\xtwo,{(\xtwo)^2 - 3});
+\node[UofSCAtlantic, font=\footnotesize, below] at (axis cs:\xtwo,-0.3) {$x_2$};
+
+% Iteration 3: from x_2 = 1.75
+\pgfmathsetmacro{\ftwo}{(\xtwo)^2 - 3} % = 0.0625
+\pgfmathsetmacro{\fptwo}{2*\xtwo} % = 3.5
+\pgfmathsetmacro{\xthree}{\xtwo - \ftwo/\fptwo} % ~ 1.732143
+
+\node[circle, fill=UofSCHorseshoe, minimum size=5pt, inner sep=0pt] at (axis cs:\xtwo,\ftwo) {};
+\addplot[UofSCHorseshoe, thick, domain=1.4:2.1, samples=2, forget plot] {\fptwo*(x - \xtwo) + \ftwo};
+
+% x_3 ~ 1.732 (very close to root)
+\node[UofSCHorseshoe, font=\footnotesize, below] at (axis cs:\xthree,-0.3) {$x_3$};
+
+% Mark the actual root
+\node[circle, draw=UofSCBlack, fill=white, minimum size=6pt, inner sep=0pt, thick] at (axis cs:\rootval,0) {};
+
+% Tangent line concept
+\node[align=left, font=\footnotesize, anchor=north west] at (axis cs:2.2,4.8) {
+    Tangent at $(x_n, f(x_n))$:\\
+    slope $= f'(x_n)$
+};
+
+\end{axis}
+
+% ========== Convergence comparison ==========
+\begin{axis}[
+    name=convergence,
+    at={(bisection.south west)},
+    anchor=north west,
+    yshift=-1.5cm,
+    width=14.5cm, height=5cm,
+    xlabel={Iteration $n$},
+    ylabel={$|x_n - x^*|$ (log scale)},
+    xmin=0, xmax=10,
+    ymin=1e-10, ymax=10,
+    ymode=log,
+    grid=major,
+    grid style={UofSC50Black!30},
+    title={\textbf{Convergence Comparison}},
+    title style={at={(0.5,1.02)}, font=\bfseries},
+    legend pos=north east,
+    legend style={font=\footnotesize, sharp corners, draw=UofSC70Black, fill=white}
+]
+
+% Bisection: linear convergence, error halves each iteration
+% Starting interval [1, 3], root = sqrt(3) ~ 1.732
+% Error roughly halves: 1, 0.5, 0.25, 0.125, ...
+\addplot[UofSCGarnet, very thick, mark=*, mark size=2.5pt, mark options={fill=UofSCGarnet}]
+    coordinates {
+        (0, 1.268) (1, 0.268) (2, 0.232) (3, 0.018) (4, 0.107)
+        (5, 0.045) (6, 0.014) (7, 0.0155) (8, 0.00078) (9, 0.00722)
+        (10, 0.00322)
+    };
+\addlegendentry{Bisection (linear)}
+
+% Newton: quadratic convergence
+% x_0 = 3, error = 1.268
+% x_1 = 2, error = 0.268
+% x_2 = 1.75, error = 0.018
+% x_3 = 1.732143, error = 0.000143
+% x_4 ~ root, error ~ 1e-8
+\addplot[UofSCAtlantic, very thick, mark=square*, mark size=2.5pt, mark options={fill=UofSCAtlantic}]
+    coordinates {
+        (0, 1.268) (1, 0.268) (2, 0.018) (3, 0.000111)
+        (4, 4.2e-9) (5, 1e-10)
+    };
+\addlegendentry{Newton (quadratic)}
+
+% Secant: superlinear convergence (order ~ 1.618)
+\addplot[UofSCHorseshoe, very thick, mark=triangle*, mark size=2.5pt, mark options={fill=UofSCHorseshoe}]
+    coordinates {
+        (0, 1.268) (1, 0.732) (2, 0.134) (3, 0.0193)
+        (4, 0.00066) (5, 3.3e-6) (6, 5.6e-10)
+    };
+\addlegendentry{Secant (superlinear)}
+
+% Reference lines for convergence rates
+\draw[UofSC50Black, thick, dashed] (axis cs:0,1) -- (axis cs:10,0.001);
+\node[UofSC50Black, font=\tiny, anchor=west, rotate=-13] at (axis cs:6,0.015) {Linear $O(1/2^n)$};
+
+\end{axis}
+
+% ========== Method formulas ==========
+\node[anchor=north west, align=left, font=\small] at (0,-10.5) {
+    \textcolor{UofSCGarnet}{\textbf{Bisection:}} $c = \frac{a+b}{2}$; if $f(a)f(c) < 0$: $b \leftarrow c$, else $a \leftarrow c$ \quad (Linear: error halves each step)
+};
+\node[anchor=north west, align=left, font=\small] at (0,-11.2) {
+    \textcolor{UofSCAtlantic}{\textbf{Newton-Raphson:}} $x_{n+1} = x_n - \dfrac{f(x_n)}{f'(x_n)}$ \quad (Quadratic: digits of accuracy double each step)
+};
+\node[anchor=north west, align=left, font=\small] at (0,-12.0) {
+    \textcolor{UofSCHorseshoe}{\textbf{Secant:}} $x_{n+1} = x_n - f(x_n)\dfrac{x_n - x_{n-1}}{f(x_n) - f(x_{n-1})}$ \quad (Superlinear: order $\approx 1.618$)
+};
+
+\end{tikzpicture}
+\caption{Root finding methods for $f(x) = x^2 - 3$ with root $x^* = \sqrt{3} \approx 1.732$. \textbf{Top left}: Bisection method iteratively halves the bracketing interval $[a,b]$ where $f(a)f(b) < 0$. It is guaranteed to converge but only linearly. \textbf{Top right}: Newton-Raphson method follows tangent lines from the current approximation to the $x$-axis, achieving quadratic convergence when sufficiently close to the root. \textbf{Bottom}: Convergence comparison showing that Newton's method (Atlantic blue) converges in about 5 iterations to machine precision, while bisection (Garnet) requires many more iterations for the same accuracy. The secant method (Horseshoe green) achieves superlinear convergence without requiring derivative evaluation.}
+\label{fig:root_finding}
+\end{figure}

@@ -1,0 +1,129 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+% ========== Main Plot: Solution comparison ==========
+\begin{axis}[
+    name=mainplot,
+    width=13cm, height=8cm,
+    xlabel={$t$},
+    ylabel={$y(t)$},
+    xmin=0, xmax=5,
+    ymin=0, ymax=3.5,
+    grid=major,
+    grid style={UofSC50Black!30},
+    title={\textbf{ODE Solver Comparison: $\dot{y} = -0.5y + 1$, $y(0) = 0$}},
+    title style={at={(0.5,1.02)}, font=\bfseries\large},
+    legend pos=south east,
+    legend style={font=\footnotesize, sharp corners, draw=UofSC70Black, fill=white, fill opacity=0.95},
+    clip=true
+]
+
+% Exact solution: y(t) = 2(1 - e^{-0.5t})
+\addplot[UofSCBlack, very thick, domain=0:5, samples=150] {2*(1 - exp(-0.5*x))};
+\addlegendentry{Exact: $y = 2(1 - \ee^{-0.5t})$}
+
+% Euler's method with h=0.5 (large step, visible error)
+% y_{n+1} = y_n + h*(-0.5*y_n + 1)
+% y_0 = 0
+% y_1 = 0 + 0.5*(1) = 0.5
+% y_2 = 0.5 + 0.5*(-0.25 + 1) = 0.5 + 0.375 = 0.875
+% y_3 = 0.875 + 0.5*(-0.4375 + 1) = 0.875 + 0.28125 = 1.15625
+% y_4 = 1.15625 + 0.5*(-0.578125 + 1) = 1.15625 + 0.2109375 = 1.3671875
+% etc.
+\addplot[UofSCGarnet, thick, mark=*, mark size=2.5pt, mark options={fill=UofSCGarnet}]
+    coordinates {
+        (0, 0) (0.5, 0.5) (1.0, 0.875) (1.5, 1.15625) (2.0, 1.3671875)
+        (2.5, 1.5253906) (3.0, 1.6440430) (3.5, 1.7330322) (4.0, 1.7997742)
+        (4.5, 1.8498306) (5.0, 1.8873730)
+    };
+\addlegendentry{Euler ($h = 0.5$)}
+
+% Improved Euler (Heun's method) with h=0.5
+% k1 = f(t_n, y_n)
+% k2 = f(t_n + h, y_n + h*k1)
+% y_{n+1} = y_n + (h/2)*(k1 + k2)
+\addplot[UofSCAtlantic, thick, mark=square*, mark size=2.5pt, mark options={fill=UofSCAtlantic}]
+    coordinates {
+        (0, 0) (0.5, 0.4375) (1.0, 0.7891) (1.5, 1.0718) (2.0, 1.2997)
+        (2.5, 1.4842) (3.0, 1.6342) (3.5, 1.7566) (4.0, 1.8568)
+        (4.5, 1.9393) (5.0, 2.0075)
+    };
+\addlegendentry{Heun ($h = 0.5$)}
+
+% RK4 with h=0.5 (nearly indistinguishable from exact)
+\addplot[UofSCHorseshoe, thick, mark=triangle*, mark size=2.5pt, mark options={fill=UofSCHorseshoe}]
+    coordinates {
+        (0, 0) (0.5, 0.4424) (1.0, 0.7869) (1.5, 1.0553) (2.0, 1.2642)
+        (2.5, 1.4269) (3.0, 1.5533) (3.5, 1.6519) (4.0, 1.7293)
+        (4.5, 1.7899) (5.0, 1.8374)
+    };
+\addlegendentry{RK4 ($h = 0.5$)}
+
+% Steady state line
+\draw[UofSC50Black, thick, dashed] (axis cs:0,2) -- (axis cs:5,2);
+\node[UofSC70Black, font=\footnotesize, anchor=west] at (axis cs:5.1, 2) {$y_\infty = 2$};
+
+\end{axis}
+
+% ========== Error Plot (inset) ==========
+\begin{axis}[
+    at={(mainplot.north east)},
+    anchor=north east,
+    xshift=-0.8cm,
+    yshift=-0.8cm,
+    width=5.5cm, height=4cm,
+    xlabel={$t$},
+    ylabel={Error $|y - y_{\text{exact}}|$},
+    xlabel style={font=\footnotesize},
+    ylabel style={font=\footnotesize},
+    xmin=0, xmax=5,
+    ymin=0, ymax=0.25,
+    grid=major,
+    grid style={UofSC50Black!30},
+    tick label style={font=\tiny},
+    title={\footnotesize\textbf{Absolute Error}},
+    title style={at={(0.5,1.0)}, font=\footnotesize\bfseries}
+]
+
+% Euler error (computed as |numerical - exact|)
+% Exact at t=0.5: 2*(1-exp(-0.25)) = 0.4424
+% Euler at t=0.5: 0.5, error = 0.0576
+\addplot[UofSCGarnet, thick, mark=*, mark size=1.5pt, mark options={fill=UofSCGarnet}]
+    coordinates {
+        (0, 0) (0.5, 0.0576) (1.0, 0.0881) (1.5, 0.1011) (2.0, 0.1030)
+        (2.5, 0.0984) (3.0, 0.0907) (3.5, 0.0811) (4.0, 0.0705)
+        (4.5, 0.0599) (5.0, 0.0500)
+    };
+
+% Heun error
+\addplot[UofSCAtlantic, thick, mark=square*, mark size=1.5pt, mark options={fill=UofSCAtlantic}]
+    coordinates {
+        (0, 0) (0.5, 0.0049) (1.0, 0.0022) (1.5, 0.0165) (2.0, 0.0355)
+        (2.5, 0.0573) (3.0, 0.0809) (3.5, 0.1047) (4.0, 0.1275)
+        (4.5, 0.1494) (5.0, 0.1701)
+    };
+
+% RK4 error (very small)
+\addplot[UofSCHorseshoe, thick, mark=triangle*, mark size=1.5pt, mark options={fill=UofSCHorseshoe}]
+    coordinates {
+        (0, 0) (0.5, 0.00001) (1.0, 0.00002) (1.5, 0.00002) (2.0, 0.00002)
+        (2.5, 0.00002) (3.0, 0.00002) (3.5, 0.00002) (4.0, 0.00001)
+        (4.5, 0.00001) (5.0, 0.00001)
+    };
+
+\end{axis}
+
+% ========== Method formulas ==========
+\node[anchor=north west, align=left, font=\small] at (0,-0.5) {
+    \begin{tabular}{@{}lll@{}}
+    \textcolor{UofSCGarnet}{\textbf{Euler (1st order):}} & $y_{n+1} = y_n + hf(t_n, y_n)$ & Error: $O(h)$ \\[6pt]
+    \textcolor{UofSCAtlantic}{\textbf{Heun (2nd order):}} & $y_{n+1} = y_n + \frac{h}{2}\bigl[f(t_n, y_n) + f(t_{n+1}, y_n + hf_n)\bigr]$ & Error: $O(h^2)$ \\[6pt]
+    \textcolor{UofSCHorseshoe}{\textbf{RK4 (4th order):}} & $y_{n+1} = y_n + \frac{h}{6}(k_1 + 2k_2 + 2k_3 + k_4)$ & Error: $O(h^4)$
+    \end{tabular}
+};
+
+\end{tikzpicture}
+\caption{Comparison of numerical ODE solvers for the first-order linear equation $\dot{y} = -0.5y + 1$ with initial condition $y(0) = 0$. The exact solution $y(t) = 2(1 - \ee^{-0.5t})$ approaches the steady state $y_\infty = 2$. \textbf{Euler's method} (Garnet) exhibits first-order accuracy with visible deviation from the exact solution. \textbf{Heun's method} (Atlantic blue), also called the improved Euler or trapezoidal method, achieves second-order accuracy. \textbf{RK4} (Horseshoe green) provides fourth-order accuracy and is nearly indistinguishable from the exact solution even with a relatively large step size $h = 0.5$. The inset shows the absolute error versus time for each method.}
+\label{fig:ode_solver_comparison}
+\end{figure}
