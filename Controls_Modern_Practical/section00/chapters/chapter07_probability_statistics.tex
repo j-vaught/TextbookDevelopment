@@ -2,9 +2,18 @@
 \label{ch:probability}
 % ============================================================================
 
-Probability theory is essential for stochastic control, Kalman filtering, and machine learning.
+Probability theory is essential for stochastic control, Kalman filtering, and machine learning. This chapter provides the mathematical foundations needed to understand uncertainty quantification, state estimation, and statistical inference in control systems.
 
 \section{Probability Fundamentals}
+
+\begin{definitionbox}[title=Definition: Probability Space]
+A \textbf{probability space} is a triple $(\Omega, \mathcal{F}, P)$ where:
+\begin{itemize}
+    \item $\Omega$ is the \textbf{sample space} (set of all possible outcomes)
+    \item $\mathcal{F}$ is the \textbf{$\sigma$-algebra} (collection of events)
+    \item $P: \mathcal{F} \to [0,1]$ is the \textbf{probability measure}
+\end{itemize}
+\end{definitionbox}
 
 \subsubsection{Axioms of Probability}
 \begin{enumerate}
@@ -14,14 +23,72 @@ Probability theory is essential for stochastic control, Kalman filtering, and ma
 \end{enumerate}
 
 \subsubsection{Conditional Probability}
+
+\begin{definitionbox}[title=Definition: Conditional Probability]
+The \textbf{conditional probability} of event $A$ given event $B$ (with $P(B) > 0$) is:
 \begin{equation}
 P(A|B) = \frac{P(A \cap B)}{P(B)}
 \end{equation}
+\end{definitionbox}
 
 \subsubsection{Bayes' Theorem}
+
+\begin{keyconceptbox}[title=Bayes' Theorem]
+For events $A$ and $B$ with $P(B) > 0$:
 \begin{equation}
 P(A|B) = \frac{P(B|A)P(A)}{P(B)}
+\label{eq:bayes_theorem}
 \end{equation}
+In the context of estimation:
+\begin{itemize}
+    \item $P(A)$ is the \textbf{prior} probability
+    \item $P(B|A)$ is the \textbf{likelihood}
+    \item $P(A|B)$ is the \textbf{posterior} probability
+    \item $P(B)$ is the \textbf{evidence} (normalizing constant)
+\end{itemize}
+\end{keyconceptbox}
+
+The denominator can be expanded using the law of total probability:
+\begin{equation}
+P(B) = \sum_i P(B|A_i)P(A_i)
+\end{equation}
+where $\{A_i\}$ forms a partition of the sample space.
+
+\input{figures/fig_ch00_bayes_update.tex}
+
+\begin{examplebox}[title=Example: Computing Conditional Probability with Bayes' Theorem]
+A sensor for detecting system faults has the following characteristics:
+\begin{itemize}
+    \item The sensor correctly detects a fault (true positive) 95\% of the time: $P(\text{alarm}|\text{fault}) = 0.95$
+    \item The sensor has a false alarm rate of 3\%: $P(\text{alarm}|\text{no fault}) = 0.03$
+    \item From historical data, the probability of a fault occurring is 1\%: $P(\text{fault}) = 0.01$
+\end{itemize}
+
+\textbf{Question:} If the alarm triggers, what is the probability that an actual fault occurred?
+
+\textbf{Solution:}
+
+We seek $P(\text{fault}|\text{alarm})$. Using Bayes' theorem:
+\begin{equation*}
+P(\text{fault}|\text{alarm}) = \frac{P(\text{alarm}|\text{fault})P(\text{fault})}{P(\text{alarm})}
+\end{equation*}
+
+First, compute $P(\text{alarm})$ using total probability:
+\begin{align*}
+P(\text{alarm}) &= P(\text{alarm}|\text{fault})P(\text{fault}) + P(\text{alarm}|\text{no fault})P(\text{no fault}) \\
+&= (0.95)(0.01) + (0.03)(0.99) \\
+&= 0.0095 + 0.0297 = 0.0392
+\end{align*}
+
+Now apply Bayes' theorem:
+\begin{equation*}
+P(\text{fault}|\text{alarm}) = \frac{(0.95)(0.01)}{0.0392} = \frac{0.0095}{0.0392} \approx 0.242
+\end{equation*}
+
+\textbf{Interpretation:} Despite the sensor having a 95\% detection rate, when an alarm triggers, there is only about a 24\% chance of an actual fault. This counterintuitive result (the \textit{base rate fallacy}) occurs because faults are rare events. The false alarms from the large population of non-fault cases dominate.
+
+\textbf{Engineering implication:} This analysis is critical for designing alert systems in control applications. A second confirmation measurement or a more stringent threshold may be needed to reduce false positives.
+\end{examplebox}
 
 \section{Random Variables}
 
@@ -39,13 +106,30 @@ P(A|B) = \frac{P(B|A)P(A)}{P(B)}
     \item Cumulative distribution: $F(x) = P(X \leq x) = \int_{-\infty}^x f(t)\,\dd t$
 \end{itemize}
 
+\begin{keyconceptbox}[title=Properties of Expectation and Variance]
+For random variables $X$ and $Y$, and constants $a, b$:
+\begin{align}
+E[aX + b] &= aE[X] + b \\
+\text{Var}(aX + b) &= a^2\text{Var}(X) \\
+E[X + Y] &= E[X] + E[Y] \quad \text{(always true)}
+\end{align}
+If $X$ and $Y$ are independent:
+\begin{equation}
+\text{Var}(X + Y) = \text{Var}(X) + \text{Var}(Y)
+\end{equation}
+\end{keyconceptbox}
+
 \section{Common Distributions}
+
+\input{figures/fig_ch00_probability_distributions.tex}
 
 \subsubsection{Gaussian (Normal) Distribution}
 \begin{equation}
 f(x) = \frac{1}{\sigma\sqrt{2\pi}} \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)
 \end{equation}
 Notation: $X \sim \mathcal{N}(\mu, \sigma^2)$
+
+\input{figures/fig_ch00_normal_curve.tex}
 
 \subsubsection{Multivariate Gaussian}
 \begin{equation}
@@ -60,6 +144,127 @@ where $\boldsymbol{\mu}$ is the mean vector and $\boldsymbol{\Sigma}$ is the cov
     \item \textbf{Bernoulli:} $P(X=1) = p$, $P(X=0) = 1-p$
     \item \textbf{Poisson:} $P(X=k) = \frac{\lambda^k \ee^{-\lambda}}{k!}$
 \end{itemize}
+
+\begin{examplebox}[title=Example: Mean and Variance of a Mixture of Distributions]
+A manufacturing process has two operational modes. In Mode A (70\% of the time), output follows $\mathcal{N}(10, 1)$. In Mode B (30\% of the time), output follows $\mathcal{N}(15, 4)$. Find the overall mean and variance.
+
+\textbf{Solution:}
+
+Let $X$ be the output and $M$ be the mode indicator. The mixture distribution has PDF:
+\begin{equation*}
+f_X(x) = 0.7 \cdot f_A(x) + 0.3 \cdot f_B(x)
+\end{equation*}
+
+\textbf{Mean:} Using the law of total expectation:
+\begin{align*}
+E[X] &= E[E[X|M]] = P(M=A)E[X|M=A] + P(M=B)E[X|M=B] \\
+&= 0.7 \times 10 + 0.3 \times 15 = 7 + 4.5 = 11.5
+\end{align*}
+
+\textbf{Variance:} Using the law of total variance:
+\begin{equation*}
+\text{Var}(X) = E[\text{Var}(X|M)] + \text{Var}(E[X|M])
+\end{equation*}
+
+First term (expected conditional variance):
+\begin{equation*}
+E[\text{Var}(X|M)] = 0.7 \times 1 + 0.3 \times 4 = 0.7 + 1.2 = 1.9
+\end{equation*}
+
+Second term (variance of conditional means):
+\begin{align*}
+\text{Var}(E[X|M]) &= E[(E[X|M])^2] - (E[E[X|M]])^2 \\
+&= (0.7 \times 10^2 + 0.3 \times 15^2) - 11.5^2 \\
+&= (70 + 67.5) - 132.25 = 137.5 - 132.25 = 5.25
+\end{align*}
+
+Total variance:
+\begin{equation*}
+\text{Var}(X) = 1.9 + 5.25 = 7.15
+\end{equation*}
+
+\textbf{Key insight:} The variance of a mixture (7.15) is larger than both component variances (1 and 4) because the variance of conditional means contributes significantly when the modes have different means.
+\end{examplebox}
+
+\section{Covariance and Correlation}
+
+Understanding the relationship between multiple random variables is fundamental for multivariate analysis, state estimation, and sensor fusion in control systems.
+
+\begin{definitionbox}[title=Definition: Covariance]
+The \textbf{covariance} between two random variables $X$ and $Y$ measures their linear association:
+\begin{equation}
+\text{Cov}(X, Y) = E[(X - E[X])(Y - E[Y])] = E[XY] - E[X]E[Y]
+\end{equation}
+\end{definitionbox}
+
+\subsubsection{Properties of Covariance}
+\begin{enumerate}
+    \item $\text{Cov}(X, X) = \text{Var}(X)$
+    \item $\text{Cov}(X, Y) = \text{Cov}(Y, X)$ (symmetry)
+    \item $\text{Cov}(aX + b, cY + d) = ac \cdot \text{Cov}(X, Y)$ (linearity)
+    \item $\text{Cov}(X + Y, Z) = \text{Cov}(X, Z) + \text{Cov}(Y, Z)$ (distributive)
+    \item If $X$ and $Y$ are independent, then $\text{Cov}(X, Y) = 0$
+\end{enumerate}
+
+\begin{warningbox}[title=Covariance Zero Does Not Imply Independence]
+The converse of property 5 is \textbf{not} true. Two random variables can have zero covariance but still be dependent. Covariance only measures \textit{linear} relationships.
+
+\textbf{Example:} Let $X \sim \mathcal{N}(0,1)$ and $Y = X^2$. Then $\text{Cov}(X, Y) = E[X^3] - E[X]E[X^2] = 0 - 0 = 0$, but $X$ and $Y$ are clearly dependent.
+\end{warningbox}
+
+\begin{definitionbox}[title=Definition: Correlation Coefficient]
+The \textbf{Pearson correlation coefficient} normalizes covariance to a dimensionless measure:
+\begin{equation}
+\rho_{XY} = \frac{\text{Cov}(X, Y)}{\sigma_X \sigma_Y} = \frac{E[(X-\mu_X)(Y-\mu_Y)]}{\sqrt{\text{Var}(X)\text{Var}(Y)}}
+\end{equation}
+where $\rho_{XY} \in [-1, 1]$.
+\end{definitionbox}
+
+\textbf{Interpretation:}
+\begin{itemize}
+    \item $\rho = 1$: Perfect positive linear relationship
+    \item $\rho = -1$: Perfect negative linear relationship
+    \item $\rho = 0$: No linear relationship (uncorrelated)
+    \item $|\rho| \approx 1$: Strong linear relationship
+\end{itemize}
+
+\subsubsection{Covariance Matrices}
+
+For a random vector $\vecx = [X_1, X_2, \ldots, X_n]^\top$, the covariance matrix captures all pairwise covariances:
+
+\begin{definitionbox}[title=Definition: Covariance Matrix]
+The \textbf{covariance matrix} $\boldsymbol{\Sigma}$ of a random vector $\vecx$ is:
+\begin{equation}
+\boldsymbol{\Sigma} = E[(\vecx - \boldsymbol{\mu})(\vecx - \boldsymbol{\mu})^\top]
+\end{equation}
+where $\boldsymbol{\mu} = E[\vecx]$. The $(i,j)$ element is $\Sigma_{ij} = \text{Cov}(X_i, X_j)$.
+\end{definitionbox}
+
+Explicitly, the covariance matrix is:
+\begin{equation}
+\boldsymbol{\Sigma} = \begin{bmatrix}
+\text{Var}(X_1) & \text{Cov}(X_1, X_2) & \cdots & \text{Cov}(X_1, X_n) \\
+\text{Cov}(X_2, X_1) & \text{Var}(X_2) & \cdots & \text{Cov}(X_2, X_n) \\
+\vdots & \vdots & \ddots & \vdots \\
+\text{Cov}(X_n, X_1) & \text{Cov}(X_n, X_2) & \cdots & \text{Var}(X_n)
+\end{bmatrix}
+\end{equation}
+
+\begin{keyconceptbox}[title=Properties of Covariance Matrices]
+For any covariance matrix $\boldsymbol{\Sigma}$:
+\begin{enumerate}
+    \item \textbf{Symmetric:} $\boldsymbol{\Sigma} = \boldsymbol{\Sigma}^\top$
+    \item \textbf{Positive semi-definite:} $\vecv^\top \boldsymbol{\Sigma} \vecv \geq 0$ for all $\vecv$
+    \item \textbf{Diagonal elements are variances:} $\Sigma_{ii} = \text{Var}(X_i) \geq 0$
+    \item \textbf{Off-diagonal bounds:} $|\Sigma_{ij}| \leq \sqrt{\Sigma_{ii}\Sigma_{jj}}$ (follows from $|\rho| \leq 1$)
+\end{enumerate}
+\end{keyconceptbox}
+
+\textbf{Linear transformation of covariance:} If $\vecy = \mA\vecx + \vecb$, then:
+\begin{equation}
+\boldsymbol{\Sigma}_{\vecy} = \mA \boldsymbol{\Sigma}_{\vecx} \mA^\top
+\end{equation}
+This result is fundamental in Kalman filtering when propagating uncertainty through system dynamics.
 
 \section{Stochastic Processes}
 
@@ -81,9 +286,56 @@ P(X_{n+1}|X_n, X_{n-1}, \ldots, X_0) = P(X_{n+1}|X_n)
 \section{Estimation Theory}
 
 \subsubsection{Maximum Likelihood Estimation (MLE)}
+
+\begin{definitionbox}[title=Definition: Maximum Likelihood Estimator]
+Given observations $\vecx = (x_1, x_2, \ldots, x_n)$ from a distribution $f(x|\theta)$, the \textbf{maximum likelihood estimator} is:
 \begin{equation}
 \hat{\theta}_{ML} = \arg\max_\theta \prod_{i=1}^n f(x_i|\theta) = \arg\max_\theta \sum_{i=1}^n \log f(x_i|\theta)
 \end{equation}
+The second form (log-likelihood) is typically more convenient for computation.
+\end{definitionbox}
+
+\begin{examplebox}[title=Example: Maximum Likelihood Estimation for Gaussian Parameters]
+Given $n$ independent observations $x_1, x_2, \ldots, x_n$ from a Gaussian distribution $\mathcal{N}(\mu, \sigma^2)$, find the MLEs for $\mu$ and $\sigma^2$.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Write the likelihood function.}
+\begin{equation*}
+L(\mu, \sigma^2) = \prod_{i=1}^n \frac{1}{\sigma\sqrt{2\pi}} \exp\left(-\frac{(x_i-\mu)^2}{2\sigma^2}\right)
+\end{equation*}
+
+\textbf{Step 2: Take the log-likelihood.}
+\begin{align*}
+\ell(\mu, \sigma^2) &= \log L(\mu, \sigma^2) \\
+&= -\frac{n}{2}\log(2\pi) - \frac{n}{2}\log(\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^n (x_i - \mu)^2
+\end{align*}
+
+\textbf{Step 3: Find the MLE for $\mu$.}
+\begin{equation*}
+\frac{\partial \ell}{\partial \mu} = \frac{1}{\sigma^2}\sum_{i=1}^n (x_i - \mu) = 0
+\end{equation*}
+
+Solving: $\sum_{i=1}^n x_i = n\mu$, so:
+\begin{equation*}
+\boxed{\hat{\mu}_{ML} = \bar{x} = \frac{1}{n}\sum_{i=1}^n x_i}
+\end{equation*}
+
+\textbf{Step 4: Find the MLE for $\sigma^2$.}
+\begin{equation*}
+\frac{\partial \ell}{\partial \sigma^2} = -\frac{n}{2\sigma^2} + \frac{1}{2(\sigma^2)^2}\sum_{i=1}^n (x_i - \mu)^2 = 0
+\end{equation*}
+
+Solving:
+\begin{equation*}
+\boxed{\hat{\sigma}^2_{ML} = \frac{1}{n}\sum_{i=1}^n (x_i - \bar{x})^2}
+\end{equation*}
+
+\textbf{Note:} The MLE for variance is biased (expected value is $\frac{n-1}{n}\sigma^2$). The unbiased estimator uses $n-1$ in the denominator:
+\begin{equation*}
+s^2 = \frac{1}{n-1}\sum_{i=1}^n (x_i - \bar{x})^2
+\end{equation*}
+\end{examplebox}
 
 \subsubsection{Bayesian Estimation}
 \begin{equation}
@@ -91,9 +343,172 @@ p(\theta|\vecx) \propto p(\vecx|\theta)p(\theta)
 \end{equation}
 (posterior $\propto$ likelihood $\times$ prior)
 
+\begin{examplebox}[title=Example: Bayesian Parameter Estimation]
+Suppose we want to estimate the mean $\mu$ of a Gaussian distribution with known variance $\sigma^2 = 1$. We have a prior belief that $\mu \sim \mathcal{N}(\mu_0, \tau_0^2)$ where $\mu_0 = 0$ and $\tau_0^2 = 4$. After observing a single measurement $x = 2.5$, find the posterior distribution.
+
+\textbf{Solution:}
+
+\textbf{Step 1: Identify the components.}
+\begin{itemize}
+    \item Prior: $p(\mu) \propto \exp\left(-\frac{(\mu - 0)^2}{2 \times 4}\right) = \exp\left(-\frac{\mu^2}{8}\right)$
+    \item Likelihood: $p(x|\mu) \propto \exp\left(-\frac{(x-\mu)^2}{2}\right) = \exp\left(-\frac{(2.5-\mu)^2}{2}\right)$
+\end{itemize}
+
+\textbf{Step 2: Apply Bayes' theorem.}
+\begin{align*}
+p(\mu|x) &\propto p(x|\mu) \cdot p(\mu) \\
+&\propto \exp\left(-\frac{(2.5-\mu)^2}{2}\right) \cdot \exp\left(-\frac{\mu^2}{8}\right)
+\end{align*}
+
+\textbf{Step 3: Combine the exponents.}
+\begin{align*}
+-\frac{(2.5-\mu)^2}{2} - \frac{\mu^2}{8} &= -\frac{4(2.5-\mu)^2 + \mu^2}{8} \\
+&= -\frac{4(6.25 - 5\mu + \mu^2) + \mu^2}{8} \\
+&= -\frac{25 - 20\mu + 4\mu^2 + \mu^2}{8} \\
+&= -\frac{5\mu^2 - 20\mu + 25}{8}
+\end{align*}
+
+\textbf{Step 4: Complete the square.}
+\begin{align*}
+5\mu^2 - 20\mu + 25 &= 5(\mu^2 - 4\mu) + 25 \\
+&= 5(\mu^2 - 4\mu + 4 - 4) + 25 \\
+&= 5(\mu - 2)^2 + 5
+\end{align*}
+
+So:
+\begin{equation*}
+p(\mu|x) \propto \exp\left(-\frac{5(\mu-2)^2}{8}\right) = \exp\left(-\frac{(\mu-2)^2}{2 \times 0.8}\right)
+\end{equation*}
+
+\textbf{Result:} The posterior is $\mu|x \sim \mathcal{N}(\mu_n, \tau_n^2)$ where:
+\begin{align*}
+\tau_n^2 &= \frac{1}{\frac{1}{\tau_0^2} + \frac{1}{\sigma^2}} = \frac{1}{\frac{1}{4} + 1} = \frac{4}{5} = 0.8 \\
+\mu_n &= \tau_n^2 \left(\frac{\mu_0}{\tau_0^2} + \frac{x}{\sigma^2}\right) = 0.8\left(\frac{0}{4} + \frac{2.5}{1}\right) = 2.0
+\end{align*}
+
+\textbf{Interpretation:}
+\begin{itemize}
+    \item The posterior mean (2.0) is between the prior mean (0) and the observation (2.5), weighted by their respective precisions.
+    \item The posterior variance (0.8) is smaller than both the prior variance (4) and the likelihood variance (1), reflecting increased certainty after incorporating data.
+    \item This ``Gaussian-Gaussian'' conjugate pair is the foundation of the Kalman filter.
+\end{itemize}
+\end{examplebox}
+
+\input{figures/fig_ch00_confidence_intervals.tex}
+
 \subsubsection{Minimum Mean Square Error (MMSE)}
 \begin{equation}
 \hat{\theta}_{MMSE} = E[\theta|\vecx]
 \end{equation}
+
+\begin{keyconceptbox}[title=Comparison of Estimators]
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Estimator} & \textbf{Criterion} & \textbf{Result} \\
+\midrule
+MLE & Maximize $p(\vecx|\theta)$ & Mode of likelihood \\
+MAP & Maximize $p(\theta|\vecx)$ & Mode of posterior \\
+MMSE & Minimize $E[(\theta - \hat{\theta})^2|\vecx]$ & Mean of posterior \\
+\bottomrule
+\end{tabular}
+\end{center}
+For symmetric, unimodal posteriors (like Gaussians), MAP and MMSE coincide.
+\end{keyconceptbox}
+
+\section{Hypothesis Testing Basics}
+
+Hypothesis testing provides a framework for making decisions under uncertainty, which is essential in fault detection, change detection, and quality control in control systems.
+
+\begin{definitionbox}[title=Definition: Hypothesis Test]
+A \textbf{hypothesis test} is a procedure for deciding between two competing claims:
+\begin{itemize}
+    \item $H_0$: The \textbf{null hypothesis} (default assumption, often ``no effect'' or ``no change'')
+    \item $H_1$ (or $H_a$): The \textbf{alternative hypothesis} (the claim we're testing for)
+\end{itemize}
+\end{definitionbox}
+
+\textbf{Example hypotheses in control systems:}
+\begin{itemize}
+    \item $H_0$: System is operating normally; $H_1$: Fault has occurred
+    \item $H_0$: Controller gain equals design value; $H_1$: Gain has changed
+    \item $H_0$: Sensor is calibrated; $H_1$: Sensor has drifted
+\end{itemize}
+
+\subsubsection{Types of Errors}
+
+\begin{definitionbox}[title=Definition: Type I and Type II Errors]
+\begin{center}
+\begin{tabular}{l|cc}
+& \textbf{$H_0$ True} & \textbf{$H_1$ True} \\
+\hline
+\textbf{Reject $H_0$} & Type I Error ($\alpha$) & Correct Decision \\
+\textbf{Fail to reject $H_0$} & Correct Decision & Type II Error ($\beta$) \\
+\end{tabular}
+\end{center}
+\begin{itemize}
+    \item \textbf{Type I Error (False Positive):} Rejecting $H_0$ when it is true. Probability: $\alpha$ (significance level)
+    \item \textbf{Type II Error (False Negative):} Failing to reject $H_0$ when $H_1$ is true. Probability: $\beta$
+    \item \textbf{Power:} $1 - \beta$ = probability of correctly rejecting $H_0$ when $H_1$ is true
+\end{itemize}
+\end{definitionbox}
+
+\begin{warningbox}[title=Trade-off Between Error Types]
+There is an inherent trade-off between Type I and Type II errors:
+\begin{itemize}
+    \item Decreasing $\alpha$ (fewer false alarms) typically increases $\beta$ (more missed detections)
+    \item The only way to reduce both simultaneously is to collect more data
+\end{itemize}
+In control applications, the relative costs of each error type should guide the choice of $\alpha$.
+\end{warningbox}
+
+\subsubsection{The p-value}
+
+\begin{definitionbox}[title=Definition: p-value]
+The \textbf{p-value} is the probability of observing a test statistic as extreme as, or more extreme than, the observed value, assuming the null hypothesis is true:
+\begin{equation}
+p\text{-value} = P(\text{test statistic} \geq \text{observed value} \;|\; H_0 \text{ true})
+\end{equation}
+(For two-sided tests, consider both tails.)
+\end{definitionbox}
+
+\textbf{Interpretation:}
+\begin{itemize}
+    \item Small p-value ($< \alpha$): Strong evidence against $H_0$; reject $H_0$
+    \item Large p-value ($\geq \alpha$): Insufficient evidence against $H_0$; fail to reject $H_0$
+    \item Common significance levels: $\alpha = 0.05$ (5\%), $\alpha = 0.01$ (1\%)
+\end{itemize}
+
+\begin{warningbox}[title=Common Misinterpretations of p-values]
+The p-value is \textbf{NOT}:
+\begin{itemize}
+    \item The probability that $H_0$ is true
+    \item The probability that $H_1$ is false
+    \item The probability of making an error
+\end{itemize}
+The p-value is the probability of the \textit{data} (or more extreme), given $H_0$ is true---not the probability of $H_0$ given the data.
+\end{warningbox}
+
+\subsubsection{Example: Z-test for a Mean}
+
+\textbf{Setup:} Test whether a population mean $\mu$ differs from a hypothesized value $\mu_0$ when the population variance $\sigma^2$ is known.
+
+\textbf{Hypotheses:} $H_0: \mu = \mu_0$ vs. $H_1: \mu \neq \mu_0$ (two-sided)
+
+\textbf{Test statistic:}
+\begin{equation}
+Z = \frac{\bar{X} - \mu_0}{\sigma/\sqrt{n}}
+\end{equation}
+Under $H_0$, $Z \sim \mathcal{N}(0, 1)$.
+
+\textbf{Decision rule:} Reject $H_0$ if $|Z| > z_{\alpha/2}$, where $z_{\alpha/2}$ is the critical value from the standard normal distribution.
+
+\begin{keyconceptbox}[title=Connection to Confidence Intervals]
+Hypothesis testing and confidence intervals are dual concepts:
+\begin{itemize}
+    \item A $100(1-\alpha)\%$ confidence interval contains all parameter values that would \textit{not} be rejected at significance level $\alpha$
+    \item Rejecting $H_0: \mu = \mu_0$ at level $\alpha$ is equivalent to $\mu_0$ being outside the $(1-\alpha)$ confidence interval
+\end{itemize}
+\end{keyconceptbox}
 
 % ============================================================================
