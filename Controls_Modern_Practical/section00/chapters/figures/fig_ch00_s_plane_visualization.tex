@@ -1,0 +1,100 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=1.2]
+    % ========== Main s-plane ==========
+    % Shaded stability regions
+    \fill[UofSCHorseshoe!15] (-4,-3) rectangle (0,3);
+    \fill[UofSCRose!15] (0,-3) rectangle (3,3);
+
+    % Grid
+    \draw[help lines, gray!30] (-4,-3) grid (3,3);
+
+    % Axes
+    \draw[thick,->] (-4.3,0) -- (3.5,0) node[right] {$\sigma = \Real(s)$};
+    \draw[thick,->] (0,-3.3) -- (0,3.5) node[above] {$\jj\omega = \Imag(s)$};
+
+    % Imaginary axis (stability boundary)
+    \draw[UofSCCongaree, very thick] (0,-3) -- (0,3);
+
+    % Region labels
+    \node[UofSCHorseshoe, font=\bfseries] at (-2, 2.5) {Stable};
+    \node[UofSCHorseshoe, font=\small] at (-2, 2.1) {$\sigma < 0$};
+    \node[UofSCRose, font=\bfseries] at (1.5, 2.5) {Unstable};
+    \node[UofSCRose, font=\small] at (1.5, 2.1) {$\sigma > 0$};
+    \node[UofSCCongaree, font=\bfseries, rotate=90, anchor=south] at (0.35, 0) {Marginally Stable};
+    \node[UofSCCongaree, font=\small, rotate=90, anchor=north] at (-0.35, 0) {$\sigma = 0$};
+
+    % Example poles (X symbols)
+    % Stable pole (left half-plane)
+    \node[UofSCGarnet, font=\Large] at (-2, 0) {$\times$};
+    \node[UofSCGarnet, font=\small, below] at (-2, -0.3) {$p_1 = -2$};
+
+    % Complex conjugate poles (stable)
+    \node[UofSCGarnet, font=\Large] at (-1, 1.5) {$\times$};
+    \node[UofSCGarnet, font=\Large] at (-1, -1.5) {$\times$};
+    \node[UofSCGarnet, font=\small, right] at (-0.8, 1.5) {$p_2 = -1 + 1.5\jj$};
+    \node[UofSCGarnet, font=\small, right] at (-0.8, -1.5) {$p_2^* = -1 - 1.5\jj$};
+
+    % Unstable pole
+    \node[UofSCGarnet, font=\Large] at (1, 0.8) {$\times$};
+    \node[UofSCGarnet, font=\small, right] at (1.2, 0.8) {$p_3 = 1 + 0.8\jj$};
+
+    % Example zeros (circle symbols)
+    \draw[UofSCAtlantic, thick] (-3, 0) circle (0.12);
+    \node[UofSCAtlantic, font=\small, above] at (-3, 0.25) {$z_1 = -3$};
+
+    \draw[UofSCAtlantic, thick] (0.5, -1) circle (0.12);
+    \node[UofSCAtlantic, font=\small, right] at (0.7, -1) {$z_2 = 0.5 - \jj$};
+
+    % Origin marker
+    \node[below left, font=\small] at (0,0) {$0$};
+
+    % Legend
+    \node[anchor=north west] at (-4, -3.5) {
+        \begin{tikzpicture}[scale=0.8]
+            \node[UofSCGarnet, font=\normalsize] at (0,0) {$\times$};
+            \node[right, font=\small] at (0.3, 0) {Pole};
+            \draw[UofSCAtlantic, thick] (2, 0) circle (0.1);
+            \node[right, font=\small] at (2.3, 0) {Zero};
+        \end{tikzpicture}
+    };
+\end{tikzpicture}
+
+\vspace{0.5cm}
+
+% Time response relationship
+\begin{tikzpicture}[scale=0.9]
+    % Title
+    \node[font=\bfseries] at (0, 2.2) {Time Response Characteristics by Pole Location};
+
+    % Stable real pole response
+    \begin{scope}[xshift=-5cm]
+        \draw[->] (0,0) -- (2.5,0) node[right, font=\tiny] {$t$};
+        \draw[->] (0,-0.3) -- (0,1.5) node[above, font=\tiny] {$y(t)$};
+        \draw[UofSCHorseshoe, very thick, domain=0:2.3, samples=50] plot (\x, {1.2*exp(-1.5*\x)});
+        \node[UofSCGarnet, font=\small] at (1.2, 1.7) {$p$ real, $\sigma < 0$};
+        \node[font=\footnotesize] at (1.2, -0.6) {Decaying exponential};
+    \end{scope}
+
+    % Complex conjugate poles (underdamped)
+    \begin{scope}[xshift=0cm]
+        \draw[->] (0,0) -- (2.5,0) node[right, font=\tiny] {$t$};
+        \draw[->] (0,-0.8) -- (0,1.5) node[above, font=\tiny] {$y(t)$};
+        \draw[UofSCAtlantic, very thick, domain=0:2.3, samples=100] plot (\x, {exp(-0.8*\x)*cos(deg(4*\x))});
+        \node[UofSCGarnet, font=\small] at (1.2, 1.7) {$p = \sigma \pm \jj\omega_d$};
+        \node[font=\footnotesize] at (1.2, -1.1) {Damped oscillation};
+    \end{scope}
+
+    % Unstable pole response
+    \begin{scope}[xshift=5cm]
+        \draw[->] (0,0) -- (2.5,0) node[right, font=\tiny] {$t$};
+        \draw[->] (0,-0.3) -- (0,1.5) node[above, font=\tiny] {$y(t)$};
+        \draw[UofSCRose, very thick, domain=0:1.2, samples=50] plot (\x, {0.3*exp(1.2*\x)});
+        \node[UofSCGarnet, font=\small] at (1.2, 1.7) {$p$ real, $\sigma > 0$};
+        \node[font=\footnotesize] at (1.2, -0.6) {Growing exponential};
+    \end{scope}
+\end{tikzpicture}
+
+\caption{The complex $s$-plane showing stability regions and pole-zero locations. The left half-plane (Horseshoe green shading, $\sigma < 0$) corresponds to stable system responses, while the right half-plane (Rose shading, $\sigma > 0$) produces unstable responses. The imaginary axis (Congaree, $\sigma = 0$) represents marginal stability. Poles are marked with Garnet $\times$ symbols, zeros with Atlantic $\circ$ symbols. Bottom panels show representative time responses: stable real poles produce decaying exponentials, complex conjugate poles in the LHP produce damped oscillations, and RHP poles lead to unbounded growth.}
+\label{fig:s_plane_visualization}
+\end{figure}
