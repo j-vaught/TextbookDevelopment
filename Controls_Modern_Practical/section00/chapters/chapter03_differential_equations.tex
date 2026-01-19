@@ -2,7 +2,15 @@
 \label{ch:diff_eq}
 % ============================================================================
 
-Differential equations describe how systems evolve over time and are the mathematical language of dynamics.
+Differential equations describe how systems evolve over time and are the mathematical language of dynamics. In control systems, we encounter differential equations when modeling physical systems, analyzing stability, and designing controllers.
+
+\begin{definitionbox}[title=Definition: Ordinary Differential Equation (ODE)]
+An \textbf{ordinary differential equation} is an equation involving a function $y(t)$ and its derivatives with respect to a single independent variable $t$:
+\begin{equation}
+F\left(t, y, \frac{\dd y}{\dd t}, \frac{\dd^2 y}{\dd t^2}, \ldots, \frac{\dd^n y}{\dd t^n}\right) = 0
+\end{equation}
+The \textbf{order} of the ODE is the highest derivative that appears. An ODE is \textbf{linear} if the function $y$ and all its derivatives appear linearly (to the first power and not multiplied together).
+\end{definitionbox}
 
 \section{Ordinary Differential Equations (ODEs)}
 
@@ -24,7 +32,17 @@ For constant coefficients $\frac{\dd y}{\dd t} + ay = b$:
 y(t) = \frac{b}{a} + \left(y_0 - \frac{b}{a}\right)\ee^{-at}
 \end{equation}
 
-\begin{examplebox}[title=Example 0.2: RC Circuit]
+\begin{keyconceptbox}[title=Time Constant]
+For a first-order system $\tau \frac{\dd y}{\dd t} + y = Ku$, the \textbf{time constant} $\tau$ determines:
+\begin{itemize}
+    \item The speed of response: smaller $\tau$ means faster response
+    \item At $t = \tau$, the response reaches $63.2\%$ of its final value
+    \item At $t = 4\tau$, the response is within $2\%$ of steady state
+    \item The bandwidth is $\omega_{bw} = 1/\tau$ rad/s
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example: RC Circuit]
 An RC circuit with voltage source $V_s$ satisfies:
 \begin{equation}
 RC\frac{\dd v_c}{\dd t} + v_c = V_s
@@ -35,6 +53,8 @@ v_c(t) = V_s\left(1 - \ee^{-t/RC}\right)
 \end{equation}
 The time constant $\tau = RC$ determines how quickly the system responds.
 \end{examplebox}
+
+\input{figures/fig_ch00_first_order_response.tex}
 
 \subsection{Second-Order Linear ODEs with Constant Coefficients}
 
@@ -74,9 +94,111 @@ with roots:
     \item \textbf{Undamped} ($\zeta = 0$): Pure imaginary roots. Response: $y(t) = C_1\cos\omega_n t + C_2\sin\omega_n t$
 \end{enumerate}
 
+\begin{examplebox}[title=Example: Mass-Spring-Damper System]
+Consider a mass-spring-damper system with $m = 2$ kg, $c = 4$ N$\cdot$s/m, and $k = 10$ N/m. The equation of motion is:
+\begin{equation}
+2\ddot{x} + 4\dot{x} + 10x = 0
+\end{equation}
+\textbf{Step 1:} Write in standard form by dividing by $m$:
+\begin{equation}
+\ddot{x} + 2\dot{x} + 5x = 0
+\end{equation}
+\textbf{Step 2:} Identify parameters. Comparing with $\ddot{x} + 2\zeta\omega_n\dot{x} + \omega_n^2 x = 0$:
+\begin{itemize}
+    \item $\omega_n^2 = 5 \Rightarrow \omega_n = \sqrt{5} \approx 2.24$ rad/s
+    \item $2\zeta\omega_n = 2 \Rightarrow \zeta = 1/\omega_n = 1/\sqrt{5} \approx 0.447$
+\end{itemize}
+\textbf{Step 3:} Since $\zeta < 1$, the system is \textbf{underdamped}. The damped frequency is:
+\begin{equation}
+\omega_d = \omega_n\sqrt{1 - \zeta^2} = \sqrt{5}\sqrt{1 - 0.2} = \sqrt{4} = 2 \text{ rad/s}
+\end{equation}
+\textbf{Step 4:} The general solution is:
+\begin{equation}
+x(t) = \ee^{-t}(C_1 \cos 2t + C_2 \sin 2t)
+\end{equation}
+With initial conditions $x(0) = 1$ m, $\dot{x}(0) = 0$:
+\begin{itemize}
+    \item From $x(0) = 1$: $C_1 = 1$
+    \item From $\dot{x}(0) = 0$: $-C_1 + 2C_2 = 0 \Rightarrow C_2 = 0.5$
+\end{itemize}
+\textbf{Final answer:}
+\begin{equation}
+x(t) = \ee^{-t}\left(\cos 2t + 0.5\sin 2t\right) \text{ m}
+\end{equation}
+\end{examplebox}
+
+\begin{examplebox}[title=Example: Overdamped Second-Order System]
+Solve $\ddot{y} + 5\dot{y} + 4y = 0$ with $y(0) = 1$, $\dot{y}(0) = 0$.
+
+\textbf{Step 1:} Find the characteristic equation:
+\begin{equation}
+\lambda^2 + 5\lambda + 4 = 0
+\end{equation}
+\textbf{Step 2:} Factor to find roots:
+\begin{equation}
+(\lambda + 1)(\lambda + 4) = 0 \Rightarrow \lambda_1 = -1, \quad \lambda_2 = -4
+\end{equation}
+Since both roots are real and distinct (and negative), the system is \textbf{overdamped and stable}.
+
+\textbf{Step 3:} Write the general solution:
+\begin{equation}
+y(t) = C_1 \ee^{-t} + C_2 \ee^{-4t}
+\end{equation}
+\textbf{Step 4:} Apply initial conditions:
+\begin{align}
+y(0) &= C_1 + C_2 = 1 \\
+\dot{y}(0) &= -C_1 - 4C_2 = 0
+\end{align}
+Solving: $C_1 = 4/3$, $C_2 = -1/3$.
+
+\textbf{Final answer:}
+\begin{equation}
+y(t) = \frac{4}{3}\ee^{-t} - \frac{1}{3}\ee^{-4t}
+\end{equation}
+Note: The response is dominated by the slower mode $\ee^{-t}$ as $t$ increases.
+\end{examplebox}
+
+\begin{examplebox}[title=Example: Critically Damped System]
+Solve $\ddot{y} + 6\dot{y} + 9y = 0$ with $y(0) = 2$, $\dot{y}(0) = 3$.
+
+\textbf{Step 1:} Characteristic equation:
+\begin{equation}
+\lambda^2 + 6\lambda + 9 = (\lambda + 3)^2 = 0
+\end{equation}
+\textbf{Step 2:} Repeated root $\lambda = -3$ (critically damped, $\zeta = 1$, $\omega_n = 3$).
+
+\textbf{Step 3:} General solution for repeated roots:
+\begin{equation}
+y(t) = (C_1 + C_2 t)\ee^{-3t}
+\end{equation}
+\textbf{Step 4:} Apply initial conditions:
+\begin{align}
+y(0) &= C_1 = 2 \\
+\dot{y}(t) &= C_2\ee^{-3t} - 3(C_1 + C_2 t)\ee^{-3t} \\
+\dot{y}(0) &= C_2 - 3C_1 = 3 \Rightarrow C_2 = 9
+\end{align}
+\textbf{Final answer:}
+\begin{equation}
+y(t) = (2 + 9t)\ee^{-3t}
+\end{equation}
+This represents the fastest decay without oscillation.
+\end{examplebox}
+
 \input{figures/fig_ch00_second_order_response.tex}
 
+\input{figures/fig_ch00_solution_families.tex}
+
 \input{figures/fig_ch00_pole_locations_s_plane.tex}
+
+\begin{warningbox}[title=Common Pitfall: Sign Errors in Characteristic Equation]
+When solving the characteristic equation, be careful with signs:
+\begin{itemize}
+    \item The ODE $\ddot{y} + a\dot{y} + by = 0$ gives characteristic equation $\lambda^2 + a\lambda + b = 0$
+    \item Stable systems require $a > 0$ and $b > 0$ (all coefficients positive)
+    \item A negative coefficient indicates instability
+\end{itemize}
+Example: $\ddot{y} - 2\dot{y} + y = 0$ has $\lambda = 1$ (repeated), which is \textbf{unstable} despite the positive coefficient of $y$.
+\end{warningbox}
 
 \subsection{Higher-Order Linear ODEs}
 
@@ -91,6 +213,350 @@ The solution consists of:
     \item \textbf{Particular solution} $y_p(t)$: Depends on the forcing function $f(t)$
 \end{itemize}
 
+The complete solution is $y(t) = y_h(t) + y_p(t)$.
+
+\begin{examplebox}[title=Example: Converting 3rd Order ODE to State-Space Form]
+Convert the following third-order ODE to state-space form:
+\begin{equation}
+\dddot{y} + 6\ddot{y} + 11\dot{y} + 6y = u(t)
+\end{equation}
+
+\textbf{Step 1:} Define state variables. Choose:
+\begin{align}
+x_1 &= y \\
+x_2 &= \dot{y} = \dot{x}_1 \\
+x_3 &= \ddot{y} = \dot{x}_2
+\end{align}
+
+\textbf{Step 2:} Write the first-order equations. From the original ODE:
+\begin{equation}
+\dot{x}_3 = \dddot{y} = -6\ddot{y} - 11\dot{y} - 6y + u = -6x_3 - 11x_2 - 6x_1 + u
+\end{equation}
+
+\textbf{Step 3:} Assemble into matrix form $\dot{\vecx} = \mA\vecx + \mB u$:
+\begin{equation}
+\begin{bmatrix} \dot{x}_1 \\ \dot{x}_2 \\ \dot{x}_3 \end{bmatrix} =
+\begin{bmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \\ -6 & -11 & -6 \end{bmatrix}
+\begin{bmatrix} x_1 \\ x_2 \\ x_3 \end{bmatrix} +
+\begin{bmatrix} 0 \\ 0 \\ 1 \end{bmatrix} u
+\end{equation}
+
+\textbf{Step 4:} Output equation (if $y$ is the output):
+\begin{equation}
+y = \begin{bmatrix} 1 & 0 & 0 \end{bmatrix} \begin{bmatrix} x_1 \\ x_2 \\ x_3 \end{bmatrix} = \mC\vecx
+\end{equation}
+
+This is the \textbf{controllable canonical form}. The characteristic polynomial of $\mA$ matches the original ODE: $\det(\lambda\mI - \mA) = \lambda^3 + 6\lambda^2 + 11\lambda + 6 = (\lambda + 1)(\lambda + 2)(\lambda + 3)$.
+\end{examplebox}
+
+\begin{keyconceptbox}[title=State-Space Conversion Recipe]
+For an $n$th-order ODE: $y^{(n)} + a_{n-1}y^{(n-1)} + \cdots + a_1\dot{y} + a_0 y = b_0 u$
+\begin{enumerate}
+    \item Define states: $x_1 = y$, $x_2 = \dot{y}$, \ldots, $x_n = y^{(n-1)}$
+    \item The companion matrix form is:
+    \begin{equation}
+    \mA = \begin{bmatrix} 0 & 1 & 0 & \cdots & 0 \\ 0 & 0 & 1 & \cdots & 0 \\ \vdots & & \ddots & \ddots & \vdots \\ 0 & 0 & \cdots & 0 & 1 \\ -a_0 & -a_1 & \cdots & -a_{n-2} & -a_{n-1} \end{bmatrix}, \quad
+    \mB = \begin{bmatrix} 0 \\ 0 \\ \vdots \\ 0 \\ b_0 \end{bmatrix}
+    \end{equation}
+    \item Output: $\mC = \begin{bmatrix} 1 & 0 & \cdots & 0 \end{bmatrix}$, $\mD = 0$
+\end{enumerate}
+\end{keyconceptbox}
+
+\section{Solution Techniques for Nonhomogeneous ODEs}
+\label{sec:solution_techniques}
+
+The complete solution of a nonhomogeneous linear ODE $L[y] = f(t)$ is:
+\begin{equation}
+y(t) = y_h(t) + y_p(t)
+\end{equation}
+where $y_h(t)$ is the homogeneous solution (from Section \ref{ch:diff_eq}) and $y_p(t)$ is a particular solution.
+
+\subsection{Method of Undetermined Coefficients}
+
+This method works when the forcing function $f(t)$ is a polynomial, exponential, sine, cosine, or a combination thereof.
+
+\begin{definitionbox}[title=Definition: Method of Undetermined Coefficients]
+For an ODE with constant coefficients $L[y] = f(t)$:
+\begin{enumerate}
+    \item Identify the form of $f(t)$ from the table below
+    \item Guess a particular solution $y_p(t)$ with undetermined coefficients
+    \item Substitute $y_p(t)$ into the ODE and solve for the coefficients
+    \item If any term in $y_p$ is a solution of the homogeneous equation, multiply by $t$ (or $t^2$ for repeated roots)
+\end{enumerate}
+\end{definitionbox}
+
+\subsubsection{Table of Particular Solution Forms}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Forcing Function $f(t)$} & \textbf{Particular Solution Form $y_p(t)$} \\
+\midrule
+$K$ (constant) & $A$ \\
+$Kt^n$ & $A_n t^n + A_{n-1}t^{n-1} + \cdots + A_1 t + A_0$ \\
+$K\ee^{at}$ & $A\ee^{at}$ \\
+$K\cos(\omega t)$ or $K\sin(\omega t)$ & $A\cos(\omega t) + B\sin(\omega t)$ \\
+$K\ee^{at}\cos(\omega t)$ or $K\ee^{at}\sin(\omega t)$ & $\ee^{at}(A\cos(\omega t) + B\sin(\omega t))$ \\
+$Kt^n\ee^{at}$ & $(A_n t^n + \cdots + A_0)\ee^{at}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warningbox}[title=Modification Rule for Resonance]
+If any term in the guessed $y_p(t)$ is also a solution of the homogeneous equation:
+\begin{itemize}
+    \item Multiply the entire guess by $t$
+    \item If still a homogeneous solution (repeated roots), multiply by $t^2$
+\end{itemize}
+This accounts for \textbf{resonance} conditions.
+\end{warningbox}
+
+\begin{examplebox}[title=Example: Undetermined Coefficients with Exponential Forcing]
+Solve $\ddot{y} + 3\dot{y} + 2y = 10\ee^{-3t}$ with $y(0) = 0$, $\dot{y}(0) = 0$.
+
+\textbf{Step 1:} Find homogeneous solution. Characteristic equation: $\lambda^2 + 3\lambda + 2 = (\lambda+1)(\lambda+2) = 0$
+\begin{equation}
+y_h(t) = C_1\ee^{-t} + C_2\ee^{-2t}
+\end{equation}
+
+\textbf{Step 2:} Guess particular solution. Since $f(t) = 10\ee^{-3t}$ and $\ee^{-3t}$ is not a homogeneous solution:
+\begin{equation}
+y_p(t) = A\ee^{-3t}
+\end{equation}
+
+\textbf{Step 3:} Substitute into ODE:
+\begin{align}
+\dot{y}_p &= -3A\ee^{-3t}, \quad \ddot{y}_p = 9A\ee^{-3t} \\
+9A\ee^{-3t} + 3(-3A\ee^{-3t}) + 2(A\ee^{-3t}) &= 10\ee^{-3t} \\
+(9A - 9A + 2A)\ee^{-3t} &= 10\ee^{-3t} \\
+2A &= 10 \Rightarrow A = 5
+\end{align}
+
+\textbf{Step 4:} General solution: $y(t) = C_1\ee^{-t} + C_2\ee^{-2t} + 5\ee^{-3t}$
+
+\textbf{Step 5:} Apply initial conditions:
+\begin{align}
+y(0) &= C_1 + C_2 + 5 = 0 \\
+\dot{y}(0) &= -C_1 - 2C_2 - 15 = 0
+\end{align}
+Solving: $C_1 = -20$, $C_2 = 15$.
+
+\textbf{Final answer:}
+\begin{equation}
+y(t) = -20\ee^{-t} + 15\ee^{-2t} + 5\ee^{-3t}
+\end{equation}
+\end{examplebox}
+
+\begin{examplebox}[title=Example: Undetermined Coefficients with Sinusoidal Forcing]
+Find the particular solution of $\ddot{y} + 4y = 3\cos(2t)$.
+
+\textbf{Step 1:} Check homogeneous solutions. Characteristic equation: $\lambda^2 + 4 = 0 \Rightarrow \lambda = \pm 2\jj$
+\begin{equation}
+y_h(t) = C_1\cos(2t) + C_2\sin(2t)
+\end{equation}
+
+\textbf{Step 2:} Initial guess would be $A\cos(2t) + B\sin(2t)$, but this IS a homogeneous solution. Apply modification rule:
+\begin{equation}
+y_p(t) = t(A\cos(2t) + B\sin(2t))
+\end{equation}
+
+\textbf{Step 3:} Compute derivatives:
+\begin{align}
+\dot{y}_p &= A\cos(2t) + B\sin(2t) + t(-2A\sin(2t) + 2B\cos(2t)) \\
+\ddot{y}_p &= -4A\sin(2t) + 4B\cos(2t) - 4t(A\cos(2t) + B\sin(2t))
+\end{align}
+
+\textbf{Step 4:} Substitute into $\ddot{y}_p + 4y_p = 3\cos(2t)$:
+\begin{equation}
+-4A\sin(2t) + 4B\cos(2t) = 3\cos(2t)
+\end{equation}
+Comparing coefficients: $B = 3/4$, $A = 0$.
+
+\textbf{Final answer:}
+\begin{equation}
+y_p(t) = \frac{3}{4}t\sin(2t)
+\end{equation}
+Note: The factor of $t$ indicates \textbf{resonance}---the response grows linearly with time.
+\end{examplebox}
+
+\subsection{Variation of Parameters}
+
+The method of variation of parameters provides a general formula that works for \emph{any} forcing function $f(t)$, not just the special forms required for undetermined coefficients.
+
+\begin{keyconceptbox}[title=Variation of Parameters Formula (Second-Order)]
+For $\ddot{y} + p(t)\dot{y} + q(t)y = f(t)$ with homogeneous solutions $y_1(t)$ and $y_2(t)$:
+\begin{equation}
+y_p(t) = -y_1(t)\int \frac{y_2(t)f(t)}{W(t)} \, \dd t + y_2(t)\int \frac{y_1(t)f(t)}{W(t)} \, \dd t
+\end{equation}
+where $W(t) = y_1\dot{y}_2 - \dot{y}_1 y_2$ is the \textbf{Wronskian}.
+\end{keyconceptbox}
+
+For constant-coefficient equations, the Wronskian is constant (or a simple exponential), making the integrals more tractable.
+
+\begin{practicalbox}[title=When to Use Each Method]
+\begin{itemize}
+    \item \textbf{Undetermined coefficients:} Use when forcing is polynomial, exponential, sine/cosine, or products thereof. Faster and simpler.
+    \item \textbf{Variation of parameters:} Use when forcing is more complex (e.g., $\tan t$, $\sec t$, arbitrary functions). Always works but integrals may be difficult.
+    \item \textbf{Laplace transforms:} Often the easiest approach for control systems (Chapter~\ref{ch:laplace}). Handles initial conditions automatically.
+\end{itemize}
+\end{practicalbox}
+
+% ============================================================================
+\section{Phase Plane Analysis}
+\label{sec:phase_plane}
+
+The phase plane provides a geometric visualization of second-order system behavior without explicitly solving the differential equation.
+
+\begin{definitionbox}[title=Definition: Phase Portrait]
+For a second-order system written as two first-order equations:
+\begin{align}
+\dot{x}_1 &= f_1(x_1, x_2) \\
+\dot{x}_2 &= f_2(x_1, x_2)
+\end{align}
+The \textbf{phase portrait} is the collection of all trajectories in the $(x_1, x_2)$ plane, showing how the system state evolves from different initial conditions.
+\end{definitionbox}
+
+For linear systems $\dot{\vecx} = \mA\vecx$, the eigenvalues of $\mA$ determine the type of equilibrium:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Eigenvalues} & \textbf{Equilibrium Type} & \textbf{Stability} \\
+\midrule
+$\lambda_1, \lambda_2 < 0$ (real, distinct) & Stable node & Asymptotically stable \\
+$\lambda_1, \lambda_2 > 0$ (real, distinct) & Unstable node & Unstable \\
+$\lambda_1 < 0 < \lambda_2$ (real, opposite signs) & Saddle point & Unstable \\
+$\lambda = \sigma \pm \jj\omega$, $\sigma < 0$ & Stable focus (spiral) & Asymptotically stable \\
+$\lambda = \sigma \pm \jj\omega$, $\sigma > 0$ & Unstable focus (spiral) & Unstable \\
+$\lambda = \pm\jj\omega$ (pure imaginary) & Center & Marginally stable \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\input{figures/fig_ch00_phase_portrait.tex}
+
+% ============================================================================
+\section{Stability Analysis}
+\label{sec:stability}
+
+Stability is a fundamental property in control systems. A system is stable if its response remains bounded and eventually settles to equilibrium.
+
+\subsection{Definitions of Stability}
+
+\begin{definitionbox}[title=Definition: Lyapunov Stability]
+An equilibrium point $\vecx_e$ is \textbf{Lyapunov stable} (or stable in the sense of Lyapunov) if, for every $\epsilon > 0$, there exists $\delta > 0$ such that:
+\begin{equation}
+\|\vecx(0) - \vecx_e\| < \delta \Rightarrow \|\vecx(t) - \vecx_e\| < \epsilon \quad \forall t \geq 0
+\end{equation}
+In other words, trajectories starting close to equilibrium remain close.
+\end{definitionbox}
+
+\begin{definitionbox}[title=Definition: Asymptotic Stability]
+An equilibrium is \textbf{asymptotically stable} if it is Lyapunov stable AND:
+\begin{equation}
+\lim_{t \to \infty} \vecx(t) = \vecx_e
+\end{equation}
+for all initial conditions in some neighborhood of $\vecx_e$. The system not only stays close but converges to equilibrium.
+\end{definitionbox}
+
+\begin{definitionbox}[title=Definition: BIBO Stability]
+A system is \textbf{Bounded-Input Bounded-Output (BIBO) stable} if every bounded input produces a bounded output:
+\begin{equation}
+|u(t)| \leq M_u < \infty \quad \forall t \geq 0 \Rightarrow |y(t)| \leq M_y < \infty \quad \forall t \geq 0
+\end{equation}
+This is the most common stability notion for input-output (transfer function) descriptions.
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Stability Criterion for LTI Systems]
+For a linear time-invariant (LTI) system, the following are equivalent:
+\begin{enumerate}
+    \item The system is asymptotically stable
+    \item All eigenvalues of $\mA$ have negative real parts: $\Real(\lambda_i) < 0$
+    \item All poles of the transfer function lie in the open left half-plane
+    \item The impulse response decays to zero: $\lim_{t\to\infty} h(t) = 0$
+\end{enumerate}
+For BIBO stability, the additional requirement is that there are no pole-zero cancellations in the right half-plane.
+\end{keyconceptbox}
+
+\subsection{Pole Locations and System Response}
+
+The location of poles (eigenvalues) in the complex plane directly determines system behavior:
+
+\begin{itemize}
+    \item \textbf{Real part $\sigma = \Real(\lambda)$:} Determines stability and decay/growth rate
+    \begin{itemize}
+        \item $\sigma < 0$: Decaying response (stable)
+        \item $\sigma = 0$: Sustained oscillation or constant (marginally stable)
+        \item $\sigma > 0$: Growing response (unstable)
+    \end{itemize}
+
+    \item \textbf{Imaginary part $\omega = \Imag(\lambda)$:} Determines oscillation frequency
+    \begin{itemize}
+        \item $\omega = 0$: No oscillation (real pole)
+        \item $\omega \neq 0$: Oscillation at frequency $|\omega|$ rad/s
+    \end{itemize}
+
+    \item \textbf{Distance from origin $|\lambda|$:} Determines speed of response
+    \begin{itemize}
+        \item Larger $|\lambda|$: Faster response
+        \item Smaller $|\lambda|$: Slower response (dominant pole)
+    \end{itemize}
+\end{itemize}
+
+\input{figures/fig_ch00_stability_regions.tex}
+
+\subsection{The Routh-Hurwitz Criterion (Preview)}
+
+For higher-order systems, directly computing eigenvalues can be difficult. The \textbf{Routh-Hurwitz criterion} provides an algebraic test for stability without solving the characteristic equation.
+
+\begin{keyconceptbox}[title=Routh-Hurwitz Stability Criterion]
+For a characteristic polynomial:
+\begin{equation}
+a_n s^n + a_{n-1}s^{n-1} + \cdots + a_1 s + a_0 = 0
+\end{equation}
+\textbf{Necessary conditions} (quick check):
+\begin{enumerate}
+    \item All coefficients $a_i$ must be present (no missing terms)
+    \item All coefficients must have the same sign (typically all positive)
+\end{enumerate}
+If either condition fails, the system is unstable.
+
+The \textbf{sufficient condition} requires constructing the Routh array and checking that all entries in the first column have the same sign. The number of sign changes equals the number of right half-plane poles.
+
+\textit{Note: The complete Routh-Hurwitz procedure is covered in detail in the classical control chapters.}
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example: Quick Stability Check]
+Determine if the following characteristic polynomials represent stable systems:
+
+\textbf{(a)} $s^3 + 4s^2 + 6s + 4 = 0$
+
+All coefficients present and positive. Passes necessary conditions. (Routh array confirms stability: roots are $-2, -1\pm\jj$.)
+
+\textbf{(b)} $s^3 + 2s^2 + s + 8 = 0$
+
+All coefficients present and positive. Passes necessary conditions. However, Routh array reveals two RHP poles---\textbf{unstable}.
+
+\textbf{(c)} $s^4 + 2s^2 + 1 = 0$
+
+Missing $s^3$ and $s^1$ terms. Fails necessary condition---\textbf{unstable} (or marginally stable with imaginary axis poles).
+
+\textbf{(d)} $s^3 - 2s^2 + s + 4 = 0$
+
+Coefficient of $s^2$ is negative while others are positive. Sign inconsistency---\textbf{unstable}.
+\end{examplebox}
+
+\begin{warningbox}[title=Marginal Stability Warning]
+Systems with poles exactly on the imaginary axis ($\Real(\lambda) = 0$) are \textbf{marginally stable}:
+\begin{itemize}
+    \item Bounded response to bounded inputs only for some input types
+    \item Sustained oscillations (not decaying, not growing)
+    \item Any perturbation can push the system to instability
+    \item In practice, treat marginally stable systems as potentially unstable
+\end{itemize}
+\end{warningbox}
+
+% ============================================================================
 \section{Systems of First-Order ODEs}
 
 Any higher-order ODE can be written as a system of first-order equations. This is the \textbf{state-space} representation:
@@ -105,6 +571,22 @@ The solution is:
 \vecx(t) = \ee^{\mA t}\vecx(0) + \int_0^t \ee^{\mA(t-\tau)}\mB\vecu(\tau) \, \dd\tau
 \end{equation}
 
-where $\ee^{\mA t}$ is the \textbf{matrix exponential} (discussed in Section \ref{ch:linear_algebra}).
+where $\ee^{\mA t}$ is the \textbf{matrix exponential} (discussed in Chapter~\ref{ch:linear_algebra}).
+
+\begin{keyconceptbox}[title=Connection: Poles, Eigenvalues, and Stability]
+For a linear system, the following are all equivalent characterizations:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Representation} & \textbf{Stability Determined By} & \textbf{Condition} \\
+\midrule
+ODE: $a_n y^{(n)} + \cdots + a_0 y = f(t)$ & Roots of characteristic polynomial & $\Real(\lambda_i) < 0$ \\
+Transfer function: $G(s) = N(s)/D(s)$ & Poles (roots of $D(s)$) & $\Real(p_i) < 0$ \\
+State-space: $\dot{\vecx} = \mA\vecx$ & Eigenvalues of $\mA$ & $\Real(\lambda_i) < 0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+All three approaches yield the same stability conclusion for a given system.
+\end{keyconceptbox}
 
 % ============================================================================
