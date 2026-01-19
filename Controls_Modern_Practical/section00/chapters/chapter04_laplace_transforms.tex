@@ -1,0 +1,143 @@
+\chapter{Laplace Transforms}
+\label{ch:laplace}
+% ============================================================================
+
+The Laplace transform converts differential equations into algebraic equations, making system analysis much simpler.
+
+\section{Definition}
+
+\begin{definitionbox}[title=Definition 0.2: Laplace Transform]
+The \textbf{Laplace transform} of a function $f(t)$ defined for $t \geq 0$ is:
+\begin{equation}
+F(s) = \Laplace\{f(t)\} = \int_0^\infty f(t)\ee^{-st} \, \dd t
+\end{equation}
+where $s = \sigma + \jj\omega$ is a complex variable.
+\end{definitionbox}
+
+The \textbf{inverse Laplace transform} is:
+\begin{equation}
+f(t) = \iLaplace\{F(s)\} = \frac{1}{2\pi\jj} \int_{\sigma-\jj\infty}^{\sigma+\jj\infty} F(s)\ee^{st} \, \dd s
+\end{equation}
+
+In practice, we use tables and partial fraction expansion rather than direct integration.
+
+\section{Common Laplace Transform Pairs}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Signal Name} & $f(t)$ for $t \geq 0$ & $F(s)$ \\
+\midrule
+Impulse & $\delta(t)$ & $1$ \\
+Unit step & $u(t) = 1$ & $\frac{1}{s}$ \\
+Ramp & $t$ & $\frac{1}{s^2}$ \\
+Parabolic & $t^2$ & $\frac{2}{s^3}$ \\
+Power & $t^n$ & $\frac{n!}{s^{n+1}}$ \\
+Exponential & $\ee^{-at}$ & $\frac{1}{s+a}$ \\
+Decaying ramp & $t\ee^{-at}$ & $\frac{1}{(s+a)^2}$ \\
+Sine & $\sin\omega t$ & $\frac{\omega}{s^2+\omega^2}$ \\
+Cosine & $\cos\omega t$ & $\frac{s}{s^2+\omega^2}$ \\
+Damped sine & $\ee^{-at}\sin\omega t$ & $\frac{\omega}{(s+a)^2+\omega^2}$ \\
+Damped cosine & $\ee^{-at}\cos\omega t$ & $\frac{s+a}{(s+a)^2+\omega^2}$ \\
+\bottomrule
+\end{tabular}
+\caption{Common Laplace transform pairs.}
+\label{tab:laplace_pairs}
+\end{table}
+
+\section{Laplace Transform Properties}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Time Domain} & \textbf{$s$-Domain} \\
+\midrule
+Linearity & $af(t) + bg(t)$ & $aF(s) + bG(s)$ \\
+Differentiation & $\frac{\dd f}{\dd t}$ & $sF(s) - f(0^-)$ \\
+Second derivative & $\frac{\dd^2 f}{\dd t^2}$ & $s^2F(s) - sf(0^-) - f'(0^-)$ \\
+$n$th derivative & $\frac{\dd^n f}{\dd t^n}$ & $s^nF(s) - \sum_{k=0}^{n-1} s^{n-1-k}f^{(k)}(0^-)$ \\
+Integration & $\int_0^t f(\tau)\,\dd\tau$ & $\frac{F(s)}{s}$ \\
+Time delay & $f(t-\tau)u(t-\tau)$ & $\ee^{-\tau s}F(s)$ \\
+Frequency shift & $\ee^{-at}f(t)$ & $F(s+a)$ \\
+Time scaling & $f(at)$ & $\frac{1}{a}F\left(\frac{s}{a}\right)$ \\
+Convolution & $f(t) \conv g(t)$ & $F(s)G(s)$ \\
+Initial value & $\lim_{t\to 0^+} f(t)$ & $\lim_{s\to\infty} sF(s)$ \\
+Final value & $\lim_{t\to\infty} f(t)$ & $\lim_{s\to 0} sF(s)$ \\
+\bottomrule
+\end{tabular}
+\caption{Laplace transform properties.}
+\label{tab:laplace_properties}
+\end{table}
+
+\begin{warningbox}
+The \textbf{Final Value Theorem} only applies if all poles of $sF(s)$ are in the left half-plane (LHP). If any poles are on the imaginary axis or in the right half-plane, the theorem gives incorrect results.
+\end{warningbox}
+
+\section{Partial Fraction Expansion}
+
+To find the inverse Laplace transform, we decompose rational functions into simpler terms.
+
+\subsubsection{Distinct Real Poles}
+\begin{equation}
+\frac{N(s)}{(s+p_1)(s+p_2)\cdots(s+p_n)} = \frac{A_1}{s+p_1} + \frac{A_2}{s+p_2} + \cdots + \frac{A_n}{s+p_n}
+\end{equation}
+
+The residue $A_i$ is found by:
+\begin{equation}
+A_i = \lim_{s \to -p_i} (s + p_i) F(s)
+\end{equation}
+
+\subsubsection{Repeated Poles}
+For a pole of multiplicity $m$ at $s = -p$:
+\begin{equation}
+\frac{N(s)}{(s+p)^m} = \frac{A_1}{s+p} + \frac{A_2}{(s+p)^2} + \cdots + \frac{A_m}{(s+p)^m}
+\end{equation}
+
+\subsubsection{Complex Conjugate Poles}
+For poles at $s = -\sigma \pm \jj\omega$:
+\begin{equation}
+\frac{N(s)}{(s+\sigma)^2+\omega^2} = \frac{As + B}{(s+\sigma)^2+\omega^2}
+\end{equation}
+
+\begin{examplebox}[title=Example 0.3: Partial Fraction Expansion]
+Find the inverse Laplace transform of:
+\begin{equation}
+F(s) = \frac{2s + 3}{(s+1)(s+2)}
+\end{equation}
+
+\textbf{Solution:}
+\begin{equation}
+F(s) = \frac{A}{s+1} + \frac{B}{s+2}
+\end{equation}
+
+Residues:
+\begin{align}
+A &= \lim_{s \to -1} (s+1) \cdot \frac{2s+3}{(s+1)(s+2)} = \frac{2(-1)+3}{-1+2} = 1 \\
+B &= \lim_{s \to -2} (s+2) \cdot \frac{2s+3}{(s+1)(s+2)} = \frac{2(-2)+3}{-2+1} = 1
+\end{align}
+
+Therefore:
+\begin{equation}
+f(t) = \ee^{-t} + \ee^{-2t}, \quad t \geq 0
+\end{equation}
+\end{examplebox}
+
+\section{Transfer Functions}
+
+\begin{definitionbox}[title=Definition 0.3: Transfer Function]
+The \textbf{transfer function} $G(s)$ of a linear time-invariant system is the ratio of the Laplace transform of the output to the Laplace transform of the input, assuming zero initial conditions:
+\begin{equation}
+G(s) = \frac{Y(s)}{U(s)}
+\end{equation}
+\end{definitionbox}
+
+Transfer functions are typically written as:
+\begin{equation}
+G(s) = \frac{b_ms^m + b_{m-1}s^{m-1} + \cdots + b_1s + b_0}{a_ns^n + a_{n-1}s^{n-1} + \cdots + a_1s + a_0} = K\frac{\prod_{i=1}^m (s-z_i)}{\prod_{j=1}^n (s-p_j)}
+\end{equation}
+
+where $z_i$ are the \textbf{zeros} and $p_j$ are the \textbf{poles} of the transfer function.
+
+% ============================================================================

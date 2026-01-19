@@ -1,0 +1,109 @@
+\chapter{Discrete-Time Mathematics}
+\label{ch:discrete}
+% ============================================================================
+
+Digital control systems operate on sampled data, requiring discrete-time analysis.
+
+\section{Sequences and Difference Equations}
+
+A \textbf{sequence} is a function defined on integers: $x[n]$ or $x_n$ for $n \in \mathbb{Z}$.
+
+\subsubsection{First-order difference equation}
+\begin{equation}
+x[n+1] = ax[n] + bu[n]
+\end{equation}
+
+Solution:
+\begin{equation}
+x[n] = a^n x[0] + \sum_{k=0}^{n-1} a^{n-1-k} bu[k]
+\end{equation}
+
+\section{The Z-Transform}
+
+\begin{definitionbox}[title=Definition 0.8: Z-Transform]
+The \textbf{Z-transform} of a sequence $x[n]$ is:
+\begin{equation}
+X(z) = \ZT\{x[n]\} = \sum_{n=0}^{\infty} x[n] z^{-n}
+\end{equation}
+\end{definitionbox}
+
+\subsubsection{Common Z-Transform Pairs}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Sequence} & $x[n]$ for $n \geq 0$ & $X(z)$ \\
+\midrule
+Unit impulse & $\delta[n]$ & $1$ \\
+Unit step & $u[n] = 1$ & $\frac{z}{z-1}$ \\
+Ramp & $n$ & $\frac{z}{(z-1)^2}$ \\
+Exponential & $a^n$ & $\frac{z}{z-a}$ \\
+Exponential ramp & $na^n$ & $\frac{az}{(z-a)^2}$ \\
+Sine & $\sin(\omega n)$ & $\frac{z\sin\omega}{z^2 - 2z\cos\omega + 1}$ \\
+Cosine & $\cos(\omega n)$ & $\frac{z(z-\cos\omega)}{z^2 - 2z\cos\omega + 1}$ \\
+\bottomrule
+\end{tabular}
+\caption{Common Z-transform pairs.}
+\label{tab:z_transform}
+\end{table}
+
+\subsubsection{Z-Transform Properties}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Sequence} & \textbf{Z-Domain} \\
+\midrule
+Linearity & $ax[n] + by[n]$ & $aX(z) + bY(z)$ \\
+Time shift (delay) & $x[n-k]$ & $z^{-k}X(z)$ \\
+Time advance & $x[n+1]$ & $zX(z) - zx[0]$ \\
+Convolution & $x[n] \conv y[n]$ & $X(z)Y(z)$ \\
+Initial value & $x[0]$ & $\lim_{z\to\infty} X(z)$ \\
+Final value & $\lim_{n\to\infty} x[n]$ & $\lim_{z\to 1}(z-1)X(z)$ \\
+\bottomrule
+\end{tabular}
+\caption{Z-transform properties.}
+\label{tab:z_properties}
+\end{table}
+
+\section{Relationship Between s-Domain and z-Domain}
+
+For a sampled signal with sampling period $T$:
+\begin{equation}
+z = \ee^{sT}
+\end{equation}
+
+Therefore:
+\begin{equation}
+s = \frac{1}{T}\ln z
+\end{equation}
+
+\begin{keyconceptbox}[title=Stability in z-Domain]
+A discrete-time system is stable if and only if all poles of its transfer function $G(z)$ lie \textbf{inside the unit circle} $|z| < 1$.
+\end{keyconceptbox}
+
+The imaginary axis in the $s$-plane maps to the unit circle in the $z$-plane:
+\begin{itemize}
+    \item Left half-plane ($\Real(s) < 0$) $\to$ inside unit circle ($|z| < 1$)
+    \item Right half-plane ($\Real(s) > 0$) $\to$ outside unit circle ($|z| > 1$)
+    \item $s = 0$ $\to$ $z = 1$
+    \item $s = \pm\jj\omega_s/2$ $\to$ $z = -1$ (Nyquist frequency)
+\end{itemize}
+
+\section{Discrete-Time State-Space}
+
+The discrete-time state-space representation:
+\begin{align}
+\vecx[k+1] &= \mA_d\vecx[k] + \mB_d\vecu[k] \\
+\vecy[k] &= \mC_d\vecx[k] + \mD_d\vecu[k]
+\end{align}
+
+Conversion from continuous-time (exact discretization with zero-order hold):
+\begin{align}
+\mA_d &= \ee^{\mA T} \\
+\mB_d &= \int_0^T \ee^{\mA\tau}\,\dd\tau \cdot \mB = \mA^{-1}(\ee^{\mA T} - \mI)\mB
+\end{align}
+
+% ============================================================================
