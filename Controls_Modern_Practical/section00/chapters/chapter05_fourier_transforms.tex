@@ -23,19 +23,138 @@ f(t) = \sum_{n=-\infty}^{\infty} c_n \ee^{\jj n \omega_0 t}, \quad \omega_0 = \f
 
 where $c_n = \frac{1}{T} \int_0^T f(t) \ee^{-\jj n \omega_0 t} \, \dd t$
 
+\input{figures/fig_ch00_fourier_series.tex}
+
+\begin{examplebox}[title=Example: Fourier Series of a Square Wave]
+Consider a square wave with period $T = 2\pi$ and amplitude $A$:
+\[
+f(t) = \begin{cases}
+A & 0 < t < \pi \\
+-A & \pi < t < 2\pi
+\end{cases}
+\]
+
+\textbf{Step 1: Compute $a_0$}
+\[
+a_0 = \frac{1}{2\pi} \int_0^{2\pi} f(t) \, \dd t = \frac{1}{2\pi} \left[ \int_0^{\pi} A \, \dd t + \int_{\pi}^{2\pi} (-A) \, \dd t \right] = \frac{1}{2\pi}(A\pi - A\pi) = 0
+\]
+
+\textbf{Step 2: Compute $a_n$}
+
+Since $f(t)$ is an odd function about $t = \pi$, all cosine coefficients vanish: $a_n = 0$ for all $n$.
+
+\textbf{Step 3: Compute $b_n$}
+\begin{align*}
+b_n &= \frac{2}{2\pi} \int_0^{2\pi} f(t) \sin(nt) \, \dd t \\
+&= \frac{1}{\pi} \left[ \int_0^{\pi} A\sin(nt) \, \dd t + \int_{\pi}^{2\pi} (-A)\sin(nt) \, \dd t \right] \\
+&= \frac{A}{\pi} \left[ -\frac{\cos(nt)}{n} \Big|_0^{\pi} + \frac{\cos(nt)}{n} \Big|_{\pi}^{2\pi} \right] \\
+&= \frac{A}{n\pi} \left[ (-\cos(n\pi) + 1) + (\cos(2n\pi) - \cos(n\pi)) \right] \\
+&= \frac{A}{n\pi} \left[ 2 - 2\cos(n\pi) \right] = \frac{2A}{n\pi}(1 - (-1)^n)
+\end{align*}
+
+For $n$ odd: $b_n = \dfrac{4A}{n\pi}$. For $n$ even: $b_n = 0$.
+
+\textbf{Result:} The Fourier series of the square wave is:
+\begin{equation}
+\boxed{f(t) = \frac{4A}{\pi} \left( \sin(t) + \frac{1}{3}\sin(3t) + \frac{1}{5}\sin(5t) + \cdots \right) = \frac{4A}{\pi} \sum_{n=1,3,5,\ldots}^{\infty} \frac{\sin(nt)}{n}}
+\end{equation}
+
+This shows that a square wave contains only odd harmonics, with amplitudes decreasing as $1/n$.
+\end{examplebox}
+
+\begin{keyconceptbox}[title=Gibbs Phenomenon]
+When approximating a discontinuous function with a finite Fourier series, overshoot occurs near discontinuities. This overshoot is approximately 9\% of the jump magnitude and does not diminish as more terms are added---it only becomes narrower. This is known as the \textbf{Gibbs phenomenon}.
+\end{keyconceptbox}
+
 \section{Fourier Transform}
 
 For non-periodic functions, the Fourier transform extends the series to continuous frequencies:
 
-\begin{definitionbox}[title=Definition 0.4: Fourier Transform]
+\begin{definitionbox}[title=Definition 5.1: Fourier Transform]
 \begin{align}
 F(\omega) &= \Fourier\{f(t)\} = \int_{-\infty}^{\infty} f(t) \ee^{-\jj\omega t} \, \dd t \\
 f(t) &= \iFourier\{F(\omega)\} = \frac{1}{2\pi} \int_{-\infty}^{\infty} F(\omega) \ee^{\jj\omega t} \, \dd\omega
 \end{align}
 \end{definitionbox}
 
+\input{figures/fig_ch00_spectrum_visualization.tex}
+
+\begin{examplebox}[title=Example: Fourier Transform of a Decaying Exponential]
+Find the Fourier transform of $f(t) = \ee^{-at}u(t)$ where $a > 0$ and $u(t)$ is the unit step function.
+
+\textbf{Solution:}
+\begin{align*}
+F(\omega) &= \int_{-\infty}^{\infty} \ee^{-at}u(t) \ee^{-\jj\omega t} \, \dd t \\
+&= \int_{0}^{\infty} \ee^{-at} \ee^{-\jj\omega t} \, \dd t \\
+&= \int_{0}^{\infty} \ee^{-(a + \jj\omega)t} \, \dd t \\
+&= \left[ \frac{\ee^{-(a + \jj\omega)t}}{-(a + \jj\omega)} \right]_{0}^{\infty}
+\end{align*}
+
+Since $a > 0$, the exponential vanishes as $t \to \infty$:
+\[
+F(\omega) = 0 - \frac{1}{-(a + \jj\omega)} = \frac{1}{a + \jj\omega}
+\]
+
+\textbf{Result:}
+\begin{equation}
+\boxed{\Fourier\{\ee^{-at}u(t)\} = \frac{1}{a + \jj\omega}}
+\end{equation}
+
+\textbf{Magnitude and Phase:}
+\[
+|F(\omega)| = \frac{1}{\sqrt{a^2 + \omega^2}}, \quad \angle F(\omega) = -\arctan\left(\frac{\omega}{a}\right)
+\]
+
+This result shows that a decaying exponential has a low-pass frequency spectrum: low frequencies pass through with little attenuation, while high frequencies are attenuated.
+\end{examplebox}
+
+\subsection{Fourier Transform Properties}
+
+The Fourier transform possesses several important properties that make it a powerful tool for signal analysis:
+
+\begin{table}[htbp]
+\centering
+\caption{Fourier Transform Properties}
+\label{tab:fourier_properties}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Property} & \textbf{Time Domain} & \textbf{Frequency Domain} \\
+\midrule
+Linearity & $af(t) + bg(t)$ & $aF(\omega) + bG(\omega)$ \\[6pt]
+Time Shifting & $f(t - t_0)$ & $F(\omega)\ee^{-\jj\omega t_0}$ \\[6pt]
+Frequency Shifting & $f(t)\ee^{\jj\omega_0 t}$ & $F(\omega - \omega_0)$ \\[6pt]
+Time Scaling & $f(at)$ & $\dfrac{1}{|a|}F\left(\dfrac{\omega}{a}\right)$ \\[6pt]
+Time Reversal & $f(-t)$ & $F(-\omega)$ \\[6pt]
+Differentiation & $\dfrac{\dd f}{\dd t}$ & $\jj\omega F(\omega)$ \\[6pt]
+Integration & $\displaystyle\int_{-\infty}^{t} f(\tau)\,\dd\tau$ & $\dfrac{F(\omega)}{\jj\omega} + \pi F(0)\delta(\omega)$ \\[6pt]
+Convolution & $f(t) \conv g(t)$ & $F(\omega) \cdot G(\omega)$ \\[6pt]
+Modulation & $f(t) \cdot g(t)$ & $\dfrac{1}{2\pi}F(\omega) \conv G(\omega)$ \\[6pt]
+Parseval's Theorem & $\displaystyle\int_{-\infty}^{\infty}|f(t)|^2\,\dd t$ & $\dfrac{1}{2\pi}\displaystyle\int_{-\infty}^{\infty}|F(\omega)|^2\,\dd\omega$ \\[6pt]
+Duality & $F(t)$ & $2\pi f(-\omega)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{warningbox}[title=Convolution vs. Modulation]
+Note the duality between convolution and modulation:
+\begin{itemize}
+    \item Convolution in time $\Leftrightarrow$ Multiplication in frequency
+    \item Multiplication in time $\Leftrightarrow$ Convolution in frequency (scaled by $1/2\pi$)
+\end{itemize}
+This duality is fundamental to understanding filtering, modulation, and signal processing.
+\end{warningbox}
+
 \subsubsection{Relationship to Laplace Transform}
 For causal signals, $F(\omega) = F(s)|_{s=\jj\omega}$ when the Laplace transform converges on the imaginary axis.
+
+\begin{keyconceptbox}[title=When Does the Fourier Transform Exist?]
+The Fourier transform of $f(t)$ exists if:
+\begin{enumerate}
+    \item $f(t)$ is absolutely integrable: $\displaystyle\int_{-\infty}^{\infty}|f(t)|\,\dd t < \infty$, or
+    \item $f(t)$ is square integrable: $\displaystyle\int_{-\infty}^{\infty}|f(t)|^2\,\dd t < \infty$
+\end{enumerate}
+Functions like $\sin(\omega_0 t)$ or the unit step $u(t)$ do not satisfy these conditions, but their Fourier transforms can be defined using generalized functions (distributions) involving impulses $\delta(\omega)$.
+\end{keyconceptbox}
 
 \section{Frequency Response}
 
@@ -62,5 +181,141 @@ Bode plots display magnitude (in dB) and phase versus frequency (on a log scale)
 \end{equation}
 
 \input{figures/fig_ch00_bode_first_order.tex}
+
+\begin{examplebox}[title=Example: Drawing a Bode Plot from Frequency Response]
+Construct the Bode plot for the first-order low-pass filter:
+\[
+G(s) = \frac{K}{1 + s/\omega_c}
+\]
+where $K = 10$ (DC gain) and $\omega_c = 100$ rad/s (corner frequency).
+
+\textbf{Step 1: Find the frequency response}
+
+Substitute $s = \jj\omega$:
+\[
+G(\jj\omega) = \frac{K}{1 + \jj\omega/\omega_c} = \frac{10}{1 + \jj\omega/100}
+\]
+
+\textbf{Step 2: Calculate magnitude}
+\[
+|G(\jj\omega)| = \frac{K}{\sqrt{1 + (\omega/\omega_c)^2}} = \frac{10}{\sqrt{1 + (\omega/100)^2}}
+\]
+
+In decibels:
+\[
+|G(\jj\omega)|_{\text{dB}} = 20\log_{10}(K) - 20\log_{10}\sqrt{1 + (\omega/\omega_c)^2} = 20 - 10\log_{10}(1 + \omega^2/10000)
+\]
+
+\textbf{Step 3: Calculate phase}
+\[
+\angle G(\jj\omega) = -\arctan\left(\frac{\omega}{\omega_c}\right) = -\arctan\left(\frac{\omega}{100}\right)
+\]
+
+\textbf{Step 4: Asymptotic approximations}
+
+\underline{Magnitude:}
+\begin{itemize}
+    \item For $\omega \ll \omega_c$: $|G|_{\text{dB}} \approx 20\log_{10}(K) = 20$ dB (flat)
+    \item For $\omega \gg \omega_c$: $|G|_{\text{dB}} \approx 20\log_{10}(K) - 20\log_{10}(\omega/\omega_c)$ (slope: $-20$ dB/decade)
+    \item At $\omega = \omega_c$: $|G|_{\text{dB}} = 20 - 3 = 17$ dB (corner point, 3 dB below)
+\end{itemize}
+
+\underline{Phase:}
+\begin{itemize}
+    \item For $\omega \ll \omega_c/10$: $\angle G \approx 0^\circ$
+    \item At $\omega = \omega_c$: $\angle G = -45^\circ$
+    \item For $\omega \gg 10\omega_c$: $\angle G \approx -90^\circ$
+\end{itemize}
+
+\textbf{Result:} The Bode plot shows a flat response at low frequencies with 20 dB gain, rolling off at $-20$ dB/decade above the corner frequency, with phase shifting from $0^\circ$ to $-90^\circ$.
+\end{examplebox}
+
+\begin{keyconceptbox}[title=Standard Bode Plot Building Blocks]
+Any transfer function can be decomposed into these basic elements:
+\begin{enumerate}
+    \item \textbf{Constant gain $K$:} Flat magnitude at $20\log_{10}|K|$ dB, phase $0^\circ$ or $\pm 180^\circ$
+    \item \textbf{Poles/zeros at origin $(s)^{\pm n}$:} $\pm 20n$ dB/decade slope through 0 dB at $\omega = 1$, phase $\pm 90n^\circ$
+    \item \textbf{Real pole/zero $(1 + s/\omega_c)^{\pm 1}$:} $\pm 20$ dB/decade above $\omega_c$, phase change of $\pm 90^\circ$
+    \item \textbf{Complex poles/zeros:} Resonant peak/notch near $\omega_n$, phase change of $\pm 180^\circ$
+\end{enumerate}
+\end{keyconceptbox}
+
+\section{Discrete Fourier Transform and FFT}
+
+When working with sampled data, we use the Discrete Fourier Transform (DFT) instead of the continuous Fourier transform.
+
+\begin{definitionbox}[title=Definition 5.2: Discrete Fourier Transform (DFT)]
+For a sequence of $N$ samples $\{x[0], x[1], \ldots, x[N-1]\}$, the DFT is defined as:
+\begin{equation}
+X[k] = \sum_{n=0}^{N-1} x[n] \ee^{-\jj 2\pi kn/N}, \quad k = 0, 1, \ldots, N-1
+\end{equation}
+
+The inverse DFT (IDFT) recovers the original sequence:
+\begin{equation}
+x[n] = \frac{1}{N} \sum_{k=0}^{N-1} X[k] \ee^{\jj 2\pi kn/N}, \quad n = 0, 1, \ldots, N-1
+\end{equation}
+\end{definitionbox}
+
+\subsection{Connection to Continuous Fourier Transform}
+
+The DFT approximates the continuous Fourier transform at discrete frequencies. If the continuous signal $f(t)$ is sampled at rate $f_s = 1/T_s$ to produce $N$ samples:
+\begin{itemize}
+    \item The DFT frequency bins are spaced at $\Delta f = f_s/N$ Hz
+    \item The $k$-th DFT coefficient corresponds to frequency $f_k = k \cdot f_s/N$
+    \item The relationship is: $X[k] \approx T_s \cdot F(2\pi f_k)$ for band-limited signals
+\end{itemize}
+
+\input{figures/fig_ch00_nyquist_sampling.tex}
+
+\begin{warningbox}[title=Nyquist Sampling Theorem]
+To avoid aliasing, the sampling frequency must satisfy:
+\[
+f_s > 2 f_{\max}
+\]
+where $f_{\max}$ is the highest frequency component in the signal. The frequency $f_s/2$ is called the \textbf{Nyquist frequency}. Frequency components above the Nyquist frequency will ``fold back'' and appear as lower frequencies (aliasing).
+\end{warningbox}
+
+\subsection{Fast Fourier Transform (FFT)}
+
+Direct computation of the DFT requires $\mathcal{O}(N^2)$ operations. The \textbf{Fast Fourier Transform (FFT)} is an efficient algorithm that computes the DFT in $\mathcal{O}(N \log N)$ operations by exploiting symmetry and periodicity of the complex exponentials.
+
+\begin{keyconceptbox}[title=FFT Key Points]
+\begin{itemize}
+    \item The FFT computes the \textit{exact same result} as the DFT---it is not an approximation
+    \item Most efficient when $N$ is a power of 2 (e.g., 256, 512, 1024, 2048)
+    \item Speedup factor: For $N = 1024$, FFT is about 100$\times$ faster than direct DFT
+    \item The Cooley-Tukey algorithm (1965) is the most common FFT implementation
+    \item Modern libraries (FFTW, NumPy, MATLAB) use highly optimized FFT routines
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{practicalbox}[title=Using FFT in Practice]
+When using FFT for spectral analysis:
+\begin{enumerate}
+    \item \textbf{Zero-padding:} Add zeros to increase frequency resolution (interpolation in frequency domain)
+    \item \textbf{Windowing:} Apply a window function (Hanning, Hamming, Blackman) to reduce spectral leakage
+    \item \textbf{Averaging:} Use Welch's method (overlapping windowed segments) for noise reduction
+    \item \textbf{Scaling:} Normalize properly to get correct magnitude units
+\end{enumerate}
+
+In MATLAB/Python:
+\begin{lstlisting}[language=Python]
+import numpy as np
+from scipy.fft import fft, fftfreq
+
+# Sample signal
+fs = 1000  # Sampling frequency (Hz)
+t = np.arange(0, 1, 1/fs)
+x = np.sin(2*np.pi*50*t) + 0.5*np.sin(2*np.pi*120*t)
+
+# Compute FFT
+N = len(x)
+X = fft(x)
+freq = fftfreq(N, 1/fs)
+
+# Magnitude spectrum (single-sided)
+X_mag = 2*np.abs(X[:N//2])/N
+\end{lstlisting}
+\end{practicalbox}
 
 % ============================================================================
