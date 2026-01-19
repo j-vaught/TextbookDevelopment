@@ -5,38 +5,442 @@
 \chapter{System Analogies}
 \label{ch:analogies}
 
-Remarkably, systems from different physical domains often share the same mathematical structure. This allows us to transfer intuition and analysis techniques across domains.
+% ============================================================================
+\section{Introduction to Domain Analogies}
+\label{sec:analogy_intro}
+% ============================================================================
+
+Remarkably, systems from different physical domains---mechanical, electrical, thermal, hydraulic, and acoustic---often share the same mathematical structure. This deep connection arises because energy storage, energy dissipation, and power flow obey analogous relationships across domains. By recognizing these analogies, engineers can transfer intuition and analysis techniques developed in one domain to problems in another.
+
+The practical benefits of system analogies are substantial. Electrical engineers have developed powerful circuit analysis tools---mesh analysis, nodal analysis, impedance methods, and simulation software like SPICE---that can be applied to mechanical, thermal, and fluid systems once the appropriate analogous quantities are identified. Furthermore, many modern systems span multiple domains (electromechanical actuators, thermoelectric devices, piezoelectric sensors), and analogies provide a unified framework for their analysis.
+
+\begin{keyconceptbox}[title=Power-Conjugate Variables]
+In any physical domain, power is the product of two conjugate variables:
+\begin{equation}
+P = \text{(effort)} \times \text{(flow)}
+\end{equation}
+The \textbf{effort} variable (also called ``across'' variable) represents potential or driving force, while the \textbf{flow} variable (also called ``through'' variable) represents rate of motion or current. Identifying these conjugate pairs is the key to establishing analogies.
+\end{keyconceptbox}
+
+% ============================================================================
+\section{Force-Voltage Analogy}
+\label{sec:force_voltage}
+% ============================================================================
+
+The \textbf{force-voltage analogy} (also called the Maxwell analogy or impedance analogy) maps mechanical force to electrical voltage and mechanical velocity to electrical current. This is the most commonly used analogy in control systems because mechanical impedance directly corresponds to electrical impedance.
 
 \begin{table}[htbp]
 \centering
 \begin{tabular}{llll}
 \toprule
-\textbf{Concept} & \textbf{Mechanical (Trans.)} & \textbf{Electrical} & \textbf{Thermal} \\
+\textbf{Concept} & \textbf{Mechanical (Trans.)} & \textbf{Electrical} & \textbf{Units} \\
 \midrule
-Effort (across) & Force $F$ & Voltage $V$ & Temperature $T$ \\
-Flow (through) & Velocity $v$ & Current $i$ & Heat flow $\dot{Q}$ \\
-Resistance & Damper $b$ & Resistor $R$ & Thermal res. $R_t$ \\
-Capacitance & Spring $1/k$ & Capacitor $C$ & Thermal cap. $C_t$ \\
-Inductance & Mass $m$ & Inductor $L$ & --- \\
+Effort (across) & Force $F$ & Voltage $V$ & N, V \\
+Flow (through) & Velocity $v$ & Current $i$ & m/s, A \\
+Displacement & Position $x$ & Charge $q$ & m, C \\
+Momentum & Momentum $p = mv$ & Flux linkage $\lambda = Li$ & N$\cdot$s, Wb \\
+\midrule
+Resistance & Damper $b$ & Resistor $R$ & N$\cdot$s/m, $\Omega$ \\
+Capacitance & Compliance $1/k$ & Capacitor $C$ & m/N, F \\
+Inductance & Mass $m$ & Inductor $L$ & kg, H \\
 \bottomrule
 \end{tabular}
-\caption{Analogous quantities across physical domains (force-voltage analogy).}
-\label{tab:analogies}
+\caption{Force-voltage analogy: mechanical and electrical quantities.}
+\label{tab:force_voltage}
 \end{table}
 
-\begin{examplebox}[title=Example: Mass-Spring-Damper $\equiv$ RLC Circuit]
-The mechanical system:
+\subsection{Element Relationships}
+
+For the \textbf{mass} (stores kinetic energy):
+\begin{equation}
+F = m\frac{\dd v}{\dd t} \quad \longleftrightarrow \quad V = L\frac{\dd i}{\dd t}
+\end{equation}
+
+For the \textbf{spring} (stores potential energy):
+\begin{equation}
+F = kx = k\int v \, \dd t \quad \longleftrightarrow \quad V = \frac{1}{C}\int i \, \dd t = \frac{q}{C}
+\end{equation}
+
+For the \textbf{damper} (dissipates energy):
+\begin{equation}
+F = bv \quad \longleftrightarrow \quad V = Ri
+\end{equation}
+
+\subsection{Series and Parallel Connections}
+
+In the force-voltage analogy, elements connected in \textbf{series mechanically} (same velocity) correspond to elements in \textbf{parallel electrically} (same current). Conversely, elements in \textbf{parallel mechanically} (same force) correspond to elements in \textbf{series electrically} (same voltage).
+
+\begin{examplebox}[title=Example 5.1: Mass-Spring-Damper to Series RLC Circuit]
+Consider a mass-spring-damper system with the equation of motion:
 \begin{equation}
 m\ddot{x} + b\dot{x} + kx = F(t)
 \end{equation}
 
-is mathematically identical to the series RLC circuit:
+Substituting $v = \dot{x}$ and integrating the spring term:
 \begin{equation}
-L\ddot{q} + R\dot{q} + \frac{1}{C}q = V(t)
+m\frac{\dd v}{\dd t} + bv + k\int v \, \dd t = F(t)
 \end{equation}
 
-Both have the same transfer function form:
+This is mathematically identical to the series RLC circuit equation:
 \begin{equation}
-G(s) = \frac{1}{ms^2 + bs + k} \equiv \frac{1}{Ls^2 + Rs + 1/C}
+L\frac{\dd i}{\dd t} + Ri + \frac{1}{C}\int i \, \dd t = V(t)
+\end{equation}
+
+The analogous parameters are:
+\begin{center}
+\begin{tabular}{rcl}
+$m = 2$ kg & $\longleftrightarrow$ & $L = 2$ H \\
+$b = 8$ N$\cdot$s/m & $\longleftrightarrow$ & $R = 8$ $\Omega$ \\
+$k = 50$ N/m & $\longleftrightarrow$ & $C = 1/50 = 0.02$ F
+\end{tabular}
+\end{center}
+
+Both systems have the same transfer function form:
+\begin{equation}
+G(s) = \frac{V(s)/X(s)}{F(s)/V(s)} = \frac{1}{2s^2 + 8s + 50}
+\end{equation}
+
+with natural frequency $\omega_n = 5$ rad/s and damping ratio $\zeta = 0.4$.
+\end{examplebox}
+
+% ============================================================================
+\section{Force-Current Analogy}
+\label{sec:force_current}
+% ============================================================================
+
+The \textbf{force-current analogy} (also called the Firestone analogy or mobility analogy) maps mechanical force to electrical current and velocity to voltage. While less intuitive, this analogy preserves the topology of interconnections: series mechanical connections map to series electrical connections.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Concept} & \textbf{Mechanical (Trans.)} & \textbf{Electrical} & \textbf{Units} \\
+\midrule
+Effort (across) & Velocity $v$ & Voltage $V$ & m/s, V \\
+Flow (through) & Force $F$ & Current $i$ & N, A \\
+\midrule
+Resistance & Compliance $1/b$ & Resistor $R$ & m/(N$\cdot$s), $\Omega$ \\
+Capacitance & Mass $m$ & Capacitor $C$ & kg, F \\
+Inductance & Compliance $1/k$ & Inductor $L$ & m/N, H \\
+\bottomrule
+\end{tabular}
+\caption{Force-current analogy: mechanical and electrical quantities.}
+\label{tab:force_current}
+\end{table}
+
+\subsection{Element Relationships}
+
+For the \textbf{mass}:
+\begin{equation}
+v = \frac{1}{m}\int F \, \dd t \quad \longleftrightarrow \quad V = \frac{1}{C}\int i \, \dd t
+\end{equation}
+
+For the \textbf{spring}:
+\begin{equation}
+v = \frac{1}{k}\frac{\dd F}{\dd t} \quad \longleftrightarrow \quad V = L\frac{\dd i}{\dd t}
+\end{equation}
+
+For the \textbf{damper}:
+\begin{equation}
+v = \frac{F}{b} \quad \longleftrightarrow \quad V = Ri
+\end{equation}
+
+\begin{keyconceptbox}[title=Choosing the Right Analogy]
+\textbf{Force-voltage analogy:} Use when you want mechanical impedance to equal electrical impedance. Preferred for impedance matching problems and when using network analysis tools.
+
+\textbf{Force-current analogy:} Use when you want to preserve circuit topology (series $\leftrightarrow$ series, parallel $\leftrightarrow$ parallel). Preferred when physical layout matters or when using bond graph methods.
+\end{keyconceptbox}
+
+% ============================================================================
+\section{Impedance Methods for Multi-Domain Systems}
+\label{sec:impedance}
+% ============================================================================
+
+The concept of \textbf{impedance}---the ratio of effort to flow in the Laplace domain---provides a powerful unified framework for analyzing systems across domains.
+
+\subsection{Mechanical Impedance}
+
+For translational mechanical elements, the mechanical impedance $Z_m(s)$ is defined as:
+\begin{equation}
+Z_m(s) = \frac{F(s)}{V(s)}
+\end{equation}
+
+where $V(s) = sX(s)$ is the Laplace transform of velocity.
+
+\begin{definitionbox}[title=Mechanical Impedances]
+\begin{align}
+\text{Mass:} \quad Z_m(s) &= ms \label{eq:Zm_mass} \\
+\text{Damper:} \quad Z_m(s) &= b \label{eq:Zm_damper} \\
+\text{Spring:} \quad Z_m(s) &= \frac{k}{s} \label{eq:Zm_spring}
+\end{align}
+\end{definitionbox}
+
+These combine exactly like electrical impedances:
+\begin{itemize}
+    \item \textbf{Series connection} (elements sharing the same velocity): $Z_{\text{total}} = Z_1 + Z_2 + \cdots$
+    \item \textbf{Parallel connection} (elements sharing the same force): $\frac{1}{Z_{\text{total}}} = \frac{1}{Z_1} + \frac{1}{Z_2} + \cdots$
+\end{itemize}
+
+\begin{examplebox}[title=Example 5.2: Impedance Analysis of a Speaker System]
+A loudspeaker consists of a voice coil (electrical) driving a cone (mechanical) coupled to an acoustic load. The mechanical subsystem has:
+\begin{itemize}
+    \item Cone mass: $m = 0.015$ kg
+    \item Suspension compliance (inverse stiffness): $C_m = 1/k = 0.001$ m/N
+    \item Mechanical damping: $R_m = b = 2$ N$\cdot$s/m
+\end{itemize}
+
+The total mechanical impedance is:
+\begin{equation}
+Z_m(s) = ms + R_m + \frac{1}{C_m s} = 0.015s + 2 + \frac{1000}{s}
+\end{equation}
+
+At a driving frequency $\omega$, replacing $s = \jj\omega$:
+\begin{equation}
+Z_m(\jj\omega) = \jj(0.015\omega) + 2 - \jj\frac{1000}{\omega}
+\end{equation}
+
+The mechanical resonance occurs when the imaginary part vanishes:
+\begin{equation}
+0.015\omega_0 = \frac{1000}{\omega_0} \quad \Rightarrow \quad \omega_0 = \sqrt{\frac{1000}{0.015}} = 258 \text{ rad/s} = 41 \text{ Hz}
+\end{equation}
+
+At resonance, the impedance is purely resistive: $Z_m(\jj\omega_0) = R_m = 2$ N$\cdot$s/m, and the cone moves with maximum velocity for a given force.
+\end{examplebox}
+
+\subsection{Electrical Equivalent Circuits}
+
+Using the force-voltage analogy, any mechanical system can be represented as an equivalent electrical circuit. This allows powerful circuit simulation tools to analyze mechanical dynamics.
+
+\begin{examplebox}[title=Example 5.3: Quarter-Car Electrical Equivalent]
+The quarter-car suspension model (sprung mass $m_s$, unsprung mass $m_u$, suspension stiffness $k_s$, damping $b_s$, tire stiffness $k_t$) can be represented as an equivalent electrical circuit.
+
+Using the force-voltage analogy with the following correspondences:
+\begin{center}
+\begin{tabular}{rcl}
+Road velocity $\dot{x}_r$ & $\longleftrightarrow$ & Voltage source $V_r$ \\
+Body mass $m_s$ & $\longleftrightarrow$ & Inductor $L_s = m_s$ \\
+Wheel mass $m_u$ & $\longleftrightarrow$ & Inductor $L_u = m_u$ \\
+Suspension spring $k_s$ & $\longleftrightarrow$ & Capacitor $C_s = 1/k_s$ \\
+Tire spring $k_t$ & $\longleftrightarrow$ & Capacitor $C_t = 1/k_t$ \\
+Damper $b_s$ & $\longleftrightarrow$ & Resistor $R_s = b_s$
+\end{tabular}
+\end{center}
+
+With typical values ($m_s = 250$ kg, $m_u = 35$ kg, $k_s = 16{,}000$ N/m, $b_s = 1{,}000$ N$\cdot$s/m, $k_t = 160{,}000$ N/m):
+\begin{center}
+\begin{tabular}{rcl}
+$L_s = 250$ H & $C_s = 62.5$ $\mu$F & $R_s = 1000$ $\Omega$ \\
+$L_u = 35$ H & $C_t = 6.25$ $\mu$F &
+\end{tabular}
+\end{center}
+
+This equivalent circuit can be simulated in SPICE to analyze ride quality and suspension response.
+\end{examplebox}
+
+\begin{historicalbox}[title=Gabriel Kron and Unified Network Theory]
+Gabriel Kron (1901--1968), a Hungarian-American engineer at General Electric, revolutionized the analysis of complex electromechanical systems through his development of \textbf{tensor network analysis}. In the 1930s and 1940s, Kron showed that electrical machines, power systems, and mechanical structures could all be analyzed using a unified mathematical framework based on network topology and tensor calculus.
+
+Kron's key insight was that the equations governing different physical systems---electrical circuits, mechanical linkages, and rotating machines---share a common mathematical structure that can be expressed in terms of generalized coordinates and network connections. His methods, published in works like \emph{Tensors for Circuits} (1942) and \emph{Diakoptics} (1963), laid the foundation for modern computer-aided analysis of multi-domain systems and influenced the development of bond graph theory, finite element methods, and object-oriented modeling languages like Modelica.
+\end{historicalbox}
+
+% ============================================================================
+\section{Thermal System Analogies}
+\label{sec:thermal}
+% ============================================================================
+
+Thermal systems exhibit first-order dynamics (no thermal equivalent of inductance) and map naturally to RC electrical circuits.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Concept} & \textbf{Thermal} & \textbf{Electrical} & \textbf{Units} \\
+\midrule
+Effort (across) & Temperature $T$ & Voltage $V$ & K (or $^\circ$C), V \\
+Flow (through) & Heat flow $\dot{Q}$ & Current $i$ & W, A \\
+Stored quantity & Thermal energy $Q$ & Charge $q$ & J, C \\
+\midrule
+Resistance & Thermal resistance $R_t$ & Resistor $R$ & K/W, $\Omega$ \\
+Capacitance & Thermal capacitance $C_t$ & Capacitor $C$ & J/K, F \\
+\bottomrule
+\end{tabular}
+\caption{Thermal-electrical analogy.}
+\label{tab:thermal}
+\end{table}
+
+\subsection{Thermal Element Relationships}
+
+\textbf{Thermal resistance} relates temperature difference to heat flow:
+\begin{equation}
+\dot{Q} = \frac{T_1 - T_2}{R_t} \quad \longleftrightarrow \quad i = \frac{V_1 - V_2}{R}
+\end{equation}
+
+For conduction through a solid: $R_t = \frac{L}{kA}$ where $L$ is length, $k$ is thermal conductivity, and $A$ is cross-sectional area.
+
+For convection: $R_t = \frac{1}{hA}$ where $h$ is the convection coefficient.
+
+\textbf{Thermal capacitance} relates stored energy to temperature:
+\begin{equation}
+Q = C_t T \quad \text{and} \quad \dot{Q} = C_t \frac{\dd T}{\dd t}
+\end{equation}
+
+where $C_t = mc_p$ (mass times specific heat capacity).
+
+\begin{examplebox}[title=Example 5.4: Building Thermal Model]
+A simplified single-zone building model has:
+\begin{itemize}
+    \item Interior thermal mass: $C_i = 5 \times 10^6$ J/K
+    \item Wall thermal resistance: $R_w = 0.01$ K/W
+    \item Window thermal resistance: $R_{win} = 0.05$ K/W
+\end{itemize}
+
+The equivalent circuit has $C_i$ connected to ambient temperature $T_a$ through parallel resistances $R_w$ and $R_{win}$.
+
+Total thermal resistance:
+\begin{equation}
+R_{eq} = \frac{R_w R_{win}}{R_w + R_{win}} = \frac{0.01 \times 0.05}{0.01 + 0.05} = 0.00833 \text{ K/W}
+\end{equation}
+
+Time constant:
+\begin{equation}
+\tau = R_{eq} C_i = 0.00833 \times 5 \times 10^6 = 41{,}667 \text{ s} \approx 11.6 \text{ hours}
+\end{equation}
+
+Transfer function from ambient temperature to interior temperature:
+\begin{equation}
+\frac{T_i(s)}{T_a(s)} = \frac{1}{R_{eq}C_i s + 1} = \frac{1}{41667s + 1}
 \end{equation}
 \end{examplebox}
+
+% ============================================================================
+\section{Analogies in Practice: Multi-Domain Systems}
+\label{sec:practice}
+% ============================================================================
+
+Modern engineering systems frequently span multiple physical domains. System analogies enable unified modeling and analysis of these complex systems.
+
+\subsection{Electromechanical Systems}
+
+Motors and generators couple electrical and mechanical domains through electromagnetic interaction.
+
+\begin{examplebox}[title=Example 5.5: DC Motor Complete Model]
+A DC motor couples electrical and mechanical subsystems through the motor constant $K_m$.
+
+\textbf{Electrical subsystem} (armature circuit):
+\begin{equation}
+V_a = L_a \frac{\dd i_a}{\dd t} + R_a i_a + e_b
+\end{equation}
+where $e_b = K_m \omega$ is the back-EMF.
+
+\textbf{Mechanical subsystem} (rotor dynamics):
+\begin{equation}
+J\frac{\dd \omega}{\dd t} + B\omega = \tau_m - \tau_L
+\end{equation}
+where $\tau_m = K_m i_a$ is the motor torque.
+
+\textbf{Coupling equations:}
+\begin{align}
+e_b &= K_m \omega \quad \text{(back-EMF)} \\
+\tau_m &= K_m i_a \quad \text{(torque)}
+\end{align}
+
+Combining these with $\tau_L = 0$:
+\begin{equation}
+\frac{\Omega(s)}{V_a(s)} = \frac{K_m}{(L_a s + R_a)(Js + B) + K_m^2}
+\end{equation}
+
+For a small DC motor with $L_a = 0.5$ mH, $R_a = 1$ $\Omega$, $J = 0.01$ kg$\cdot$m$^2$, $B = 0.1$ N$\cdot$m$\cdot$s/rad, $K_m = 0.5$ V/(rad/s):
+\begin{equation}
+\frac{\Omega(s)}{V_a(s)} = \frac{0.5}{0.000005s^2 + 0.0105s + 0.35} = \frac{100{,}000}{s^2 + 2100s + 70{,}000}
+\end{equation}
+
+The electrical time constant $\tau_e = L_a/R_a = 0.5$ ms is much faster than the mechanical time constant $\tau_m = J/B = 0.1$ s, justifying the common approximation of neglecting armature inductance.
+\end{examplebox}
+
+\subsection{Comprehensive Analogy Table}
+
+Table~\ref{tab:comprehensive} summarizes analogies across mechanical (translational and rotational), electrical, thermal, and fluid domains.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lllll}
+\toprule
+\textbf{Quantity} & \textbf{Mech. (Trans.)} & \textbf{Mech. (Rot.)} & \textbf{Electrical} & \textbf{Thermal} \\
+\midrule
+Effort & Force $F$ & Torque $\tau$ & Voltage $V$ & Temp. $T$ \\
+Flow & Velocity $v$ & Angular vel. $\omega$ & Current $i$ & Heat flow $\dot{Q}$ \\
+Displacement & Position $x$ & Angle $\theta$ & Charge $q$ & Heat $Q$ \\
+\midrule
+Inertia & Mass $m$ & Inertia $J$ & Inductor $L$ & --- \\
+Compliance & $1/k$ (spring) & $1/\kappa$ & Capacitor $C$ & Thermal cap. $C_t$ \\
+Dissipation & Damper $b$ & Damper $B$ & Resistor $R$ & Thermal res. $R_t$ \\
+\midrule
+Kinetic energy & $\frac{1}{2}mv^2$ & $\frac{1}{2}J\omega^2$ & $\frac{1}{2}Li^2$ & --- \\
+Potential energy & $\frac{1}{2}kx^2$ & $\frac{1}{2}\kappa\theta^2$ & $\frac{1}{2}CV^2$ & --- \\
+Power dissipation & $bv^2$ & $B\omega^2$ & $Ri^2$ & $\dot{Q}^2 R_t$ \\
+\bottomrule
+\end{tabular}
+\caption{Comprehensive system analogies across physical domains.}
+\label{tab:comprehensive}
+\end{table}
+
+\subsection{Unified State-Space Modeling}
+
+For multi-domain systems, state-space representation provides a unified framework. Energy storage elements contribute state variables:
+\begin{itemize}
+    \item Inductors/masses/inertias: state = current/velocity/angular velocity
+    \item Capacitors/springs: state = voltage/displacement/angle
+    \item Thermal capacitances: state = temperature
+\end{itemize}
+
+\begin{practicalbox}[title=Multi-Domain Simulation Tools]
+Modern simulation environments handle multi-domain systems directly:
+\begin{itemize}
+    \item \textbf{Simulink/Simscape} (MathWorks): Physical modeling with mechanical, electrical, thermal, and hydraulic libraries
+    \item \textbf{Modelica} (open standard): Equation-based, object-oriented modeling language
+    \item \textbf{SPICE variants}: Electrical circuit simulators that can model other domains via equivalent circuits
+    \item \textbf{Bond graphs}: Unified graphical representation preserving power flow
+\end{itemize}
+\end{practicalbox}
+
+% ============================================================================
+\section{Key Concepts and Limitations}
+\label{sec:limitations}
+% ============================================================================
+
+\begin{warningbox}[title=Limitations of System Analogies]
+While system analogies are powerful tools, they have important limitations:
+
+\begin{enumerate}
+    \item \textbf{Linear systems only:} The analogies presented assume linear, time-invariant elements. Nonlinear effects (saturation, backlash, friction) require extended models.
+
+    \item \textbf{Lumped parameter assumption:} We assume properties are concentrated at discrete points. Distributed systems (transmission lines, flexible beams) require partial differential equations or discretization.
+
+    \item \textbf{No thermal inductance:} Thermal systems have no equivalent of mass or inductance---there is no ``thermal momentum.'' Thermal dynamics are inherently first-order.
+
+    \item \textbf{Sign conventions:} Different domains use different sign conventions. Be careful when combining domains to maintain consistent power flow directions.
+
+    \item \textbf{Frequency limitations:} At high frequencies, parasitic effects (stray capacitance, lead inductance, radiation) become significant and must be modeled explicitly.
+\end{enumerate}
+\end{warningbox}
+
+\begin{keyconceptbox}[title=Chapter Summary: System Analogies]
+\begin{enumerate}
+    \item Physical systems from different domains share common mathematical structures based on energy storage, dissipation, and power flow.
+
+    \item The \textbf{force-voltage analogy} maps $F \leftrightarrow V$, $v \leftrightarrow i$, and is preferred for impedance-based analysis.
+
+    \item The \textbf{force-current analogy} maps $F \leftrightarrow i$, $v \leftrightarrow V$, and preserves circuit topology.
+
+    \item \textbf{Mechanical impedance} ($Z_m = ms$, $Z_m = b$, $Z_m = k/s$) allows circuit analysis methods to be applied to mechanical systems.
+
+    \item \textbf{Thermal systems} are first-order (RC equivalent) with no inductive element.
+
+    \item Multi-domain systems (electromechanical, thermoelectric) can be analyzed using unified state-space or equivalent circuit methods.
+
+    \item Analogies assume linear, lumped-parameter systems---extend with care to nonlinear or distributed systems.
+\end{enumerate}
+\end{keyconceptbox}
+
+% ============================================================================

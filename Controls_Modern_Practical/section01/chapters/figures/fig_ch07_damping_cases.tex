@@ -1,0 +1,69 @@
+% Figure: Step Response for Different Damping Cases
+% Chapter 7: Time-Domain Analysis
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    \begin{axis}[
+        width=12cm,
+        height=8cm,
+        xlabel={Normalized Time $\omega_n t$},
+        ylabel={Normalized Response $y(t)/y_{ss}$},
+        xmin=0, xmax=12,
+        ymin=0, ymax=1.8,
+        xtick={0, 2, 4, 6, 8, 10, 12},
+        ytick={0, 0.5, 1, 1.5},
+        grid=major,
+        grid style={UofSC50Black!30},
+        legend pos=south east,
+        legend style={font=\small, sharp corners, draw=UofSC70Black, fill=white},
+        cycle list name=uofsc,
+    ]
+        % Steady-state reference line
+        \addplot[UofSC50Black, dashed, thin] coordinates {(0, 1) (12, 1)};
+
+        % Underdamped (zeta = 0.2)
+        \addplot[UofSCRose, very thick, domain=0:12, samples=200]
+            {1 - exp(-0.2*x)/sqrt(1-0.04) * (cos(deg(sqrt(1-0.04)*x)) + 0.2/sqrt(1-0.04)*sin(deg(sqrt(1-0.04)*x)))};
+        \addlegendentry{$\zeta = 0.2$ (underdamped)}
+
+        % Underdamped (zeta = 0.5)
+        \addplot[UofSCAtlantic, very thick, domain=0:12, samples=200]
+            {1 - exp(-0.5*x)/sqrt(1-0.25) * (cos(deg(sqrt(1-0.25)*x)) + 0.5/sqrt(1-0.25)*sin(deg(sqrt(1-0.25)*x)))};
+        \addlegendentry{$\zeta = 0.5$ (underdamped)}
+
+        % Critically damped (zeta = 1.0)
+        \addplot[UofSCHorseshoe, very thick, domain=0:12, samples=200]
+            {1 - exp(-x) * (1 + x)};
+        \addlegendentry{$\zeta = 1.0$ (critically damped)}
+
+        % Overdamped (zeta = 2.0)
+        \addplot[UofSCCongaree, very thick, domain=0:12, samples=200]
+            {1 - 2*exp(-0.268*x) + exp(-3.732*x)};
+        \addlegendentry{$\zeta = 2.0$ (overdamped)}
+
+        % Peak overshoot annotation for zeta=0.2
+        \coordinate (peak) at (axis cs:3.2, 1.53);
+        \node[UofSCRose, font=\footnotesize, above right] at (peak) {Peak overshoot};
+        \draw[->, UofSCRose, thin] (axis cs:3.5, 1.45) -- (axis cs:3.22, 1.51);
+
+        % 2% settling band
+        \addplot[UofSCGarnet!50, dashed, thin] coordinates {(0, 1.02) (12, 1.02)};
+        \addplot[UofSCGarnet!50, dashed, thin] coordinates {(0, 0.98) (12, 0.98)};
+        \node[UofSCGarnet, font=\tiny, right] at (axis cs:12, 1.04) {$+2\%$};
+        \node[UofSCGarnet, font=\tiny, right] at (axis cs:12, 0.96) {$-2\%$};
+
+    \end{axis}
+
+    % Key observations box
+    \node[draw=UofSCGarnet, fill=UofSCSandstorm, font=\footnotesize,
+          align=left, sharp corners, anchor=north west] at (0.5, 1.5) {
+        \textbf{Key Observations:}\\[2pt]
+        $\bullet$ Lower $\zeta$: faster rise, more overshoot\\
+        $\bullet$ $\zeta = 1$: fastest without overshoot\\
+        $\bullet$ Higher $\zeta$: slower, no oscillation
+    };
+
+\end{tikzpicture}
+\caption{Step response of a second-order system $G(s) = \omega_n^2/(s^2 + 2\zeta\omega_n s + \omega_n^2)$ for different damping ratios $\zeta$. The underdamped responses exhibit oscillation with overshoot, critically damped response is the fastest non-oscillatory, and overdamped response is sluggish but smooth.}
+\label{fig:damping_cases}
+\end{figure}

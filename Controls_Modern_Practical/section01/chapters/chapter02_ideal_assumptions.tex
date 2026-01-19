@@ -5,44 +5,387 @@
 \chapter{Ideal Assumptions}
 \label{ch:ideal_assumptions}
 
-Throughout this textbook, we begin with two fundamental idealizations that simplify analysis while capturing essential dynamics.
+Throughout this textbook, we begin with two fundamental idealizations that simplify analysis while capturing essential dynamics. Understanding these assumptions---and their limitations---is crucial for bridging the gap between elegant theory and robust practical implementation. This chapter establishes the ideal sensor and actuator models, contrasts them with real-world behavior, and examines the practical consequences of these idealizations.
 
+\begin{historicalbox}
+The practice of idealizing components dates back to the earliest days of control theory. James Clerk Maxwell, in his 1868 paper ``On Governors,'' analyzed Watt's centrifugal governor by assuming perfect mechanical linkages and instantaneous response. This approach---simplify to understand, then add complexity---remains the foundation of engineering analysis. Harold Black's invention of the negative feedback amplifier in 1927 similarly relied on ideal assumptions about amplifier gain to derive the fundamental feedback equation $H = G/(1+GH)$.
+\end{historicalbox}
+
+% ============================================================================
+\section{The Role of Idealizations in Control Systems}
+\label{sec:role_idealizations}
+% ============================================================================
+
+Control system design follows a hierarchical approach: first, understand the fundamental dynamics using ideal assumptions; second, analyze the impact of non-idealities; third, design controllers robust to these imperfections. This methodology allows engineers to develop intuition about system behavior before confronting the full complexity of real implementations.
+
+\begin{keyconceptbox}[title=The Idealization Philosophy]
+Ideal assumptions serve three purposes in control engineering:
+\begin{enumerate}
+    \item \textbf{Analytical tractability}: Simplified models yield closed-form solutions that reveal fundamental relationships.
+    \item \textbf{Design insight}: Ideal models expose the essential dynamics without obscuring them with secondary effects.
+    \item \textbf{Performance benchmarks}: Ideal behavior represents the best achievable performance, providing targets for real implementations.
+\end{enumerate}
+\end{keyconceptbox}
+
+The feedback control loop shown in Figure~\ref{fig:feedback_loop_ideal} contains three main components: the plant (physical system to be controlled), the sensor (measurement device), and the actuator (device that applies control action). In this chapter, we focus on idealizing the sensor and actuator, leaving plant dynamics as the primary subject of analysis.
+
+\input{figures/fig_ch02_feedback_loop.tex}
+
+% ============================================================================
 \section{Ideal Sensors}
+\label{sec:ideal_sensors}
+% ============================================================================
 
-An \textbf{ideal sensor} provides a perfect measurement of the quantity of interest:
+An \textbf{ideal sensor} provides a perfect measurement of the quantity of interest. This idealization assumes that the measurement process itself does not corrupt or delay the information being gathered.
 
-\begin{itemize}
-    \item \textbf{No delay}: The measurement is instantaneous
-    \item \textbf{No noise}: The measurement has no random errors
-    \item \textbf{No bias}: The measurement has no systematic offset
-    \item \textbf{Infinite bandwidth}: All frequencies are captured equally
-    \item \textbf{Infinite resolution}: Any value can be measured exactly
-    \item \textbf{No loading}: The sensor does not affect the measured quantity
-\end{itemize}
+\subsection{Mathematical Definition}
 
-Mathematically, if $x(t)$ is the true value, the ideal sensor output is:
+For an ideal sensor measuring quantity $x(t)$, the sensor output is:
 \begin{equation}
-y_{\text{measured}}(t) = x(t)
+\boxed{y_{\text{measured}}(t) = x(t)}
+\label{eq:ideal_sensor}
 \end{equation}
 
-\section{Ideal Actuators}
+This deceptively simple equation embodies several profound assumptions.
 
-An \textbf{ideal actuator} produces exactly the commanded output:
+\subsection{Properties of Ideal Sensors}
+
+\begin{itemize}
+    \item \textbf{No delay}: The measurement is instantaneous ($\tau = 0$)
+    \item \textbf{No noise}: The measurement contains no random errors ($n(t) = 0$)
+    \item \textbf{No bias}: The measurement has no systematic offset ($b = 0$)
+    \item \textbf{Infinite bandwidth}: All frequencies are captured equally
+    \item \textbf{Infinite resolution}: Any value can be measured with infinite precision
+    \item \textbf{No loading}: The sensor does not affect the measured quantity
+    \item \textbf{Linear response}: Output is directly proportional to input
+\end{itemize}
+
+\subsection{Transfer Function Representation}
+
+In the Laplace domain, an ideal sensor has the transfer function:
+\begin{equation}
+H_{\text{sensor}}(s) = \frac{Y_{\text{measured}}(s)}{X(s)} = 1
+\label{eq:ideal_sensor_tf}
+\end{equation}
+
+This unity transfer function means the sensor has infinite bandwidth (all frequencies pass equally) and zero phase shift (no delay at any frequency).
+
+\subsection{Real Sensor Model}
+
+In contrast to the ideal model, a real sensor introduces several non-idealities. The general real sensor model is:
+\begin{equation}
+\boxed{y_{\text{measured}}(t) = G_s \cdot x(t - \tau) + b + n(t)}
+\label{eq:real_sensor}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $G_s$ is the sensor gain (ideally 1, but may vary with temperature, age, or operating point)
+    \item $\tau$ is the measurement delay (time lag between true value and measurement)
+    \item $b$ is the bias or offset (systematic error)
+    \item $n(t)$ is measurement noise (random error, often modeled as Gaussian)
+\end{itemize}
+
+\begin{examplebox}[title=Example 2.1: Temperature Sensor Comparison]
+Consider measuring the temperature of a chemical reactor at $T = 150^\circ$C.
+
+\textbf{Ideal sensor:}
+\begin{equation}
+T_{\text{measured}}(t) = 150^\circ\text{C} \quad \text{(exactly, instantaneously)}
+\end{equation}
+
+\textbf{Real thermocouple (Type K):}
+\begin{itemize}
+    \item Gain error: $\pm 0.75\%$ of reading $\Rightarrow G_s \in [0.9925, 1.0075]$
+    \item Time constant: $\tau \approx 0.5$ to 5 seconds (depending on sheath)
+    \item Bias: $\pm 2.2^\circ$C or $\pm 0.75\%$ (whichever is greater)
+    \item Noise: Typically 0.1--0.5$^\circ$C RMS from electromagnetic interference
+\end{itemize}
+
+The real measurement might read:
+\begin{equation}
+T_{\text{measured}}(t) = 1.005 \times 150 \times (1 - \ee^{-t/2}) + 1.5 + 0.3\sin(120\pi t)
+\end{equation}
+
+where the exponential term represents first-order dynamics with a 2-second time constant, 1.5$^\circ$C bias, and 60 Hz electrical noise.
+\end{examplebox}
+
+\subsection{Frequency Response of Real Sensors}
+
+Real sensors exhibit bandwidth limitations. A first-order sensor model has the transfer function:
+\begin{equation}
+H_{\text{sensor}}(s) = \frac{G_s}{1 + \tau_s s} \ee^{-\tau_d s}
+\label{eq:first_order_sensor}
+\end{equation}
+
+where $\tau_s$ is the sensor time constant and $\tau_d$ is pure time delay. The magnitude response rolls off at high frequencies:
+\begin{equation}
+|H_{\text{sensor}}(j\omega)| = \frac{G_s}{\sqrt{1 + (\omega\tau_s)^2}}
+\end{equation}
+
+The $-3$ dB bandwidth (where magnitude drops to $1/\sqrt{2}$ of DC value) is:
+\begin{equation}
+\omega_{BW} = \frac{1}{\tau_s} \quad \text{or} \quad f_{BW} = \frac{1}{2\pi\tau_s}
+\end{equation}
+
+\begin{examplebox}[title=Example 2.2: Accelerometer Bandwidth Requirements]
+A vibration monitoring system must accurately measure oscillations up to 500 Hz. What sensor time constant is required?
+
+\textbf{Solution:}
+
+For accurate measurement, the sensor bandwidth should be at least 5--10 times the highest frequency of interest (to minimize phase distortion):
+\begin{equation}
+f_{BW} \geq 5 \times 500 = 2500 \text{ Hz}
+\end{equation}
+
+Required time constant:
+\begin{equation}
+\tau_s \leq \frac{1}{2\pi \times 2500} = 63.7 \text{ }\mu\text{s}
+\end{equation}
+
+A piezoelectric accelerometer with $\tau_s < 50$ $\mu$s would be appropriate. A strain-gauge accelerometer with $\tau_s \approx 1$ ms would be inadequate, as it would attenuate and phase-shift the high-frequency components.
+\end{examplebox}
+
+% ============================================================================
+\section{Ideal Actuators}
+\label{sec:ideal_actuators}
+% ============================================================================
+
+An \textbf{ideal actuator} produces exactly the commanded output without limitation or delay. This idealization assumes infinite power, infinite bandwidth, and perfect mechanical transmission.
+
+\subsection{Mathematical Definition}
+
+For an ideal actuator receiving command $u(t)$, the actual output is:
+\begin{equation}
+\boxed{F_{\text{actual}}(t) = u(t)}
+\label{eq:ideal_actuator}
+\end{equation}
+
+where the output may be force, torque, voltage, current, flow rate, or any other physical quantity depending on the actuator type.
+
+\subsection{Properties of Ideal Actuators}
 
 \begin{itemize}
     \item \textbf{No delay}: Response is instantaneous
     \item \textbf{No dynamics}: No transient behavior in the actuator itself
     \item \textbf{Infinite bandwidth}: Can track any commanded signal perfectly
-    \item \textbf{Unlimited force/torque/power}: No saturation limits
-    \item \textbf{Infinite acceleration}: Can change output instantly
+    \item \textbf{Unlimited magnitude}: No saturation limits on force/torque/power
+    \item \textbf{Unlimited rate}: Can change output arbitrarily fast
     \item \textbf{No backlash or friction}: Perfect mechanical transmission
+    \item \textbf{Bidirectional}: Can push and pull equally well
 \end{itemize}
 
-Mathematically, if $u(t)$ is the commanded input, the ideal actuator produces:
+\subsection{Transfer Function Representation}
+
+In the Laplace domain, an ideal actuator has the transfer function:
 \begin{equation}
-F_{\text{actual}}(t) = u(t) \quad \text{(or voltage, torque, flow rate, etc.)}
+G_{\text{actuator}}(s) = \frac{F_{\text{actual}}(s)}{U(s)} = 1
+\label{eq:ideal_actuator_tf}
 \end{equation}
 
+\subsection{Real Actuator Limitations}
+
+Real actuators face fundamental physical constraints that limit their performance.
+
+\subsubsection{Saturation}
+
+Every actuator has maximum output limits. The saturation function is:
+\begin{equation}
+\boxed{F_{\text{actual}} = \text{sat}(u, F_{\min}, F_{\max}) = \begin{cases}
+F_{\max} & \text{if } u > F_{\max} \\
+u & \text{if } F_{\min} \leq u \leq F_{\max} \\
+F_{\min} & \text{if } u < F_{\min}
+\end{cases}}
+\label{eq:saturation}
+\end{equation}
+
+For symmetric saturation limits ($F_{\max} = -F_{\min} = F_{\text{sat}}$):
+\begin{equation}
+F_{\text{actual}} = F_{\text{sat}} \cdot \text{sat}\left(\frac{u}{F_{\text{sat}}}\right) = F_{\text{sat}} \cdot \sgn(u) \cdot \min\left(1, \left|\frac{u}{F_{\text{sat}}}\right|\right)
+\end{equation}
+
+\subsubsection{Rate Limiting}
+
+Actuators cannot change their output infinitely fast. Rate limiting is modeled as:
+\begin{equation}
+\boxed{\dot{F}_{\text{actual}} = \text{sat}\left(\frac{u - F_{\text{actual}}}{\tau_a}, -R_{\max}, R_{\max}\right)}
+\label{eq:rate_limit}
+\end{equation}
+
+where $R_{\max}$ is the maximum slew rate and $\tau_a$ is the actuator time constant.
+
+\subsubsection{Combined Dynamics Model}
+
+A comprehensive real actuator model includes both dynamics and limits:
+\begin{equation}
+G_{\text{actuator}}(s) = \frac{K_a}{(1 + \tau_1 s)(1 + \tau_2 s)} \ee^{-\tau_d s}
+\label{eq:real_actuator_tf}
+\end{equation}
+
+subject to saturation and rate limits applied to the output.
+
+\begin{examplebox}[title=Example 2.3: DC Motor Actuator Limitations]
+A DC motor positioning system has the following specifications:
+\begin{itemize}
+    \item Maximum torque: $\tau_{\max} = \pm 5$ N$\cdot$m
+    \item Maximum speed: $\omega_{\max} = 3000$ rpm $= 314$ rad/s
+    \item Electrical time constant: $\tau_e = 2$ ms
+    \item Mechanical time constant: $\tau_m = 50$ ms
+    \item Maximum torque rate: $\dot{\tau}_{\max} = 500$ N$\cdot$m/s
+\end{itemize}
+
+\textbf{Analysis:}
+
+The transfer function from commanded to actual torque is approximately:
+\begin{equation}
+G_{\text{motor}}(s) = \frac{1}{(1 + 0.002s)(1 + 0.05s)} \approx \frac{1}{1 + 0.052s}
+\end{equation}
+
+The bandwidth is:
+\begin{equation}
+f_{BW} = \frac{1}{2\pi \times 0.052} = 3.06 \text{ Hz}
+\end{equation}
+
+For a step command from 0 to 5 N$\cdot$m:
+\begin{itemize}
+    \item Ideal actuator: Instantaneous step to 5 N$\cdot$m
+    \item Real actuator with dynamics only: $\tau(t) = 5(1 - \ee^{-t/0.052})$ N$\cdot$m
+    \item Real actuator with rate limit: Rise time limited to $5/500 = 10$ ms minimum
+\end{itemize}
+
+The rate limit dominates for large step commands, while dynamics dominate for small signal tracking.
+\end{examplebox}
+
+\input{figures/fig_ch02_saturation_ratelimit.tex}
+
+% ============================================================================
+\section{Comparison: Ideal vs. Real Components}
+\label{sec:comparison}
+% ============================================================================
+
+Understanding the gap between ideal and real component behavior is essential for practical control design. Table~\ref{tab:ideal_vs_real} summarizes key differences.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Ideal} & \textbf{Real} \\
+\midrule
+\multicolumn{3}{l}{\textit{Sensors}} \\
+Transfer function & $H(s) = 1$ & $H(s) = \frac{G_s}{1+\tau s}\ee^{-\tau_d s}$ \\
+Bandwidth & $\infty$ & Finite (Hz to MHz) \\
+Noise & None & Present (thermal, quantization) \\
+Resolution & Infinite & Limited by ADC bits \\
+\midrule
+\multicolumn{3}{l}{\textit{Actuators}} \\
+Transfer function & $G(s) = 1$ & $G(s) = \frac{K_a}{(1+\tau s)}\ee^{-\tau_d s}$ \\
+Output range & $\pm\infty$ & $[F_{\min}, F_{\max}]$ \\
+Slew rate & $\infty$ & $\pm R_{\max}$ \\
+Power & Unlimited & Limited by source \\
+\bottomrule
+\end{tabular}
+\caption{Comparison of ideal and real sensor/actuator characteristics.}
+\label{tab:ideal_vs_real}
+\end{table}
+
+\subsection{When Ideal Assumptions Are Valid}
+
+The ideal assumptions become reasonable approximations when:
+\begin{enumerate}
+    \item \textbf{Plant dynamics are slow}: If the plant time constants are much larger than sensor/actuator time constants, the latter can be neglected.
+    \item \textbf{Operating within linear region}: When commands stay well within saturation limits, nonlinearities are avoided.
+    \item \textbf{Signal-to-noise ratio is high}: When measured signals are large compared to noise.
+    \item \textbf{Sampling is fast}: When digital sampling rate is much higher than signal bandwidth.
+\end{enumerate}
+
+\begin{keyconceptbox}[title=Rule of Thumb for Neglecting Dynamics]
+A dynamic element can often be approximated as ideal if its bandwidth is at least 5--10 times higher than the closed-loop bandwidth of the control system. For example, if a position control loop has a 10 Hz bandwidth, sensors and actuators with bandwidth exceeding 50--100 Hz can typically be modeled as ideal.
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 2.4: Validity of Ideal Assumptions]
+Consider a temperature control system for a large industrial furnace:
+\begin{itemize}
+    \item Furnace thermal time constant: $\tau_{\text{furnace}} = 30$ minutes $= 1800$ s
+    \item Thermocouple time constant: $\tau_{\text{sensor}} = 5$ s
+    \item Gas valve time constant: $\tau_{\text{actuator}} = 0.5$ s
+\end{itemize}
+
+\textbf{Analysis:}
+
+Ratio of plant to sensor dynamics: $1800/5 = 360$
+
+Ratio of plant to actuator dynamics: $1800/0.5 = 3600$
+
+Both ratios greatly exceed 10, so ideal sensor and actuator assumptions are excellent approximations for this system. The furnace dynamics completely dominate the closed-loop behavior.
+
+\textbf{Contrast with a fast system:}
+
+For a hard disk drive head positioning system:
+\begin{itemize}
+    \item Mechanical resonance: $f_n = 5$ kHz $\Rightarrow \tau_{\text{mech}} \approx 32$ $\mu$s
+    \item Position sensor (optical encoder): $\tau_{\text{sensor}} = 10$ $\mu$s
+    \item Voice coil actuator: $\tau_{\text{actuator}} = 50$ $\mu$s
+\end{itemize}
+
+Ratios: $32/10 = 3.2$ and $32/50 = 0.64$
+
+Here, sensor and actuator dynamics are comparable to plant dynamics and \textbf{cannot} be neglected. Ideal assumptions would lead to significant design errors.
+\end{examplebox}
+
+% ============================================================================
+\section{Practical Consequences of Ideal Assumptions}
+\label{sec:practical_consequences}
+% ============================================================================
+
+Using ideal assumptions during design, then encountering real components during implementation, can lead to several practical problems.
+
+\subsection{Stability Margin Erosion}
+
+Phase lag from sensor and actuator dynamics reduces stability margins. A system designed with 45$^\circ$ phase margin assuming ideal components may have only 20$^\circ$ margin (or become unstable) when real component dynamics are included.
+
 \begin{warningbox}
-Real sensors and actuators violate all of these assumptions to varying degrees. Chapters on sensor modeling and actuator dynamics will address these non-idealities. For now, ideal assumptions let us focus on the plant dynamics.
+Controllers designed assuming ideal sensors and actuators almost always require detuning (reducing gains) when implemented with real components. A common rule: design for 60$^\circ$ phase margin with ideal components to achieve 30--45$^\circ$ margin in practice.
 \end{warningbox}
+
+\subsection{Integrator Windup}
+
+When actuators saturate, integral control action continues accumulating error, causing large overshoots when the system returns to the linear region. This phenomenon, called \textbf{integrator windup}, does not occur with ideal (unsaturated) actuators.
+
+\subsection{Noise Amplification}
+
+High-gain controllers designed for ideal (noiseless) sensors will amplify measurement noise when implemented with real sensors, potentially causing actuator chatter and component wear.
+
+\subsection{Limit Cycling}
+
+The combination of saturation, rate limiting, and time delays can cause sustained oscillations (limit cycles) that would not occur with ideal components.
+
+\begin{practicalbox}
+When transitioning from ideal models to real implementations:
+\begin{enumerate}
+    \item Add sensor and actuator dynamics to your simulation model
+    \item Include saturation and rate limits
+    \item Inject realistic noise levels
+    \item Verify stability margins with the augmented model
+    \item Implement anti-windup schemes for integral control
+    \item Consider adding filtering to reduce noise sensitivity
+\end{enumerate}
+\end{practicalbox}
+
+% ============================================================================
+\section{Summary}
+\label{sec:ch02_summary}
+% ============================================================================
+
+Ideal sensor and actuator assumptions are powerful tools for initial control system analysis and design. The ideal sensor ($y = x$) and ideal actuator ($F = u$) models allow focus on plant dynamics without the complexity of auxiliary components. However, engineers must recognize when these assumptions break down:
+
+\begin{itemize}
+    \item When plant dynamics are comparable to sensor/actuator dynamics
+    \item When operating near saturation limits
+    \item When noise levels are significant relative to signal levels
+    \item When precise timing or phase relationships matter
+\end{itemize}
+
+The remainder of this textbook primarily uses ideal sensor and actuator assumptions, explicitly noting when non-idealities become important. Later chapters on robustness, implementation, and advanced control techniques address methods for handling real-world component limitations.
+
+\input{figures/fig_ch02_ideal_real_comparison.tex}
+
