@@ -1,0 +1,59 @@
+% Ideal vs Real Component Comparison for Chapter 2
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    % Time response comparison
+    \begin{scope}[xshift=0cm]
+        \draw[->] (-0.3,0) -- (5,0) node[right] {$t$};
+        \draw[->] (0,-0.3) -- (0,2.8) node[above] {$y(t)$};
+
+        % Reference/setpoint
+        \draw[thick, UofSC50Black, dashed] (0,2) -- (5,2) node[right, font=\footnotesize] {Reference};
+
+        % Ideal response
+        \draw[thick, UofSCAtlantic] (0,0) -- (0.3,0)
+            plot[domain=0.3:5, samples=50] (\x, {2*(1-exp(-3*(\x-0.3)))});
+
+        % Real response (with delay, overshoot, noise)
+        \draw[thick, UofSCGarnet]
+            (0,0) -- (0.5,0)
+            plot[domain=0.5:5, samples=80]
+            (\x, {2*(1 - 1.15*exp(-2*(\x-0.5))*cos(deg(4*(\x-0.5)))) + 0.08*sin(deg(40*\x))});
+
+        % Legend
+        \node[font=\footnotesize, UofSCAtlantic] at (4,0.6) {Ideal};
+        \node[font=\footnotesize, UofSCGarnet] at (4,0.3) {Real};
+
+        \node[below, font=\small] at (2.5,-0.6) {(a) Step Response Comparison};
+    \end{scope}
+
+    % Frequency response comparison
+    \begin{scope}[xshift=8cm]
+        \draw[->] (-0.3,0) -- (4.5,0) node[right] {$\omega$ (log)};
+        \draw[->] (0,-2.5) -- (0,1) node[above] {$|G(\jj\omega)|$ (dB)};
+
+        % Ideal response (flat)
+        \draw[thick, UofSCAtlantic, dashed] (0,0) -- (4,0);
+
+        % Real response (bandwidth limited)
+        \draw[thick, UofSCGarnet]
+            plot[domain=0:4, samples=50] (\x, {-0.5*\x*\x/4});
+
+        % -3dB line
+        \draw[dotted, UofSC70Black] (0,-0.75) -- (4,-0.75);
+        \node[left, font=\footnotesize] at (0,-0.75) {$-3$ dB};
+
+        % Bandwidth marker
+        \draw[<->, UofSCHorseshoe] (2.45,-0.1) -- (2.45,-0.65);
+        \node[right, font=\footnotesize, UofSCHorseshoe] at (2.5,-0.4) {$\omega_{BW}$};
+
+        % Legend
+        \node[font=\footnotesize, UofSCAtlantic] at (3.5,0.5) {Ideal};
+        \node[font=\footnotesize, UofSCGarnet] at (3.5,0.2) {Real};
+
+        \node[below, font=\small] at (2,-2.9) {(b) Frequency Response};
+    \end{scope}
+\end{tikzpicture}
+\caption{Comparison of ideal and real sensor/actuator behavior: (a) Time-domain step response showing delay, overshoot, and noise in the real system. (b) Frequency response showing the bandwidth limitation of real components versus the infinite bandwidth of ideal components.}
+\label{fig:ideal_real_comparison}
+\end{figure}

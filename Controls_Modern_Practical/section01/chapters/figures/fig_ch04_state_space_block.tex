@@ -1,0 +1,85 @@
+% Figure: State-Space Block Diagram Realization
+% Chapter 4: Mathematical Representations
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=1.5cm]
+    % Input
+    \node[input] (input) {};
+    \node[left=0.3cm of input, font=\small] {$u(t)$};
+
+    % B matrix gain
+    \node[block, right=of input, fill=UofSCGarnet!15, minimum width=2.5em] (B) {$\mathbf{B}$};
+
+    % First sum node
+    \node[sum, right=of B] (sum1) {};
+    \node at (sum1) {\small $+$};
+
+    % Integrator block (1/s represents integration)
+    \node[integrator, right=of sum1, minimum width=3.5em, minimum height=2.5em] (int) {$\dfrac{1}{s}$};
+    \node[above=0.1cm of int, font=\footnotesize, UofSCHorseshoe] {$\int$};
+
+    % State output label
+    \node[above right=-0.1cm and 0.3cm of int, font=\small] {$\mathbf{x}(t)$};
+
+    % Branch point after integrator
+    \node[branch, right=1.2cm of int] (branch1) {};
+
+    % C matrix gain
+    \node[block, right=of branch1, fill=UofSCAtlantic!15, minimum width=2.5em] (C) {$\mathbf{C}$};
+
+    % D feedthrough path sum
+    \node[sum, right=of C] (sum2) {};
+    \node at (sum2) {\small $+$};
+
+    % Output
+    \node[output, right=of sum2] (output) {};
+    \node[right=0.3cm of output, font=\small] {$y(t)$};
+
+    % A matrix feedback
+    \node[block, below=1.2cm of int, fill=UofSCCongaree!15, minimum width=2.5em] (A) {$\mathbf{A}$};
+
+    % D matrix feedthrough
+    \node[block, above=1.2cm of C, fill=UofSCHoneycomb!15, minimum width=2.5em] (D) {$D$};
+
+    % Main signal path
+    \draw[signal] (input) -- (B);
+    \draw[signal] (B) -- (sum1);
+    \draw[signal] (sum1) -- (int) node[midway, above, font=\small] {$\dot{\mathbf{x}}$};
+    \draw[signal] (int) -- (branch1);
+    \draw[signal] (branch1) -- (C);
+    \draw[signal] (C) -- (sum2);
+    \draw[signal] (sum2) -- (output);
+
+    % A matrix feedback path
+    \draw[thick] (branch1) -- ++(0, -1.2);
+    \draw[signal] ($(branch1) + (0, -1.2)$) -- (A);
+    \draw[signal] (A) -| (sum1);
+
+    % D matrix feedthrough path
+    \coordinate (feedthrough_start) at ($(input) + (0.5, 0)$);
+    \node[branch] at (feedthrough_start) {};
+    \draw[thick] (feedthrough_start) -- ++(0, 1.2);
+    \draw[signal] ($(feedthrough_start) + (0, 1.2)$) -| (D);
+    \draw[signal] (D) -| (sum2);
+
+    % Equation annotations
+    \node[draw=UofSCGarnet, fill=UofSCSandstorm, font=\footnotesize,
+          align=left, sharp corners, anchor=north west] at (-1.5, -2.8) {
+        State equation: $\dot{\mathbf{x}} = \mathbf{A}\mathbf{x} + \mathbf{B}u$\\[2pt]
+        Output equation: $y = \mathbf{C}\mathbf{x} + Du$
+    };
+
+    % Dimension labels
+    \node[font=\tiny, UofSC70Black, below=0.1cm of B] {$n \times m$};
+    \node[font=\tiny, UofSC70Black, below=0.1cm of A] {$n \times n$};
+    \node[font=\tiny, UofSC70Black, above=0.1cm of C] {$p \times n$};
+    \node[font=\tiny, UofSC70Black, below=0.1cm of D] {$p \times m$};
+
+    % Dashed box around state-space system
+    \draw[UofSCGarnet, dashed, thick]
+        ($(B.north west)+(-0.3,1.8)$) rectangle ($(sum2.south east)+(0.3,-2.0)$);
+
+\end{tikzpicture}
+\caption{Block diagram realization of state-space equations showing the relationship between input $u(t)$, state vector $\mathbf{x}(t)$, and output $y(t)$. The integrator converts $\dot{\mathbf{x}}$ to $\mathbf{x}$, matrix $\mathbf{A}$ provides state feedback, and $D$ is the direct feedthrough term.}
+\label{fig:state_space_block}
+\end{figure}

@@ -1,42 +1,360 @@
 % ============================================================================
-% CHAPTER 6: STANDARD TEST INPUTS
+% CHAPTER 6: TEST INPUTS AND SYSTEM RESPONSE
 % ============================================================================
 
-\chapter{Standard Test Inputs}
+\chapter{Test Inputs and System Response}
 \label{ch:test_inputs}
 
-To characterize system behavior, we use standard test inputs.
+Understanding how systems respond to standard test inputs is fundamental to control system analysis and design. Rather than testing systems with arbitrary signals, engineers use a small set of mathematically tractable inputs that reveal essential dynamic characteristics. These standard inputs---impulse, step, ramp, and sinusoidal---each expose different aspects of system behavior and together provide a complete picture of system performance.
 
-\section{Impulse Input}
+The choice of test input depends on what information we seek. The impulse response reveals the system's fundamental dynamics and completely characterizes linear time-invariant (LTI) systems. The step response shows transient behavior and steady-state accuracy. The ramp response exposes tracking capability for changing references. The sinusoidal response, when applied across frequencies, maps the complete frequency response. Mastery of these test inputs and their associated performance metrics is essential for any control engineer.
 
-\begin{equation}
-u(t) = \delta(t), \quad U(s) = 1
-\end{equation}
+\begin{keyconceptbox}[title=Why Standard Test Inputs?]
+Standard test inputs serve three critical purposes:
+\begin{itemize}
+    \item \textbf{Mathematical tractability}: Simple Laplace transforms enable analytical solutions
+    \item \textbf{Reproducibility}: Standardized tests allow comparison across different systems
+    \item \textbf{Complete characterization}: Together, they reveal all essential dynamic behavior
+\end{itemize}
+\end{keyconceptbox}
 
-The impulse response $h(t) = \iLaplace\{G(s)\}$ completely characterizes an LTI system.
+% ============================================================================
+\section{Impulse Input and Response}
+\label{sec:impulse}
+% ============================================================================
 
-\section{Step Input}
-
-\begin{equation}
-u(t) = A \cdot \unitstep, \quad U(s) = \frac{A}{s}
-\end{equation}
-
-Step response reveals settling time, overshoot, and steady-state error.
-
-\section{Ramp Input}
-
-\begin{equation}
-u(t) = At \cdot \unitstep, \quad U(s) = \frac{A}{s^2}
-\end{equation}
-
-Ramp response reveals tracking ability for constantly changing references.
-
-\section{Sinusoidal Input}
+The impulse function, also called the Dirac delta function, represents an idealized instantaneous pulse of infinite amplitude and infinitesimal duration, but with unit area:
 
 \begin{equation}
-u(t) = A\sin(\omega t), \quad U(s) = \frac{A\omega}{s^2 + \omega^2}
+r(t) = \delta(t) = \begin{cases} \infty & t = 0 \\ 0 & t \neq 0 \end{cases}, \quad \int_{-\infty}^{\infty} \delta(t)\,\dd t = 1
 \end{equation}
 
-Sinusoidal response at various frequencies reveals the frequency response.
+The Laplace transform of the impulse function is remarkably simple:
+\begin{equation}
+\Laplace\{\delta(t)\} = 1
+\end{equation}
+
+This simplicity makes the impulse response particularly valuable. For a system with transfer function $G(s)$, the output to an impulse input is:
+\begin{equation}
+Y(s) = G(s) \cdot 1 = G(s) \quad \Rightarrow \quad y(t) = h(t) = \iLaplace\{G(s)\}
+\end{equation}
+
+The impulse response $h(t)$ is the inverse Laplace transform of the transfer function itself, making it the system's fundamental characterization.
+
+\begin{definitionbox}[title=Impulse Response]
+The \textbf{impulse response} $h(t)$ of an LTI system is the output when the input is a unit impulse $\delta(t)$. It completely characterizes the system because any output can be computed via convolution:
+\begin{equation}
+y(t) = \int_{0}^{t} h(\tau) r(t-\tau)\,\dd\tau = h(t) \conv r(t)
+\end{equation}
+\end{definitionbox}
+
+For a second-order underdamped system with transfer function:
+\begin{equation}
+G(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+The impulse response is:
+\begin{equation}
+h(t) = \frac{\omega_n}{\sqrt{1-\zeta^2}}\ee^{-\zeta\omega_n t}\sin(\omega_d t), \quad \omega_d = \omega_n\sqrt{1-\zeta^2}
+\end{equation}
+
+\begin{examplebox}[title=Example 6.1: Impulse Response of a First-Order System]
+Find the impulse response of the first-order system $G(s) = \dfrac{K}{\tau s + 1}$.
+
+\textbf{Solution:}
+
+Rewrite in standard form:
+\begin{equation}
+G(s) = \frac{K/\tau}{s + 1/\tau}
+\end{equation}
+
+Taking the inverse Laplace transform:
+\begin{equation}
+h(t) = \frac{K}{\tau}\ee^{-t/\tau}, \quad t \geq 0
+\end{equation}
+
+The impulse response is an exponential decay with time constant $\tau$. The initial value $h(0^+) = K/\tau$ depends on the DC gain and time constant, while the decay rate is determined solely by $\tau$.
+\end{examplebox}
+
+% ============================================================================
+\section{Step Input and Response}
+\label{sec:step}
+% ============================================================================
+
+The unit step function represents an instantaneous change from zero to a constant value:
+\begin{equation}
+r(t) = u(t) = \begin{cases} 0 & t < 0 \\ 1 & t \geq 0 \end{cases}
+\end{equation}
+
+The Laplace transform is:
+\begin{equation}
+\Laplace\{u(t)\} = \frac{1}{s}
+\end{equation}
+
+The step response is perhaps the most commonly used test because it reveals both transient and steady-state behavior. For a system $G(s)$:
+\begin{equation}
+Y(s) = G(s) \cdot \frac{1}{s}
+\end{equation}
+
+\subsection{Time-Domain Performance Specifications}
+
+The step response defines several critical performance metrics that engineers use to specify system requirements.
+
+\begin{definitionbox}[title=Step Response Specifications]
+For a second-order underdamped system responding to a unit step:
+\begin{itemize}
+    \item \textbf{Rise time} $t_r$: Time to go from 10\% to 90\% of final value
+    \item \textbf{Peak time} $t_p$: Time to reach the first (maximum) peak
+    \item \textbf{Percent overshoot} \%OS: Amount the response exceeds the final value
+    \item \textbf{Settling time} $t_s$: Time to remain within a specified band (typically 2\%) of the final value
+\end{itemize}
+\end{definitionbox}
+
+For a standard second-order system, these specifications have closed-form expressions:
+
+\begin{align}
+t_r &\approx \frac{1.8}{\omega_n} \quad \text{(approximation for } 0.3 < \zeta < 0.8\text{)} \\[6pt]
+t_p &= \frac{\pi}{\omega_d} = \frac{\pi}{\omega_n\sqrt{1-\zeta^2}} \\[6pt]
+\%\text{OS} &= 100 \cdot \ee^{-\pi\zeta/\sqrt{1-\zeta^2}} \\[6pt]
+t_s &\approx \frac{4}{\zeta\omega_n} \quad \text{(2\% criterion)}
+\end{align}
+
+\begin{keyconceptbox}[title=Design Trade-offs]
+The step response specifications reveal fundamental trade-offs:
+\begin{itemize}
+    \item \textbf{Speed vs. overshoot}: Faster rise time typically increases overshoot
+    \item \textbf{Damping ratio $\zeta$}: Higher $\zeta$ reduces overshoot but slows response
+    \item \textbf{Natural frequency $\omega_n$}: Higher $\omega_n$ speeds up all time metrics
+\end{itemize}
+The ``sweet spot'' for many applications is $\zeta \approx 0.7$, giving about 5\% overshoot with reasonably fast response.
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 6.2: Step Response Specifications]
+A position control system has the closed-loop transfer function:
+\begin{equation}
+G(s) = \frac{100}{s^2 + 10s + 100}
+\end{equation}
+
+Find the step response specifications.
+
+\textbf{Solution:}
+
+Comparing with the standard form $\omega_n^2/(s^2 + 2\zeta\omega_n s + \omega_n^2)$:
+\begin{align}
+\omega_n^2 &= 100 \quad \Rightarrow \quad \omega_n = 10 \text{ rad/s} \\
+2\zeta\omega_n &= 10 \quad \Rightarrow \quad \zeta = 0.5
+\end{align}
+
+The damped natural frequency:
+\begin{equation}
+\omega_d = \omega_n\sqrt{1-\zeta^2} = 10\sqrt{1-0.25} = 8.66 \text{ rad/s}
+\end{equation}
+
+Computing the specifications:
+\begin{align}
+t_r &\approx \frac{1.8}{10} = 0.18 \text{ s} \\
+t_p &= \frac{\pi}{8.66} = 0.363 \text{ s} \\
+\%\text{OS} &= 100 \cdot \ee^{-\pi(0.5)/\sqrt{0.75}} = 100 \cdot \ee^{-1.814} = 16.3\% \\
+t_s &\approx \frac{4}{0.5 \times 10} = 0.8 \text{ s}
+\end{align}
+\end{examplebox}
+
+% ============================================================================
+\section{Ramp Input and Response}
+\label{sec:ramp}
+% ============================================================================
+
+The ramp input represents a constantly increasing signal:
+\begin{equation}
+r(t) = t \cdot u(t)
+\end{equation}
+
+The Laplace transform is:
+\begin{equation}
+\Laplace\{t \cdot u(t)\} = \frac{1}{s^2}
+\end{equation}
+
+Ramp inputs test a system's ability to track continuously changing references, such as a robot arm following a trajectory or an antenna tracking a moving satellite.
+
+\subsection{Steady-State Error and Velocity Error Constant}
+
+For ramp inputs, the steady-state error depends on the system type. The \textbf{velocity error constant} $K_v$ characterizes this behavior:
+
+\begin{equation}
+K_v = \lim_{s \to 0} s \cdot G(s)H(s)
+\end{equation}
+
+For a unity feedback system with open-loop transfer function $G(s)$:
+\begin{equation}
+e_{ss} = \frac{1}{K_v}
+\end{equation}
+
+\begin{warningbox}[title=System Type and Ramp Response]
+The steady-state error to a ramp input depends on the system type (number of free integrators):
+\begin{itemize}
+    \item \textbf{Type 0}: $K_v = 0$, infinite steady-state error (cannot track ramp)
+    \item \textbf{Type 1}: $K_v = $ finite, constant steady-state error $e_{ss} = 1/K_v$
+    \item \textbf{Type 2 or higher}: $K_v = \infty$, zero steady-state error
+\end{itemize}
+\end{warningbox}
+
+\begin{examplebox}[title=Example 6.3: Ramp Response and Velocity Error]
+A unity feedback system has the open-loop transfer function:
+\begin{equation}
+G(s) = \frac{50}{s(s + 5)}
+\end{equation}
+
+Find the velocity error constant and steady-state error to a unit ramp input.
+
+\textbf{Solution:}
+
+This is a Type 1 system (one free integrator in $G(s)$).
+
+The velocity error constant:
+\begin{equation}
+K_v = \lim_{s \to 0} s \cdot \frac{50}{s(s + 5)} = \lim_{s \to 0} \frac{50}{s + 5} = \frac{50}{5} = 10
+\end{equation}
+
+The steady-state error to a unit ramp:
+\begin{equation}
+e_{ss} = \frac{1}{K_v} = \frac{1}{10} = 0.1
+\end{equation}
+
+The system tracks the ramp with a constant position error of 0.1 units---it always lags behind the reference by this amount.
+\end{examplebox}
+
+% ============================================================================
+\section{Sinusoidal Input and Frequency Response}
+\label{sec:sinusoidal}
+% ============================================================================
+
+The sinusoidal input is fundamental to frequency-domain analysis:
+\begin{equation}
+r(t) = A\sin(\omega t)
+\end{equation}
+
+The Laplace transform is:
+\begin{equation}
+\Laplace\{A\sin(\omega t)\} = \frac{A\omega}{s^2 + \omega^2}
+\end{equation}
+
+For stable LTI systems, a sinusoidal input produces a sinusoidal output at the same frequency, but with different amplitude and phase. This steady-state response is characterized by the \textbf{frequency response} $G(\jj\omega)$.
+
+\subsection{Frequency Response Function}
+
+The frequency response is obtained by substituting $s = \jj\omega$ into the transfer function:
+\begin{equation}
+G(\jj\omega) = |G(\jj\omega)| \cdot \ee^{\jj\angle G(\jj\omega)}
+\end{equation}
+
+where:
+\begin{align}
+|G(\jj\omega)| &= \sqrt{[\Real\{G(\jj\omega)\}]^2 + [\Imag\{G(\jj\omega)\}]^2} \quad \text{(magnitude)} \\
+\angle G(\jj\omega) &= \arctan\left(\frac{\Imag\{G(\jj\omega)\}}{\Real\{G(\jj\omega)\}}\right) \quad \text{(phase)}
+\end{align}
+
+For a sinusoidal input $r(t) = A\sin(\omega t)$, the steady-state output is:
+\begin{equation}
+y_{ss}(t) = A|G(\jj\omega)|\sin(\omega t + \angle G(\jj\omega))
+\end{equation}
+
+\begin{definitionbox}[title=Frequency Response Interpretation]
+The frequency response $G(\jj\omega)$ provides:
+\begin{itemize}
+    \item \textbf{Magnitude} $|G(\jj\omega)|$: Ratio of output amplitude to input amplitude
+    \item \textbf{Phase} $\angle G(\jj\omega)$: Phase shift between output and input
+\end{itemize}
+Plotting these versus frequency yields Bode plots, which are essential tools for control design.
+\end{definitionbox}
+
+\begin{examplebox}[title=Example 6.4: Frequency Response Calculation]
+Find the frequency response of the first-order system $G(s) = \dfrac{10}{s + 2}$ at $\omega = 2$ rad/s.
+
+\textbf{Solution:}
+
+Substitute $s = \jj\omega = 2\jj$:
+\begin{equation}
+G(\jj 2) = \frac{10}{2\jj + 2} = \frac{10}{2(1 + \jj)} = \frac{5}{1 + \jj}
+\end{equation}
+
+Rationalize by multiplying by the complex conjugate:
+\begin{equation}
+G(\jj 2) = \frac{5(1 - \jj)}{(1 + \jj)(1 - \jj)} = \frac{5(1 - \jj)}{2} = 2.5 - 2.5\jj
+\end{equation}
+
+Magnitude:
+\begin{equation}
+|G(\jj 2)| = \sqrt{2.5^2 + 2.5^2} = \sqrt{12.5} = 3.54
+\end{equation}
+
+Phase:
+\begin{equation}
+\angle G(\jj 2) = \arctan\left(\frac{-2.5}{2.5}\right) = \arctan(-1) = -45°
+\end{equation}
+
+For a 1 V amplitude sinusoid at 2 rad/s, the output would have amplitude 3.54 V and lag the input by 45°.
+\end{examplebox}
+
+% ============================================================================
+\section{Comparison of Standard Test Inputs}
+\label{sec:comparison}
+% ============================================================================
+
+The four standard test inputs each serve distinct purposes in system analysis. Table~\ref{tab:test_inputs} summarizes their properties.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Input} & \textbf{Time Domain} & \textbf{Laplace Transform} & \textbf{Primary Use} \\
+\midrule
+Impulse & $\delta(t)$ & $1$ & System identification \\
+Step & $u(t)$ & $\dfrac{1}{s}$ & Transient response \\
+Ramp & $t \cdot u(t)$ & $\dfrac{1}{s^2}$ & Tracking accuracy \\
+Sinusoidal & $\sin(\omega t)$ & $\dfrac{\omega}{s^2 + \omega^2}$ & Frequency response \\
+\bottomrule
+\end{tabular}
+\caption{Summary of standard test inputs and their applications.}
+\label{tab:test_inputs}
+\end{table}
+
+\subsection{Relationships Between Test Inputs}
+
+The test inputs are mathematically related through differentiation and integration:
+\begin{equation}
+\delta(t) \xleftarrow{\text{differentiate}} u(t) \xleftarrow{\text{differentiate}} t \cdot u(t)
+\end{equation}
+
+In the Laplace domain, this corresponds to multiplication/division by $s$:
+\begin{equation}
+1 \xleftarrow{\times s} \frac{1}{s} \xleftarrow{\times s} \frac{1}{s^2}
+\end{equation}
+
+This relationship means that the step response can be obtained by integrating the impulse response, and the ramp response by integrating the step response.
+
+\begin{practicalbox}[title=Practical Implementation]
+In practice, true impulse functions cannot be generated. Engineers approximate impulses using:
+\begin{itemize}
+    \item Short-duration rectangular pulses
+    \item Hammer strikes (mechanical systems)
+    \item Brief voltage spikes (electrical systems)
+\end{itemize}
+The approximation is valid when the pulse duration is much shorter than the system's fastest time constant.
+\end{practicalbox}
+
+% ============================================================================
+\section{Historical Context}
+\label{sec:history}
+% ============================================================================
+
+\begin{historicalbox}
+The development of test input theory parallels the evolution of control systems analysis itself. Oliver Heaviside (1850--1925) introduced operational calculus in the 1880s, providing the mathematical foundation for analyzing step responses in electrical circuits. His ``operational methods'' predated and inspired the formal development of Laplace transforms for engineering applications.
+
+Harry Nyquist (1889--1976) at Bell Labs revolutionized frequency-domain analysis in 1932 with his stability criterion, which relies on sinusoidal test inputs to determine closed-loop stability from open-loop frequency response. His work showed that sweeping through frequencies could reveal system behavior that step responses might miss.
+
+Hendrik Bode (1905--1982), also at Bell Labs, further developed frequency response methods in the 1930s and 1940s. Bode plots---logarithmic graphs of magnitude and phase versus frequency---became the standard tool for control system design. His work demonstrated that sinusoidal testing at multiple frequencies provides complete system characterization.
+
+Together, these pioneers established that a small set of mathematically elegant test inputs could fully characterize any linear system, enabling the systematic design methods that control engineers use today.
+\end{historicalbox}
 
 \input{figures/fig_ch01_test_inputs.tex}

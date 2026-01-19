@@ -5,33 +5,605 @@
 \chapter{Model Representations}
 \label{ch:model_representations}
 
-The same dynamic system can be represented in several equivalent forms.
+The same dynamic system can be represented in several equivalent mathematical forms, each offering unique advantages for analysis and design. Understanding these representations and the ability to convert between them is fundamental to control systems engineering. The choice of representation often determines which analysis tools are most effective and can significantly impact the complexity of controller design.
 
+In this chapter, we explore four primary representations: differential equations, transfer functions, state-space models, and block diagrams. Each captures the same underlying dynamics but emphasizes different aspects of system behavior. Differential equations arise naturally from physical laws and are ideal for simulation. Transfer functions provide frequency-domain insight and simplify interconnection analysis. State-space representations handle multiple-input, multiple-output (MIMO) systems elegantly and enable modern control techniques. Block diagrams offer visual clarity for understanding signal flow and system architecture.
+
+Mastering the conversions between these forms allows engineers to leverage the strengths of each representation, selecting the most appropriate tool for each task in the analysis and design process.
+
+% ============================================================================
 \section{Differential Equation Form}
+\label{sec:diff_eq_form}
+% ============================================================================
 
-The most direct form, derived from physical laws:
+The differential equation is the most fundamental representation, derived directly from physical laws such as Newton's laws of motion, Kirchhoff's circuit laws, or conservation principles. For a linear time-invariant (LTI) system with input $u(t)$ and output $y(t)$, the general form is:
+
 \begin{equation}
-a_n\frac{\dd^n y}{\dd t^n} + a_{n-1}\frac{\dd^{n-1} y}{\dd t^{n-1}} + \cdots + a_1\frac{\dd y}{\dd t} + a_0 y = b_m\frac{\dd^m u}{\dd t^m} + \cdots + b_0 u
+\boxed{a_n\frac{\dd^n y}{\dd t^n} + a_{n-1}\frac{\dd^{n-1} y}{\dd t^{n-1}} + \cdots + a_1\frac{\dd y}{\dd t} + a_0 y = b_m\frac{\dd^m u}{\dd t^m} + \cdots + b_1\frac{\dd u}{\dd t} + b_0 u}
+\label{eq:general_ode}
 \end{equation}
 
+where $n$ is the system order (the highest derivative of the output) and $m \leq n$ for physical realizability.
+
+\begin{definitionbox}[title=Proper and Strictly Proper Systems]
+A system is \textbf{proper} if $m \leq n$ (the degree of the numerator does not exceed that of the denominator). A system is \textbf{strictly proper} if $m < n$. Most physical systems are strictly proper because they cannot respond instantaneously to input changes.
+\end{definitionbox}
+
+\begin{examplebox}[title=Example 4.1: RC Circuit Differential Equation]
+Consider a series RC circuit with input voltage $v_{in}(t)$ and output voltage $v_C(t)$ across the capacitor.
+
+Applying Kirchhoff's voltage law:
+\begin{equation}
+v_{in}(t) = Ri(t) + v_C(t) = RC\frac{\dd v_C}{\dd t} + v_C(t)
+\end{equation}
+
+Rearranging into standard form:
+\begin{equation}
+\tau\frac{\dd v_C}{\dd t} + v_C = v_{in}
+\end{equation}
+
+where $\tau = RC$ is the time constant. This is a first-order system ($n = 1$, $m = 0$).
+
+For $R = 10$ k$\Omega$ and $C = 100\ \mu$F: $\tau = 1$ second.
+\end{examplebox}
+
+The differential equation form is essential for:
+\begin{itemize}
+    \item Deriving models from first principles (physics-based modeling)
+    \item Numerical simulation using ODE solvers
+    \item Understanding initial condition effects
+    \item Nonlinear system analysis before linearization
+\end{itemize}
+
+% ============================================================================
 \section{Transfer Function Form}
+\label{sec:transfer_function_form}
+% ============================================================================
 
-Taking the Laplace transform (with zero initial conditions):
+The transfer function is obtained by taking the Laplace transform of the differential equation with zero initial conditions. It represents the ratio of output to input in the frequency domain.
+
+\begin{definition}[Transfer Function]
+For an LTI system, the transfer function $G(s)$ is defined as:
 \begin{equation}
-G(s) = \frac{Y(s)}{U(s)} = \frac{b_m s^m + b_{m-1}s^{m-1} + \cdots + b_0}{a_n s^n + a_{n-1}s^{n-1} + \cdots + a_0}
+\boxed{G(s) = \frac{Y(s)}{U(s)} = \frac{b_m s^m + b_{m-1}s^{m-1} + \cdots + b_1 s + b_0}{a_n s^n + a_{n-1}s^{n-1} + \cdots + a_1 s + a_0}}
+\label{eq:general_tf}
+\end{equation}
+\end{definition}
+
+The transfer function can be factored into pole-zero form:
+\begin{equation}
+G(s) = K\frac{(s-z_1)(s-z_2)\cdots(s-z_m)}{(s-p_1)(s-p_2)\cdots(s-p_n)} = K\frac{\prod_{i=1}^{m}(s-z_i)}{\prod_{j=1}^{n}(s-p_j)}
+\label{eq:pz_form}
 \end{equation}
 
-\section{State-Space Form}
+where $z_i$ are the \textbf{zeros} (roots of the numerator), $p_j$ are the \textbf{poles} (roots of the denominator), and $K$ is the gain.
 
+\begin{keyconceptbox}[title=Poles and Zeros Determine System Behavior]
+\begin{itemize}
+    \item \textbf{Poles} determine stability and natural response modes (exponential, oscillatory)
+    \item \textbf{Zeros} affect the response amplitude and shape
+    \item Poles in the right half-plane ($\Real\{p_j\} > 0$) cause instability
+    \item Zeros in the right half-plane create non-minimum phase behavior
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{examplebox}[title=Example 4.2: Mass-Spring-Damper Transfer Function]
+For the mass-spring-damper system with equation $m\ddot{x} + b\dot{x} + kx = F(t)$:
+
+Taking the Laplace transform with zero initial conditions:
+\begin{equation}
+ms^2X(s) + bsX(s) + kX(s) = F(s)
+\end{equation}
+
+Solving for the transfer function:
+\begin{equation}
+G(s) = \frac{X(s)}{F(s)} = \frac{1}{ms^2 + bs + k} = \frac{1/m}{s^2 + (b/m)s + k/m}
+\end{equation}
+
+In standard second-order form with $\omega_n = \sqrt{k/m}$ and $\zeta = b/(2\sqrt{km})$:
+\begin{equation}
+G(s) = \frac{\omega_n^2/k}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+The poles are at $s = -\zeta\omega_n \pm \omega_n\sqrt{\zeta^2 - 1}$.
+\end{examplebox}
+
+\subsection{Closed-Loop Transfer Functions}
+
+For feedback systems, the closed-loop transfer function is derived using block diagram algebra.
+
+\begin{equation}
+\boxed{T(s) = \frac{G(s)}{1 + G(s)H(s)}}
+\label{eq:closed_loop_tf}
+\end{equation}
+
+where $G(s)$ is the forward-path transfer function and $H(s)$ is the feedback-path transfer function. For unity feedback ($H(s) = 1$):
+
+\begin{equation}
+T(s) = \frac{G(s)}{1 + G(s)}
+\label{eq:unity_feedback_tf}
+\end{equation}
+
+% ============================================================================
+\section{State-Space Form}
+\label{sec:state_space_form}
+% ============================================================================
+
+State-space representation describes the system using first-order differential equations with state variables that capture the system's internal dynamics.
+
+\begin{definition}[State-Space Representation]
+A continuous-time LTI system in state-space form is:
 \begin{align}
-\dot{\vecx} &= \mA\vecx + \mB\vecu \\
-\vecy &= \mC\vecx + \mD\vecu
+\dot{\vecx}(t) &= \mA\vecx(t) + \mB\vecu(t) \quad \text{(State equation)} \label{eq:state_eq}\\
+\vecy(t) &= \mC\vecx(t) + \mD\vecu(t) \quad \text{(Output equation)} \label{eq:output_eq}
+\end{align}
+where:
+\begin{itemize}
+    \item $\vecx \in \mathbb{R}^n$ is the state vector
+    \item $\vecu \in \mathbb{R}^p$ is the input vector
+    \item $\vecy \in \mathbb{R}^q$ is the output vector
+    \item $\mA \in \mathbb{R}^{n \times n}$ is the system matrix
+    \item $\mB \in \mathbb{R}^{n \times p}$ is the input matrix
+    \item $\mC \in \mathbb{R}^{q \times n}$ is the output matrix
+    \item $\mD \in \mathbb{R}^{q \times p}$ is the feedthrough matrix
+\end{itemize}
+\end{definition}
+
+\subsection{State Variables}
+
+State variables represent the minimum set of information needed to completely describe a system's future behavior, given the input. Common choices include:
+\begin{itemize}
+    \item Physical variables: positions, velocities, currents, voltages
+    \item Phase variables: output and its derivatives
+    \item Canonical forms: controllable or observable canonical form
+\end{itemize}
+
+\begin{examplebox}[title=Example 4.3: Mass-Spring-Damper State-Space Model]
+For $m\ddot{x} + b\dot{x} + kx = F$, define states $x_1 = x$ (position) and $x_2 = \dot{x}$ (velocity).
+
+Then $\dot{x}_1 = x_2$ and $\dot{x}_2 = \ddot{x} = \frac{1}{m}(F - bx_2 - kx_1)$.
+
+State-space matrices:
+\begin{equation}
+\mA = \begin{bmatrix} 0 & 1 \\ -k/m & -b/m \end{bmatrix}, \quad
+\mB = \begin{bmatrix} 0 \\ 1/m \end{bmatrix}, \quad
+\mC = \begin{bmatrix} 1 & 0 \end{bmatrix}, \quad
+\mD = \begin{bmatrix} 0 \end{bmatrix}
+\end{equation}
+
+For $m = 1$ kg, $b = 3$ N$\cdot$s/m, $k = 2$ N/m:
+\begin{equation}
+\mA = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}, \quad
+\mB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mC = \begin{bmatrix} 1 & 0 \end{bmatrix}, \quad
+\mD = \begin{bmatrix} 0 \end{bmatrix}
+\end{equation}
+\end{examplebox}
+
+\subsection{Controllable Canonical Form}
+
+For a transfer function $G(s) = \frac{b_1s + b_0}{s^2 + a_1s + a_0}$, the controllable canonical form is:
+\begin{equation}
+\mA = \begin{bmatrix} 0 & 1 \\ -a_0 & -a_1 \end{bmatrix}, \quad
+\mB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mC = \begin{bmatrix} b_0 & b_1 \end{bmatrix}, \quad
+\mD = \begin{bmatrix} 0 \end{bmatrix}
+\label{eq:ccf}
+\end{equation}
+
+\subsection{Observable Canonical Form}
+
+The observable canonical form is the transpose of the controllable form:
+\begin{equation}
+\mA = \begin{bmatrix} 0 & -a_0 \\ 1 & -a_1 \end{bmatrix}, \quad
+\mB = \begin{bmatrix} b_0 \\ b_1 \end{bmatrix}, \quad
+\mC = \begin{bmatrix} 0 & 1 \end{bmatrix}, \quad
+\mD = \begin{bmatrix} 0 \end{bmatrix}
+\label{eq:ocf}
+\end{equation}
+
+\begin{keyconceptbox}[title=State-Space Advantages]
+State-space representation offers several advantages:
+\begin{itemize}
+    \item Natural handling of MIMO systems
+    \item Direct representation of internal system states
+    \item Foundation for modern control techniques (LQR, Kalman filtering)
+    \item Easy incorporation of initial conditions
+    \item Computational efficiency for simulation
+\end{itemize}
+\end{keyconceptbox}
+
+% ============================================================================
+\section{Block Diagram Form}
+\label{sec:block_diagram_form}
+% ============================================================================
+
+Block diagrams provide a graphical representation of system interconnections, showing signal flow between components. They are particularly useful for understanding complex system architectures and deriving overall transfer functions.
+
+\subsection{Block Diagram Elements}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=2.5cm]
+    % Blocks
+    \node[block] (tf) {$G(s)$};
+    \node[left=1.5cm of tf] (in1) {$U(s)$};
+    \node[right=1.5cm of tf] (out1) {$Y(s)$};
+    \draw[signal] (in1) -- (tf);
+    \draw[signal] (tf) -- (out1);
+    \node[below=0.3cm of tf] {(a) Transfer function block};
+
+    % Summer
+    \node[sum, right=5cm of tf] (sum1) {};
+    \node at (sum1) {\small $\Sigma$};
+    \node[left=1.2cm of sum1] (s1) {$X_1$};
+    \node[above=0.8cm of sum1] (s2) {$X_2$};
+    \node[right=1.2cm of sum1] (sout) {$X_1 + X_2$};
+    \draw[signal] (s1) -- node[above,pos=0.8] {\small $+$} (sum1);
+    \draw[signal] (s2) -- node[left,pos=0.8] {\small $+$} (sum1);
+    \draw[signal] (sum1) -- (sout);
+    \node[below=0.8cm of sum1] {(b) Summing junction};
+
+    % Branch point
+    \node[branch, right=5cm of sum1] (bp) {};
+    \node[left=1.2cm of bp] (bpin) {$X$};
+    \node[right=1.2cm of bp] (bpout1) {$X$};
+    \node[below=0.8cm of bp] (bpout2) {$X$};
+    \draw[signal] (bpin) -- (bp);
+    \draw[signal] (bp) -- (bpout1);
+    \draw[signal] (bp) -- (bpout2);
+    \node[below=1.3cm of bp] {(c) Branch point};
+\end{tikzpicture}
+\caption{Basic block diagram elements: (a) transfer function block, (b) summing junction, (c) branch point.}
+\label{fig:block_elements}
+\end{figure}
+
+\subsection{Block Diagram Reduction Rules}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{Diagram} & \textbf{Equivalent} \\
+\midrule
+Series (cascade) & $G_1 \rightarrow G_2$ & $G_1 G_2$ \\
+Parallel & $G_1 \parallel G_2$ & $G_1 + G_2$ \\
+Negative feedback & $G/(1+GH)$ loop & $\dfrac{G}{1+GH}$ \\
+Positive feedback & $G/(1-GH)$ loop & $\dfrac{G}{1-GH}$ \\
+\bottomrule
+\end{tabular}
+\caption{Block diagram reduction rules.}
+\label{tab:block_rules}
+\end{table}
+
+\begin{examplebox}[title=Example 4.4: Feedback System Block Diagram]
+Consider a unity feedback system with controller $C(s) = K$ and plant $G(s) = \frac{1}{s+1}$.
+
+The open-loop transfer function is:
+\begin{equation}
+L(s) = C(s)G(s) = \frac{K}{s+1}
+\end{equation}
+
+The closed-loop transfer function is:
+\begin{equation}
+T(s) = \frac{L(s)}{1 + L(s)} = \frac{K/(s+1)}{1 + K/(s+1)} = \frac{K}{s + 1 + K}
+\end{equation}
+
+The closed-loop pole is at $s = -(1+K)$, showing that increasing gain moves the pole further into the left half-plane, improving stability margins but potentially affecting transient response.
+\end{examplebox}
+
+% ============================================================================
+\section{Conversion Between Representations}
+\label{sec:conversions}
+% ============================================================================
+
+Converting between representations is a critical skill. This section provides systematic procedures for all common conversions.
+
+\subsection{State-Space to Transfer Function}
+
+The transfer function can be obtained from state-space matrices using:
+
+\begin{equation}
+\boxed{G(s) = \mC(s\mI - \mA)^{-1}\mB + \mD}
+\label{eq:ss_to_tf}
+\end{equation}
+
+For SISO systems, this yields a scalar transfer function. For MIMO systems, it produces a transfer function matrix.
+
+\begin{examplebox}[title=Example 4.5: State-Space to Transfer Function Conversion]
+Given the state-space model:
+\begin{equation}
+\mA = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}, \quad
+\mB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mC = \begin{bmatrix} 1 & 0 \end{bmatrix}, \quad
+\mD = \begin{bmatrix} 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 1:} Compute $(s\mI - \mA)$:
+\begin{equation}
+s\mI - \mA = \begin{bmatrix} s & -1 \\ 2 & s+3 \end{bmatrix}
+\end{equation}
+
+\textbf{Step 2:} Find the inverse using $\mM^{-1} = \frac{1}{\det(\mM)}\text{adj}(\mM)$:
+\begin{equation}
+\det(s\mI - \mA) = s(s+3) + 2 = s^2 + 3s + 2
+\end{equation}
+\begin{equation}
+(s\mI - \mA)^{-1} = \frac{1}{s^2 + 3s + 2}\begin{bmatrix} s+3 & 1 \\ -2 & s \end{bmatrix}
+\end{equation}
+
+\textbf{Step 3:} Compute $G(s) = \mC(s\mI - \mA)^{-1}\mB + \mD$:
+\begin{equation}
+G(s) = \frac{1}{s^2 + 3s + 2}\begin{bmatrix} 1 & 0 \end{bmatrix}\begin{bmatrix} s+3 & 1 \\ -2 & s \end{bmatrix}\begin{bmatrix} 0 \\ 1 \end{bmatrix} = \frac{1}{s^2 + 3s + 2}
+\end{equation}
+
+Factoring: $G(s) = \frac{1}{(s+1)(s+2)}$, with poles at $s = -1$ and $s = -2$.
+\end{examplebox}
+
+\subsection{Transfer Function to State-Space}
+
+Multiple state-space realizations exist for any transfer function. The controllable canonical form provides a systematic approach.
+
+For $G(s) = \frac{b_{n-1}s^{n-1} + \cdots + b_1 s + b_0}{s^n + a_{n-1}s^{n-1} + \cdots + a_1 s + a_0}$:
+
+\begin{equation}
+\mA = \begin{bmatrix}
+0 & 1 & 0 & \cdots & 0 \\
+0 & 0 & 1 & \cdots & 0 \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+0 & 0 & 0 & \cdots & 1 \\
+-a_0 & -a_1 & -a_2 & \cdots & -a_{n-1}
+\end{bmatrix}, \quad
+\mB = \begin{bmatrix} 0 \\ 0 \\ \vdots \\ 0 \\ 1 \end{bmatrix}
+\label{eq:ccf_general}
+\end{equation}
+
+\begin{equation}
+\mC = \begin{bmatrix} b_0 & b_1 & \cdots & b_{n-1} \end{bmatrix}, \quad \mD = \begin{bmatrix} 0 \end{bmatrix}
+\end{equation}
+
+\begin{examplebox}[title=Example 4.6: Transfer Function to State-Space]
+Convert $G(s) = \frac{2s + 5}{s^2 + 4s + 3}$ to controllable canonical form.
+
+Comparing with the general form: $a_0 = 3$, $a_1 = 4$, $b_0 = 5$, $b_1 = 2$.
+
+\begin{equation}
+\mA = \begin{bmatrix} 0 & 1 \\ -3 & -4 \end{bmatrix}, \quad
+\mB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mC = \begin{bmatrix} 5 & 2 \end{bmatrix}, \quad
+\mD = \begin{bmatrix} 0 \end{bmatrix}
+\end{equation}
+
+\textbf{Verification:} The eigenvalues of $\mA$ are the roots of $\det(s\mI - \mA) = s^2 + 4s + 3 = (s+1)(s+3)$, matching the poles at $s = -1$ and $s = -3$.
+\end{examplebox}
+
+\subsection{Differential Equation to Transfer Function}
+
+Take the Laplace transform of both sides assuming zero initial conditions, then solve for $Y(s)/U(s)$.
+
+\begin{examplebox}[title=Example 4.7: ODE to Transfer Function]
+Convert $2\ddot{y} + 5\dot{y} + 3y = 4\dot{u} + u$ to transfer function form.
+
+Taking the Laplace transform:
+\begin{equation}
+2s^2Y(s) + 5sY(s) + 3Y(s) = 4sU(s) + U(s)
+\end{equation}
+
+Solving:
+\begin{equation}
+G(s) = \frac{Y(s)}{U(s)} = \frac{4s + 1}{2s^2 + 5s + 3}
+\end{equation}
+\end{examplebox}
+
+\subsection{Differential Equation to State-Space}
+
+Define state variables as the output and its derivatives (phase variables), then express the highest derivative in terms of lower-order terms.
+
+\begin{examplebox}[title=Example 4.8: ODE to State-Space (No Input Derivatives)]
+Convert $\ddot{y} + 3\dot{y} + 2y = u$ to state-space form.
+
+Define states: $x_1 = y$, $x_2 = \dot{y}$.
+
+Then: $\dot{x}_1 = x_2$ and $\dot{x}_2 = \ddot{y} = u - 3\dot{y} - 2y = -2x_1 - 3x_2 + u$.
+
+\begin{equation}
+\mA = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}, \quad
+\mB = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mC = \begin{bmatrix} 1 & 0 \end{bmatrix}, \quad
+\mD = \begin{bmatrix} 0 \end{bmatrix}
+\end{equation}
+\end{examplebox}
+
+\begin{warningbox}[title=Handling Input Derivatives]
+When the differential equation contains derivatives of the input (e.g., $\ddot{y} + \dot{y} = \dot{u} + u$), the phase variable approach requires modification. Use either:
+\begin{enumerate}
+    \item The controllable canonical form directly from the transfer function
+    \item A change of variables to eliminate input derivatives
+\end{enumerate}
+Never differentiate the input signal in implementation---this amplifies noise.
+\end{warningbox}
+
+\subsection{Transfer Function to Differential Equation}
+
+Cross-multiply and take the inverse Laplace transform.
+
+For $G(s) = \frac{b_1 s + b_0}{a_2 s^2 + a_1 s + a_0}$:
+
+\begin{equation}
+(a_2 s^2 + a_1 s + a_0)Y(s) = (b_1 s + b_0)U(s)
+\end{equation}
+
+Inverse Laplace transform yields:
+\begin{equation}
+a_2\ddot{y} + a_1\dot{y} + a_0 y = b_1\dot{u} + b_0 u
+\end{equation}
+
+\begin{practicalbox}[title=Software Tools for Model Conversion]
+Both MATLAB and Python provide functions for converting between representations:
+
+\textbf{MATLAB (Control System Toolbox):}
+\begin{lstlisting}[language=Matlab,basicstyle=\ttfamily\footnotesize]
+% Transfer function to state-space
+sys_tf = tf([2 5], [1 4 3]);
+sys_ss = ss(sys_tf);
+
+% State-space to transfer function
+sys_tf2 = tf(sys_ss);
+
+% Access matrices
+[A, B, C, D] = ssdata(sys_ss);
+[num, den] = tfdata(sys_tf, 'v');
+\end{lstlisting}
+
+\textbf{Python (control library):}
+\begin{lstlisting}[language=Python,basicstyle=\ttfamily\footnotesize]
+import control as ct
+import numpy as np
+
+# Transfer function to state-space
+sys_tf = ct.tf([2, 5], [1, 4, 3])
+sys_ss = ct.tf2ss(sys_tf)
+
+# State-space to transfer function
+sys_tf2 = ct.ss2tf(sys_ss)
+
+# Access matrices
+A, B, C, D = sys_ss.A, sys_ss.B, sys_ss.C, sys_ss.D
+\end{lstlisting}
+\end{practicalbox}
+
+% ============================================================================
+\section{Practical Example: DC Motor in All Forms}
+\label{sec:dc_motor_example}
+% ============================================================================
+
+The DC motor provides an excellent example for demonstrating all four representations. Consider an armature-controlled DC motor with the following parameters:
+\begin{itemize}
+    \item Armature resistance $R_a = 2\ \Omega$
+    \item Armature inductance $L_a = 0.5$ H
+    \item Motor constant $K_m = 0.1$ N$\cdot$m/A (also equals back-EMF constant $K_e$)
+    \item Rotor inertia $J = 0.01$ kg$\cdot$m$^2$
+    \item Viscous friction $b = 0.1$ N$\cdot$m$\cdot$s/rad
+\end{itemize}
+
+\subsection{Differential Equation Form}
+
+The electrical and mechanical equations are:
+\begin{align}
+L_a\frac{\dd i_a}{\dd t} + R_a i_a &= V_a - K_e\omega \\
+J\frac{\dd \omega}{\dd t} + b\omega &= K_m i_a
 \end{align}
 
-where $\vecx$ is the state vector containing the minimum information needed to predict future behavior.
+Substituting values:
+\begin{align}
+0.5\frac{\dd i_a}{\dd t} + 2i_a &= V_a - 0.1\omega \\
+0.01\frac{\dd \omega}{\dd t} + 0.1\omega &= 0.1 i_a
+\end{align}
 
-\section{Block Diagram Form}
+\subsection{Transfer Function Form}
 
-A graphical representation showing signal flow and interconnections.
+Eliminating $i_a$ between the Laplace-transformed equations:
+\begin{equation}
+G(s) = \frac{\Omega(s)}{V_a(s)} = \frac{K_m}{(L_a s + R_a)(Js + b) + K_m K_e} = \frac{0.1}{0.005s^2 + 0.07s + 0.21}
+\end{equation}
 
-\input{figures/fig_ch01_simple_block.tex}
+Simplifying:
+\begin{equation}
+G(s) = \frac{20}{s^2 + 14s + 42}
+\end{equation}
+
+Poles: $s = -7 \pm j\sqrt{42-49} = -7 \pm j\sqrt{-7}$... Computing correctly: $s = \frac{-14 \pm \sqrt{196 - 168}}{2} = -7 \pm 2.65$
+
+So poles at $s = -4.35$ and $s = -9.65$.
+
+\subsection{State-Space Form}
+
+Choosing states $x_1 = i_a$ (armature current) and $x_2 = \omega$ (angular velocity):
+
+\begin{equation}
+\mA = \begin{bmatrix} -R_a/L_a & -K_e/L_a \\ K_m/J & -b/J \end{bmatrix} = \begin{bmatrix} -4 & -0.2 \\ 10 & -10 \end{bmatrix}
+\end{equation}
+
+\begin{equation}
+\mB = \begin{bmatrix} 1/L_a \\ 0 \end{bmatrix} = \begin{bmatrix} 2 \\ 0 \end{bmatrix}, \quad
+\mC = \begin{bmatrix} 0 & 1 \end{bmatrix}, \quad
+\mD = \begin{bmatrix} 0 \end{bmatrix}
+\end{equation}
+
+\subsection{Block Diagram Form}
+
+The DC motor block diagram shows the coupling between electrical and mechanical subsystems.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=2cm]
+    \node[input] (input) {};
+    \node[sum, right=1.2cm of input] (sum1) {};
+    \node at (sum1) {\small $\Sigma$};
+    \node[block, right=1.5cm of sum1] (elec) {$\dfrac{1}{L_a s + R_a}$};
+    \node[block, right=2cm of elec] (torque) {$K_m$};
+    \node[sum, right=1.5cm of torque] (sum2) {};
+    \node at (sum2) {\small $\Sigma$};
+    \node[block, right=1.5cm of sum2] (mech) {$\dfrac{1}{Js + b}$};
+    \node[output, right=1.5cm of mech] (output) {};
+    \node[block, below=1.2cm of torque] (bemf) {$K_e$};
+
+    \draw[signal] (input) -- node[above] {$V_a$} node[below,pos=0.8] {\small $+$} (sum1);
+    \draw[signal] (sum1) -- (elec);
+    \draw[signal] (elec) -- node[above] {$I_a$} (torque);
+    \draw[signal] (torque) -- node[above] {$\tau_m$} node[below,pos=0.8] {\small $+$} (sum2);
+    \draw[signal] (sum2) -- (mech);
+    \draw[signal] (mech) -- node[above] {$\omega$} (output);
+
+    % Feedback paths
+    \coordinate[right=0.7cm of mech] (fb1);
+    \node[branch] at (fb1) {};
+    \draw[thick] (fb1) |- (bemf);
+    \draw[signal] (bemf) -| node[left,pos=0.9] {\small $-$} (sum1);
+
+    % Load torque
+    \node[above=0.8cm of sum2] (load) {$\tau_L$};
+    \draw[signal] (load) -- node[right,pos=0.8] {\small $-$} (sum2);
+\end{tikzpicture}
+\caption{Block diagram of armature-controlled DC motor showing electrical-mechanical coupling and back-EMF feedback.}
+\label{fig:dc_motor_block}
+\end{figure}
+
+% ============================================================================
+\section{Selecting the Right Representation}
+\label{sec:selecting_representation}
+% ============================================================================
+
+Each representation has strengths that make it preferred for specific tasks.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lp{10cm}}
+\toprule
+\textbf{Representation} & \textbf{Best Used For} \\
+\midrule
+Differential Equation & Physics-based derivation, nonlinear systems, simulation with general ODE solvers \\
+Transfer Function & Frequency response analysis (Bode, Nyquist), classical controller design (root locus, lead-lag), stability analysis \\
+State-Space & MIMO systems, modern control (LQR, LQG), observer design, numerical simulation, controllability/observability analysis \\
+Block Diagram & System architecture visualization, subsystem interconnection, deriving overall transfer functions \\
+\bottomrule
+\end{tabular}
+\caption{Guidelines for selecting system representation.}
+\label{tab:representation_guide}
+\end{table}
+
+\begin{keyconceptbox}[title=Representation Selection Summary]
+\begin{itemize}
+    \item \textbf{Start with differential equations} when deriving models from physics
+    \item \textbf{Use transfer functions} for SISO classical control design and frequency analysis
+    \item \textbf{Use state-space} for MIMO systems, modern control techniques, and simulation
+    \item \textbf{Use block diagrams} to understand and communicate system structure
+    \item \textbf{Convert freely} between representations as needed for the task at hand
+\end{itemize}
+\end{keyconceptbox}
+
+\begin{historicalbox}[title=Historical Development of System Representations]
+The differential equation form dates back to Newton and Leibniz in the 17th century. Transfer functions emerged in the late 19th century with Heaviside's operational calculus and were formalized with the Laplace transform. State-space methods were developed in the 1950s-1960s by Kalman and others, enabling the ``modern control'' revolution. Block diagrams evolved from signal flow graphs developed by Mason in the 1950s. Today, all four representations remain essential tools, each serving different aspects of control system analysis and design.
+\end{historicalbox}
+
+% ============================================================================

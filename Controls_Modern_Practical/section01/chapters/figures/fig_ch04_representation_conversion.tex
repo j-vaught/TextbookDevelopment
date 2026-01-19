@@ -1,0 +1,86 @@
+% Figure: System Representation Conversions
+% Chapter 4: Mathematical Representations
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    repr box/.style={draw=UofSCBlack, fill=#1!15, rectangle,
+                     minimum height=2cm, minimum width=3.8cm,
+                     sharp corners, font=\small, align=center, line width=1pt},
+    conv arrow/.style={->, >=stealth, thick, UofSC70Black},
+    conv label/.style={font=\tiny, fill=white, inner sep=1pt}
+]
+    % Four representation boxes arranged in a square
+
+    % Differential Equation (top left)
+    \node[repr box=UofSCAtlantic] (de) at (-3.5, 2.5) {
+        \textbf{Differential Equation}\\[4pt]
+        $a_n\dfrac{d^n y}{dt^n} + \cdots + a_0 y$\\[2pt]
+        $= b_m\dfrac{d^m u}{dt^m} + \cdots + b_0 u$
+    };
+
+    % Transfer Function (top right)
+    \node[repr box=UofSCHorseshoe] (tf) at (3.5, 2.5) {
+        \textbf{Transfer Function}\\[4pt]
+        $G(s) = \dfrac{Y(s)}{U(s)}$\\[2pt]
+        $= \dfrac{b_m s^m + \cdots + b_0}{a_n s^n + \cdots + a_0}$
+    };
+
+    % State Space (bottom left)
+    \node[repr box=UofSCGarnet] (ss) at (-3.5, -2.5) {
+        \textbf{State-Space}\\[4pt]
+        $\dot{\mathbf{x}} = \mathbf{A}\mathbf{x} + \mathbf{B}u$\\[2pt]
+        $y = \mathbf{C}\mathbf{x} + Du$
+    };
+
+    % Block Diagram (bottom right)
+    \node[repr box=UofSCCongaree] (bd) at (3.5, -2.5) {
+        \textbf{Block Diagram}\\[4pt]
+        \begin{tikzpicture}[scale=0.5]
+            \node[draw, fill=white, minimum width=1cm, minimum height=0.6cm, font=\tiny] (g) at (0,0) {$G(s)$};
+            \draw[->, thick] (-1.2,0) -- (g.west);
+            \draw[->, thick] (g.east) -- (1.2,0);
+        \end{tikzpicture}
+    };
+
+    % Horizontal conversions (top)
+    \draw[conv arrow] (de.east) -- (tf.west);
+    \node[conv label, above] at (0, 2.7) {Laplace Transform};
+
+    \draw[conv arrow] (tf.west) -- (de.east);
+    \node[conv label, below] at (0, 2.3) {Inverse Laplace};
+
+    % Horizontal conversions (bottom)
+    \draw[conv arrow] (ss.east) -- (bd.west);
+    \node[conv label, above] at (0, -2.3) {$G(s) = \mathbf{C}(s\mathbf{I}-\mathbf{A})^{-1}\mathbf{B} + D$};
+
+    \draw[conv arrow] (bd.west) -- (ss.east);
+    \node[conv label, below] at (0, -2.7) {Realization};
+
+    % Vertical conversions (left)
+    \draw[conv arrow] (de.south) -- (ss.north);
+    \node[conv label, left, align=right] at (-3.7, 0) {State\\selection};
+
+    \draw[conv arrow] (ss.north) -- (de.south);
+    \node[conv label, right, align=left] at (-3.3, 0) {Eliminate\\states};
+
+    % Vertical conversions (right)
+    \draw[conv arrow] (tf.south) -- (bd.north);
+    \node[conv label, right, align=left] at (3.7, 0) {Direct\\mapping};
+
+    \draw[conv arrow] (bd.north) -- (tf.south);
+    \node[conv label, left, align=right] at (3.3, 0) {Block\\reduction};
+
+    % Diagonal conversions
+    \draw[conv arrow, dashed, UofSC50Black] (de.south east) -- (bd.north west);
+    \draw[conv arrow, dashed, UofSC50Black] (tf.south west) -- (ss.north east);
+
+    % Central note
+    \node[draw=UofSCGarnet, fill=UofSCSandstorm, font=\footnotesize,
+          align=center, sharp corners, inner sep=4pt] at (0, 0) {
+        All forms describe\\the same system
+    };
+
+\end{tikzpicture}
+\caption{Conversion pathways between the four main system representations. Each representation offers different insights: differential equations show physical relationships, transfer functions simplify frequency analysis, state-space enables modern control design, and block diagrams provide visual system structure.}
+\label{fig:representation_conversion}
+\end{figure}

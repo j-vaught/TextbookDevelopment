@@ -1,0 +1,102 @@
+% Figure: Step Response Specifications
+% Chapter 7: Time-Domain Analysis
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+    \begin{axis}[
+        width=13cm,
+        height=9cm,
+        xlabel={Time $t$ (seconds)},
+        ylabel={Response $y(t)$},
+        xmin=0, xmax=10,
+        ymin=0, ymax=1.6,
+        xtick={0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+        ytick={0, 0.1, 0.5, 0.9, 1, 1.3, 1.5},
+        yticklabels={$0$, $0.1y_{ss}$, $0.5y_{ss}$, $0.9y_{ss}$, $y_{ss}$, $M_p$, $$},
+        grid=major,
+        grid style={UofSC50Black!30},
+        every axis x label/.style={at={(ticklabel* cs:1)}, anchor=west},
+        every axis y label/.style={at={(ticklabel* cs:1)}, anchor=south},
+    ]
+        % Steady-state reference
+        \addplot[UofSC50Black, dashed, thin] coordinates {(0, 1) (10, 1)};
+
+        % 2% settling band
+        \addplot[UofSCGarnet!40, dashed, thin] coordinates {(0, 1.02) (10, 1.02)};
+        \addplot[UofSCGarnet!40, dashed, thin] coordinates {(0, 0.98) (10, 0.98)};
+        \fill[UofSCGarnet!8] (axis cs:0, 0.98) rectangle (axis cs:10, 1.02);
+
+        % Step response curve (zeta = 0.4, omega_n = 1.5)
+        \addplot[UofSCGarnet, very thick, domain=0:10, samples=300]
+            {1 - exp(-0.6*x)/0.917 * (cos(deg(1.375*x)) + 0.436*sin(deg(1.375*x)))};
+
+        % 10% and 90% lines for rise time
+        \addplot[UofSCAtlantic!60, dashed, thin] coordinates {(0, 0.1) (10, 0.1)};
+        \addplot[UofSCAtlantic!60, dashed, thin] coordinates {(0, 0.9) (10, 0.9)};
+
+        % Rise time markers (t_r from 10% to 90%)
+        % At 10%: t ≈ 0.3, at 90%: t ≈ 1.5
+        \addplot[UofSCAtlantic, thick, mark=*, mark size=2pt] coordinates {(0.3, 0.1)};
+        \addplot[UofSCAtlantic, thick, mark=*, mark size=2pt] coordinates {(1.5, 0.9)};
+
+        % Rise time dimension line
+        \draw[<->, UofSCAtlantic, thick] (axis cs:0.3, 0.2) -- (axis cs:1.5, 0.2);
+        \node[UofSCAtlantic, font=\small, fill=white, inner sep=1pt] at (axis cs:0.9, 0.2) {$t_r$};
+
+        % Peak time marker (t_p ≈ 2.3)
+        \addplot[UofSCRose, thick, mark=*, mark size=3pt] coordinates {(2.28, 1.3)};
+        \draw[UofSCRose, dashed, thin] (axis cs:2.28, 0) -- (axis cs:2.28, 1.3);
+        \node[UofSCRose, font=\small, below] at (axis cs:2.28, 0) {$t_p$};
+
+        % Peak overshoot annotation
+        \draw[<->, UofSCRose, thick] (axis cs:2.6, 1) -- (axis cs:2.6, 1.3);
+        \node[UofSCRose, font=\small, right, align=left] at (axis cs:2.7, 1.15) {$M_p$\\(overshoot)};
+
+        % Percent overshoot formula
+        \node[UofSCRose, font=\footnotesize] at (axis cs:4.5, 1.4) {$\%OS = \dfrac{M_p - y_{ss}}{y_{ss}} \times 100\%$};
+
+        % Settling time marker (t_s ≈ 6.7 for 2%)
+        \draw[UofSCHorseshoe, thick, dashed] (axis cs:6.7, 0) -- (axis cs:6.7, 1.02);
+        \node[UofSCHorseshoe, font=\small, below] at (axis cs:6.7, 0) {$t_s$};
+        \fill[UofSCHorseshoe] (axis cs:6.7, 1.0) circle (3pt);
+
+        % Settling time annotation
+        \draw[->, UofSCHorseshoe, thick] (axis cs:8, 0.7) -- (axis cs:6.8, 0.98);
+        \node[UofSCHorseshoe, font=\small, right, align=left] at (axis cs:8, 0.7) {Settling time\\(2\% criterion)};
+
+        % Delay time (50% point)
+        \addplot[UofSCCongaree, thick, mark=*, mark size=2pt] coordinates {(0.65, 0.5)};
+        \draw[UofSCCongaree, dashed, thin] (axis cs:0.65, 0) -- (axis cs:0.65, 0.5);
+        \node[UofSCCongaree, font=\small, below] at (axis cs:0.65, 0) {$t_d$};
+
+        % Steady-state error annotation (showing zero error for this case)
+        \draw[<->, UofSC70Black, thin] (axis cs:9.5, 0) -- (axis cs:9.5, 1);
+        \node[UofSC70Black, font=\footnotesize, right] at (axis cs:9.6, 0.5) {$y_{ss}$};
+
+    \end{axis}
+
+    % Specification summary box
+    \node[draw=UofSCGarnet, fill=UofSCSandstorm, font=\footnotesize,
+          align=left, sharp corners, anchor=north west] at (0.3, 2.5) {
+        \textbf{Time-Domain Specifications:}\\[3pt]
+        $t_d$ = Delay time (50\% of $y_{ss}$)\\
+        $t_r$ = Rise time (10\% to 90\%)\\
+        $t_p$ = Peak time\\
+        $t_s$ = Settling time (2\% band)\\
+        $M_p$ = Peak overshoot
+    };
+
+    % Formula box
+    \node[draw=UofSC70Black, fill=white, font=\footnotesize,
+          align=left, sharp corners, anchor=north east] at (12.8, 2.5) {
+        \textbf{For 2nd-order systems:}\\[3pt]
+        $t_r \approx \dfrac{1.8}{\omega_n}$\\[6pt]
+        $t_p = \dfrac{\pi}{\omega_d}$\\[6pt]
+        $t_s \approx \dfrac{4}{\zeta\omega_n}$ (2\%)\\[6pt]
+        $\%OS = e^{-\pi\zeta/\sqrt{1-\zeta^2}} \times 100$
+    };
+
+\end{tikzpicture}
+\caption{Step response specifications for a second-order underdamped system ($\zeta = 0.4$, $\omega_n = 1.5$ rad/s). Key performance metrics include rise time $t_r$, peak time $t_p$, settling time $t_s$, and percent overshoot $\%OS$.}
+\label{fig:step_response_specs}
+\end{figure}

@@ -1,58 +1,577 @@
 % ============================================================================
-% CHAPTER 3: FUNDAMENTAL PHYSICAL LAWS
+% CHAPTER 3: PHYSICAL LAWS FOR DYNAMIC SYSTEMS
 % ============================================================================
 
-\chapter{Fundamental Physical Laws}
+\chapter{Physical Laws for Dynamic Systems}
 \label{ch:physical_laws}
 
-Most dynamic systems can be modeled using a small set of conservation principles.
+The mathematical models that describe dynamic systems arise from a remarkably small set of physical principles. These conservation laws---governing momentum, charge, energy, and mass---provide the foundation for deriving the differential equations that characterize system behavior. Mastering these principles enables engineers to model systems across mechanical, electrical, thermal, and fluid domains using a unified framework.
 
-\section{Newton's Laws (Mechanical)}
+% ============================================================================
+\section{Conservation Laws Framework}
+\label{sec:conservation_framework}
+% ============================================================================
 
-\textbf{Newton's Second Law} for translation:
+All physical systems obey fundamental conservation principles. In control systems engineering, we exploit these principles to derive mathematical models that predict system behavior. The key insight is that conservation laws take a universal form: the rate of change of a conserved quantity equals the net flow into the system plus any internal generation.
+
+\begin{keyconceptbox}[title=The Four Conservation Laws]
+The dynamics of virtually all engineering systems can be derived from four conservation principles:
+\begin{enumerate}
+    \item \textbf{Conservation of Momentum}: $\displaystyle\frac{\dd p}{\dd t} = \sum F$ (mechanical systems)
+    \item \textbf{Conservation of Charge}: $\displaystyle\frac{\dd q}{\dd t} = \sum i$ (electrical systems)
+    \item \textbf{Conservation of Energy}: $\displaystyle\frac{\dd E}{\dd t} = \dot{Q}_{\text{in}} - \dot{Q}_{\text{out}} + \dot{W}$ (thermal systems)
+    \item \textbf{Conservation of Mass}: $\displaystyle\frac{\dd m}{\dd t} = \dot{m}_{\text{in}} - \dot{m}_{\text{out}}$ (fluid systems)
+\end{enumerate}
+Each law states that the rate of accumulation of a conserved quantity equals the net inflow plus any sources.
+\end{keyconceptbox}
+
+The general form of any conservation law can be expressed as:
 \begin{equation}
-\sum F = ma = m\frac{\dd^2 x}{\dd t^2}
+\frac{\dd}{\dd t}(\text{stored quantity}) = (\text{rate in}) - (\text{rate out}) + (\text{generation rate})
+\label{eq:conservation_general}
 \end{equation}
 
-\textbf{Rotational analog}:
+This framework provides a systematic approach to modeling: identify the conserved quantities, draw system boundaries, and apply the appropriate conservation law to each element or node.
+
+% ============================================================================
+\section{Newton's Laws for Mechanical Systems}
+\label{sec:newtons_laws}
+% ============================================================================
+
+Mechanical systems are governed by Newton's laws of motion, which relate forces to the acceleration of masses. These laws form the basis for modeling translational and rotational mechanical systems.
+
+\subsection{Translational Motion}
+
+\textbf{Newton's Second Law} for translational motion states that the sum of forces equals mass times acceleration:
 \begin{equation}
-\sum \tau = J\alpha = J\frac{\dd^2 \theta}{\dd t^2}
+\sum F = ma = m\frac{\dd v}{\dd t} = m\frac{\dd^2 x}{\dd t^2}
+\label{eq:newton_translation}
 \end{equation}
 
-where $J$ is the moment of inertia and $\alpha$ is angular acceleration.
-
-\section{Kirchhoff's Laws (Electrical)}
-
-\textbf{Kirchhoff's Voltage Law (KVL)}: The sum of voltages around any closed loop is zero:
+In terms of momentum $p = mv$:
 \begin{equation}
-\sum_{\text{loop}} V = 0
+\sum F = \frac{\dd p}{\dd t}
 \end{equation}
 
-\textbf{Kirchhoff's Current Law (KCL)}: The sum of currents at any node is zero:
+This formulation is more general and applies even when mass varies with time.
+
+\subsection{Rotational Motion}
+
+The rotational analog of Newton's second law relates torques to angular acceleration:
 \begin{equation}
-\sum_{\text{node}} i = 0
+\sum \tau = J\alpha = J\frac{\dd \omega}{\dd t} = J\frac{\dd^2 \theta}{\dd t^2}
+\label{eq:newton_rotation}
 \end{equation}
 
-\section{Conservation of Energy (Thermal)}
+where $J$ is the moment of inertia (kg$\cdot$m$^2$), $\alpha$ is angular acceleration (rad/s$^2$), $\omega$ is angular velocity (rad/s), and $\theta$ is angular displacement (rad).
 
+In terms of angular momentum $L = J\omega$:
 \begin{equation}
-\frac{\dd E}{\dd t} = \dot{Q}_{\text{in}} - \dot{Q}_{\text{out}} + \dot{W}
+\sum \tau = \frac{\dd L}{\dd t}
 \end{equation}
 
-For thermal systems:
+\subsection{d'Alembert's Principle}
+
+An alternative formulation treats the inertial force as a pseudo-force, converting dynamics problems into equivalent statics problems:
+\begin{equation}
+\sum F - ma = 0 \quad \Rightarrow \quad \sum F + F_{\text{inertia}} = 0
+\label{eq:dalembert}
+\end{equation}
+
+where $F_{\text{inertia}} = -ma$ is the inertial force. This principle is particularly useful for complex mechanical systems and forms the basis for Lagrangian mechanics.
+
+\begin{examplebox}[title=Example 3.1: Free Body Diagram Analysis]
+A mass $m = 2$ kg rests on a surface with kinetic friction coefficient $\mu_k = 0.3$. A horizontal force $F(t)$ is applied. Derive the equation of motion.
+
+\textbf{Solution:}
+
+Drawing the free body diagram, the forces acting on the mass are:
+\begin{itemize}
+    \item Applied force: $F(t)$ (horizontal, positive direction)
+    \item Friction force: $f = \mu_k N = \mu_k mg$ (opposing motion)
+    \item Normal force: $N = mg$ (vertical, balances weight)
+    \item Weight: $W = mg$ (vertical, downward)
+\end{itemize}
+
+Applying Newton's second law in the horizontal direction:
+\begin{equation*}
+m\ddot{x} = F(t) - \mu_k mg
+\end{equation*}
+
+Substituting values:
+\begin{equation*}
+2\ddot{x} = F(t) - (0.3)(2)(9.81) = F(t) - 5.89
+\end{equation*}
+
+The equation of motion is: $\ddot{x} = 0.5F(t) - 2.94$ m/s$^2$
+\end{examplebox}
+
+% ============================================================================
+\section{Constitutive Relations}
+\label{sec:constitutive}
+% ============================================================================
+
+Conservation laws alone are insufficient to model systems---we also need \emph{constitutive relations} that describe how individual components behave. These relations connect effort variables (forces, voltages, pressures) to flow variables (velocities, currents, volumetric flow rates).
+
+\subsection{Mechanical Constitutive Relations}
+
+\textbf{Linear Spring} (stores potential energy):
+\begin{equation}
+F = k(x_1 - x_2) \quad \text{or} \quad F = kx
+\label{eq:spring_const}
+\end{equation}
+where $k$ is the spring constant (N/m).
+
+\textbf{Viscous Damper} (dissipates energy):
+\begin{equation}
+F = b(\dot{x}_1 - \dot{x}_2) \quad \text{or} \quad F = b\dot{x}
+\label{eq:damper_const}
+\end{equation}
+where $b$ is the damping coefficient (N$\cdot$s/m).
+
+\textbf{Mass} (stores kinetic energy):
+\begin{equation}
+F = m\ddot{x}
+\label{eq:mass_const}
+\end{equation}
+
+\subsection{Electrical Constitutive Relations}
+
+\textbf{Resistor} (dissipates energy):
+\begin{equation}
+v = iR \quad \text{or} \quad i = \frac{v}{R} = Gv
+\label{eq:resistor_const}
+\end{equation}
+where $R$ is resistance ($\Omega$) and $G = 1/R$ is conductance (S).
+
+\textbf{Capacitor} (stores energy in electric field):
+\begin{equation}
+i = C\frac{\dd v}{\dd t} \quad \text{or} \quad v = \frac{1}{C}\int i \, \dd t
+\label{eq:capacitor_const}
+\end{equation}
+where $C$ is capacitance (F).
+
+\textbf{Inductor} (stores energy in magnetic field):
+\begin{equation}
+v = L\frac{\dd i}{\dd t} \quad \text{or} \quad i = \frac{1}{L}\int v \, \dd t
+\label{eq:inductor_const}
+\end{equation}
+where $L$ is inductance (H).
+
+\subsection{Thermal Constitutive Relations}
+
+\textbf{Thermal Resistance} (Fourier's law for conduction):
+\begin{equation}
+\dot{Q} = \frac{T_1 - T_2}{R_{\text{th}}} = \frac{\Delta T}{R_{\text{th}}}
+\label{eq:thermal_resistance}
+\end{equation}
+where $R_{\text{th}}$ is thermal resistance (K/W).
+
+\textbf{Thermal Capacitance}:
+\begin{equation}
+\dot{Q} = C_{\text{th}}\frac{\dd T}{\dd t} = mC_p\frac{\dd T}{\dd t}
+\label{eq:thermal_capacitance}
+\end{equation}
+where $C_{\text{th}} = mC_p$ is thermal capacitance (J/K).
+
+\subsection{Fluid Constitutive Relations}
+
+\textbf{Fluid Resistance} (laminar flow):
+\begin{equation}
+Q = \frac{P_1 - P_2}{R_f} = \frac{\Delta P}{R_f}
+\label{eq:fluid_resistance}
+\end{equation}
+where $R_f$ is fluid resistance (Pa$\cdot$s/m$^3$) and $Q$ is volumetric flow rate (m$^3$/s).
+
+\textbf{Fluid Capacitance} (tank):
+\begin{equation}
+Q = C_f\frac{\dd P}{\dd t} \quad \text{where} \quad C_f = \frac{A}{\rho g}
+\label{eq:fluid_capacitance}
+\end{equation}
+where $A$ is the tank cross-sectional area.
+
+\begin{examplebox}[title=Example 3.2: Domain Analogies]
+A mechanical mass-spring-damper system has: $m = 1$ kg, $k = 100$ N/m, $b = 10$ N$\cdot$s/m. Find the analogous electrical RLC circuit parameters.
+
+\textbf{Solution:}
+
+Using the force-voltage analogy:
+\begin{center}
+\begin{tabular}{lcl}
+Mechanical & $\leftrightarrow$ & Electrical \\
+\hline
+Mass $m$ & $\leftrightarrow$ & Inductance $L$ \\
+Damping $b$ & $\leftrightarrow$ & Resistance $R$ \\
+Stiffness $k$ & $\leftrightarrow$ & Inverse capacitance $1/C$ \\
+\end{tabular}
+\end{center}
+
+The mechanical equation: $m\ddot{x} + b\dot{x} + kx = F$
+
+The analogous electrical equation: $L\ddot{q} + R\dot{q} + \frac{1}{C}q = v$
+
+Using impedance scaling with $\omega_n = \sqrt{k/m} = 10$ rad/s:
+
+If we choose $L = 1$ H, then $R = 10$ $\Omega$ and $C = 0.01$ F = 10 mF.
+
+Both systems have identical natural frequency $\omega_n = 10$ rad/s and damping ratio $\zeta = 0.5$.
+\end{examplebox}
+
+% ============================================================================
+\section{Kirchhoff's Laws for Electrical Systems}
+\label{sec:kirchhoffs_laws}
+% ============================================================================
+
+Electrical circuits are governed by Kirchhoff's laws, which express conservation of charge and energy in electrical networks.
+
+\subsection{Kirchhoff's Current Law (KCL)}
+
+The algebraic sum of currents entering any node equals zero:
+\begin{equation}
+\sum_{\text{node}} i_k = 0
+\label{eq:kcl}
+\end{equation}
+
+This is a direct consequence of conservation of charge---charge cannot accumulate at a node (except in capacitors, which are modeled separately).
+
+\subsection{Kirchhoff's Voltage Law (KVL)}
+
+The algebraic sum of voltages around any closed loop equals zero:
+\begin{equation}
+\sum_{\text{loop}} v_k = 0
+\label{eq:kvl}
+\end{equation}
+
+This expresses conservation of energy---the work done moving a charge around a closed path must be zero.
+
+\subsection{Systematic Circuit Analysis}
+
+For circuits with $n$ nodes and $b$ branches:
+\begin{itemize}
+    \item Apply KCL at $(n-1)$ independent nodes
+    \item Apply KVL around $(b-n+1)$ independent loops
+    \item Use constitutive relations for each element
+\end{itemize}
+
+\input{figures/fig_ch03_rlc_circuit.tex}
+
+\begin{examplebox}[title=Example 3.3: RLC Circuit Analysis]
+Derive the differential equation for the series RLC circuit shown in Figure~\ref{fig:rlc_circuit}.
+
+\textbf{Solution:}
+
+Applying KVL around the loop:
+\begin{equation*}
+v_{\text{in}}(t) - v_R - v_L - v_C = 0
+\end{equation*}
+
+Substituting constitutive relations with $i = C\frac{\dd v_C}{\dd t}$:
+\begin{equation*}
+v_{\text{in}} = iR + L\frac{\dd i}{\dd t} + v_C
+\end{equation*}
+
+Since $i = C\frac{\dd v_C}{\dd t}$:
+\begin{equation*}
+v_{\text{in}} = RC\frac{\dd v_C}{\dd t} + LC\frac{\dd^2 v_C}{\dd t^2} + v_C
+\end{equation*}
+
+Rearranging into standard form:
+\begin{equation*}
+\boxed{LC\frac{\dd^2 v_C}{\dd t^2} + RC\frac{\dd v_C}{\dd t} + v_C = v_{\text{in}}(t)}
+\end{equation*}
+
+In terms of natural frequency and damping ratio:
+\begin{equation*}
+\omega_n = \frac{1}{\sqrt{LC}}, \quad \zeta = \frac{R}{2}\sqrt{\frac{C}{L}}
+\end{equation*}
+\end{examplebox}
+
+% ============================================================================
+\section{Conservation of Energy}
+\label{sec:energy_conservation}
+% ============================================================================
+
+Energy conservation provides an alternative approach to deriving system equations and is essential for thermal systems and energy-based modeling methods.
+
+\subsection{General Energy Balance}
+
+For any system, the first law of thermodynamics states:
+\begin{equation}
+\frac{\dd E}{\dd t} = \dot{Q}_{\text{in}} - \dot{Q}_{\text{out}} + \dot{W}_{\text{in}} - \dot{W}_{\text{out}}
+\label{eq:energy_balance}
+\end{equation}
+
+where $E$ is total stored energy, $\dot{Q}$ is heat transfer rate, and $\dot{W}$ is work rate (power).
+
+\subsection{Thermal Systems}
+
+For a thermal mass with no work interactions:
 \begin{equation}
 mC_p\frac{\dd T}{\dd t} = \dot{Q}_{\text{in}} - \dot{Q}_{\text{out}}
+\label{eq:thermal_energy}
 \end{equation}
 
-\section{Conservation of Mass (Fluid/Chemical)}
+Combining with Fourier's law for heat conduction:
+\begin{equation}
+mC_p\frac{\dd T}{\dd t} = \frac{T_{\infty} - T}{R_{\text{th}}}
+\label{eq:thermal_system}
+\end{equation}
 
+This yields a first-order system with time constant $\tau = mC_p R_{\text{th}} = C_{\text{th}}R_{\text{th}}$.
+
+\subsection{Energy Storage in System Elements}
+
+Each system element stores or dissipates energy:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Element} & \textbf{Energy Type} & \textbf{Expression} & \textbf{Storage/Dissipation} \\
+\midrule
+Mass & Kinetic & $E = \frac{1}{2}mv^2$ & Storage \\
+Spring & Potential & $E = \frac{1}{2}kx^2$ & Storage \\
+Damper & --- & $P = bv^2$ & Dissipation \\
+Inductor & Magnetic & $E = \frac{1}{2}Li^2$ & Storage \\
+Capacitor & Electric & $E = \frac{1}{2}Cv^2$ & Storage \\
+Resistor & --- & $P = i^2R$ & Dissipation \\
+\bottomrule
+\end{tabular}
+\caption{Energy storage and dissipation in common elements.}
+\label{tab:energy_elements}
+\end{table}
+
+\begin{examplebox}[title=Example 3.4: Thermal System Modeling]
+A metal block ($m = 5$ kg, $C_p = 450$ J/(kg$\cdot$K)) is placed in a furnace at $T_{\infty} = 500$\textdegree C. The thermal resistance between block and furnace is $R_{\text{th}} = 0.2$ K/W. Find the time constant and the time to reach 450\textdegree C from 25\textdegree C.
+
+\textbf{Solution:}
+
+The governing equation:
+\begin{equation*}
+mC_p\frac{\dd T}{\dd t} = \frac{T_{\infty} - T}{R_{\text{th}}}
+\end{equation*}
+
+Rearranging:
+\begin{equation*}
+\tau\frac{\dd T}{\dd t} + T = T_{\infty}
+\end{equation*}
+
+Time constant:
+\begin{equation*}
+\tau = mC_p R_{\text{th}} = (5)(450)(0.2) = 450 \text{ s} = 7.5 \text{ min}
+\end{equation*}
+
+The solution for step response:
+\begin{equation*}
+T(t) = T_{\infty} - (T_{\infty} - T_0)\ee^{-t/\tau} = 500 - 475\ee^{-t/450}
+\end{equation*}
+
+To reach 450\textdegree C:
+\begin{equation*}
+450 = 500 - 475\ee^{-t/450} \quad \Rightarrow \quad \ee^{-t/450} = \frac{50}{475} = 0.105
+\end{equation*}
+\begin{equation*}
+t = -450\ln(0.105) = 1013 \text{ s} \approx 16.9 \text{ min}
+\end{equation*}
+\end{examplebox}
+
+% ============================================================================
+\section{Conservation of Mass}
+\label{sec:mass_conservation}
+% ============================================================================
+
+Mass conservation governs fluid systems and chemical processes. The principle states that mass can neither be created nor destroyed (in non-nuclear processes).
+
+\subsection{General Mass Balance}
+
+For a control volume:
 \begin{equation}
 \frac{\dd m}{\dd t} = \dot{m}_{\text{in}} - \dot{m}_{\text{out}}
+\label{eq:mass_balance}
 \end{equation}
 
-For incompressible fluids with density $\rho$ and volume $V$:
+For incompressible fluids with constant density $\rho$:
 \begin{equation}
 \rho\frac{\dd V}{\dd t} = \rho Q_{\text{in}} - \rho Q_{\text{out}}
+\label{eq:volume_balance}
 \end{equation}
 
-where $Q$ is volumetric flow rate.
+where $Q$ is the volumetric flow rate (m$^3$/s).
+
+\subsection{Tank Level Systems}
+
+For a tank with cross-sectional area $A$ and liquid height $h$:
+\begin{equation}
+A\frac{\dd h}{\dd t} = Q_{\text{in}} - Q_{\text{out}}
+\label{eq:tank_level}
+\end{equation}
+
+If outflow depends on head (gravity-driven through a valve):
+\begin{equation}
+Q_{\text{out}} = \frac{h}{R_f} \quad \text{or} \quad Q_{\text{out}} = C_d A_o \sqrt{2gh}
+\label{eq:tank_outflow}
+\end{equation}
+
+The linearized model for small deviations around operating point $h_0$:
+\begin{equation}
+A\frac{\dd \Delta h}{\dd t} = \Delta Q_{\text{in}} - \frac{\Delta h}{R_f}
+\label{eq:tank_linearized}
+\end{equation}
+
+\begin{examplebox}[title=Example 3.5: Two-Tank System]
+Two tanks are connected in series. Tank 1 has area $A_1 = 1$ m$^2$ and outflow resistance $R_1 = 100$ s/m$^2$. Tank 2 has area $A_2 = 2$ m$^2$ and outflow resistance $R_2 = 200$ s/m$^2$. Derive the transfer function from inlet flow $Q_{\text{in}}$ to tank 2 level $h_2$.
+
+\textbf{Solution:}
+
+For Tank 1:
+\begin{equation*}
+A_1\frac{\dd h_1}{\dd t} = Q_{\text{in}} - \frac{h_1}{R_1}
+\end{equation*}
+
+For Tank 2:
+\begin{equation*}
+A_2\frac{\dd h_2}{\dd t} = \frac{h_1}{R_1} - \frac{h_2}{R_2}
+\end{equation*}
+
+Taking Laplace transforms:
+\begin{equation*}
+H_1(s) = \frac{R_1}{A_1 R_1 s + 1}Q_{\text{in}}(s) = \frac{100}{100s + 1}Q_{\text{in}}(s)
+\end{equation*}
+
+\begin{equation*}
+H_2(s) = \frac{R_2}{A_2 R_2 s + 1} \cdot \frac{H_1(s)}{R_1} = \frac{1}{A_2 R_2 s + 1}H_1(s)
+\end{equation*}
+
+The overall transfer function:
+\begin{equation*}
+\frac{H_2(s)}{Q_{\text{in}}(s)} = \frac{R_2}{(A_1 R_1 s + 1)(A_2 R_2 s + 1)} = \frac{200}{(100s + 1)(400s + 1)}
+\end{equation*}
+
+Time constants: $\tau_1 = A_1 R_1 = 100$ s, $\tau_2 = A_2 R_2 = 400$ s.
+\end{examplebox}
+
+% ============================================================================
+\section{Energy-Based Derivation Methods}
+\label{sec:energy_methods}
+% ============================================================================
+
+For complex systems, energy-based methods provide systematic approaches that automatically satisfy constraints and handle coupled dynamics.
+
+\subsection{Lagrangian Mechanics}
+
+The Lagrangian $\mathcal{L}$ is defined as the difference between kinetic and potential energy:
+\begin{equation}
+\mathcal{L} = T - V
+\label{eq:lagrangian}
+\end{equation}
+
+The equations of motion are obtained from the Euler-Lagrange equations:
+\begin{equation}
+\frac{\dd}{\dd t}\left(\frac{\partial \mathcal{L}}{\partial \dot{q}_i}\right) - \frac{\partial \mathcal{L}}{\partial q_i} = Q_i
+\label{eq:euler_lagrange}
+\end{equation}
+
+where $q_i$ are generalized coordinates and $Q_i$ are generalized non-conservative forces.
+
+\begin{historicalbox}[title=Lagrange and Hamilton: Energy Methods in Mechanics]
+Joseph-Louis Lagrange (1736--1813) revolutionized mechanics by reformulating Newton's laws in terms of energy. His \emph{M\'{e}canique Analytique} (1788) introduced the Lagrangian formulation, which elegantly handles constraints and generalizes to any coordinate system. Rather than tracking forces and accelerations directly, Lagrange's approach requires only the kinetic and potential energies as functions of generalized coordinates.
+
+William Rowan Hamilton (1805--1865) further extended these ideas, developing Hamiltonian mechanics based on the total energy (the Hamiltonian). Hamilton's formulation, using position and momentum as independent variables, proved essential for quantum mechanics and modern control theory. The Hamilton-Jacobi equation connects classical mechanics to optimal control through dynamic programming, while the Hamiltonian structure underlies passivity-based control methods used today.
+\end{historicalbox}
+
+\subsection{Rayleigh Dissipation Function}
+
+To include viscous damping in Lagrangian mechanics, we use the Rayleigh dissipation function:
+\begin{equation}
+\mathcal{D} = \frac{1}{2}\sum_i b_i \dot{q}_i^2
+\label{eq:rayleigh}
+\end{equation}
+
+The modified Euler-Lagrange equation becomes:
+\begin{equation}
+\frac{\dd}{\dd t}\left(\frac{\partial \mathcal{L}}{\partial \dot{q}_i}\right) - \frac{\partial \mathcal{L}}{\partial q_i} + \frac{\partial \mathcal{D}}{\partial \dot{q}_i} = Q_i
+\label{eq:euler_lagrange_damped}
+\end{equation}
+
+\subsection{Hamiltonian Formulation}
+
+The Hamiltonian $\mathcal{H}$ represents total system energy:
+\begin{equation}
+\mathcal{H} = T + V = \sum_i p_i \dot{q}_i - \mathcal{L}
+\label{eq:hamiltonian}
+\end{equation}
+
+where $p_i = \frac{\partial \mathcal{L}}{\partial \dot{q}_i}$ is the generalized momentum. Hamilton's equations are:
+\begin{equation}
+\dot{q}_i = \frac{\partial \mathcal{H}}{\partial p_i}, \quad \dot{p}_i = -\frac{\partial \mathcal{H}}{\partial q_i}
+\label{eq:hamilton_equations}
+\end{equation}
+
+\begin{examplebox}[title=Example 3.6: Lagrangian Derivation of Pendulum Equation]
+Use Lagrangian mechanics to derive the equation of motion for a simple pendulum of length $\ell$ and mass $m$.
+
+\textbf{Solution:}
+
+Choose $\theta$ (angle from vertical) as the generalized coordinate.
+
+Kinetic energy (mass moving in arc):
+\begin{equation*}
+T = \frac{1}{2}m v^2 = \frac{1}{2}m(\ell\dot{\theta})^2 = \frac{1}{2}m\ell^2\dot{\theta}^2
+\end{equation*}
+
+Potential energy (height above lowest point):
+\begin{equation*}
+V = mg\ell(1 - \cos\theta)
+\end{equation*}
+
+Lagrangian:
+\begin{equation*}
+\mathcal{L} = T - V = \frac{1}{2}m\ell^2\dot{\theta}^2 - mg\ell(1 - \cos\theta)
+\end{equation*}
+
+Applying the Euler-Lagrange equation:
+\begin{equation*}
+\frac{\partial \mathcal{L}}{\partial \dot{\theta}} = m\ell^2\dot{\theta}, \quad \frac{\dd}{\dd t}\left(\frac{\partial \mathcal{L}}{\partial \dot{\theta}}\right) = m\ell^2\ddot{\theta}
+\end{equation*}
+\begin{equation*}
+\frac{\partial \mathcal{L}}{\partial \theta} = -mg\ell\sin\theta
+\end{equation*}
+
+The equation of motion:
+\begin{equation*}
+m\ell^2\ddot{\theta} + mg\ell\sin\theta = 0 \quad \Rightarrow \quad \boxed{\ddot{\theta} + \frac{g}{\ell}\sin\theta = 0}
+\end{equation*}
+
+This agrees with the result from Newton's laws but was derived systematically from energy considerations.
+\end{examplebox}
+
+\begin{practicalbox}
+When deriving equations of motion:
+\begin{itemize}
+    \item For systems with few degrees of freedom and simple geometry, Newton's laws (free body diagrams) are often quickest.
+    \item For systems with constraints, multiple bodies, or complex geometry, Lagrangian methods avoid constraint forces entirely.
+    \item For port-Hamiltonian and passivity-based control design, the Hamiltonian formulation provides the natural framework.
+    \item Always verify your model by checking units, limiting cases, and energy conservation (for conservative systems).
+\end{itemize}
+\end{practicalbox}
+
+% ============================================================================
+\section{Summary: A Unified Modeling Approach}
+\label{sec:unified_approach}
+% ============================================================================
+
+The physical laws presented in this chapter can be unified into a systematic modeling procedure:
+
+\begin{enumerate}
+    \item \textbf{Identify the domain}: Determine whether the system is mechanical, electrical, thermal, fluid, or multi-domain.
+    \item \textbf{Define system boundaries}: Establish control volumes or free body diagrams.
+    \item \textbf{Select state variables}: Choose energy storage elements (masses, springs, inductors, capacitors, thermal masses, tank levels).
+    \item \textbf{Apply conservation laws}: Use Newton's laws, Kirchhoff's laws, or energy/mass balances as appropriate.
+    \item \textbf{Incorporate constitutive relations}: Apply element-specific laws (Hooke's law, Ohm's law, Fourier's law, etc.).
+    \item \textbf{Combine and simplify}: Eliminate algebraic variables to obtain differential equations in state variables.
+    \item \textbf{Linearize if necessary}: For nonlinear systems, linearize about the operating point.
+\end{enumerate}
+
+This systematic approach enables modeling of systems across all physical domains using the same fundamental principles, forming the foundation for the analysis and control design methods developed in subsequent chapters.
+
+% ============================================================================
