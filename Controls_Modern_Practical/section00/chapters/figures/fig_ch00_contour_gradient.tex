@@ -1,54 +1,121 @@
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
-    \begin{axis}[
-        width=10cm,
-        height=8cm,
-        xlabel={$x_1$},
-        ylabel={$x_2$},
-        xmin=-3, xmax=3,
-        ymin=-3, ymax=3,
-        view={0}{90},
-        colormap={uofsc}{color(0cm)=(UofSCAtlantic!20); color(1cm)=(UofSCAtlantic!40); color(2cm)=(UofSCAtlantic!60); color(3cm)=(UofSCAtlantic!80); color(4cm)=(UofSCGarnet)},
-        axis equal image,
-    ]
-        % Contour plot of quadratic function f(x,y) = x^2 + 4y^2
-        \addplot[
-            contour lua={
-                number=8,
-                labels=false,
-            },
-            thick,
-            UofSCAtlantic,
-            domain=-3:3,
-            y domain=-3:3,
-            samples=40,
-        ] {x^2 + 4*y^2};
+% Contour plot of f(x,y) = x^2 + 4*y^2 with gradient descent path
+% This is an elliptical paraboloid with minimum at origin
 
-        % Minimum point
-        \addplot[only marks, mark=*, mark size=4pt, UofSCGarnet] coordinates {(0,0)};
-        \node[above right, UofSCGarnet, font=\small\bfseries] at (axis cs:0.15,0.15) {$\vecx^*$};
+\begin{axis}[
+    width=12cm, height=10cm,
+    xlabel={$x_1$},
+    ylabel={$x_2$},
+    xmin=-3, xmax=3,
+    ymin=-2, ymax=2,
+    axis equal image,
+    axis lines=middle,
+    axis line style={thick, ->, >=stealth},
+    xlabel style={at={(axis description cs:1.02,0.5)}, anchor=west},
+    ylabel style={at={(axis description cs:0.5,1.02)}, anchor=south},
+    grid=major,
+    grid style={UofSC50Black!30},
+    title={\textbf{Gradient Descent on Contour Plot}},
+    title style={at={(0.5,1.05)}, font=\bfseries\large}
+]
 
-        % Gradient vectors at several points
-        % At (2, 1): gradient = (4, 8), normalized and scaled
-        \draw[->,UofSCGarnet,very thick] (axis cs:2,1) -- (axis cs:2-0.8,1-1.6);
-        \node[above right, UofSCGarnet, font=\scriptsize] at (axis cs:2,1) {$-\nabla f$};
+% Contour levels for f(x,y) = x^2 + 4*y^2
+% Level curves: x^2 + 4*y^2 = c  =>  ellipses
 
-        % At (-1.5, 0.8): gradient = (-3, 6.4), normalized and scaled
-        \draw[->,UofSCGarnet,very thick] (axis cs:-1.5,0.8) -- (axis cs:-1.5+0.6,0.8-1.3);
+% Level c = 0.5
+\addplot[UofSC50Black, thick, domain=0:360, samples=100, smooth]
+    ({0.707*cos(x)}, {0.354*sin(x)});
 
-        % At (0.5, -1.2): gradient = (1, -9.6), normalized and scaled
-        \draw[->,UofSCGarnet,very thick] (axis cs:0.5,-1.2) -- (axis cs:0.5-0.2,-1.2+1.9);
+% Level c = 2
+\addplot[UofSC70Black, thick, domain=0:360, samples=100, smooth]
+    ({1.414*cos(x)}, {0.707*sin(x)});
 
-        % At (-2, -0.5): gradient = (-4, -4), normalized and scaled
-        \draw[->,UofSCGarnet,very thick] (axis cs:-2,-0.5) -- (axis cs:-2+0.7,-0.5+0.7);
+% Level c = 4.5
+\addplot[UofSC70Black, thick, domain=0:360, samples=100, smooth]
+    ({2.121*cos(x)}, {1.061*sin(x)});
 
-        % Level set labels
-        \node[UofSCAtlantic, font=\scriptsize] at (axis cs:1.8,-0.3) {$f = 4$};
-        \node[UofSCAtlantic, font=\scriptsize] at (axis cs:2.5,-0.5) {$f = 8$};
+% Level c = 8
+\addplot[UofSC50Black, thick, domain=0:360, samples=100, smooth]
+    ({2.828*cos(x)}, {1.414*sin(x)});
 
-    \end{axis}
+% Level labels
+\node[font=\footnotesize, UofSC70Black] at (axis cs:1.7,0.15) {$f=2$};
+\node[font=\footnotesize, UofSC70Black] at (axis cs:2.3,0.15) {$f=4.5$};
+\node[font=\footnotesize, UofSC50Black] at (axis cs:0.9,0.1) {$f=0.5$};
+
+% Gradient descent path from (2.5, 1.2) with step size alpha = 0.2
+% For f = x^2 + 4y^2: gradient = (2x, 8y)
+% x_{k+1} = x_k - 0.2*(2*x_k) = 0.6*x_k
+% y_{k+1} = y_k - 0.2*(8*y_k) = -0.6*y_k
+
+% Starting point
+\node[circle, fill=UofSCGarnet, minimum size=6pt, inner sep=0pt] at (axis cs:2.5,1.2) {};
+\node[UofSCGarnet, font=\footnotesize, above right] at (axis cs:2.5,1.2) {$\vecx_0$};
+
+% Gradient descent iterates (computed: x_{k+1} = 0.6*x_k, y_{k+1} = -0.6*y_k)
+% Point 1: (1.5, -0.72)
+\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:1.5,-0.72) {};
+% Point 2: (0.9, 0.432)
+\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:0.9,0.432) {};
+% Point 3: (0.54, -0.259)
+\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:0.54,-0.259) {};
+% Point 4: (0.324, 0.156)
+\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:0.324,0.156) {};
+% Point 5: (0.194, -0.093)
+\node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:0.194,-0.093) {};
+
+% Descent path segments
+\draw[UofSCGarnet, very thick, ->, >=stealth] (axis cs:2.5,1.2) -- (axis cs:1.5,-0.72);
+\draw[UofSCGarnet, very thick, ->, >=stealth] (axis cs:1.5,-0.72) -- (axis cs:0.9,0.432);
+\draw[UofSCGarnet, very thick, ->, >=stealth] (axis cs:0.9,0.432) -- (axis cs:0.54,-0.259);
+\draw[UofSCGarnet, very thick, ->, >=stealth] (axis cs:0.54,-0.259) -- (axis cs:0.324,0.156);
+\draw[UofSCGarnet, very thick, ->, >=stealth] (axis cs:0.324,0.156) -- (axis cs:0.194,-0.093);
+\draw[UofSCGarnet, very thick, ->, >=stealth] (axis cs:0.194,-0.093) -- (axis cs:0.1,0.05);
+
+% Minimum point
+\node[circle, fill=UofSCHorseshoe, minimum size=8pt, inner sep=0pt] at (axis cs:0,0) {};
+\node[UofSCHorseshoe, font=\footnotesize, below left] at (axis cs:-0.1,-0.1) {$\vecx^*$};
+
+% Gradient vectors at selected points (scaled for visibility)
+% At (2.5, 1.2): gradient = (5, 9.6), normalized and scaled
+\draw[UofSCAtlantic, thick, ->, >=stealth] (axis cs:2.5,1.2) -- (axis cs:2.04,0.31);
+\node[UofSCAtlantic, font=\footnotesize] at (axis cs:2.55,0.7) {$-\nabla f$};
+
+% At (1.5, -0.72): gradient = (3, -5.76)
+\draw[UofSCAtlantic, thick, ->, >=stealth] (axis cs:1.5,-0.72) -- (axis cs:1.05,0.16);
+
+% At (0.9, 0.432): gradient = (1.8, 3.456)
+\draw[UofSCAtlantic, thick, ->, >=stealth] (axis cs:0.9,0.432) -- (axis cs:0.63,-0.095);
+
+\end{axis}
+
+% Legend box
+\begin{scope}[xshift=9.5cm, yshift=7cm]
+    \draw[thick, UofSC70Black] (-0.2,-0.2) rectangle (3.0,2.0);
+    \fill[white] (-0.15,-0.15) rectangle (2.95,1.95);
+    \draw[thick, UofSC70Black] (-0.2,-0.2) rectangle (3.0,2.0);
+
+    \node[font=\footnotesize\bfseries] at (1.4, 1.7) {Legend};
+
+    \draw[very thick, UofSCGarnet, ->, >=stealth] (0.1, 1.25) -- (0.7, 1.25);
+    \node[right, font=\footnotesize] at (0.8, 1.25) {Descent path};
+
+    \draw[very thick, UofSCAtlantic, ->, >=stealth] (0.1, 0.85) -- (0.7, 0.85);
+    \node[right, font=\footnotesize] at (0.8, 0.85) {$-\nabla f$};
+
+    \draw[thick, UofSC70Black] (0.1, 0.45) -- (0.7, 0.45);
+    \node[right, font=\footnotesize] at (0.8, 0.45) {Level curves};
+
+    \node[circle, fill=UofSCHorseshoe, minimum size=6pt, inner sep=0pt] at (0.4, 0.1) {};
+    \node[right, font=\footnotesize] at (0.8, 0.1) {Minimum $\vecx^*$};
+\end{scope}
+
+% Function definition
+\node[font=\small, align=left] at (1.5,-1.0) {$f(\vecx) = x_1^2 + 4x_2^2$, \quad Step size $\alpha = 0.2$};
+
 \end{tikzpicture}
-\caption{Contour plot of $f(x_1, x_2) = x_1^2 + 4x_2^2$ showing level curves (lines of constant function value). The negative gradient vectors (red arrows) point toward the minimum $\vecx^* = (0, 0)$ and are perpendicular to the level curves. Elliptical contours indicate different scaling along each axis (condition number $\kappa = 4$), which causes gradient descent to take an inefficient zigzag path.}
+\caption{Gradient descent on a quadratic function $f(\vecx) = x_1^2 + 4x_2^2$. The elliptical contours represent level curves of constant function value. Starting from initial point $\vecx_0 = (2.5, 1.2)$, gradient descent iteratively moves in the direction of steepest descent (negative gradient, shown in Atlantic blue). The zigzag pattern (Garnet path) is characteristic of gradient descent on ill-conditioned problems where the contours are elongated ellipses. Each step moves perpendicular to the local level curve, eventually converging to the global minimum at $\vecx^* = (0, 0)$ (Horseshoe green).}
 \label{fig:contour_gradient}
 \end{figure}

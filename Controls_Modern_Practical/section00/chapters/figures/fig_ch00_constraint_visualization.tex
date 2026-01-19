@@ -1,72 +1,123 @@
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
-    \begin{axis}[
-        width=10cm,
-        height=10cm,
-        xlabel={$x$},
-        ylabel={$y$},
-        xmin=-0.5, xmax=5,
-        ymin=-0.5, ymax=5,
-        axis equal image,
-        xtick={0,1,2,3,4},
-        ytick={0,1,2,3,4},
-    ]
-        % Constraint line: x + y = 4
-        \addplot[
-            very thick,
-            UofSCAtlantic,
-            domain=-0.5:5,
-            samples=2,
-        ] {4 - x};
-        \node[above right, UofSCAtlantic, font=\small, rotate=-45] at (axis cs:1,3) {$g(x,y) = x + y - 4 = 0$};
 
-        % Contours of objective f(x,y) = x^2 + y^2
-        \addplot[
-            contour lua={
-                number=6,
-                labels=false,
-            },
-            UofSCGarnet!50,
-            domain=0:5,
-            y domain=0:5,
-            samples=40,
-        ] {x^2 + y^2};
+\begin{axis}[
+    width=12cm, height=10cm,
+    xlabel={$x_1$},
+    ylabel={$x_2$},
+    xmin=-0.5, xmax=5,
+    ymin=-0.5, ymax=4.5,
+    axis lines=left,
+    axis line style={thick, ->, >=stealth},
+    xlabel style={at={(axis description cs:1.02,0.12)}, anchor=west},
+    ylabel style={at={(axis description cs:0.12,1.02)}, anchor=south},
+    grid=major,
+    grid style={UofSC50Black!20},
+    title={\textbf{Constrained Optimization: Feasible Region and Optimal Point}},
+    title style={at={(0.5,1.03)}, font=\bfseries\large}
+]
 
-        % Contour labels
-        \node[UofSCGarnet, font=\scriptsize] at (axis cs:1.5,0.3) {$f=4$};
-        \node[UofSCGarnet, font=\scriptsize] at (axis cs:2.5,0.5) {$f=8$};
-        \node[UofSCGarnet, font=\scriptsize] at (axis cs:3.2,1.0) {$f=12$};
+% ========== Feasible Region (shaded) ==========
+% Constraints: x1 + x2 <= 4, 2*x1 + x2 <= 5, x1 >= 0, x2 >= 0
+% Vertices: (0,0), (2.5,0), (1,3), (0,4)
 
-        % Optimal point
-        \addplot[only marks, mark=*, mark size=5pt, UofSCGarnet] coordinates {(2,2)};
-        \node[above right, UofSCGarnet, font=\small\bfseries] at (axis cs:2.1,2.1) {$(2,2)$};
+% Fill feasible region
+\fill[UofSCAtlantic, opacity=0.15]
+    (axis cs:0,0) -- (axis cs:2.5,0) -- (axis cs:1,3) -- (axis cs:0,4) -- cycle;
 
-        % Gradient of f at optimal point (points outward from origin)
-        \draw[->,UofSCGarnet,very thick] (axis cs:2,2) -- (axis cs:2.8,2.8);
-        \node[above right, UofSCGarnet, font=\small] at (axis cs:2.8,2.8) {$\nabla f$};
+% ========== Constraint Boundaries ==========
 
-        % Gradient of g at optimal point (perpendicular to constraint)
-        \draw[->,UofSCAtlantic,very thick] (axis cs:2,2) -- (axis cs:2.5,2.5);
-        \node[below right, UofSCAtlantic, font=\small] at (axis cs:2.5,2.5) {$\nabla g$};
+% Constraint 1: x1 + x2 = 4
+\addplot[UofSCCongaree, very thick, domain=-0.5:4.5, samples=50] {4 - x};
+\node[UofSCCongaree, font=\footnotesize, rotate=-45] at (axis cs:3.5,1.2) {$x_1 + x_2 = 4$};
 
-        % Show they are parallel (key insight)
-        \draw[<->,UofSCHorseshoe,dashed,thick] (axis cs:2.6,2.6) to[bend left=20] (axis cs:2.9,2.9);
-        \node[right, UofSCHorseshoe, font=\scriptsize, align=left] at (axis cs:3.0,2.75) {$\nabla f \parallel \nabla g$\\(at optimum)};
+% Constraint 2: 2*x1 + x2 = 5
+\addplot[UofSCHorseshoe, very thick, domain=-0.5:2.75, samples=50] {5 - 2*x};
+\node[UofSCHorseshoe, font=\footnotesize, rotate=-63] at (axis cs:2.0,2.0) {$2x_1 + x_2 = 5$};
 
-        % Origin marker
-        \addplot[only marks, mark=o, mark size=3pt, UofSC70Black] coordinates {(0,0)};
-        \node[below right, font=\small] at (axis cs:0,0) {origin};
+% Constraint boundaries: x1 = 0, x2 = 0 (axes)
+\draw[UofSC70Black, very thick] (axis cs:0,0) -- (axis cs:0,4.5);
+\draw[UofSC70Black, very thick] (axis cs:0,0) -- (axis cs:5,0);
 
-        % Unconstrained minimum (for comparison)
-        \draw[dashed,UofSC50Black] (axis cs:0,0) -- (axis cs:2,2);
-        \node[below, UofSC70Black, font=\scriptsize, align=center] at (axis cs:1,0.8) {distance\\$= 2\sqrt{2}$};
+% ========== Level Curves of Objective Function ==========
+% Objective: minimize f(x) = x1 + 2*x2 (level curves: x1 + 2*x2 = c)
 
-        % Feasible region label
-        \node[UofSCAtlantic, font=\small, align=center] at (axis cs:0.8,4.2) {feasible set\\(constraint line)};
+% Level c = 6 (outer)
+\addplot[UofSCRose, thick, dashed, domain=0:4.5, samples=50] {3 - 0.5*x};
+\node[UofSCRose, font=\footnotesize] at (axis cs:4.2,0.9) {$f = 6$};
 
-    \end{axis}
+% Level c = 4
+\addplot[UofSCRose, thick, dashed, domain=0:4, samples=50] {2 - 0.5*x};
+\node[UofSCRose, font=\footnotesize] at (axis cs:2.8,0.6) {$f = 4$};
+
+% Level c = 2.5 (optimal, passes through (2.5, 0))
+\addplot[UofSCGarnet, very thick, domain=0:4.5, samples=50] {1.25 - 0.5*x};
+\node[UofSCGarnet, font=\footnotesize] at (axis cs:1.0,0.75) {$f^* = 2.5$};
+
+% Level c = 1 (infeasible)
+\addplot[UofSCRose, thick, dotted, domain=0:2, samples=50] {0.5 - 0.5*x};
+
+% ========== Vertices of Feasible Region ==========
+\node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:0,0) {};
+\node[UofSCAtlantic, font=\footnotesize, below left] at (axis cs:0,0) {$(0,0)$};
+
+\node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:0,4) {};
+\node[UofSCAtlantic, font=\footnotesize, left] at (axis cs:0,4) {$(0,4)$};
+
+\node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:1,3) {};
+\node[UofSCAtlantic, font=\footnotesize, above right] at (axis cs:1,3) {$(1,3)$};
+
+% ========== Optimal Point ==========
+\node[circle, fill=UofSCGarnet, minimum size=8pt, inner sep=0pt] at (axis cs:2.5,0) {};
+\node[UofSCGarnet, font=\footnotesize\bfseries, above right] at (axis cs:2.5,0.1) {$\vecx^* = (2.5, 0)$};
+
+% ========== Gradient Direction ==========
+% Gradient of f = (1, 2), pointing away from optimal level curve
+\draw[UofSCGarnet, very thick, ->, >=stealth] (axis cs:2.5,0) -- (axis cs:3.2,1.4);
+\node[UofSCGarnet, font=\footnotesize] at (axis cs:3.5,1.0) {$\nabla f$};
+
+% Normal direction annotation
+\draw[UofSCHorseshoe, thick, ->, >=stealth] (axis cs:2.5,0) -- (axis cs:1.9,-0.6);
+\node[UofSCHorseshoe, font=\footnotesize] at (axis cs:1.4,-0.5) {$-\nabla g$};
+
+% ========== Labels ==========
+\node[UofSCAtlantic, font=\small\bfseries] at (axis cs:0.8,1.5) {Feasible};
+\node[UofSCAtlantic, font=\small\bfseries] at (axis cs:0.8,1.1) {Region};
+
+\end{axis}
+
+% ========== Legend ==========
+\begin{scope}[xshift=9.5cm, yshift=7.5cm]
+    \fill[white] (-0.2,-0.2) rectangle (3.2,2.5);
+    \draw[thick, UofSC70Black] (-0.2,-0.2) rectangle (3.2,2.5);
+
+    \node[font=\footnotesize\bfseries] at (1.5, 2.2) {Legend};
+
+    \fill[UofSCAtlantic, opacity=0.15] (0.1, 1.75) rectangle (0.6, 1.95);
+    \draw[thick, UofSCAtlantic] (0.1, 1.75) rectangle (0.6, 1.95);
+    \node[right, font=\footnotesize] at (0.7, 1.85) {Feasible region};
+
+    \draw[very thick, UofSCCongaree] (0.1, 1.45) -- (0.6, 1.45);
+    \draw[very thick, UofSCHorseshoe] (0.1, 1.1) -- (0.6, 1.1);
+    \node[right, font=\footnotesize] at (0.7, 1.28) {Constraints};
+
+    \draw[thick, dashed, UofSCRose] (0.1, 0.75) -- (0.6, 0.75);
+    \node[right, font=\footnotesize] at (0.7, 0.75) {Level curves};
+
+    \draw[very thick, UofSCGarnet] (0.1, 0.4) -- (0.6, 0.4);
+    \node[right, font=\footnotesize] at (0.7, 0.4) {Optimal level};
+
+    \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (0.35, 0.1) {};
+    \node[right, font=\footnotesize] at (0.7, 0.1) {Optimal $\vecx^*$};
+\end{scope}
+
+% ========== Problem Statement ==========
+\node[font=\small, align=left, text width=8cm] at (4.0,-0.8) {
+    \textbf{Problem:} $\displaystyle\min_{\vecx} f(\vecx) = x_1 + 2x_2$ \quad subject to: $x_1 + x_2 \leq 4$, $2x_1 + x_2 \leq 5$, $\vecx \geq 0$
+};
+
 \end{tikzpicture}
-\caption{Geometric interpretation of Lagrange multipliers. Minimizing $f(x,y) = x^2 + y^2$ (distance squared from origin) subject to $g(x,y) = x + y - 4 = 0$. Circular contours show level curves of $f$. At the constrained minimum $(2,2)$, the gradients $\nabla f$ and $\nabla g$ are parallel (both perpendicular to the constraint line). This is the geometric condition for optimality: we cannot improve the objective while staying on the constraint.}
+\caption{Visualization of a constrained optimization problem. The feasible region (shaded in Atlantic blue) is the intersection of half-planes defined by the linear inequality constraints. The dashed Rose curves are level sets of the linear objective function $f(\vecx) = x_1 + 2x_2$, with lower values toward the origin. The optimal point $\vecx^* = (2.5, 0)$ (Garnet) occurs where the lowest level curve touches the feasible region boundary. At this vertex, the gradient $\nabla f$ points outward from the feasible region, satisfying the KKT conditions. The constraint $2x_1 + x_2 \leq 5$ is active at the optimum.}
 \label{fig:constraint_visualization}
 \end{figure}

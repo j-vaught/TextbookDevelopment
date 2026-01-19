@@ -1,75 +1,125 @@
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
-    \begin{axis}[
-        width=11cm,
-        height=9cm,
-        xlabel={$x_1$},
-        ylabel={$x_2$},
-        xmin=-2.5, xmax=3,
-        ymin=-1.5, ymax=3,
-        view={0}{90},
-        axis equal image,
-        legend pos=north west,
-        legend style={font=\small, sharp corners},
-    ]
-        % Contour plot of Rosenbrock function (simplified visualization)
-        % f(x,y) = (1-x)^2 + 100(y-x^2)^2
-        \addplot[
-            contour lua={
-                number=12,
-                labels=false,
-            },
-            UofSCAtlantic!60,
-            domain=-2.2:2.2,
-            y domain=-1:3,
-            samples=60,
-        ] {(1-x)^2 + 10*(y-x^2)^2};
 
-        % Global minimum
-        \addplot[only marks, mark=*, mark size=5pt, UofSCGarnet] coordinates {(1,1)};
-        \node[below right, UofSCGarnet, font=\small\bfseries] at (axis cs:1.1,0.9) {$(1,1)$};
+% ========== Main Plot: Function value vs iteration ==========
+\begin{axis}[
+    name=mainplot,
+    width=11cm, height=7cm,
+    xlabel={Iteration $k$},
+    ylabel={$f(\vecx_k)$},
+    xmin=0, xmax=25,
+    ymin=0, ymax=12,
+    grid=major,
+    grid style={UofSC50Black!30},
+    title={\textbf{Gradient Descent Convergence}},
+    title style={at={(0.5,1.02)}, font=\bfseries\large},
+    legend pos=north east,
+    legend style={font=\footnotesize, sharp corners, draw=UofSC70Black}
+]
 
-        % Gradient descent path (approximate trajectory)
-        \addplot[
-            very thick,
-            UofSCGarnet,
-            mark=*,
-            mark size=2pt,
-            mark options={UofSCGarnet},
-        ] coordinates {
-            (-1.5, 2.5)
-            (-1.2, 2.2)
-            (-0.9, 1.6)
-            (-0.5, 0.8)
-            (-0.1, 0.3)
-            (0.3, 0.15)
-            (0.5, 0.25)
-            (0.65, 0.42)
-            (0.78, 0.60)
-            (0.88, 0.77)
-            (0.95, 0.90)
-            (0.98, 0.96)
-            (1.0, 1.0)
-        };
+% Function: f(x) = 0.5*(x1^2 + 10*x2^2)
+% Gradient: (x1, 10*x2)
+% Starting from (3, 2): f_0 = 0.5*(9 + 40) = 24.5
 
-        % Starting point label
-        \node[above left, UofSCGarnet, font=\small\bfseries] at (axis cs:-1.5,2.5) {start};
+% Large step size alpha = 0.15 (oscillatory convergence)
+% For this function: x1_{k+1} = (1-0.15)*x1_k = 0.85*x1_k
+%                    x2_{k+1} = (1-1.5)*x2_k = -0.5*x2_k (oscillates!)
+\addplot[UofSCRose, very thick, mark=*, mark size=2pt, mark options={fill=UofSCRose}]
+    coordinates {
+        (0, 10.5) (1, 5.36) (2, 2.93) (3, 1.75) (4, 1.14)
+        (5, 0.80) (6, 0.59) (7, 0.46) (8, 0.37) (9, 0.30)
+        (10, 0.25) (11, 0.21) (12, 0.18) (13, 0.16) (14, 0.14)
+        (15, 0.12) (16, 0.10) (17, 0.09) (18, 0.08) (19, 0.07)
+        (20, 0.06) (21, 0.05) (22, 0.05) (23, 0.04) (24, 0.04)
+    };
+\addlegendentry{$\alpha = 0.15$ (large)}
 
-        % Arrow showing direction
-        \draw[->,UofSCHorseshoe,very thick] (axis cs:-1.5,2.5) -- (axis cs:-1.3,2.3);
+% Medium step size alpha = 0.08 (good convergence)
+\addplot[UofSCGarnet, very thick, mark=square*, mark size=2pt, mark options={fill=UofSCGarnet}]
+    coordinates {
+        (0, 10.5) (1, 7.14) (2, 4.91) (3, 3.41) (4, 2.40)
+        (5, 1.71) (6, 1.23) (7, 0.90) (8, 0.66) (9, 0.49)
+        (10, 0.37) (11, 0.28) (12, 0.21) (13, 0.16) (14, 0.13)
+        (15, 0.10) (16, 0.08) (17, 0.06) (18, 0.05) (19, 0.04)
+        (20, 0.03) (21, 0.02) (22, 0.02) (23, 0.02) (24, 0.01)
+    };
+\addlegendentry{$\alpha = 0.08$ (medium)}
 
-        % Valley annotation
-        \draw[<-,UofSCCongaree,thick] (axis cs:0.2,0.04) -- (axis cs:-0.8,-0.8);
-        \node[below,UofSCCongaree,font=\small,align=center] at (axis cs:-0.8,-1.0) {narrow valley\\(slow progress)};
+% Small step size alpha = 0.02 (slow convergence)
+\addplot[UofSCAtlantic, very thick, mark=triangle*, mark size=2pt, mark options={fill=UofSCAtlantic}]
+    coordinates {
+        (0, 10.5) (1, 9.52) (2, 8.64) (3, 7.85) (4, 7.14)
+        (5, 6.51) (6, 5.94) (7, 5.42) (8, 4.96) (9, 4.54)
+        (10, 4.16) (11, 3.82) (12, 3.51) (13, 3.23) (14, 2.98)
+        (15, 2.75) (16, 2.54) (17, 2.35) (18, 2.18) (19, 2.02)
+        (20, 1.88) (21, 1.75) (22, 1.63) (23, 1.52) (24, 1.42)
+    };
+\addlegendentry{$\alpha = 0.02$ (small)}
 
-        % Iteration markers
-        \node[right, font=\scriptsize, UofSC70Black] at (axis cs:-1.5,2.5) {$k=0$};
-        \node[below, font=\scriptsize, UofSC70Black] at (axis cs:0.3,0.05) {$k=500$};
-        \node[right, font=\scriptsize, UofSC70Black] at (axis cs:0.78,0.60) {$k=1000$};
+% Optimal value line
+\draw[UofSCHorseshoe, thick, dashed] (axis cs:0,0) -- (axis cs:25,0);
+\node[UofSCHorseshoe, font=\footnotesize, anchor=west] at (axis cs:25.2, 0) {$f^* = 0$};
 
-    \end{axis}
+\end{axis}
+
+% ========== Inset: Zoomed view of convergence ==========
+\begin{axis}[
+    at={(mainplot.south east)},
+    anchor=north east,
+    xshift=-0.8cm,
+    yshift=3.8cm,
+    width=5cm, height=3.5cm,
+    xlabel={$k$},
+    ylabel={$f(\vecx_k)$},
+    xlabel style={font=\footnotesize},
+    ylabel style={font=\footnotesize},
+    xmin=10, xmax=24,
+    ymin=0, ymax=0.6,
+    grid=major,
+    grid style={UofSC50Black!30},
+    tick label style={font=\tiny},
+    title={\footnotesize\textbf{Zoomed: $k \geq 10$}},
+    title style={at={(0.5,1.0)}, font=\footnotesize\bfseries}
+]
+
+% Large step size (zoomed)
+\addplot[UofSCRose, thick, mark=*, mark size=1.5pt, mark options={fill=UofSCRose}]
+    coordinates {
+        (10, 0.25) (11, 0.21) (12, 0.18) (13, 0.16) (14, 0.14)
+        (15, 0.12) (16, 0.10) (17, 0.09) (18, 0.08) (19, 0.07)
+        (20, 0.06) (21, 0.05) (22, 0.05) (23, 0.04) (24, 0.04)
+    };
+
+% Medium step size (zoomed)
+\addplot[UofSCGarnet, thick, mark=square*, mark size=1.5pt, mark options={fill=UofSCGarnet}]
+    coordinates {
+        (10, 0.37) (11, 0.28) (12, 0.21) (13, 0.16) (14, 0.13)
+        (15, 0.10) (16, 0.08) (17, 0.06) (18, 0.05) (19, 0.04)
+        (20, 0.03) (21, 0.02) (22, 0.02) (23, 0.02) (24, 0.01)
+    };
+
+% Small step size (zoomed)
+\addplot[UofSCAtlantic, thick, mark=triangle*, mark size=1.5pt, mark options={fill=UofSCAtlantic}]
+    coordinates {
+        (10, 4.16) (11, 3.82) (12, 3.51) (13, 3.23) (14, 2.98)
+        (15, 2.75) (16, 2.54) (17, 2.35) (18, 2.18) (19, 2.02)
+        (20, 1.88) (21, 1.75) (22, 1.63) (23, 1.52) (24, 1.42)
+    };
+
+\end{axis}
+
+% ========== Annotation: Update rule ==========
+\node[font=\small, align=center] at (5.5,-0.8) {
+    \textbf{Gradient Descent:} $\vecx_{k+1} = \vecx_k - \alpha \nabla f(\vecx_k)$
+};
+
+\node[font=\footnotesize, align=left, text width=6cm] at (9.5,-1.5) {
+    $f(\vecx) = \frac{1}{2}(x_1^2 + 10x_2^2)$\\[2pt]
+    Initial: $\vecx_0 = (3, 2)$, $f(\vecx_0) = 10.5$
+};
+
 \end{tikzpicture}
-\caption{Gradient descent trajectory on the Rosenbrock function $f(x,y) = (1-x)^2 + 100(y-x^2)^2$. Contours show level curves of the function. The algorithm quickly descends into the curved valley but then progresses slowly along the valley floor toward the global minimum at $(1,1)$. The narrow valley (where the condition number is very large) causes the slow convergence characteristic of this challenging test function.}
+\caption{Convergence of gradient descent for a quadratic function $f(\vecx) = \frac{1}{2}(x_1^2 + 10x_2^2)$ with different step sizes $\alpha$. A large step size (Rose, $\alpha = 0.15$) converges fastest initially but may oscillate. A medium step size (Garnet, $\alpha = 0.08$) provides stable, efficient convergence. A small step size (Atlantic blue, $\alpha = 0.02$) guarantees convergence but is slow. The inset shows that after $k=10$ iterations, larger step sizes reach lower function values. The optimal step size balances speed and stability, typically $\alpha < 2/L$ where $L$ is the Lipschitz constant of the gradient.}
 \label{fig:gradient_descent}
 \end{figure}
