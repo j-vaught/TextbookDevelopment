@@ -1,0 +1,72 @@
+% Figure: Ideal vs Real Sensor Chain
+% Chapter 2: Control Systems Framework
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=1.8cm]
+    % === IDEAL SENSOR (top) ===
+    \node[font=\bfseries, UofSCGarnet] at (-1.5, 2) {Ideal Sensor:};
+
+    % Input
+    \node[input] (ideal_in) at (1, 2) {};
+    \node[left, font=\small] at (ideal_in) {$y(t)$};
+
+    % Ideal sensor block
+    \node[sensorblock, right=of ideal_in, minimum width=5em] (ideal_sensor) {Gain $K_s$};
+
+    % Output
+    \node[output, right=of ideal_sensor] (ideal_out) {};
+    \node[right, font=\small] at (ideal_out) {$y_m(t) = K_s y(t)$};
+
+    % Connections
+    \draw[signal] (ideal_in) -- (ideal_sensor);
+    \draw[signal] (ideal_sensor) -- (ideal_out);
+
+    % === REAL SENSOR (bottom) ===
+    \node[font=\bfseries, UofSCGarnet] at (-1.5, -1) {Real Sensor:};
+
+    % Input
+    \node[input] (real_in) at (1, -1) {};
+    \node[left, font=\small] at (real_in) {$y(t)$};
+
+    % Gain block
+    \node[sensorblock, right=1.2cm of real_in, minimum width=4em] (gain) {$K_s$};
+
+    % Bandwidth/dynamics block
+    \node[block, right=of gain, minimum width=5em, fill=UofSCAtlantic!20] (bandwidth) {$\dfrac{1}{\tau s + 1}$};
+
+    % Delay block
+    \node[block, right=of bandwidth, minimum width=4em, fill=UofSCCongaree!20] (delay) {$e^{-\tau_d s}$};
+
+    % Sum node for noise
+    \node[sum, right=1.5cm of delay] (noise_sum) {};
+    \node at (noise_sum) {\small $+$};
+
+    % Noise input
+    \node[above=0.8cm of noise_sum, font=\small] (noise_in) {$n(t)$};
+    \draw[signal] (noise_in) -- (noise_sum);
+
+    % Output
+    \node[output, right=1.2cm of noise_sum] (real_out) {};
+    \node[right, font=\small] at (real_out) {$y_m(t)$};
+
+    % Connections
+    \draw[signal] (real_in) -- (gain);
+    \draw[signal] (gain) -- (bandwidth);
+    \draw[signal] (bandwidth) -- (delay);
+    \draw[signal] (delay) -- (noise_sum);
+    \draw[signal] (noise_sum) -- (real_out);
+
+    % Labels below blocks
+    \node[below=0.3cm of gain, font=\footnotesize, UofSCHoneycomb] {Sensitivity};
+    \node[below=0.3cm of bandwidth, font=\footnotesize, UofSCAtlantic] {Bandwidth};
+    \node[below=0.3cm of delay, font=\footnotesize, UofSCCongaree] {Transport Delay};
+    \node[below=0.6cm of noise_sum, font=\footnotesize, UofSC70Black] {Noise};
+
+    % Dashed box around real sensor components
+    \draw[UofSCGarnet, dashed, thick, rounded corners=3pt]
+        ($(gain.north west)+(-0.3,0.5)$) rectangle ($(noise_sum.south east)+(0.3,-1.0)$);
+
+\end{tikzpicture}
+\caption{Comparison of ideal and real sensor models. An ideal sensor provides instantaneous, noise-free measurement with constant gain. A real sensor includes bandwidth limitations (dynamics), transport delay, and measurement noise.}
+\label{fig:sensor_chain}
+\end{figure}

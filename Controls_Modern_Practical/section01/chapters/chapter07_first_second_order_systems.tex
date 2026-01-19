@@ -5,74 +5,481 @@
 \chapter{First and Second Order System Responses}
 \label{ch:standard_responses}
 
-\section{First-Order Systems}
+The vast majority of physical systems encountered in control engineering can be approximated by first or second-order models. Understanding these canonical forms provides the foundation for analyzing and designing control systems across all engineering domains.
 
-The standard first-order transfer function:
+% ============================================================================
+\section{First-Order Systems}
+\label{sec:first_order}
+% ============================================================================
+
+\subsection{Standard Form and Parameters}
+
+The standard first-order transfer function is:
 \begin{equation}
 G(s) = \frac{K}{\tau s + 1}
+\label{eq:first_order_tf}
 \end{equation}
 
 where:
 \begin{itemize}
-    \item $K$ = DC gain (steady-state gain)
-    \item $\tau$ = time constant
+    \item $K$ = DC gain (steady-state gain), dimensionless or with appropriate units
+    \item $\tau$ = time constant (seconds)
 \end{itemize}
 
-\textbf{Step Response:}
+The single pole is located at $s = -1/\tau$, which lies on the negative real axis for stable systems ($\tau > 0$).
+
+\subsection{Step Response Derivation}
+
+For a unit step input $R(s) = 1/s$, the output in the Laplace domain is:
 \begin{equation}
-y(t) = K\left(1 - \ee^{-t/\tau}\right)
+Y(s) = G(s) \cdot R(s) = \frac{K}{\tau s + 1} \cdot \frac{1}{s} = \frac{K}{s(\tau s + 1)}
 \end{equation}
 
-Key characteristics:
+Using partial fraction expansion:
+\begin{equation}
+Y(s) = \frac{K}{s(\tau s + 1)} = \frac{A}{s} + \frac{B}{\tau s + 1}
+\end{equation}
+
+Solving for coefficients: $A = K$ (setting $s = 0$) and $B = -K\tau$ (setting $s = -1/\tau$).
+
+Taking the inverse Laplace transform:
+\begin{equation}
+\boxed{y(t) = K\left(1 - \ee^{-t/\tau}\right), \quad t \geq 0}
+\label{eq:first_order_step}
+\end{equation}
+
+\begin{keyconceptbox}[title=First-Order Step Response Characteristics]
 \begin{itemize}
-    \item At $t = \tau$: reaches 63.2\% of final value
-    \item At $t = 4\tau$: reaches 98.2\% of final value (settling time)
-    \item Initial slope: $K/\tau$
-\end{itemize}
-
-\section{Second-Order Systems}
-
-The standard second-order transfer function:
-\begin{equation}
-G(s) = \frac{K\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
-\end{equation}
-
-where:
-\begin{itemize}
-    \item $K$ = DC gain
-    \item $\omega_n$ = natural frequency (rad/s)
-    \item $\zeta$ = damping ratio
-\end{itemize}
-
-\textbf{Poles:}
-\begin{equation}
-s_{1,2} = -\zeta\omega_n \pm \omega_n\sqrt{\zeta^2 - 1}
-\end{equation}
-
-\textbf{Step Response (underdamped, $0 < \zeta < 1$):}
-\begin{equation}
-y(t) = K\left[1 - \frac{\ee^{-\zeta\omega_n t}}{\sqrt{1-\zeta^2}}\sin(\omega_d t + \phi)\right]
-\end{equation}
-where $\omega_d = \omega_n\sqrt{1-\zeta^2}$ and $\phi = \arccos(\zeta)$.
-
-\textbf{Time-Domain Specifications:}
-\begin{align}
-\text{Rise time (10-90\%):} \quad t_r &\approx \frac{1.8}{\omega_n} \\
-\text{Peak time:} \quad t_p &= \frac{\pi}{\omega_d} \\
-\text{Percent overshoot:} \quad \%OS &= 100 \cdot \ee^{-\pi\zeta/\sqrt{1-\zeta^2}} \\
-\text{Settling time (2\%):} \quad t_s &\approx \frac{4}{\zeta\omega_n}
-\end{align}
-
-\begin{keyconceptbox}[title=Key Takeaways: System Modeling]
-\begin{itemize}
-    \item \textbf{Models are approximations}: The art of modeling lies in capturing essential dynamics while neglecting higher-order effects.
-
-    \item \textbf{Conservation laws are universal}: Physical systems across all domains can be modeled using conservation principles.
-
-    \item \textbf{Multiple representations}: A dynamic system can be expressed as differential equations, transfer functions, state-space models, or block diagrams.
-
-    \item \textbf{Cross-domain analogies}: Mathematical isomorphisms exist between seemingly unrelated physical systems.
-
-    \item \textbf{System order determines behavior}: First-order systems exhibit exponential response; second-order systems can oscillate.
+    \item At $t = \tau$: output reaches $63.2\%$ of final value ($1 - \ee^{-1} \approx 0.632$)
+    \item At $t = 2\tau$: reaches $86.5\%$ of final value
+    \item At $t = 3\tau$: reaches $95.0\%$ of final value
+    \item At $t = 4\tau$: reaches $98.2\%$ of final value (practical settling time)
+    \item At $t = 5\tau$: reaches $99.3\%$ of final value
+    \item Initial slope: $\dd y/\dd t|_{t=0} = K/\tau$
+    \item Final value: $y(\infty) = K$
 \end{itemize}
 \end{keyconceptbox}
+
+% ============================================================================
+\section{Second-Order Systems}
+\label{sec:second_order}
+% ============================================================================
+
+\subsection{Standard Form and Parameters}
+
+The standard second-order transfer function is:
+\begin{equation}
+G(s) = \frac{K\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\label{eq:second_order_tf}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $K$ = DC gain (steady-state value for unit step input)
+    \item $\omega_n$ = undamped natural frequency (rad/s)
+    \item $\zeta$ = damping ratio (dimensionless)
+\end{itemize}
+
+\begin{definitionbox}[title=Definition: Damping Ratio]
+The damping ratio $\zeta$ quantifies the level of damping relative to critical damping. It determines the qualitative nature of the system response:
+\begin{itemize}
+    \item $\zeta = 0$: Undamped (perpetual oscillation)
+    \item $0 < \zeta < 1$: Underdamped (decaying oscillation)
+    \item $\zeta = 1$: Critically damped (fastest non-oscillatory response)
+    \item $\zeta > 1$: Overdamped (sluggish, non-oscillatory response)
+\end{itemize}
+\end{definitionbox}
+
+\subsection{Pole Locations}
+
+The characteristic equation $s^2 + 2\zeta\omega_n s + \omega_n^2 = 0$ yields poles at:
+\begin{equation}
+\boxed{s_{1,2} = -\zeta\omega_n \pm \omega_n\sqrt{\zeta^2 - 1}}
+\label{eq:second_order_poles}
+\end{equation}
+
+For the underdamped case ($0 < \zeta < 1$), the poles are complex conjugates:
+\begin{equation}
+s_{1,2} = -\zeta\omega_n \pm \jj\omega_n\sqrt{1 - \zeta^2} = -\sigma \pm \jj\omega_d
+\end{equation}
+
+where $\sigma = \zeta\omega_n$ is the decay rate and $\omega_d = \omega_n\sqrt{1-\zeta^2}$ is the damped natural frequency.
+
+% ============================================================================
+\section{Underdamped Response ($0 < \zeta < 1$)}
+\label{sec:underdamped}
+% ============================================================================
+
+\subsection{Complete Step Response Derivation}
+
+For a unit step input, the Laplace-domain output is:
+\begin{equation}
+Y(s) = \frac{K\omega_n^2}{s(s^2 + 2\zeta\omega_n s + \omega_n^2)}
+\end{equation}
+
+Using partial fractions with complex poles $s = -\sigma \pm \jj\omega_d$:
+\begin{equation}
+Y(s) = \frac{K}{s} - K\frac{s + 2\zeta\omega_n}{s^2 + 2\zeta\omega_n s + \omega_n^2}
+\end{equation}
+
+Completing the square in the denominator and manipulating:
+\begin{equation}
+Y(s) = \frac{K}{s} - K\frac{(s + \sigma) + \sigma}{(s + \sigma)^2 + \omega_d^2}
+\end{equation}
+
+\begin{equation}
+Y(s) = \frac{K}{s} - K\frac{s + \sigma}{(s + \sigma)^2 + \omega_d^2} - K\frac{\sigma}{\omega_d}\frac{\omega_d}{(s + \sigma)^2 + \omega_d^2}
+\end{equation}
+
+Taking the inverse Laplace transform:
+\begin{equation}
+y(t) = K\left[1 - \ee^{-\sigma t}\cos(\omega_d t) - \frac{\sigma}{\omega_d}\ee^{-\sigma t}\sin(\omega_d t)\right]
+\end{equation}
+
+Using the identity $\cos\theta + \frac{\zeta}{\sqrt{1-\zeta^2}}\sin\theta = \frac{1}{\sqrt{1-\zeta^2}}\sin(\theta + \phi)$ where $\phi = \arctan\left(\frac{\sqrt{1-\zeta^2}}{\zeta}\right) = \arccos(\zeta)$:
+
+\begin{equation}
+\boxed{y(t) = K\left[1 - \frac{\ee^{-\zeta\omega_n t}}{\sqrt{1-\zeta^2}}\sin(\omega_d t + \phi)\right], \quad \phi = \arccos(\zeta)}
+\label{eq:underdamped_step}
+\end{equation}
+
+An equivalent form using cosine is:
+\begin{equation}
+y(t) = K\left[1 - \frac{\ee^{-\zeta\omega_n t}}{\sqrt{1-\zeta^2}}\cos(\omega_d t - \psi)\right], \quad \psi = \arctan\left(\frac{\zeta}{\sqrt{1-\zeta^2}}\right)
+\end{equation}
+
+% ============================================================================
+\section{Critically Damped Response ($\zeta = 1$)}
+\label{sec:critically_damped}
+% ============================================================================
+
+When $\zeta = 1$, the poles are real and repeated at $s = -\omega_n$:
+\begin{equation}
+G(s) = \frac{K\omega_n^2}{(s + \omega_n)^2}
+\end{equation}
+
+For a unit step input:
+\begin{equation}
+Y(s) = \frac{K\omega_n^2}{s(s + \omega_n)^2} = \frac{K}{s} - \frac{K}{s + \omega_n} - \frac{K\omega_n}{(s + \omega_n)^2}
+\end{equation}
+
+Taking the inverse Laplace transform:
+\begin{equation}
+\boxed{y(t) = K\left[1 - (1 + \omega_n t)\ee^{-\omega_n t}\right]}
+\label{eq:critical_step}
+\end{equation}
+
+Critical damping represents the boundary between oscillatory and non-oscillatory behavior, providing the fastest approach to steady state without overshoot.
+
+% ============================================================================
+\section{Overdamped Response ($\zeta > 1$)}
+\label{sec:overdamped}
+% ============================================================================
+
+When $\zeta > 1$, the poles are real and distinct:
+\begin{equation}
+s_1 = -\zeta\omega_n + \omega_n\sqrt{\zeta^2 - 1}, \quad s_2 = -\zeta\omega_n - \omega_n\sqrt{\zeta^2 - 1}
+\end{equation}
+
+Let $\alpha = \omega_n(\zeta - \sqrt{\zeta^2 - 1})$ and $\beta = \omega_n(\zeta + \sqrt{\zeta^2 - 1})$, so $s_1 = -\alpha$ and $s_2 = -\beta$.
+
+The step response becomes:
+\begin{equation}
+\boxed{y(t) = K\left[1 - \frac{\beta}{\beta - \alpha}\ee^{-\alpha t} + \frac{\alpha}{\beta - \alpha}\ee^{-\beta t}\right]}
+\label{eq:overdamped_step}
+\end{equation}
+
+The response is dominated by the slower pole (smaller $\alpha$), resulting in sluggish behavior.
+
+% ============================================================================
+\section{Pole-Zero Map and Damping Relationship}
+\label{sec:pz_damping}
+% ============================================================================
+
+The location of poles in the complex $s$-plane directly determines system behavior. For second-order systems, key geometric relationships exist.
+
+\subsection{Geometric Interpretation}
+
+For underdamped systems, the poles lie on a circle of radius $\omega_n$ centered at the origin:
+\begin{equation}
+|s| = \sqrt{\sigma^2 + \omega_d^2} = \sqrt{(\zeta\omega_n)^2 + (\omega_n\sqrt{1-\zeta^2})^2} = \omega_n
+\end{equation}
+
+The angle $\theta$ from the negative real axis satisfies:
+\begin{equation}
+\cos\theta = \zeta, \quad \sin\theta = \sqrt{1 - \zeta^2}
+\end{equation}
+
+\begin{keyconceptbox}[title=Pole Location and System Behavior]
+\begin{itemize}
+    \item \textbf{Distance from origin} ($\omega_n$): Determines speed of response
+    \item \textbf{Real part} ($-\sigma = -\zeta\omega_n$): Determines decay rate of oscillations
+    \item \textbf{Imaginary part} ($\pm\omega_d$): Determines frequency of oscillation
+    \item \textbf{Angle from negative real axis}: $\theta = \arccos(\zeta)$ determines overshoot
+    \item Lines of constant $\zeta$ are radial lines from the origin
+    \item Lines of constant $\omega_n$ are circular arcs centered at the origin
+    \item Lines of constant $\sigma$ are vertical lines parallel to the imaginary axis
+\end{itemize}
+\end{keyconceptbox}
+
+% ============================================================================
+\section{Time-Domain Specifications}
+\label{sec:time_specs}
+% ============================================================================
+
+Control system design often begins with time-domain specifications that must be translated into requirements on $\zeta$ and $\omega_n$.
+
+\subsection{Rise Time}
+
+Rise time $t_r$ is typically defined as the time to go from 10\% to 90\% of the final value. For underdamped second-order systems, an accurate approximation is:
+\begin{equation}
+\boxed{t_r \approx \frac{1.8}{\omega_n}} \quad \text{(for } 0.3 < \zeta < 0.8\text{)}
+\end{equation}
+
+A more precise formula valid for broader ranges:
+\begin{equation}
+t_r \approx \frac{1 + 1.1\zeta + 1.4\zeta^2}{\omega_n}
+\end{equation}
+
+\subsection{Peak Time}
+
+Peak time $t_p$ is when the first overshoot occurs. Setting $\dd y/\dd t = 0$ for the underdamped response:
+\begin{equation}
+\frac{\dd y}{\dd t} = \frac{K\omega_n}{\sqrt{1-\zeta^2}}\ee^{-\zeta\omega_n t}\sin(\omega_d t) = 0
+\end{equation}
+
+This occurs when $\sin(\omega_d t) = 0$, giving $\omega_d t = n\pi$. The first peak is at:
+\begin{equation}
+\boxed{t_p = \frac{\pi}{\omega_d} = \frac{\pi}{\omega_n\sqrt{1-\zeta^2}}}
+\label{eq:peak_time}
+\end{equation}
+
+\subsection{Percent Overshoot}
+
+The maximum overshoot $M_p$ is:
+\begin{equation}
+M_p = y(t_p) - K = K\frac{\ee^{-\zeta\omega_n t_p}}{\sqrt{1-\zeta^2}}\sin(\omega_d t_p + \phi) - K
+\end{equation}
+
+Substituting $t_p = \pi/\omega_d$ and simplifying:
+\begin{equation}
+\boxed{\%OS = 100 \cdot \ee^{-\pi\zeta/\sqrt{1-\zeta^2}}}
+\label{eq:overshoot}
+\end{equation}
+
+Inverting this relationship to find $\zeta$ from a desired overshoot:
+\begin{equation}
+\boxed{\zeta = \frac{-\ln(\%OS/100)}{\sqrt{\pi^2 + \ln^2(\%OS/100)}}}
+\label{eq:zeta_from_os}
+\end{equation}
+
+\subsection{Settling Time}
+
+Settling time $t_s$ is when the response remains within a specified percentage of the final value. Using the envelope $\ee^{-\zeta\omega_n t}$:
+
+For 2\% criterion ($\ee^{-\zeta\omega_n t_s} = 0.02$):
+\begin{equation}
+\boxed{t_s \approx \frac{4}{\zeta\omega_n} = \frac{4}{\sigma}}
+\label{eq:settling_2pct}
+\end{equation}
+
+For 5\% criterion:
+\begin{equation}
+t_s \approx \frac{3}{\zeta\omega_n}
+\end{equation}
+
+\begin{warningbox}[title=Common Mistakes in Time-Domain Calculations]
+\begin{itemize}
+    \item Using $\omega_n$ instead of $\omega_d$ in peak time calculations
+    \item Forgetting that settling time depends on $\zeta\omega_n$, not $\omega_n$ alone
+    \item Confusing rise time definitions (0-100\% vs 10-90\%)
+    \item Applying underdamped formulas to overdamped systems
+    \item Neglecting that overshoot formula only applies for $0 < \zeta < 1$
+\end{itemize}
+\end{warningbox}
+
+% ============================================================================
+\section{Worked Examples}
+\label{sec:examples}
+% ============================================================================
+
+\begin{examplebox}[title=Example 7.1: First-Order Thermal System]
+A thermal system has a transfer function $G(s) = \frac{50}{10s + 1}$ relating heater input (watts) to temperature change (degrees C). Find:
+\begin{enumerate}[label=(\alph*)]
+    \item The time constant and DC gain
+    \item The response to a 2 W step input
+    \item The time to reach 95\% of steady state
+\end{enumerate}
+
+\textbf{Solution:}
+
+(a) Comparing with standard form $G(s) = K/(\tau s + 1)$:
+\begin{align}
+\tau &= 10 \text{ s (time constant)} \\
+K &= 50 \text{ }^\circ\text{C/W (DC gain)}
+\end{align}
+
+(b) For a 2 W step input, the steady-state temperature rise is:
+\begin{equation}
+\Delta T_{ss} = K \cdot 2 = 100^\circ\text{C}
+\end{equation}
+
+The response is:
+\begin{equation}
+\Delta T(t) = 100(1 - \ee^{-t/10})^\circ\text{C}
+\end{equation}
+
+(c) At 95\% of steady state: $0.95 = 1 - \ee^{-t/10}$, giving:
+\begin{equation}
+t = -10\ln(0.05) = 30 \text{ s} = 3\tau
+\end{equation}
+\end{examplebox}
+
+\begin{examplebox}[title=Example 7.2: Second-Order System Analysis]
+A position control system has transfer function:
+\begin{equation}
+G(s) = \frac{100}{s^2 + 4s + 100}
+\end{equation}
+
+Find: (a) $\omega_n$, $\zeta$, and pole locations, (b) all time-domain specifications, (c) the step response expression.
+
+\textbf{Solution:}
+
+(a) Comparing with $G(s) = K\omega_n^2/(s^2 + 2\zeta\omega_n s + \omega_n^2)$:
+\begin{align}
+\omega_n^2 &= 100 \quad \Rightarrow \quad \omega_n = 10 \text{ rad/s} \\
+2\zeta\omega_n &= 4 \quad \Rightarrow \quad \zeta = 0.2 \\
+K &= 1
+\end{align}
+
+Poles: $s_{1,2} = -2 \pm \jj\sqrt{100 - 4} = -2 \pm \jj 9.80$
+
+Damped frequency: $\omega_d = 10\sqrt{1 - 0.04} = 9.80$ rad/s
+
+(b) Time-domain specifications:
+\begin{align}
+t_r &\approx \frac{1.8}{10} = 0.18 \text{ s} \\
+t_p &= \frac{\pi}{9.80} = 0.32 \text{ s} \\
+\%OS &= 100\ee^{-0.2\pi/\sqrt{1-0.04}} = 100\ee^{-0.641} = 52.7\% \\
+t_s &\approx \frac{4}{0.2 \times 10} = 2 \text{ s}
+\end{align}
+
+(c) Step response ($\phi = \arccos(0.2) = 78.5^\circ = 1.37$ rad):
+\begin{equation}
+y(t) = 1 - \frac{\ee^{-2t}}{0.98}\sin(9.80t + 1.37)
+\end{equation}
+\end{examplebox}
+
+\begin{examplebox}[title=Example 7.3: Design for Specified Overshoot]
+Design a second-order system with no more than 10\% overshoot and settling time (2\%) of 0.5 seconds.
+
+\textbf{Solution:}
+
+From the overshoot requirement using Equation~\eqref{eq:zeta_from_os}:
+\begin{equation}
+\zeta = \frac{-\ln(0.10)}{\sqrt{\pi^2 + \ln^2(0.10)}} = \frac{2.303}{\sqrt{9.87 + 5.30}} = \frac{2.303}{3.89} = 0.591
+\end{equation}
+
+From the settling time requirement:
+\begin{equation}
+t_s = \frac{4}{\zeta\omega_n} = 0.5 \quad \Rightarrow \quad \zeta\omega_n = 8
+\end{equation}
+
+Therefore:
+\begin{equation}
+\omega_n = \frac{8}{0.591} = 13.5 \text{ rad/s}
+\end{equation}
+
+The required transfer function is:
+\begin{equation}
+G(s) = \frac{182.25}{s^2 + 16s + 182.25}
+\end{equation}
+
+Verification: $\omega_d = 13.5\sqrt{1-0.35} = 10.9$ rad/s, $t_p = 0.29$ s
+\end{examplebox}
+
+\begin{examplebox}[title=Example 7.4: Overdamped System Response]
+A hydraulic actuator has transfer function:
+\begin{equation}
+G(s) = \frac{25}{s^2 + 10s + 25} = \frac{25}{(s+5)^2}
+\end{equation}
+
+(a) Identify the system type and parameters. (b) Find the step response.
+
+\textbf{Solution:}
+
+(a) Comparing with standard form: $\omega_n^2 = 25 \Rightarrow \omega_n = 5$ rad/s
+
+$2\zeta\omega_n = 10 \Rightarrow \zeta = 1$ (critically damped)
+
+The system has a repeated pole at $s = -5$.
+
+(b) Using Equation~\eqref{eq:critical_step}:
+\begin{equation}
+y(t) = 1 - (1 + 5t)\ee^{-5t}
+\end{equation}
+
+Settling time (2\%): $t_s \approx 4/5 = 0.8$ s (using the approximation for critical damping)
+\end{examplebox}
+
+\begin{examplebox}[title=Example 7.5: Comparing Damping Cases]
+Three systems have the same natural frequency $\omega_n = 4$ rad/s but different damping:
+\begin{itemize}
+    \item System A: $\zeta = 0.5$ (underdamped)
+    \item System B: $\zeta = 1.0$ (critically damped)
+    \item System C: $\zeta = 2.0$ (overdamped)
+\end{itemize}
+
+Compare their step responses.
+
+\textbf{Solution:}
+
+\textbf{System A} ($\zeta = 0.5$):
+\begin{align}
+\omega_d &= 4\sqrt{1 - 0.25} = 3.46 \text{ rad/s} \\
+t_p &= \pi/3.46 = 0.91 \text{ s} \\
+\%OS &= 100\ee^{-0.5\pi/0.866} = 16.3\% \\
+t_s &= 4/(0.5 \times 4) = 2 \text{ s}
+\end{align}
+
+\textbf{System B} ($\zeta = 1.0$):
+\begin{align}
+\text{No overshoot}&, \text{ poles at } s = -4 \\
+t_s &\approx 4/4 = 1 \text{ s}
+\end{align}
+
+\textbf{System C} ($\zeta = 2.0$):
+\begin{align}
+\text{Poles: } s_1 &= -4(2 - \sqrt{3}) = -1.07, \quad s_2 = -4(2 + \sqrt{3}) = -14.9 \\
+t_s &\approx 4/1.07 = 3.7 \text{ s (dominated by slow pole)}
+\end{align}
+
+The critically damped system (B) has the fastest settling time without overshoot. The underdamped system (A) reaches steady state faster initially but overshoots. The overdamped system (C) is slowest overall.
+\end{examplebox}
+
+% ============================================================================
+\section{Practical Considerations}
+\label{sec:practical}
+% ============================================================================
+
+\begin{practicalbox}
+Real systems deviate from ideal first and second-order models:
+\begin{itemize}
+    \item \textbf{Higher-order dynamics}: Most physical systems have additional poles; second-order models capture dominant behavior when other poles are far in the left half-plane.
+    \item \textbf{Zeros}: Transfer function zeros affect overshoot and rise time; a zero near a pole can approximately cancel its effect.
+    \item \textbf{Nonlinearities}: Saturation, dead zones, and hysteresis cause deviations from linear predictions.
+    \item \textbf{Parameter uncertainty}: Actual values of $\zeta$ and $\omega_n$ may differ from design values; robust designs account for this variation.
+    \item \textbf{Time delays}: Transport delays add phase lag not captured by rational transfer functions; they significantly affect stability.
+\end{itemize}
+\end{practicalbox}
+
+\begin{keyconceptbox}[title=Chapter Summary: Key Takeaways]
+\begin{itemize}
+    \item \textbf{First-order systems} are characterized by a single time constant $\tau$; the step response is exponential with 63.2\% rise at $t = \tau$.
+    \item \textbf{Second-order systems} are characterized by $\omega_n$ and $\zeta$; the damping ratio determines whether the response is underdamped, critically damped, or overdamped.
+    \item \textbf{Pole locations} encode all dynamic behavior: distance from origin sets speed, angle from negative real axis sets damping.
+    \item \textbf{Time-domain specifications} ($t_r$, $t_p$, $\%OS$, $t_s$) translate directly to requirements on $\zeta$ and $\omega_n$.
+    \item \textbf{Design process}: Specify time-domain requirements $\rightarrow$ calculate required $\zeta$ and $\omega_n$ $\rightarrow$ place poles appropriately.
+\end{itemize}
+\end{keyconceptbox}
+
