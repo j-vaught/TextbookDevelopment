@@ -1,0 +1,123 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+% --- Top Panel: Sample Data with Confidence Interval ---
+\begin{axis}[
+    name=top,
+    width=13cm, height=5cm,
+    xlabel={Sample Index},
+    ylabel={Measured Value},
+    xmin=0, xmax=21,
+    ymin=3.5, ymax=7.5,
+    xtick={1,5,10,15,20},
+    grid=major,
+    grid style={gray!30},
+    axis on top,
+    major tick length=0.08cm,
+    title={\bfseries Sample Data with 95\% Confidence Interval},
+    title style={at={(0.5,1.02)}, anchor=south}
+]
+
+% True mean (unknown in practice)
+\addplot[UofSCCongaree, thick, dashed, domain=0:21, samples=2] {5.5};
+\node[UofSCCongaree, font=\footnotesize, right] at (21, 5.5) {True $\mu$};
+
+% Sample mean
+\addplot[UofSCGarnet, very thick, domain=0:21, samples=2] {5.42};
+\node[UofSCGarnet, font=\footnotesize, right] at (21, 5.42) {$\bar{x} = 5.42$};
+
+% Confidence interval bounds
+\addplot[UofSCAtlantic, thick, dashed, domain=0:21, samples=2] {5.42 + 0.58};
+\addplot[UofSCAtlantic, thick, dashed, domain=0:21, samples=2] {5.42 - 0.58};
+
+% Shaded confidence region
+\addplot[fill=UofSCAtlantic!20, draw=none, domain=0:21, samples=2] {5.42 + 0.58} \closedcycle;
+\addplot[fill=white, draw=none, domain=0:21, samples=2] {5.42 - 0.58} \closedcycle;
+\addplot[fill=UofSCAtlantic!20, draw=none] coordinates {(0,4.84) (21,4.84) (21,6.0) (0,6.0)} -- cycle;
+
+% Sample data points
+\addplot[only marks, mark=*, mark size=2.5pt, UofSCBlack] coordinates {
+    (1, 5.2) (2, 5.8) (3, 4.9) (4, 5.6) (5, 5.1)
+    (6, 6.2) (7, 5.0) (8, 5.5) (9, 4.8) (10, 5.9)
+    (11, 5.3) (12, 5.7) (13, 4.6) (14, 5.4) (15, 6.1)
+    (16, 5.2) (17, 5.8) (18, 5.0) (19, 5.6) (20, 5.5)
+};
+
+% CI annotation
+\draw[UofSCAtlantic, thick, <->] (1.5, 4.84) -- (1.5, 6.0);
+\node[UofSCAtlantic, font=\footnotesize, left, align=right] at (1.5, 5.42) {95\% CI\\$[\bar{x} \pm 1.96\frac{s}{\sqrt{n}}]$};
+
+% Upper/lower bound labels
+\node[UofSCAtlantic, font=\footnotesize] at (4, 6.2) {Upper: $\bar{x} + t_{\alpha/2}\frac{s}{\sqrt{n}}$};
+\node[UofSCAtlantic, font=\footnotesize] at (4, 4.65) {Lower: $\bar{x} - t_{\alpha/2}\frac{s}{\sqrt{n}}$};
+
+\end{axis}
+
+% --- Bottom Panel: Multiple CI Illustration ---
+\begin{axis}[
+    name=bottom,
+    at={(top.south west)},
+    anchor=north west,
+    yshift=-1.5cm,
+    width=13cm, height=5.5cm,
+    xlabel={Experiment Number},
+    ylabel={Confidence Interval},
+    xmin=0, xmax=21,
+    ymin=3.8, ymax=7.2,
+    xtick={2,4,6,8,10,12,14,16,18,20},
+    grid=major,
+    grid style={gray!30},
+    axis on top,
+    major tick length=0.08cm,
+    title={\bfseries Repeated Sampling: 95\% of CIs Contain True Mean},
+    title style={at={(0.5,1.02)}, anchor=south}
+]
+
+% True mean line
+\addplot[UofSCGarnet, very thick, domain=0:21, samples=2] {5.5};
+\node[UofSCGarnet, font=\bfseries, right] at (21, 5.5) {$\mu = 5.5$};
+
+% Confidence intervals that capture the mean (Atlantic blue)
+\foreach \x/\low/\high in {
+    1/4.9/6.0, 2/5.1/6.2, 3/4.8/5.9, 5/5.0/6.1, 6/5.2/6.3,
+    7/4.7/5.8, 8/5.0/6.0, 9/4.9/6.0, 10/5.1/6.2, 11/5.0/6.1,
+    12/4.8/5.9, 13/5.2/6.3, 15/4.9/6.0, 16/5.0/6.1, 17/4.8/5.9,
+    18/5.1/6.2, 19/5.0/6.1, 20/4.9/6.0
+}{
+    \draw[UofSCAtlantic, thick] (\x, \low) -- (\x, \high);
+    \draw[UofSCAtlantic, thick] (\x-0.15, \low) -- (\x+0.15, \low);
+    \draw[UofSCAtlantic, thick] (\x-0.15, \high) -- (\x+0.15, \high);
+    \node[circle, fill=UofSCAtlantic, minimum size=3pt, inner sep=0pt] at (\x, {(\low+\high)/2}) {};
+}
+
+% Confidence intervals that miss the mean (Rose - failures)
+\foreach \x/\low/\high in {
+    4/5.6/6.7, 14/4.0/5.1
+}{
+    \draw[UofSCRose, thick] (\x, \low) -- (\x, \high);
+    \draw[UofSCRose, thick] (\x-0.15, \low) -- (\x+0.15, \low);
+    \draw[UofSCRose, thick] (\x-0.15, \high) -- (\x+0.15, \high);
+    \node[circle, fill=UofSCRose, minimum size=3pt, inner sep=0pt] at (\x, {(\low+\high)/2}) {};
+}
+
+% Legend annotation
+\node[UofSCAtlantic, font=\footnotesize, align=left] at (17, 4.3) {Contains $\mu$};
+\draw[UofSCAtlantic, thick] (15.5, 4.3) -- (16.3, 4.3);
+
+\node[UofSCRose, font=\footnotesize, align=left] at (17, 4.0) {Misses $\mu$};
+\draw[UofSCRose, thick] (15.5, 4.0) -- (16.3, 4.0);
+
+% Annotation for failures
+\draw[UofSCRose, thin, ->] (4, 6.9) -- (4, 6.75);
+\node[UofSCRose, font=\footnotesize, above] at (4, 6.9) {Miss!};
+
+\draw[UofSCRose, thin, ->] (14, 4.8) -- (14, 5.0);
+\node[UofSCRose, font=\footnotesize, below] at (14, 4.7) {Miss!};
+
+\end{axis}
+
+\end{tikzpicture}
+\caption{Confidence intervals for parameter estimation. \textbf{Top}: A sample of $n=20$ measurements (black dots) with sample mean $\bar{x}=5.42$ (Garnet line) and 95\% confidence interval (Atlantic blue shaded region). The true population mean $\mu$ (Congaree dashed) falls within the CI. \textbf{Bottom}: Interpretation of confidence level through repeated sampling. Each vertical bar represents a 95\% CI from an independent experiment. By construction, approximately 95\% of intervals (Atlantic blue, 18/20) contain the true mean, while 5\% (Rose, 2/20) do not. This frequentist interpretation is fundamental to uncertainty quantification in control system identification and sensor calibration.}
+\label{fig:confidence_intervals}
+\end{figure}
