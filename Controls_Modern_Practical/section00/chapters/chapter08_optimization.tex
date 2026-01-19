@@ -2,88 +2,483 @@
 \label{ch:optimization}
 % ============================================================================
 
-Optimization is central to optimal control, parameter estimation, and machine learning.
+Optimization is central to optimal control, parameter estimation, and machine learning. This chapter introduces the fundamental concepts and methods that underpin modern control system design and analysis.
 
 \section{Unconstrained Optimization}
 
-\subsubsection{Necessary Condition}
-At a local minimum $\vecx^*$:
+Unconstrained optimization seeks to find the minimum (or maximum) of a function $f: \mathbb{R}^n \to \mathbb{R}$ without any restrictions on the decision variable $\vecx$.
+
+\begin{definitionbox}[title=Definition: Local and Global Minima]
+A point $\vecx^*$ is a \textbf{local minimum} of $f$ if there exists $\epsilon > 0$ such that $f(\vecx^*) \leq f(\vecx)$ for all $\vecx$ with $\|\vecx - \vecx^*\| < \epsilon$.
+
+A point $\vecx^*$ is a \textbf{global minimum} if $f(\vecx^*) \leq f(\vecx)$ for all $\vecx \in \mathbb{R}^n$.
+\end{definitionbox}
+
+\subsection{Optimality Conditions}
+
+\subsubsection{Necessary Condition (First-Order)}
+At a local minimum $\vecx^*$ of a differentiable function:
 \begin{equation}
 \nabla f(\vecx^*) = \mathbf{0}
 \end{equation}
+Points satisfying this condition are called \textbf{stationary points} or \textbf{critical points}.
 
-\subsubsection{Sufficient Condition}
-Also $\mH(\vecx^*) \succ 0$ (positive definite Hessian).
+\subsubsection{Sufficient Condition (Second-Order)}
+If $\nabla f(\vecx^*) = \mathbf{0}$ and $\mH(\vecx^*) \succ 0$ (positive definite Hessian), then $\vecx^*$ is a \textbf{strict local minimum}.
 
-\subsubsection{Gradient Descent}
+\begin{keyconceptbox}[title=The Hessian Matrix]
+The Hessian matrix $\mH$ of $f: \mathbb{R}^n \to \mathbb{R}$ is the $n \times n$ matrix of second partial derivatives:
+\begin{equation}
+\mH_{ij} = \frac{\partial^2 f}{\partial x_i \partial x_j}
+\end{equation}
+For twice continuously differentiable functions, the Hessian is symmetric: $\mH = \mH^\top$.
+\end{keyconceptbox}
+
+\input{figures/fig_ch00_convex_nonconvex.tex}
+
+\begin{examplebox}[title=Example: Finding the Minimum of a Quadratic Function]
+Find the minimum of the function $f(x, y) = x^2 + 4y^2 - 2x - 8y + 5$.
+
+\textbf{Solution:}
+
+\textit{Step 1: Compute the gradient.}
+\begin{align}
+\nabla f &= \begin{bmatrix} \frac{\partial f}{\partial x} \\ \frac{\partial f}{\partial y} \end{bmatrix} = \begin{bmatrix} 2x - 2 \\ 8y - 8 \end{bmatrix}
+\end{align}
+
+\textit{Step 2: Set the gradient to zero (necessary condition).}
+\begin{align}
+2x - 2 &= 0 \quad \Rightarrow \quad x^* = 1 \\
+8y - 8 &= 0 \quad \Rightarrow \quad y^* = 1
+\end{align}
+The critical point is $\vecx^* = (1, 1)$.
+
+\textit{Step 3: Compute the Hessian.}
+\begin{equation}
+\mH = \begin{bmatrix} \frac{\partial^2 f}{\partial x^2} & \frac{\partial^2 f}{\partial x \partial y} \\ \frac{\partial^2 f}{\partial y \partial x} & \frac{\partial^2 f}{\partial y^2} \end{bmatrix} = \begin{bmatrix} 2 & 0 \\ 0 & 8 \end{bmatrix}
+\end{equation}
+
+\textit{Step 4: Check positive definiteness (sufficient condition).}
+
+The eigenvalues of $\mH$ are $\lambda_1 = 2 > 0$ and $\lambda_2 = 8 > 0$, so $\mH \succ 0$.
+
+Alternatively, check that all leading principal minors are positive:
+\begin{itemize}
+    \item $\det([2]) = 2 > 0$
+    \item $\det(\mH) = 2 \cdot 8 - 0 = 16 > 0$
+\end{itemize}
+
+\textbf{Conclusion:} The point $(1, 1)$ is a strict local minimum (and global minimum, since $f$ is convex).
+
+The minimum value is $f(1, 1) = 1 + 4 - 2 - 8 + 5 = 0$.
+\end{examplebox}
+
+\subsection{Gradient Descent}
+
+Gradient descent is an iterative optimization algorithm that moves in the direction of steepest descent:
 \begin{equation}
 \vecx_{k+1} = \vecx_k - \alpha \nabla f(\vecx_k)
 \end{equation}
-where $\alpha > 0$ is the step size (learning rate).
+where $\alpha > 0$ is the \textbf{step size} (or \textbf{learning rate}).
 
-\subsubsection{Newton's Method}
+\input{figures/fig_ch00_contour_gradient.tex}
+
+\begin{keyconceptbox}[title=Intuition Behind Gradient Descent]
+The negative gradient $-\nabla f(\vecx)$ points in the direction of steepest descent of $f$ at point $\vecx$. By taking small steps in this direction, we progressively reduce the function value, eventually converging to a local minimum (under appropriate conditions).
+\end{keyconceptbox}
+
+\input{figures/fig_ch00_gradient_descent.tex}
+
+\begin{examplebox}[title=Example: Gradient Descent on the Rosenbrock Function]
+The \textbf{Rosenbrock function} is a classic test problem for optimization algorithms:
+\begin{equation}
+f(x, y) = (1 - x)^2 + 100(y - x^2)^2
+\end{equation}
+This function has a global minimum at $(x^*, y^*) = (1, 1)$ where $f(1, 1) = 0$. The minimum lies in a narrow, curved valley, making it challenging for gradient-based methods.
+
+\textbf{Solution:}
+
+\textit{Step 1: Compute the gradient.}
+\begin{align}
+\frac{\partial f}{\partial x} &= -2(1 - x) - 400x(y - x^2) = 2x - 2 + 400x^3 - 400xy \\
+\frac{\partial f}{\partial y} &= 200(y - x^2)
+\end{align}
+
+\textit{Step 2: Apply gradient descent with $\alpha = 0.001$ and initial point $(x_0, y_0) = (-1, 1)$.}
+
+Computing the first few iterations:
+\begin{center}
+\begin{tabular}{c|cc|c}
+\toprule
+$k$ & $x_k$ & $y_k$ & $f(x_k, y_k)$ \\
+\midrule
+0 & $-1.000$ & $1.000$ & $4.000$ \\
+1 & $-0.996$ & $1.000$ & $3.985$ \\
+2 & $-0.992$ & $1.000$ & $3.970$ \\
+5 & $-0.980$ & $1.000$ & $3.925$ \\
+10 & $-0.960$ & $0.999$ & $3.852$ \\
+50 & $-0.810$ & $0.937$ & $3.416$ \\
+100 & $-0.631$ & $0.684$ & $2.871$ \\
+500 & $0.382$ & $0.158$ & $0.395$ \\
+1000 & $0.723$ & $0.524$ & $0.077$ \\
+5000 & $0.987$ & $0.974$ & $0.00017$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Key observations:}
+\begin{itemize}
+    \item Convergence is slow due to the ill-conditioned nature of the problem (the eigenvalues of the Hessian vary widely).
+    \item The algorithm first moves quickly toward the valley floor, then slowly along the valley toward the minimum.
+    \item A very small step size is needed to prevent divergence near the minimum.
+\end{itemize}
+
+\textbf{Practical lesson:} The Rosenbrock function illustrates why more sophisticated methods (conjugate gradient, quasi-Newton, Adam) are often preferred over vanilla gradient descent.
+\end{examplebox}
+
+\subsection{Newton's Method}
+
+Newton's method uses second-order information to achieve faster convergence:
 \begin{equation}
 \vecx_{k+1} = \vecx_k - [\mH(\vecx_k)]^{-1} \nabla f(\vecx_k)
 \end{equation}
 
+\begin{warningbox}[title=Computational Considerations]
+Newton's method requires computing and inverting the Hessian at each iteration, which is $O(n^3)$ for an $n$-dimensional problem. For large-scale problems, \textbf{quasi-Newton methods} (such as BFGS or L-BFGS) approximate the Hessian using gradient information, achieving a balance between convergence speed and computational cost.
+\end{warningbox}
+
+\section{Convergence Analysis}
+
+Understanding how quickly optimization algorithms converge is crucial for selecting appropriate methods.
+
+\begin{definitionbox}[title=Definition: Convergence Rate]
+Let $\{\vecx_k\}$ be a sequence converging to $\vecx^*$. The sequence has:
+\begin{itemize}
+    \item \textbf{Linear convergence} if there exists $c \in (0, 1)$ such that:
+    \begin{equation}
+    \|\vecx_{k+1} - \vecx^*\| \leq c \|\vecx_k - \vecx^*\|
+    \end{equation}
+    The error decreases by a constant factor at each iteration.
+
+    \item \textbf{Superlinear convergence} if:
+    \begin{equation}
+    \lim_{k \to \infty} \frac{\|\vecx_{k+1} - \vecx^*\|}{\|\vecx_k - \vecx^*\|} = 0
+    \end{equation}
+
+    \item \textbf{Quadratic convergence} if there exists $M > 0$ such that:
+    \begin{equation}
+    \|\vecx_{k+1} - \vecx^*\| \leq M \|\vecx_k - \vecx^*\|^2
+    \end{equation}
+    The number of correct digits roughly doubles at each iteration.
+\end{itemize}
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Convergence Rate Comparison]
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Rate} & \textbf{Cost per iteration} \\
+\midrule
+Gradient descent & Linear & $O(n)$ \\
+Conjugate gradient & Superlinear & $O(n)$ \\
+Newton's method & Quadratic & $O(n^3)$ \\
+Quasi-Newton (BFGS) & Superlinear & $O(n^2)$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{keyconceptbox}
+
+\subsection{Learning Rate Selection Guidelines}
+
+The choice of learning rate (step size) $\alpha$ critically affects convergence:
+
+\begin{itemize}
+    \item \textbf{Too large}: Algorithm may diverge or oscillate around the minimum.
+    \item \textbf{Too small}: Convergence is extremely slow, wasting computational resources.
+    \item \textbf{Optimal (for quadratic functions)}: $\alpha = 2/(\lambda_{\max} + \lambda_{\min})$ where $\lambda_{\max}$ and $\lambda_{\min}$ are the largest and smallest eigenvalues of the Hessian.
+\end{itemize}
+
+\begin{warningbox}[title=Condition Number and Convergence]
+For gradient descent on a quadratic function with Hessian $\mH$, the convergence rate is:
+\begin{equation}
+c = \frac{\kappa - 1}{\kappa + 1}
+\end{equation}
+where $\kappa = \lambda_{\max}/\lambda_{\min}$ is the \textbf{condition number}. A large condition number (ill-conditioned problem) leads to slow convergence.
+\end{warningbox}
+
+\textbf{Practical learning rate strategies:}
+\begin{enumerate}
+    \item \textbf{Line search}: At each iteration, choose $\alpha$ to minimize $f(\vecx_k - \alpha \nabla f(\vecx_k))$ along the search direction.
+    \item \textbf{Backtracking}: Start with a large $\alpha$ and reduce it until sufficient decrease is achieved (Armijo condition).
+    \item \textbf{Adaptive methods}: Algorithms like Adam, RMSprop, and AdaGrad automatically adjust learning rates based on gradient history.
+    \item \textbf{Learning rate schedules}: Decrease $\alpha$ over time (e.g., $\alpha_k = \alpha_0 / (1 + \beta k)$).
+\end{enumerate}
+
 \section{Constrained Optimization}
 
-\subsubsection{Equality Constraints}
-Minimize $f(\vecx)$ subject to $\vecg(\vecx) = \mathbf{0}$
+Many practical problems have constraints on the decision variables. We consider both equality and inequality constraints.
 
-The \textbf{Lagrangian}:
+\subsection{Equality Constraints: Lagrange Multipliers}
+
+Consider minimizing $f(\vecx)$ subject to $\vecg(\vecx) = \mathbf{0}$ where $\vecg: \mathbb{R}^n \to \mathbb{R}^m$ with $m < n$.
+
+The \textbf{Lagrangian function} is:
 \begin{equation}
 L(\vecx, \boldsymbol{\lambda}) = f(\vecx) + \boldsymbol{\lambda}^\top \vecg(\vecx)
 \end{equation}
+where $\boldsymbol{\lambda} \in \mathbb{R}^m$ is the vector of \textbf{Lagrange multipliers}.
 
-\subsubsection{Necessary Conditions (KKT)}
+\subsubsection{Necessary Conditions}
+At a constrained local minimum, the following conditions hold:
 \begin{align}
-\nabla_\vecx L &= \mathbf{0} \\
-\nabla_{\boldsymbol{\lambda}} L &= \vecg(\vecx) = \mathbf{0}
+\nabla_\vecx L &= \nabla f(\vecx^*) + \sum_{i=1}^{m} \lambda_i^* \nabla g_i(\vecx^*) = \mathbf{0} \\
+\nabla_{\boldsymbol{\lambda}} L &= \vecg(\vecx^*) = \mathbf{0}
 \end{align}
 
-\subsubsection{Inequality Constraints}
-Minimize $f(\vecx)$ subject to $\vech(\vecx) \leq \mathbf{0}$
+\input{figures/fig_ch00_constraint_visualization.tex}
 
-The \textbf{Karush-Kuhn-Tucker (KKT) conditions}:
+\begin{examplebox}[title=Example: Lagrange Multipliers for Constrained Optimization]
+Find the minimum of $f(x, y) = x^2 + y^2$ subject to $g(x, y) = x + y - 4 = 0$.
+
+\textbf{Problem interpretation:} Find the point on the line $x + y = 4$ closest to the origin.
+
+\textbf{Solution:}
+
+\textit{Step 1: Form the Lagrangian.}
+\begin{equation}
+L(x, y, \lambda) = x^2 + y^2 + \lambda(x + y - 4)
+\end{equation}
+
+\textit{Step 2: Compute the necessary conditions.}
 \begin{align}
-\nabla f(\vecx^*) + \sum_i \mu_i \nabla h_i(\vecx^*) &= \mathbf{0} \\
-h_i(\vecx^*) &\leq 0 \\
-\mu_i &\geq 0 \\
-\mu_i h_i(\vecx^*) &= 0 \quad \text{(complementary slackness)}
+\frac{\partial L}{\partial x} &= 2x + \lambda = 0 \\
+\frac{\partial L}{\partial y} &= 2y + \lambda = 0 \\
+\frac{\partial L}{\partial \lambda} &= x + y - 4 = 0
 \end{align}
+
+\textit{Step 3: Solve the system.}
+
+From the first two equations: $2x + \lambda = 2y + \lambda \Rightarrow x = y$.
+
+Substituting into the constraint: $x + x = 4 \Rightarrow x = 2$.
+
+Therefore: $x^* = 2$, $y^* = 2$, and $\lambda^* = -4$.
+
+\textbf{Verification:}
+\begin{itemize}
+    \item Constraint satisfied: $2 + 2 - 4 = 0$ \checkmark
+    \item $\nabla f = (2x, 2y) = (4, 4)$ and $\nabla g = (1, 1)$
+    \item $\nabla f = -\lambda^* \nabla g$: $(4, 4) = -(-4)(1, 1) = (4, 4)$ \checkmark
+\end{itemize}
+
+\textbf{Interpretation of $\lambda^*$:} The Lagrange multiplier $\lambda^* = -4$ represents the rate of change of the optimal value with respect to the constraint bound. If the constraint were $x + y = 4 + \epsilon$ for small $\epsilon$, the minimum value would be approximately $f^* + (-4)(-\epsilon) = 8 + 4\epsilon$.
+
+The minimum distance to the origin is $\sqrt{f(2,2)} = \sqrt{8} = 2\sqrt{2}$.
+\end{examplebox}
+
+\subsection{Inequality Constraints: KKT Conditions}
+
+For problems with inequality constraints:
+\begin{equation}
+\min_\vecx f(\vecx) \quad \text{subject to} \quad \vech(\vecx) \leq \mathbf{0}
+\end{equation}
+
+The \textbf{Karush-Kuhn-Tucker (KKT) conditions} are necessary for optimality (and sufficient for convex problems):
+\begin{align}
+\nabla f(\vecx^*) + \sum_i \mu_i \nabla h_i(\vecx^*) &= \mathbf{0} & &\text{(Stationarity)} \\
+h_i(\vecx^*) &\leq 0 & &\text{(Primal feasibility)} \\
+\mu_i &\geq 0 & &\text{(Dual feasibility)} \\
+\mu_i h_i(\vecx^*) &= 0 & &\text{(Complementary slackness)}
+\end{align}
+
+\begin{keyconceptbox}[title=Complementary Slackness]
+The condition $\mu_i h_i(\vecx^*) = 0$ means that for each constraint:
+\begin{itemize}
+    \item Either $h_i(\vecx^*) = 0$ (constraint is \textbf{active}/binding), or
+    \item $\mu_i = 0$ (constraint has no influence on the solution)
+\end{itemize}
+This elegant condition encodes the intuition that only constraints that are ``tight'' at the optimum affect the solution.
+\end{keyconceptbox}
+
+\section{Linear Programming}
+
+Linear programming (LP) is the optimization of a linear objective function subject to linear constraints.
+
+\begin{definitionbox}[title=Definition: Linear Program]
+A \textbf{linear program} in standard form is:
+\begin{align}
+\min_\vecx \quad & \vecc^\top \vecx \\
+\text{subject to} \quad & \mA\vecx = \vecb \\
+& \vecx \geq \mathbf{0}
+\end{align}
+where $\vecx \in \mathbb{R}^n$, $\vecc \in \mathbb{R}^n$, $\mA \in \mathbb{R}^{m \times n}$, and $\vecb \in \mathbb{R}^m$.
+\end{definitionbox}
+
+\begin{keyconceptbox}[title=Converting to Standard Form]
+Any LP can be converted to standard form:
+\begin{itemize}
+    \item \textbf{Maximization}: $\max \vecc^\top\vecx = -\min(-\vecc^\top\vecx)$
+    \item \textbf{Inequality constraints}: $\mA\vecx \leq \vecb$ becomes $\mA\vecx + \vecs = \vecb$ with slack variable $\vecs \geq \mathbf{0}$
+    \item \textbf{Free variables}: $x_i$ unrestricted becomes $x_i = x_i^+ - x_i^-$ with $x_i^+, x_i^- \geq 0$
+\end{itemize}
+\end{keyconceptbox}
+
+\subsection{Graphical Solution Method (2D)}
+
+For two-variable LPs, the solution can be found graphically:
+
+\begin{enumerate}
+    \item \textbf{Plot the constraint region}: Each linear constraint defines a half-plane. The \textbf{feasible region} is the intersection of all half-planes.
+    \item \textbf{Identify vertices}: The feasible region is a convex polygon (if bounded and non-empty).
+    \item \textbf{Find the optimal vertex}: The optimal solution occurs at a vertex of the feasible region. Either:
+    \begin{itemize}
+        \item Evaluate the objective at each vertex and select the best, or
+        \item Draw level curves of the objective and find the extreme feasible point.
+    \end{itemize}
+\end{enumerate}
+
+\begin{examplebox}[title=Example: Linear Programming (Graphical Solution)]
+Solve the following linear program:
+\begin{align*}
+\max_{x_1, x_2} \quad & 3x_1 + 2x_2 \\
+\text{subject to} \quad & x_1 + x_2 \leq 4 \\
+& 2x_1 + x_2 \leq 6 \\
+& x_1, x_2 \geq 0
+\end{align*}
+
+\textbf{Solution:}
+
+\textit{Step 1: Identify the feasible region.}
+
+The constraints define the following half-planes:
+\begin{itemize}
+    \item $x_1 + x_2 \leq 4$: region below the line $x_1 + x_2 = 4$
+    \item $2x_1 + x_2 \leq 6$: region below the line $2x_1 + x_2 = 6$
+    \item $x_1 \geq 0$: right of the $x_2$-axis
+    \item $x_2 \geq 0$: above the $x_1$-axis
+\end{itemize}
+
+\textit{Step 2: Find the vertices of the feasible region.}
+
+The vertices are found by solving pairs of constraint equations:
+\begin{itemize}
+    \item $A = (0, 0)$: intersection of $x_1 = 0$ and $x_2 = 0$
+    \item $B = (3, 0)$: intersection of $2x_1 + x_2 = 6$ and $x_2 = 0$
+    \item $C = (2, 2)$: intersection of $x_1 + x_2 = 4$ and $2x_1 + x_2 = 6$
+    \item $D = (0, 4)$: intersection of $x_1 + x_2 = 4$ and $x_1 = 0$
+\end{itemize}
+
+To find $C$: Subtract the first equation from the second:
+\begin{align*}
+(2x_1 + x_2) - (x_1 + x_2) &= 6 - 4 \\
+x_1 &= 2 \\
+x_2 &= 4 - 2 = 2
+\end{align*}
+
+\textit{Step 3: Evaluate the objective function at each vertex.}
+
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+\textbf{Vertex} & $(x_1, x_2)$ & $3x_1 + 2x_2$ \\
+\midrule
+$A$ & $(0, 0)$ & $0$ \\
+$B$ & $(3, 0)$ & $9$ \\
+$C$ & $(2, 2)$ & $10$ \\
+$D$ & $(0, 4)$ & $8$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Conclusion:} The maximum value is $\boxed{10}$ at the point $(x_1^*, x_2^*) = (2, 2)$.
+
+\textbf{Geometric interpretation:} The objective function $3x_1 + 2x_2 = k$ represents a family of parallel lines. We seek the line with the largest $k$ that still touches the feasible region. This occurs at vertex $C$.
+\end{examplebox}
+
+\subsection{The Simplex Method}
+
+For problems with more than two variables, the graphical method is impractical. The \textbf{simplex method}, developed by George Dantzig in 1947, is an algebraic algorithm that efficiently solves LPs.
+
+\begin{keyconceptbox}[title=Simplex Method Overview]
+The simplex method exploits a fundamental property of linear programs: \textit{if an optimal solution exists, it occurs at a vertex (basic feasible solution) of the feasible region.}
+
+The algorithm:
+\begin{enumerate}
+    \item Start at a basic feasible solution (vertex)
+    \item Move along an edge to an adjacent vertex that improves the objective
+    \item Repeat until no improving direction exists (optimality)
+\end{enumerate}
+
+Although the feasible region may have exponentially many vertices, the simplex method typically visits only a small number before finding the optimum.
+\end{keyconceptbox}
+
+\begin{warningbox}[title=Computational Complexity]
+While the simplex method works extremely well in practice, its worst-case complexity is exponential. For guaranteed polynomial-time performance, \textbf{interior-point methods} (such as the barrier method) are preferred for very large-scale problems.
+\end{warningbox}
 
 \section{Convex Optimization}
 
-\begin{definitionbox}[title=Definition 0.7: Convex Function]
+Convex optimization problems have the remarkable property that any local minimum is also a global minimum.
+
+\begin{definitionbox}[title=Definition: Convex Function]
 A function $f: \mathbb{R}^n \to \mathbb{R}$ is \textbf{convex} if for all $\vecx, \vecy$ and $\theta \in [0,1]$:
 \begin{equation}
 f(\theta\vecx + (1-\theta)\vecy) \leq \theta f(\vecx) + (1-\theta)f(\vecy)
 \end{equation}
+Geometrically, the function lies below (or on) the line segment connecting any two points on its graph.
 \end{definitionbox}
 
-Key property: Any local minimum of a convex function is a global minimum.
+\begin{keyconceptbox}[title=Why Convexity Matters]
+For convex optimization problems:
+\begin{enumerate}
+    \item \textbf{No local minima trap}: Any local minimum is global
+    \item \textbf{Efficient algorithms}: Polynomial-time algorithms exist with guaranteed convergence
+    \item \textbf{Strong duality}: Under mild conditions, primal and dual problems have equal optimal values
+    \item \textbf{Robust solutions}: Small perturbations lead to small changes in the optimal solution
+\end{enumerate}
+\end{keyconceptbox}
+
+\subsubsection{Second-Order Characterization}
+For a twice-differentiable function $f$:
+\begin{equation}
+f \text{ is convex} \quad \Longleftrightarrow \quad \mH(\vecx) \succeq 0 \text{ for all } \vecx
+\end{equation}
+where $\mH \succeq 0$ denotes positive semidefiniteness.
 
 \subsubsection{Examples of Convex Problems}
 \begin{itemize}
-    \item Linear programming: $\min \vecc^\top\vecx$ s.t. $\mA\vecx \leq \vecb$
-    \item Quadratic programming: $\min \frac{1}{2}\vecx^\top\mQ\vecx + \vecc^\top\vecx$ s.t. $\mA\vecx \leq \vecb$ (if $\mQ \succeq 0$)
-    \item Least squares: $\min \|\mA\vecx - \vecb\|^2$
+    \item \textbf{Linear programming}: $\min \vecc^\top\vecx$ subject to $\mA\vecx \leq \vecb$
+    \item \textbf{Quadratic programming}: $\min \frac{1}{2}\vecx^\top\mQ\vecx + \vecc^\top\vecx$ subject to $\mA\vecx \leq \vecb$ (when $\mQ \succeq 0$)
+    \item \textbf{Least squares}: $\min \|\mA\vecx - \vecb\|^2$
+    \item \textbf{Semidefinite programming}: Optimization over positive semidefinite matrices
 \end{itemize}
 
 \section{Dynamic Programming}
 
-For sequential decision problems, \textbf{Bellman's Principle of Optimality}:
+For sequential decision problems, \textbf{Bellman's Principle of Optimality} provides a powerful decomposition:
 
 \begin{quote}
-An optimal policy has the property that whatever the initial state and initial decision are, the remaining decisions must constitute an optimal policy with regard to the state resulting from the first decision.
+\textit{An optimal policy has the property that whatever the initial state and initial decision are, the remaining decisions must constitute an optimal policy with regard to the state resulting from the first decision.}
 \end{quote}
 
 The \textbf{Bellman equation} for discrete-time optimal control:
 \begin{equation}
 V^*(x_k) = \min_{u_k} \left[ L(x_k, u_k) + V^*(f(x_k, u_k)) \right]
 \end{equation}
+where:
+\begin{itemize}
+    \item $V^*(x)$ is the \textbf{optimal value function} (minimum cost-to-go from state $x$)
+    \item $L(x_k, u_k)$ is the stage cost at time $k$
+    \item $f(x_k, u_k)$ is the state transition function
+\end{itemize}
 
-where $V^*$ is the optimal value function (cost-to-go).
+\begin{keyconceptbox}[title=Dynamic Programming in Control]
+Dynamic programming is foundational to:
+\begin{itemize}
+    \item \textbf{Model Predictive Control (MPC)}: Solve finite-horizon optimal control problems online
+    \item \textbf{Linear Quadratic Regulator (LQR)}: Closed-form solution via the Riccati equation
+    \item \textbf{Reinforcement Learning}: Learn optimal policies through interaction with the environment
+\end{itemize}
+\end{keyconceptbox}
 
 % ============================================================================
