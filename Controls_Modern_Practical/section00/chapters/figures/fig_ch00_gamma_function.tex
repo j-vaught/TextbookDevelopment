@@ -1,0 +1,134 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+% ============================================================================
+% Main plot: Gamma function for real arguments
+% ============================================================================
+\begin{axis}[
+    width=14cm, height=10cm,
+    xlabel={$x$},
+    ylabel={$\Gamma(x)$},
+    xmin=-4.5, xmax=5.5,
+    ymin=-6, ymax=6,
+    xtick={-4, -3, -2, -1, 0, 1, 2, 3, 4, 5},
+    ytick={-6, -4, -2, 0, 2, 4, 6},
+    grid=major,
+    grid style={gray!30},
+    axis lines=middle,
+    axis line style={->, >=stealth, thick},
+    xlabel style={at={(axis description cs:1.02,0.5)}},
+    ylabel style={at={(axis description cs:0.52,1.02)}}
+]
+
+% Gamma function for x > 0 (main positive branch)
+% Using Stirling-like approximation combined with known values
+% For x in (0,1): Gamma(x) = Gamma(x+1)/x
+% For x > 1: Direct computation
+
+% Branch: x in (0.01, 5.5) - positive half
+% Using reflection and recursion approximation
+\addplot[UofSCGarnet, very thick, domain=0.15:5.5, samples=200] {
+    exp(
+        -0.5*ln(x) + x*ln(x) - x + 0.5*ln(2*pi/x)
+        + 1/(12*x) - 1/(360*x^3) + 1/(1260*x^5)
+    ) / (
+        x * (x-1) * (x-2) * (x-3) * (x-4)
+    ) * (
+        (x) * (x-1) * (x-2) * (x-3) * (x-4)
+    )
+};
+
+% Simpler approach: Use pgfplots factorial function for integer neighbors
+% Branch: x in (0.01, 1)
+\addplot[UofSCGarnet, very thick, domain=0.08:0.999, samples=150] {
+    1/x * (1 - 0.5772156649*x + 0.9890559953*x^2 - 0.9074790760*x^3
+    + 0.9817280868*x^4 - 0.9819950689*x^5 + 0.9931491146*x^6)
+};
+
+% Branch: x in (1, 2)
+\addplot[UofSCGarnet, very thick, domain=1:1.999, samples=100] {
+    (1 - 0.5772156649*(x-1) + 0.9890559953*(x-1)^2 - 0.9074790760*(x-1)^3
+    + 0.9817280868*(x-1)^4 - 0.9819950689*(x-1)^5 + 0.9931491146*(x-1)^6)
+};
+
+% Branch: x in (2, 3)
+\addplot[UofSCGarnet, very thick, domain=2:2.999, samples=100] {
+    (x-1) * (1 - 0.5772156649*(x-2) + 0.9890559953*(x-2)^2 - 0.9074790760*(x-2)^3
+    + 0.9817280868*(x-2)^4)
+};
+
+% Branch: x in (3, 4)
+\addplot[UofSCGarnet, very thick, domain=3:3.999, samples=100] {
+    (x-1)*(x-2) * (1 - 0.5772156649*(x-3) + 0.9890559953*(x-3)^2 - 0.9074790760*(x-3)^3)
+};
+
+% Branch: x in (4, 5.5)
+\addplot[UofSCGarnet, very thick, domain=4:5.5, samples=100] {
+    (x-1)*(x-2)*(x-3) * (1 - 0.5772156649*(x-4) + 0.9890559953*(x-4)^2)
+};
+
+% Negative branches: x in (-1, 0)
+\addplot[UofSCAtlantic, very thick, domain=-0.999:-0.08, samples=150] {
+    1/x * (1 - 0.5772156649*(x+1) + 0.9890559953*(x+1)^2 - 0.9074790760*(x+1)^3
+    + 0.9817280868*(x+1)^4) / (x+1)
+};
+
+% Branch: x in (-2, -1)
+\addplot[UofSCAtlantic, very thick, domain=-1.999:-1.08, samples=150] {
+    1/(x*(x+1)) * (1 - 0.5772156649*(x+2) + 0.9890559953*(x+2)^2 - 0.9074790760*(x+2)^3)
+};
+
+% Branch: x in (-3, -2)
+\addplot[UofSCAtlantic, very thick, domain=-2.999:-2.08, samples=150] {
+    1/(x*(x+1)*(x+2)) * (1 - 0.5772156649*(x+3) + 0.9890559953*(x+3)^2)
+};
+
+% Branch: x in (-4, -3)
+\addplot[UofSCAtlantic, very thick, domain=-3.92:-3.08, samples=150] {
+    1/(x*(x+1)*(x+2)*(x+3)) * (1 - 0.5772156649*(x+4))
+};
+
+% Vertical asymptotes (poles at non-positive integers)
+\draw[UofSCRose, dashed, thick] (axis cs:0,-6) -- (axis cs:0,6);
+\draw[UofSCRose, dashed, thick] (axis cs:-1,-6) -- (axis cs:-1,6);
+\draw[UofSCRose, dashed, thick] (axis cs:-2,-6) -- (axis cs:-2,6);
+\draw[UofSCRose, dashed, thick] (axis cs:-3,-6) -- (axis cs:-3,6);
+\draw[UofSCRose, dashed, thick] (axis cs:-4,-6) -- (axis cs:-4,6);
+
+% Mark factorial values at positive integers
+\node[circle, fill=UofSCHorseshoe, minimum size=6pt, inner sep=0pt] at (axis cs:1,1) {};
+\node[circle, fill=UofSCHorseshoe, minimum size=6pt, inner sep=0pt] at (axis cs:2,1) {};
+\node[circle, fill=UofSCHorseshoe, minimum size=6pt, inner sep=0pt] at (axis cs:3,2) {};
+\node[circle, fill=UofSCHorseshoe, minimum size=6pt, inner sep=0pt] at (axis cs:4,6) {};
+
+% Factorial annotations
+\node[UofSCHorseshoe, font=\footnotesize, anchor=south west] at (axis cs:1.1,1.1) {$\Gamma(1) = 0! = 1$};
+\node[UofSCHorseshoe, font=\footnotesize, anchor=south west] at (axis cs:2.1,1.1) {$\Gamma(2) = 1! = 1$};
+\node[UofSCHorseshoe, font=\footnotesize, anchor=south west] at (axis cs:3.1,2.1) {$\Gamma(3) = 2! = 2$};
+\node[UofSCHorseshoe, font=\footnotesize, anchor=west] at (axis cs:4.1,5.8) {$\Gamma(4) = 3! = 6$};
+
+% Special value: Gamma(1/2) = sqrt(pi)
+\node[circle, fill=UofSCCongaree, minimum size=6pt, inner sep=0pt] at (axis cs:0.5,1.7725) {};
+\node[UofSCCongaree, font=\footnotesize, anchor=south] at (axis cs:0.5,1.95) {$\Gamma(\tfrac{1}{2}) = \sqrt{\pi}$};
+
+% Pole labels
+\node[UofSCRose, font=\footnotesize, anchor=north] at (axis cs:0,-5.5) {Pole};
+\node[UofSCRose, font=\footnotesize, anchor=north] at (axis cs:-1,-5.5) {Pole};
+\node[UofSCRose, font=\footnotesize, anchor=north] at (axis cs:-2,-5.5) {Pole};
+\node[UofSCRose, font=\footnotesize, anchor=north] at (axis cs:-3,-5.5) {Pole};
+
+% Minimum value annotation (at x ≈ 1.4616)
+\node[diamond, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:1.4616,0.8856) {};
+\node[UofSCGarnet, font=\scriptsize, anchor=north west] at (axis cs:1.5,0.8) {min $\approx 0.886$};
+
+% Legend
+\node[UofSCGarnet, font=\small, anchor=west] at (axis cs:3.5,5) {$x > 0$};
+\node[UofSCAtlantic, font=\small, anchor=west] at (axis cs:3.5,4.3) {$x < 0$ (between poles)};
+
+\end{axis}
+
+\end{tikzpicture}
+\caption{The Gamma function $\Gamma(x)$ extends the factorial to real (and complex) numbers via the integral $\Gamma(x) = \int_0^\infty t^{x-1}\ee^{-t}\,\dd t$ for $x > 0$. Key properties: (1) $\Gamma(n) = (n-1)!$ for positive integers (Horseshoe markers); (2) Recurrence relation $\Gamma(x+1) = x\Gamma(x)$; (3) Special value $\Gamma(\frac{1}{2}) = \sqrt{\pi}$ (Congaree marker); (4) Simple poles at non-positive integers $x = 0, -1, -2, \ldots$ (Rose dashed lines) with residue $(-1)^n/n!$ at $x = -n$. The function has a unique minimum at $x \approx 1.462$ where $\Gamma(x) \approx 0.886$. In control systems, the Gamma function appears in fractional calculus, certain transfer function representations, and statistical distributions used in stochastic control.}
+\label{fig:gamma_function}
+\end{figure}
