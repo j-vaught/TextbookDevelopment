@@ -1,0 +1,151 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+% --- Top Row: Three Distribution Plots ---
+
+% Prior Distribution
+\begin{axis}[
+    name=prior,
+    width=5.5cm, height=5cm,
+    xlabel={Parameter $\theta$},
+    ylabel={Probability Density},
+    xmin=-2, xmax=6,
+    ymin=0, ymax=0.45,
+    grid=major,
+    grid style={gray!30},
+    axis on top,
+    title={\bfseries\color{UofSCAtlantic} Prior $p(\theta)$},
+    title style={at={(0.5,1.0)}, anchor=south}
+]
+
+% Prior: Gaussian centered at 1 with wide variance
+\addplot[fill=UofSCAtlantic!30, draw=UofSCAtlantic, very thick, domain=-2:6, samples=150]
+    {1/(1.5*sqrt(2*pi)) * exp(-(x-1)^2/(2*1.5^2))} \closedcycle;
+
+% Mean marker
+\draw[UofSCAtlantic, thick, dashed] (1, 0) -- (1, 0.28);
+\node[UofSCAtlantic, font=\footnotesize, above] at (1, 0.28) {$\mu_0=1$};
+
+% Variance indicator
+\draw[UofSCAtlantic, thick, |<->|] (1, 0.12) -- (2.5, 0.12);
+\node[UofSCAtlantic, font=\footnotesize, above] at (1.75, 0.12) {$\sigma_0$};
+
+\end{axis}
+
+% Likelihood Function
+\begin{axis}[
+    name=likelihood,
+    at={(prior.south east)},
+    anchor=south west,
+    xshift=0.8cm,
+    width=5.5cm, height=5cm,
+    xlabel={Parameter $\theta$},
+    ylabel={},
+    xmin=-2, xmax=6,
+    ymin=0, ymax=0.45,
+    grid=major,
+    grid style={gray!30},
+    axis on top,
+    title={\bfseries\color{UofSCHorseshoe} Likelihood $p(x|\theta)$},
+    title style={at={(0.5,1.0)}, anchor=south}
+]
+
+% Likelihood: Gaussian centered at 3.5 (where data suggests theta should be)
+\addplot[fill=UofSCHorseshoe!30, draw=UofSCHorseshoe, very thick, domain=-2:6, samples=150]
+    {1/(1.0*sqrt(2*pi)) * exp(-(x-3.5)^2/(2*1.0^2))} \closedcycle;
+
+% Peak marker
+\draw[UofSCHorseshoe, thick, dashed] (3.5, 0) -- (3.5, 0.42);
+\node[UofSCHorseshoe, font=\footnotesize, above] at (3.5, 0.42) {$x_{obs}=3.5$};
+
+% Annotation
+\node[UofSCHorseshoe, font=\footnotesize, align=center] at (0.5, 0.32) {Data\\Evidence};
+
+\end{axis}
+
+% Posterior Distribution
+\begin{axis}[
+    name=posterior,
+    at={(likelihood.south east)},
+    anchor=south west,
+    xshift=0.8cm,
+    width=5.5cm, height=5cm,
+    xlabel={Parameter $\theta$},
+    ylabel={},
+    xmin=-2, xmax=6,
+    ymin=0, ymax=0.45,
+    grid=major,
+    grid style={gray!30},
+    axis on top,
+    title={\bfseries\color{UofSCGarnet} Posterior $p(\theta|x)$},
+    title style={at={(0.5,1.0)}, anchor=south}
+]
+
+% Posterior: Narrower Gaussian between prior and likelihood means
+% Using Bayesian update: posterior mean = (sigma_1^2 * mu_0 + sigma_0^2 * x) / (sigma_0^2 + sigma_1^2)
+% posterior_mean = (1*1 + 2.25*3.5) / (2.25 + 1) = 8.875/3.25 = 2.73
+% posterior_var = 1/(1/2.25 + 1/1) = 1/1.44 = 0.69, sigma = 0.83
+\addplot[fill=UofSCGarnet!30, draw=UofSCGarnet, very thick, domain=-2:6, samples=150]
+    {1/(0.83*sqrt(2*pi)) * exp(-(x-2.73)^2/(2*0.83^2))} \closedcycle;
+
+% Posterior mean marker
+\draw[UofSCGarnet, thick, dashed] (2.73, 0) -- (2.73, 0.49);
+\node[UofSCGarnet, font=\footnotesize, above] at (2.73, 0.49) {$\mu_{post}$};
+
+% Show it's between prior and likelihood
+\draw[UofSCCongaree, thin, dotted] (1, 0.35) -- (1, 0.38);
+\draw[UofSCCongaree, thin, dotted] (3.5, 0.35) -- (3.5, 0.38);
+\draw[UofSCCongaree, thin, <->] (1, 0.36) -- (3.5, 0.36);
+\node[UofSCCongaree, font=\tiny, above] at (2.25, 0.36) {Compromise};
+
+\end{axis}
+
+% --- Bottom Row: Process Flow Diagram ---
+\begin{scope}[yshift=-6.5cm]
+
+% Flow boxes
+\node[draw=UofSCAtlantic, fill=UofSCAtlantic!15, minimum width=3cm, minimum height=1.2cm,
+      align=center, font=\small, sharp corners] (priorbox) at (1.5, 0)
+      {\textbf{Prior Belief}\\$p(\theta)$};
+
+\node[draw=UofSCHorseshoe, fill=UofSCHorseshoe!15, minimum width=3cm, minimum height=1.2cm,
+      align=center, font=\small, sharp corners] (databox) at (6.5, 0)
+      {\textbf{New Data}\\$x_{obs}$};
+
+\node[draw=UofSCGarnet, fill=UofSCGarnet!15, minimum width=3.5cm, minimum height=1.2cm,
+      align=center, font=\small, sharp corners] (posteriorbox) at (12, 0)
+      {\textbf{Updated Belief}\\$p(\theta|x)$};
+
+% Multiplication node
+\node[draw=UofSCBlack, fill=white, circle, minimum size=0.8cm, font=\large] (mult) at (4, 0) {$\times$};
+
+% Proportionality node
+\node[draw=UofSCBlack, fill=white, minimum width=1.5cm, minimum height=0.8cm,
+      font=\small, sharp corners] (prop) at (9, 0) {$\propto$};
+
+% Arrows
+\draw[->, thick, UofSCBlack] (priorbox.east) -- (mult.west);
+\draw[->, thick, UofSCBlack] (databox.west) -- (mult.east);
+\draw[->, thick, UofSCBlack] (mult.east) ++(0.3,0) -- (prop.west);
+\draw[->, thick, UofSCBlack] (prop.east) -- (posteriorbox.west);
+
+% Likelihood label above data arrow
+\node[UofSCHorseshoe, font=\footnotesize] at (5.25, 0.5) {Likelihood $p(x|\theta)$};
+
+% Bayes' Theorem equation
+\node[font=\normalsize, align=center] at (6.75, -1.5)
+    {$\displaystyle p(\theta|x) = \frac{p(x|\theta) \cdot p(\theta)}{p(x)}$};
+\node[font=\small, UofSC70Black] at (6.75, -2.2)
+    {Posterior $\propto$ Likelihood $\times$ Prior};
+
+% Iteration arrow (feedback)
+\draw[->, thick, UofSCRose, dashed] (posteriorbox.south) -- ++(0, -0.7) -| (priorbox.south)
+    node[pos=0.25, below, font=\footnotesize, UofSCRose] {Next iteration: posterior becomes new prior};
+
+\end{scope}
+
+\end{tikzpicture}
+\caption{Bayesian updating process showing how prior beliefs are combined with data to form posterior estimates. \textbf{Top row}: The prior distribution (Atlantic blue, $\mu_0=1$, broad uncertainty) represents initial knowledge before observing data. The likelihood function (Horseshoe green) quantifies how probable the observed data $x_{obs}=3.5$ is for each possible parameter value. The posterior distribution (Garnet) is the normalized product, representing updated knowledge---narrower than the prior (reduced uncertainty) with mean shifted toward the data. \textbf{Bottom}: Schematic of Bayes' theorem. The dashed Rose arrow shows sequential updating: each posterior becomes the prior for the next observation. This framework underlies Kalman filtering, recursive estimation, and probabilistic inference in control systems.}
+\label{fig:bayes_update}
+\end{figure}
