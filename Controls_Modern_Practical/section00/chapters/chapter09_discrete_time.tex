@@ -1,109 +1,704 @@
-\chapter{Discrete-Time Mathematics}
+\chapter{Discrete-Time Systems}
 \label{ch:discrete}
 % ============================================================================
 
-Digital control systems operate on sampled data, requiring discrete-time analysis.
+Digital control systems operate on sampled data, requiring discrete-time analysis. This chapter develops the mathematical foundations for analyzing signals and systems that exist only at discrete time instants, forming the basis for digital control system design.
 
-\section{Sequences and Difference Equations}
+% ============================================================================
+\section{Sampling and Reconstruction}
+% ============================================================================
 
-A \textbf{sequence} is a function defined on integers: $x[n]$ or $x_n$ for $n \in \mathbb{Z}$.
+The transition from continuous-time to discrete-time systems begins with \textbf{sampling}---the process of converting a continuous signal into a sequence of values at discrete time instants.
 
-\subsubsection{First-order difference equation}
+\subsection{Ideal Sampling}
+
+\begin{definitionbox}[title=Definition: Ideal Sampling]
+\textbf{Ideal sampling} of a continuous-time signal $x(t)$ produces a sequence of impulses:
 \begin{equation}
-x[n+1] = ax[n] + bu[n]
+x_s(t) = x(t) \cdot \sum_{n=-\infty}^{\infty} \delta(t - nT) = \sum_{n=-\infty}^{\infty} x(nT) \delta(t - nT)
 \end{equation}
+where $T$ is the \textbf{sampling period} and $f_s = 1/T$ is the \textbf{sampling frequency} (in Hz).
+\end{definitionbox}
 
-Solution:
+In the frequency domain, multiplication by an impulse train produces spectral replications:
 \begin{equation}
-x[n] = a^n x[0] + \sum_{k=0}^{n-1} a^{n-1-k} bu[k]
+X_s(f) = f_s \sum_{k=-\infty}^{\infty} X(f - kf_s)
 \end{equation}
+The spectrum of the sampled signal consists of the original spectrum repeated at intervals of $f_s$.
 
-\section{The Z-Transform}
+\subsection{The Nyquist-Shannon Sampling Theorem}
 
-\begin{definitionbox}[title=Definition 0.8: Z-Transform]
-The \textbf{Z-transform} of a sequence $x[n]$ is:
+\begin{keyconceptbox}[title=Nyquist-Shannon Sampling Theorem]
+A bandlimited continuous-time signal with maximum frequency $f_{\max}$ can be \textbf{perfectly reconstructed} from its samples if and only if the sampling frequency satisfies:
 \begin{equation}
-X(z) = \ZT\{x[n]\} = \sum_{n=0}^{\infty} x[n] z^{-n}
+f_s > 2f_{\max}
+\end{equation}
+The minimum sampling rate $f_N = 2f_{\max}$ is called the \textbf{Nyquist rate}, and $f_s/2$ is called the \textbf{Nyquist frequency} (the highest frequency that can be represented without aliasing).
+\end{keyconceptbox}
+
+% Figure: Nyquist sampling
+\input{figures/fig_ch00_nyquist_sampling.tex}
+
+\begin{warningbox}[title=Aliasing]
+When the sampling theorem is violated ($f_s < 2f_{\max}$), \textbf{aliasing} occurs: high-frequency components appear as spurious low-frequency components in the sampled signal. A signal at frequency $f$ will appear at the aliased frequency:
+\begin{equation}
+f_{\text{alias}} = \left| f - k f_s \right|
+\end{equation}
+where $k$ is chosen so that $f_{\text{alias}} \leq f_s/2$. Aliasing is \textbf{irreversible}---once aliased, the original frequency cannot be recovered.
+\end{warningbox}
+
+\subsection{Anti-Aliasing Filters}
+
+To prevent aliasing, an \textbf{anti-aliasing filter} (a low-pass filter with cutoff frequency below $f_s/2$) must be applied before sampling:
+
+\begin{practicalbox}[title=Anti-Aliasing Filter Design]
+For practical systems:
+\begin{enumerate}
+    \item Determine the maximum signal frequency of interest, $f_{\max}$
+    \item Choose $f_s \geq 2.5 f_{\max}$ to $10 f_{\max}$ (oversample to allow for non-ideal filter rolloff)
+    \item Design an analog low-pass filter with cutoff $f_c < f_s/2$
+    \item The filter should provide sufficient attenuation ($>40$ dB typical) at $f_s/2$
+\end{enumerate}
+Common anti-aliasing filters include Butterworth (maximally flat passband), Chebyshev (sharper rolloff), and Bessel (linear phase for minimal distortion).
+\end{practicalbox}
+
+\subsection{Sample-and-Hold Operation}
+
+Practical analog-to-digital converters (ADCs) cannot sample instantaneously. Instead, they use a \textbf{sample-and-hold} circuit that captures the signal value and holds it constant during conversion.
+
+\begin{definitionbox}[title=Definition: Zero-Order Hold (ZOH)]
+A \textbf{zero-order hold} maintains each sample value constant until the next sample:
+\begin{equation}
+x_{\text{ZOH}}(t) = x[n], \quad nT \leq t < (n+1)T
+\end{equation}
+The ZOH has frequency response:
+\begin{equation}
+H_{\text{ZOH}}(f) = T \cdot \sinc(\pi f T) \cdot \ee^{-\jj \pi f T} = T \frac{\sin(\pi f T)}{\pi f T} \ee^{-\jj \pi f T}
 \end{equation}
 \end{definitionbox}
 
-\subsubsection{Common Z-Transform Pairs}
+The ZOH introduces a half-sample delay and acts as a low-pass filter, attenuating high frequencies. This must be accounted for in digital controller design.
 
-\begin{table}[htbp]
-\centering
-\begin{tabular}{lll}
-\toprule
-\textbf{Sequence} & $x[n]$ for $n \geq 0$ & $X(z)$ \\
-\midrule
-Unit impulse & $\delta[n]$ & $1$ \\
-Unit step & $u[n] = 1$ & $\frac{z}{z-1}$ \\
-Ramp & $n$ & $\frac{z}{(z-1)^2}$ \\
-Exponential & $a^n$ & $\frac{z}{z-a}$ \\
-Exponential ramp & $na^n$ & $\frac{az}{(z-a)^2}$ \\
-Sine & $\sin(\omega n)$ & $\frac{z\sin\omega}{z^2 - 2z\cos\omega + 1}$ \\
-Cosine & $\cos(\omega n)$ & $\frac{z(z-\cos\omega)}{z^2 - 2z\cos\omega + 1}$ \\
-\bottomrule
-\end{tabular}
-\caption{Common Z-transform pairs.}
-\label{tab:z_transform}
-\end{table}
+% Figure: Sampling visualization
+\input{figures/fig_ch00_sampling_visualization.tex}
 
-\subsubsection{Z-Transform Properties}
+% ============================================================================
+\section{Discrete-Time Signals}
+% ============================================================================
 
-\begin{table}[htbp]
-\centering
-\begin{tabular}{lll}
-\toprule
-\textbf{Property} & \textbf{Sequence} & \textbf{Z-Domain} \\
-\midrule
-Linearity & $ax[n] + by[n]$ & $aX(z) + bY(z)$ \\
-Time shift (delay) & $x[n-k]$ & $z^{-k}X(z)$ \\
-Time advance & $x[n+1]$ & $zX(z) - zx[0]$ \\
-Convolution & $x[n] \conv y[n]$ & $X(z)Y(z)$ \\
-Initial value & $x[0]$ & $\lim_{z\to\infty} X(z)$ \\
-Final value & $\lim_{n\to\infty} x[n]$ & $\lim_{z\to 1}(z-1)X(z)$ \\
-\bottomrule
-\end{tabular}
-\caption{Z-transform properties.}
-\label{tab:z_properties}
-\end{table}
-
-\section{Relationship Between s-Domain and z-Domain}
-
-For a sampled signal with sampling period $T$:
+\begin{definitionbox}[title=Definition: Discrete-Time Signal]
+A \textbf{discrete-time signal} (or \textbf{sequence}) is a function defined only at integer values of the independent variable:
 \begin{equation}
-z = \ee^{sT}
+x[n], \quad n \in \mathbb{Z}
+\end{equation}
+where $n$ is the \textbf{sample index}. If derived from sampling a continuous signal at period $T$, then $x[n] = x(nT)$.
+\end{definitionbox}
+
+\subsection{Elementary Sequences}
+
+% Figure: Common discrete signals
+\input{figures/fig_ch00_discrete_signals.tex}
+
+The fundamental building blocks of discrete-time signal analysis include:
+
+\subsubsection{Unit Impulse (Kronecker Delta)}
+\begin{equation}
+\delta[n] = \begin{cases} 1, & n = 0 \\ 0, & n \neq 0 \end{cases}
+\end{equation}
+Any sequence can be expressed as a sum of shifted impulses:
+\begin{equation}
+x[n] = \sum_{k=-\infty}^{\infty} x[k] \delta[n-k]
+\end{equation}
+
+\subsubsection{Unit Step}
+\begin{equation}
+u[n] = \begin{cases} 1, & n \geq 0 \\ 0, & n < 0 \end{cases}
+\end{equation}
+Related to the impulse by: $u[n] = \sum_{k=0}^{\infty} \delta[n-k]$ and $\delta[n] = u[n] - u[n-1]$.
+
+\subsubsection{Unit Ramp}
+\begin{equation}
+r[n] = n \cdot u[n] = \begin{cases} n, & n \geq 0 \\ 0, & n < 0 \end{cases}
+\end{equation}
+
+\subsubsection{Exponential Sequence}
+\begin{equation}
+x[n] = a^n u[n]
+\end{equation}
+where $a$ can be real or complex. The sequence behavior depends on $|a|$:
+\begin{itemize}
+    \item $|a| < 1$: Decaying exponential (stable)
+    \item $|a| = 1$: Constant magnitude (marginally stable)
+    \item $|a| > 1$: Growing exponential (unstable)
+\end{itemize}
+
+\subsubsection{Sinusoidal Sequences}
+\begin{align}
+x[n] &= A\cos(\omega_0 n + \phi) \\
+x[n] &= A\sin(\omega_0 n + \phi)
+\end{align}
+where $\omega_0$ is the \textbf{discrete-time frequency} in radians per sample. Note that discrete-time sinusoids are periodic only if $\omega_0/(2\pi)$ is rational.
+
+\subsubsection{Complex Exponential}
+\begin{equation}
+x[n] = r^n \ee^{\jj\omega_0 n} = r^n(\cos\omega_0 n + \jj\sin\omega_0 n)
+\end{equation}
+This combines exponential growth/decay ($r$) with oscillation ($\omega_0$).
+
+\subsection{Signal Operations}
+
+\subsubsection{Time Shifting}
+\begin{equation}
+y[n] = x[n - n_0]
+\end{equation}
+Shifting by $n_0 > 0$ delays the signal; $n_0 < 0$ advances it.
+
+\subsubsection{Time Reversal}
+\begin{equation}
+y[n] = x[-n]
+\end{equation}
+
+\subsubsection{Scaling}
+\begin{equation}
+y[n] = c \cdot x[n]
+\end{equation}
+
+\subsubsection{Addition}
+\begin{equation}
+y[n] = x_1[n] + x_2[n]
+\end{equation}
+
+\subsubsection{Multiplication}
+\begin{equation}
+y[n] = x_1[n] \cdot x_2[n]
+\end{equation}
+
+\subsubsection{Convolution Sum}
+\begin{equation}
+y[n] = x[n] \conv h[n] = \sum_{k=-\infty}^{\infty} x[k] h[n-k]
+\end{equation}
+Convolution in the time domain corresponds to multiplication in the $z$-domain.
+
+% ============================================================================
+\section{The $z$-Transform}
+% ============================================================================
+
+The $z$-transform is to discrete-time systems what the Laplace transform is to continuous-time systems---it converts difference equations into algebraic equations.
+
+\begin{definitionbox}[title=Definition: $z$-Transform]
+The \textbf{$z$-transform} of a sequence $x[n]$ is:
+\begin{equation}
+X(z) = \ZT\{x[n]\} = \sum_{n=-\infty}^{\infty} x[n] z^{-n}
+\end{equation}
+where $z$ is a complex variable. For causal sequences ($x[n] = 0$ for $n < 0$), the \textbf{unilateral $z$-transform} is:
+\begin{equation}
+X(z) = \sum_{n=0}^{\infty} x[n] z^{-n}
+\end{equation}
+\end{definitionbox}
+
+\subsection{Region of Convergence (ROC)}
+
+\begin{definitionbox}[title=Definition: Region of Convergence]
+The \textbf{Region of Convergence (ROC)} is the set of all complex values $z$ for which the $z$-transform sum converges absolutely:
+\begin{equation}
+\sum_{n=-\infty}^{\infty} |x[n] z^{-n}| < \infty
+\end{equation}
+\end{definitionbox}
+
+The ROC is always an annular region (a ring) in the $z$-plane:
+\begin{itemize}
+    \item \textbf{Right-sided sequences} ($x[n] = 0$ for $n < N_1$): ROC is $|z| > r_{\min}$ (exterior of a circle)
+    \item \textbf{Left-sided sequences} ($x[n] = 0$ for $n > N_2$): ROC is $|z| < r_{\max}$ (interior of a circle)
+    \item \textbf{Two-sided sequences}: ROC is an annulus $r_{\min} < |z| < r_{\max}$
+    \item \textbf{Finite-duration sequences}: ROC is entire $z$-plane except possibly $z = 0$ and/or $z = \infty$
+\end{itemize}
+
+\begin{keyconceptbox}[title=ROC and Causality/Stability]
+For a \textbf{causal} system, the ROC extends outward from the outermost pole. For the system to also be \textbf{stable}, the ROC must include the unit circle $|z| = 1$. This means:
+\begin{center}
+\textit{A causal LTI system is stable if and only if all poles lie inside the unit circle.}
+\end{center}
+\end{keyconceptbox}
+
+% Figure: z-plane
+\input{figures/fig_ch00_z_plane.tex}
+
+\subsection{Common $z$-Transform Pairs}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Signal Name} & $x[n]$ for $n \geq 0$ & $X(z)$ & \textbf{ROC} \\
+\midrule
+Unit impulse & $\delta[n]$ & $1$ & All $z$ \\
+Unit step & $u[n] = 1$ & $\frac{z}{z-1}$ & $|z| > 1$ \\
+Ramp & $n$ & $\frac{z}{(z-1)^2}$ & $|z| > 1$ \\
+Quadratic & $n^2$ & $\frac{z(z+1)}{(z-1)^3}$ & $|z| > 1$ \\
+Exponential & $a^n$ & $\frac{z}{z-a}$ & $|z| > |a|$ \\
+Exponential ramp & $na^n$ & $\frac{az}{(z-a)^2}$ & $|z| > |a|$ \\
+Exponential quadratic & $n^2 a^n$ & $\frac{az(z+a)}{(z-a)^3}$ & $|z| > |a|$ \\
+Sine & $\sin(\omega_0 n)$ & $\frac{z\sin\omega_0}{z^2 - 2z\cos\omega_0 + 1}$ & $|z| > 1$ \\
+Cosine & $\cos(\omega_0 n)$ & $\frac{z(z-\cos\omega_0)}{z^2 - 2z\cos\omega_0 + 1}$ & $|z| > 1$ \\
+Damped sine & $a^n\sin(\omega_0 n)$ & $\frac{az\sin\omega_0}{z^2 - 2az\cos\omega_0 + a^2}$ & $|z| > |a|$ \\
+Damped cosine & $a^n\cos(\omega_0 n)$ & $\frac{z(z-a\cos\omega_0)}{z^2 - 2az\cos\omega_0 + a^2}$ & $|z| > |a|$ \\
+\bottomrule
+\end{tabular}
+\caption{Common $z$-transform pairs for causal sequences ($x[n] = 0$ for $n < 0$).}
+\label{tab:z_transform_pairs}
+\end{table}
+
+\begin{examplebox}[title=Example: Deriving the $z$-Transform of $a^n u[n]$]
+Find the $z$-transform of $x[n] = a^n u[n]$.
+
+\textbf{Solution:}
+Applying the definition for a causal sequence:
+\begin{align}
+X(z) &= \sum_{n=0}^{\infty} a^n z^{-n} = \sum_{n=0}^{\infty} \left(\frac{a}{z}\right)^n
+\end{align}
+
+This is a geometric series with ratio $r = a/z$. The series converges when $|a/z| < 1$, i.e., $|z| > |a|$:
+\begin{equation}
+X(z) = \frac{1}{1 - a/z} = \frac{z}{z-a}, \quad |z| > |a|
 \end{equation}
 
 Therefore:
 \begin{equation}
-s = \frac{1}{T}\ln z
+\boxed{\ZT\{a^n u[n]\} = \frac{z}{z-a}, \quad \text{ROC: } |z| > |a|}
 \end{equation}
+\end{examplebox}
 
-\begin{keyconceptbox}[title=Stability in z-Domain]
-A discrete-time system is stable if and only if all poles of its transfer function $G(z)$ lie \textbf{inside the unit circle} $|z| < 1$.
+\subsection{$z$-Transform Properties}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Time Domain} & \textbf{$z$-Domain} \\
+\midrule
+Linearity & $ax_1[n] + bx_2[n]$ & $aX_1(z) + bX_2(z)$ \\
+Time delay & $x[n-k]$, $k > 0$ & $z^{-k}X(z)$ \\
+Time advance & $x[n+k]$, $k > 0$ & $z^{k}\left(X(z) - \sum_{n=0}^{k-1}x[n]z^{-n}\right)$ \\
+Scaling in $z$ & $a^n x[n]$ & $X(z/a)$ \\
+Differentiation in $z$ & $nx[n]$ & $-z\frac{\dd X(z)}{\dd z}$ \\
+Convolution & $x_1[n] \conv x_2[n]$ & $X_1(z)X_2(z)$ \\
+Accumulation & $\sum_{k=0}^{n} x[k]$ & $\frac{z}{z-1}X(z)$ \\
+Initial value & $x[0]$ & $\lim_{z\to\infty} X(z)$ \\
+Final value & $\lim_{n\to\infty} x[n]$ & $\lim_{z\to 1}(z-1)X(z)$ \\
+\bottomrule
+\end{tabular}
+\caption{Properties of the $z$-transform (assuming causal sequences).}
+\label{tab:z_properties}
+\end{table}
+
+\begin{warningbox}[title=Final Value Theorem Conditions]
+The Final Value Theorem for the $z$-transform is only valid if:
+\begin{enumerate}
+    \item The limit $\lim_{n\to\infty} x[n]$ exists
+    \item $(z-1)X(z)$ has all poles inside the unit circle
+\end{enumerate}
+If there are poles on or outside the unit circle (except possibly a simple pole at $z=1$), the theorem gives incorrect results.
+\end{warningbox}
+
+\subsection{Inverse $z$-Transform Methods}
+
+The inverse $z$-transform can be computed using several methods:
+
+\subsubsection{Partial Fraction Expansion}
+The most common approach: decompose $X(z)$ into simpler terms that appear in transform tables.
+
+\begin{keyconceptbox}[title=Partial Fraction for $z$-Transforms]
+When using partial fractions with $z$-transforms, first divide by $z$ to get $X(z)/z$, perform the expansion, then multiply back by $z$:
+\begin{equation}
+\frac{X(z)}{z} = \frac{A_1}{z-p_1} + \frac{A_2}{z-p_2} + \cdots
+\end{equation}
+Then:
+\begin{equation}
+X(z) = \frac{A_1 z}{z-p_1} + \frac{A_2 z}{z-p_2} + \cdots
+\end{equation}
+Each term $\frac{A_i z}{z-p_i}$ corresponds to $A_i p_i^n u[n]$.
 \end{keyconceptbox}
 
-The imaginary axis in the $s$-plane maps to the unit circle in the $z$-plane:
+\begin{examplebox}[title=Example: Inverse $z$-Transform by Partial Fractions]
+Find the inverse $z$-transform of:
+\begin{equation}
+X(z) = \frac{z(2z - 1)}{(z-1)(z-0.5)}
+\end{equation}
+
+\textbf{Solution:}
+First, divide by $z$:
+\begin{equation}
+\frac{X(z)}{z} = \frac{2z - 1}{(z-1)(z-0.5)}
+\end{equation}
+
+Perform partial fraction expansion:
+\begin{equation}
+\frac{2z - 1}{(z-1)(z-0.5)} = \frac{A}{z-1} + \frac{B}{z-0.5}
+\end{equation}
+
+Using the cover-up method:
+\begin{align}
+A &= \left.\frac{2z-1}{z-0.5}\right|_{z=1} = \frac{2(1)-1}{1-0.5} = \frac{1}{0.5} = 2 \\
+B &= \left.\frac{2z-1}{z-1}\right|_{z=0.5} = \frac{2(0.5)-1}{0.5-1} = \frac{0}{-0.5} = 0
+\end{align}
+
+Therefore:
+\begin{equation}
+\frac{X(z)}{z} = \frac{2}{z-1}
+\end{equation}
+
+Multiplying by $z$:
+\begin{equation}
+X(z) = \frac{2z}{z-1}
+\end{equation}
+
+From the transform table, $\frac{z}{z-1} \leftrightarrow u[n]$:
+\begin{equation}
+\boxed{x[n] = 2 \cdot 1^n \cdot u[n] = 2u[n]}
+\end{equation}
+\end{examplebox}
+
+\subsubsection{Power Series Expansion}
+Express $X(z)$ as a power series in $z^{-1}$ by long division:
+\begin{equation}
+X(z) = \sum_{n=0}^{\infty} x[n] z^{-n} = x[0] + x[1]z^{-1} + x[2]z^{-2} + \cdots
+\end{equation}
+The coefficients of $z^{-n}$ give $x[n]$ directly.
+
+\subsubsection{Contour Integration}
+The formal inverse $z$-transform integral:
+\begin{equation}
+x[n] = \frac{1}{2\pi\jj} \oint_C X(z) z^{n-1} \, \dd z
+\end{equation}
+where $C$ is a counterclockwise contour in the ROC encircling the origin. This is typically evaluated using residues.
+
+% ============================================================================
+\section{Difference Equations}
+% ============================================================================
+
+\begin{definitionbox}[title=Definition: Linear Constant-Coefficient Difference Equation]
+A \textbf{linear constant-coefficient difference equation (LCCDE)} of order $N$ has the form:
+\begin{equation}
+\sum_{k=0}^{N} a_k y[n-k] = \sum_{m=0}^{M} b_m x[n-m]
+\end{equation}
+or equivalently:
+\begin{equation}
+a_0 y[n] + a_1 y[n-1] + \cdots + a_N y[n-N] = b_0 x[n] + b_1 x[n-1] + \cdots + b_M x[n-M]
+\end{equation}
+where $x[n]$ is the input and $y[n]$ is the output.
+\end{definitionbox}
+
+\subsection{First-Order Difference Equations}
+
+The first-order LCCDE:
+\begin{equation}
+y[n] - ay[n-1] = bx[n]
+\end{equation}
+
+\subsubsection{Homogeneous Solution}
+Setting $x[n] = 0$:
+\begin{equation}
+y_h[n] = C \cdot a^n
+\end{equation}
+where $C$ is determined by initial conditions. The value $a$ is the \textbf{characteristic root}.
+
+\subsubsection{Solution Using $z$-Transform}
+Taking the $z$-transform with initial condition $y[-1]$:
+\begin{align}
+Y(z) - a\left(z^{-1}Y(z) + y[-1]\right) &= bX(z) \\
+Y(z)\left(1 - az^{-1}\right) &= bX(z) + ay[-1] \\
+Y(z) &= \frac{bX(z)}{1 - az^{-1}} + \frac{ay[-1]}{1 - az^{-1}}
+\end{align}
+
+\begin{examplebox}[title=Example: First-Order Difference Equation]
+Solve: $y[n] - 0.8y[n-1] = x[n]$ with $y[-1] = 0$ and $x[n] = u[n]$.
+
+\textbf{Solution:}
+Taking the $z$-transform:
+\begin{equation}
+Y(z) - 0.8z^{-1}Y(z) = \frac{z}{z-1}
+\end{equation}
+
+Solving for $Y(z)$:
+\begin{equation}
+Y(z)\left(1 - 0.8z^{-1}\right) = \frac{z}{z-1}
+\end{equation}
+\begin{equation}
+Y(z) = \frac{z}{(z-1)(1 - 0.8z^{-1})} = \frac{z^2}{(z-1)(z-0.8)}
+\end{equation}
+
+Using partial fractions on $Y(z)/z$:
+\begin{equation}
+\frac{Y(z)}{z} = \frac{z}{(z-1)(z-0.8)} = \frac{A}{z-1} + \frac{B}{z-0.8}
+\end{equation}
+
+Cover-up method:
+\begin{align}
+A &= \left.\frac{z}{z-0.8}\right|_{z=1} = \frac{1}{0.2} = 5 \\
+B &= \left.\frac{z}{z-1}\right|_{z=0.8} = \frac{0.8}{-0.2} = -4
+\end{align}
+
+Therefore:
+\begin{equation}
+Y(z) = \frac{5z}{z-1} - \frac{4z}{z-0.8}
+\end{equation}
+
+Taking the inverse $z$-transform:
+\begin{equation}
+\boxed{y[n] = 5(1)^n u[n] - 4(0.8)^n u[n] = \left(5 - 4(0.8)^n\right)u[n]}
+\end{equation}
+
+The steady-state value is $\lim_{n\to\infty} y[n] = 5$.
+\end{examplebox}
+
+\subsection{Second-Order Difference Equations}
+
+The general second-order LCCDE:
+\begin{equation}
+y[n] + a_1 y[n-1] + a_2 y[n-2] = b_0 x[n] + b_1 x[n-1] + b_2 x[n-2]
+\end{equation}
+
+The \textbf{characteristic equation}:
+\begin{equation}
+\lambda^2 + a_1\lambda + a_2 = 0
+\end{equation}
+
+has roots $\lambda_1, \lambda_2$ that determine the homogeneous solution form:
 \begin{itemize}
-    \item Left half-plane ($\Real(s) < 0$) $\to$ inside unit circle ($|z| < 1$)
-    \item Right half-plane ($\Real(s) > 0$) $\to$ outside unit circle ($|z| > 1$)
-    \item $s = 0$ $\to$ $z = 1$
-    \item $s = \pm\jj\omega_s/2$ $\to$ $z = -1$ (Nyquist frequency)
+    \item \textbf{Distinct real roots}: $y_h[n] = C_1\lambda_1^n + C_2\lambda_2^n$
+    \item \textbf{Repeated roots} ($\lambda_1 = \lambda_2 = \lambda$): $y_h[n] = (C_1 + C_2 n)\lambda^n$
+    \item \textbf{Complex conjugate roots} ($\lambda = r\ee^{\pm\jj\theta}$): $y_h[n] = r^n(C_1\cos n\theta + C_2\sin n\theta)$
 \end{itemize}
 
-\section{Discrete-Time State-Space}
+\begin{examplebox}[title=Example: Second-Order System with Complex Poles]
+Solve: $y[n] - 1.2\cos(0.5)y[n-1] + 0.36y[n-2] = x[n]$ with zero initial conditions and $x[n] = \delta[n]$.
 
-The discrete-time state-space representation:
+\textbf{Solution:}
+The characteristic equation is:
+\begin{equation}
+\lambda^2 - 1.2\cos(0.5)\lambda + 0.36 = 0
+\end{equation}
+
+Using the quadratic formula with $\cos(0.5) \approx 0.8776$:
+\begin{equation}
+\lambda = \frac{1.2(0.8776) \pm \sqrt{1.2^2(0.8776)^2 - 4(0.36)}}{2}
+\end{equation}
+
+This gives complex conjugate roots $\lambda_{1,2} = 0.6\ee^{\pm\jj 0.5}$ (magnitude 0.6, angle $\pm 0.5$ rad).
+
+Taking the $z$-transform of the difference equation:
+\begin{equation}
+Y(z)\left(1 - 1.2\cos(0.5)z^{-1} + 0.36z^{-2}\right) = 1
+\end{equation}
+
+\begin{equation}
+Y(z) = \frac{z^2}{z^2 - 1.2\cos(0.5)z + 0.36}
+\end{equation}
+
+From the transform table for damped sinusoids with $a = 0.6$ and $\omega_0 = 0.5$:
+\begin{equation}
+\boxed{y[n] = \frac{(0.6)^n \sin(0.5(n+1))}{\sin(0.5)} u[n]}
+\end{equation}
+
+This is a damped oscillation that decays as $(0.6)^n$.
+\end{examplebox}
+
+\subsection{Stability from the Characteristic Equation}
+
+\begin{keyconceptbox}[title=Stability Criterion for Difference Equations]
+A linear constant-coefficient difference equation is \textbf{stable} (BIBO stable) if and only if all roots of its characteristic equation have magnitude less than 1:
+\begin{equation}
+|\lambda_i| < 1 \quad \text{for all } i
+\end{equation}
+This is equivalent to requiring all poles of the system's transfer function to lie inside the unit circle.
+\end{keyconceptbox}
+
+For a second-order system with characteristic equation $\lambda^2 + a_1\lambda + a_2 = 0$, the stability conditions are:
+\begin{align}
+|a_2| &< 1 \\
+1 + a_1 + a_2 &> 0 \\
+1 - a_1 + a_2 &> 0
+\end{align}
+These form a \textbf{stability triangle} in the $(a_1, a_2)$ parameter space.
+
+% ============================================================================
+\section{Discrete-Time Systems}
+% ============================================================================
+
+\subsection{Transfer Functions in the $z$-Domain}
+
+\begin{definitionbox}[title=Definition: Discrete-Time Transfer Function]
+For a discrete-time LTI system described by an LCCDE, the \textbf{transfer function} is:
+\begin{equation}
+H(z) = \frac{Y(z)}{X(z)} = \frac{\sum_{m=0}^{M} b_m z^{-m}}{\sum_{k=0}^{N} a_k z^{-k}} = \frac{b_0 z^N + b_1 z^{N-1} + \cdots + b_M z^{N-M}}{a_0 z^N + a_1 z^{N-1} + \cdots + a_N}
+\end{equation}
+assuming zero initial conditions.
+\end{definitionbox}
+
+The transfer function can be written in pole-zero form:
+\begin{equation}
+H(z) = K \frac{(z-z_1)(z-z_2)\cdots(z-z_M)}{(z-p_1)(z-p_2)\cdots(z-p_N)} = K \frac{\prod_{i=1}^{M}(z-z_i)}{\prod_{j=1}^{N}(z-p_j)}
+\end{equation}
+where $z_i$ are the \textbf{zeros} and $p_j$ are the \textbf{poles}.
+
+\subsection{Stability in the $z$-Domain}
+
+\begin{keyconceptbox}[title=BIBO Stability in the $z$-Domain]
+A causal discrete-time LTI system with transfer function $H(z)$ is \textbf{Bounded-Input Bounded-Output (BIBO) stable} if and only if all poles lie strictly inside the unit circle:
+\begin{equation}
+|p_i| < 1 \quad \text{for all poles } p_i
+\end{equation}
+\end{keyconceptbox}
+
+The relationship between pole location and time response:
+\begin{itemize}
+    \item \textbf{Real pole at $z = p$} ($0 < p < 1$): Decaying exponential $p^n$
+    \item \textbf{Real pole at $z = p$} ($-1 < p < 0$): Alternating decaying sequence $p^n$
+    \item \textbf{Complex poles at $z = r\ee^{\pm\jj\theta}$} ($r < 1$): Damped oscillation $r^n\cos(n\theta + \phi)$
+    \item \textbf{Pole at $z = 1$}: Constant (DC component)
+    \item \textbf{Pole at $z = -1$}: Alternating constant ($\pm 1, \mp 1, \ldots$)
+    \item \textbf{Poles with $|z| > 1$}: Unstable growing response
+\end{itemize}
+
+% Figure: s-to-z mapping
+\input{figures/fig_ch00_s_to_z_mapping.tex}
+
+\subsection{Frequency Response}
+
+The frequency response of a discrete-time system is obtained by evaluating the transfer function on the unit circle:
+
+\begin{definitionbox}[title=Definition: Discrete-Time Frequency Response]
+The \textbf{frequency response} of a discrete-time system is:
+\begin{equation}
+H(\ee^{\jj\omega}) = H(z)\big|_{z=\ee^{\jj\omega}}
+\end{equation}
+where $\omega$ is the discrete-time frequency in radians per sample. The frequency response is periodic with period $2\pi$.
+\end{definitionbox}
+
+The magnitude and phase responses are:
+\begin{align}
+|H(\ee^{\jj\omega})| &= \text{magnitude response} \\
+\angle H(\ee^{\jj\omega}) &= \text{phase response}
+\end{align}
+
+\begin{practicalbox}[title=Frequency Relationships]
+For a system with sampling period $T$:
+\begin{itemize}
+    \item Discrete frequency $\omega$ (rad/sample) relates to continuous frequency $\Omega$ (rad/s) by: $\omega = \Omega T$
+    \item $\omega = 0$ corresponds to DC (zero frequency)
+    \item $\omega = \pi$ corresponds to the Nyquist frequency $f_s/2$
+    \item The usable frequency range is $0 \leq \omega \leq \pi$ (or equivalently, $0 \leq f \leq f_s/2$)
+\end{itemize}
+\end{practicalbox}
+
+\begin{examplebox}[title=Example: Frequency Response of a First-Order System]
+Find the frequency response of $H(z) = \frac{1-a}{z-a}$ where $|a| < 1$.
+
+\textbf{Solution:}
+Substitute $z = \ee^{\jj\omega}$:
+\begin{equation}
+H(\ee^{\jj\omega}) = \frac{1-a}{\ee^{\jj\omega}-a}
+\end{equation}
+
+To find the magnitude, compute:
+\begin{equation}
+|H(\ee^{\jj\omega})|^2 = \frac{(1-a)^2}{|\ee^{\jj\omega}-a|^2} = \frac{(1-a)^2}{(\cos\omega - a)^2 + \sin^2\omega}
+\end{equation}
+
+Expanding the denominator:
+\begin{equation}
+(\cos\omega - a)^2 + \sin^2\omega = \cos^2\omega - 2a\cos\omega + a^2 + \sin^2\omega = 1 - 2a\cos\omega + a^2
+\end{equation}
+
+Therefore:
+\begin{equation}
+|H(\ee^{\jj\omega})| = \frac{1-a}{\sqrt{1 - 2a\cos\omega + a^2}}
+\end{equation}
+
+At DC ($\omega = 0$):
+\begin{equation}
+|H(1)| = \frac{1-a}{\sqrt{1-2a+a^2}} = \frac{1-a}{|1-a|} = 1
+\end{equation}
+
+At Nyquist ($\omega = \pi$):
+\begin{equation}
+|H(-1)| = \frac{1-a}{\sqrt{1+2a+a^2}} = \frac{1-a}{1+a}
+\end{equation}
+
+This is a \textbf{low-pass filter} for $0 < a < 1$ and a \textbf{high-pass filter} for $-1 < a < 0$.
+\end{examplebox}
+
+% ============================================================================
+\section{Relationship Between $s$-Domain and $z$-Domain}
+% ============================================================================
+
+When discretizing a continuous-time system, there is a fundamental mapping between the $s$-plane and $z$-plane.
+
+\subsection{The Mapping $z = \ee^{sT}$}
+
+For a sampled system with sampling period $T$:
+\begin{equation}
+z = \ee^{sT}
+\end{equation}
+
+This maps:
+\begin{itemize}
+    \item The imaginary axis ($s = \jj\omega$) to the unit circle ($z = \ee^{\jj\omega T}$)
+    \item The left half-plane ($\Real(s) < 0$) to inside the unit circle ($|z| < 1$)
+    \item The right half-plane ($\Real(s) > 0$) to outside the unit circle ($|z| > 1$)
+\end{itemize}
+
+Important correspondences:
+\begin{align}
+s &= 0 \quad \leftrightarrow \quad z = 1 \\
+s &= \pm\jj\frac{\omega_s}{2} = \pm\jj\frac{\pi}{T} \quad \leftrightarrow \quad z = -1 \\
+s &= -\sigma \quad \leftrightarrow \quad z = \ee^{-\sigma T}
+\end{align}
+
+\begin{warningbox}
+The mapping $z = \ee^{sT}$ is \textbf{many-to-one}: frequencies differing by multiples of the sampling frequency $\omega_s = 2\pi/T$ map to the same $z$ value. This is the mathematical basis of aliasing.
+\end{warningbox}
+
+\subsection{Discrete-Time State-Space}
+
+The continuous-time state-space system:
+\begin{align}
+\dot{\vecx}(t) &= \mA\vecx(t) + \mB\vecu(t) \\
+\vecy(t) &= \mC\vecx(t) + \mD\vecu(t)
+\end{align}
+
+can be \textbf{exactly discretized} with zero-order hold to:
 \begin{align}
 \vecx[k+1] &= \mA_d\vecx[k] + \mB_d\vecu[k] \\
 \vecy[k] &= \mC_d\vecx[k] + \mD_d\vecu[k]
 \end{align}
 
-Conversion from continuous-time (exact discretization with zero-order hold):
+where:
 \begin{align}
 \mA_d &= \ee^{\mA T} \\
-\mB_d &= \int_0^T \ee^{\mA\tau}\,\dd\tau \cdot \mB = \mA^{-1}(\ee^{\mA T} - \mI)\mB
+\mB_d &= \int_0^T \ee^{\mA\tau}\,\dd\tau \cdot \mB = \mA^{-1}(\ee^{\mA T} - \mI)\mB \quad (\text{if } \mA \text{ is invertible}) \\
+\mC_d &= \mC \\
+\mD_d &= \mD
 \end{align}
+
+The matrix exponential $\ee^{\mA T}$ can be computed using:
+\begin{equation}
+\ee^{\mA T} = \mI + \mA T + \frac{(\mA T)^2}{2!} + \frac{(\mA T)^3}{3!} + \cdots
+\end{equation}
+
+\begin{practicalbox}[title=Computing Discrete-Time Matrices]
+In practice, compute $\mA_d$ and $\mB_d$ using:
+\begin{itemize}
+    \item MATLAB: \texttt{[Ad,Bd] = c2d(A,B,T,'zoh')}
+    \item Python (scipy): \texttt{Ad, Bd, \_, \_ = cont2discrete((A,B,C,D), T, method='zoh')}
+    \item For simple systems, eigenvalue decomposition or Pad\'e approximation
+\end{itemize}
+Avoid computing $\mA^{-1}$ explicitly; use numerically stable methods.
+\end{practicalbox}
+
+The discrete-time transfer function from state-space is:
+\begin{equation}
+H(z) = \mC_d(z\mI - \mA_d)^{-1}\mB_d + \mD_d
+\end{equation}
 
 % ============================================================================

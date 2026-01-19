@@ -1,0 +1,173 @@
+\begin{figure}[htbp]
+\centering
+\textbf{Sampling and Reconstruction Process}
+
+\vspace{0.5cm}
+
+% Continuous signal
+\begin{tikzpicture}
+\begin{axis}[
+    width=13cm, height=3.5cm,
+    xlabel={},
+    ylabel={$x(t)$},
+    xmin=0, xmax=2.5,
+    ymin=-1.5, ymax=1.5,
+    grid=major,
+    grid style={gray!30},
+    title={\normalsize (a) Continuous-Time Signal $x(t)$},
+    title style={at={(0.5,1.08)}, anchor=south},
+    xtick={0, 0.5, 1, 1.5, 2, 2.5},
+    xticklabels={0, 0.5, 1, 1.5, 2, 2.5}
+]
+
+% Continuous signal: combination of sinusoids
+\addplot[UofSCAtlantic, very thick, domain=0:2.5, samples=500]
+    {0.8*sin(deg(2*pi*1.5*x)) + 0.4*sin(deg(2*pi*0.5*x))};
+
+\end{axis}
+\end{tikzpicture}
+
+\vspace{0.4cm}
+
+% Ideal sampling (impulse train)
+\begin{tikzpicture}
+\begin{axis}[
+    width=13cm, height=3.5cm,
+    xlabel={},
+    ylabel={$x_s(t)$},
+    xmin=0, xmax=2.5,
+    ymin=-1.5, ymax=1.5,
+    grid=major,
+    grid style={gray!30},
+    title={\normalsize (b) Ideal Sampling: $x_s(t) = x(t) \cdot \sum_{n=-\infty}^{\infty} \delta(t - nT)$, \quad $T = 0.1$ s ($f_s = 10$ Hz)},
+    title style={at={(0.5,1.08)}, anchor=south},
+    xtick={0, 0.5, 1, 1.5, 2, 2.5},
+    xticklabels={0, 0.5, 1, 1.5, 2, 2.5}
+]
+
+% Sample values as stems
+\addplot+[UofSCGarnet, thick, ycomb, mark=*, mark options={fill=UofSCGarnet, scale=1.2}]
+    coordinates {
+        (0.0, 0.0000)
+        (0.1, 1.0053)
+        (0.2, 1.0389)
+        (0.3, 0.3090)
+        (0.4, -0.5878)
+        (0.5, -0.8000)
+        (0.6, -0.4076)
+        (0.7, 0.1231)
+        (0.8, 0.1878)
+        (0.9, -0.4944)
+        (1.0, -1.2000)
+        (1.1, -1.1285)
+        (1.2, -0.1511)
+        (1.3, 0.9021)
+        (1.4, 1.1878)
+        (1.5, 0.8000)
+        (1.6, 0.2845)
+        (1.7, 0.1900)
+        (1.8, 0.6122)
+        (1.9, 0.6175)
+        (2.0, 0.0000)
+        (2.1, -0.8822)
+        (2.2, -1.0389)
+        (2.3, -0.5021)
+        (2.4, 0.3878)
+    };
+
+% Faint original signal for reference
+\addplot[UofSC50Black, dashed, domain=0:2.5, samples=500]
+    {0.8*sin(deg(2*pi*1.5*x)) + 0.4*sin(deg(2*pi*0.5*x))};
+
+\end{axis}
+\end{tikzpicture}
+
+\vspace{0.4cm}
+
+% Zero-order hold reconstruction
+\begin{tikzpicture}
+\begin{axis}[
+    width=13cm, height=3.5cm,
+    xlabel={Time $t$ (seconds)},
+    ylabel={$x_{\text{ZOH}}(t)$},
+    xmin=0, xmax=2.5,
+    ymin=-1.5, ymax=1.5,
+    grid=major,
+    grid style={gray!30},
+    title={\normalsize (c) Zero-Order Hold (ZOH) Reconstruction: Hold Each Sample for Duration $T$},
+    title style={at={(0.5,1.08)}, anchor=south},
+    xtick={0, 0.5, 1, 1.5, 2, 2.5},
+    xticklabels={0, 0.5, 1, 1.5, 2, 2.5}
+]
+
+% ZOH staircase
+\addplot[UofSCHorseshoe, very thick, const plot]
+    coordinates {
+        (0.0, 0.0000)
+        (0.1, 1.0053)
+        (0.2, 1.0389)
+        (0.3, 0.3090)
+        (0.4, -0.5878)
+        (0.5, -0.8000)
+        (0.6, -0.4076)
+        (0.7, 0.1231)
+        (0.8, 0.1878)
+        (0.9, -0.4944)
+        (1.0, -1.2000)
+        (1.1, -1.1285)
+        (1.2, -0.1511)
+        (1.3, 0.9021)
+        (1.4, 1.1878)
+        (1.5, 0.8000)
+        (1.6, 0.2845)
+        (1.7, 0.1900)
+        (1.8, 0.6122)
+        (1.9, 0.6175)
+        (2.0, 0.0000)
+        (2.1, -0.8822)
+        (2.2, -1.0389)
+        (2.3, -0.5021)
+        (2.4, 0.3878)
+        (2.5, 0.3878)
+    };
+
+% Original signal for comparison
+\addplot[UofSCAtlantic, dashed, domain=0:2.5, samples=500]
+    {0.8*sin(deg(2*pi*1.5*x)) + 0.4*sin(deg(2*pi*0.5*x))};
+
+\addlegendentry{ZOH output}
+\addlegendentry{Original $x(t)$}
+
+\end{axis}
+\end{tikzpicture}
+
+\vspace{0.4cm}
+
+% Block diagram of sampling process
+\begin{tikzpicture}[node distance=2.5cm]
+    % Nodes
+    \node[input] (input) {};
+    \node[block, right=1.5cm of input, minimum width=2.5cm] (sampler) {Sampler};
+    \node[block, right=of sampler, minimum width=2.5cm, fill=UofSCHorseshoe!15] (hold) {ZOH};
+    \node[block, right=of hold, minimum width=2.5cm, fill=UofSCCongaree!15] (filter) {LPF};
+    \node[output, right=1.5cm of filter] (output) {};
+
+    % Clock signal
+    \node[above=0.8cm of sampler, font=\footnotesize] (clock) {Clock: $f_s$};
+    \draw[->, >=stealth, dashed, UofSCGarnet] (clock) -- (sampler);
+
+    % Signals
+    \draw[->, >=stealth, thick] (input) -- node[above, font=\small] {$x(t)$} (sampler);
+    \draw[->, >=stealth, thick] (sampler) -- node[above, font=\small] {$x[n]$} (hold);
+    \draw[->, >=stealth, thick] (hold) -- node[above, font=\small] {$x_{\text{ZOH}}(t)$} (filter);
+    \draw[->, >=stealth, thick] (filter) -- node[above, font=\small] {$\hat{x}(t)$} (output);
+
+    % Labels below
+    \node[below=0.3cm of sampler, font=\footnotesize, align=center] {Analog-to-Digital\\(A/D)};
+    \node[below=0.3cm of hold, font=\footnotesize, align=center] {Digital-to-Analog\\(D/A)};
+    \node[below=0.3cm of filter, font=\footnotesize, align=center] {Anti-imaging\\filter};
+\end{tikzpicture}
+
+\caption{The sampling and reconstruction process. (a) A continuous-time signal $x(t)$ composed of multiple frequency components. (b) Ideal sampling multiplies the signal by an impulse train, producing discrete samples at intervals $T = 1/f_s$. (c) Zero-order hold (ZOH) reconstruction holds each sample constant until the next sample arrives, creating a staircase approximation. The block diagram shows the complete digital signal processing chain: sampling, hold, and low-pass filtering for reconstruction.}
+\label{fig:sampling_visualization}
+\end{figure}
