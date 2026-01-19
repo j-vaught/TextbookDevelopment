@@ -1,83 +1,134 @@
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
-    % Convex function (left plot)
-    \begin{scope}[xshift=-4.5cm]
-        % Axes
-        \draw[->] (-2,0) -- (2.5,0) node[right] {$x$};
-        \draw[->] (0,-0.5) -- (0,3.5) node[above] {$f(x)$};
 
-        % Convex function (parabola)
-        \draw[thick,UofSCGarnet,domain=-1.8:1.8,smooth,samples=50] plot (\x,{0.5*\x*\x + 0.5});
+% ========== Left Plot: Convex Function ==========
+\begin{axis}[
+    name=convexplot,
+    width=7.5cm, height=7cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=-3, xmax=3,
+    ymin=-0.5, ymax=5,
+    axis lines=left,
+    axis line style={thick, ->, >=stealth},
+    xlabel style={at={(axis description cs:1.02,0.12)}, anchor=west},
+    ylabel style={at={(axis description cs:0.15,1.02)}, anchor=south},
+    grid=major,
+    grid style={UofSC50Black!30},
+    title={\textbf{Convex Function}},
+    title style={at={(0.5,1.02)}, font=\bfseries}
+]
 
-        % Two points on curve
-        \coordinate (A) at (-1.2,{0.5*1.44 + 0.5});
-        \coordinate (B) at (1.4,{0.5*1.96 + 0.5});
-        \fill[UofSCAtlantic] (A) circle (2pt);
-        \fill[UofSCAtlantic] (B) circle (2pt);
+% Convex function: f(x) = x^2
+\addplot[UofSCGarnet, very thick, domain=-2.2:2.2, samples=100, smooth] {x^2};
 
-        % Chord connecting points
-        \draw[thick,UofSCAtlantic,dashed] (A) -- (B);
+% Secant line showing convexity property
+% Points: (-1.5, 2.25) and (2, 4)
+\addplot[UofSCAtlantic, thick, dashed, domain=-2:2.5, samples=50] {2.25 + (4-2.25)/(2-(-1.5))*(x-(-1.5))};
 
-        % Midpoint on chord
-        \coordinate (M) at (0.1,{0.5*(0.5*1.44 + 0.5 + 0.5*1.96 + 0.5)});
-        \fill[UofSCHorseshoe] (M) circle (2pt);
+% Mark the two points
+\node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:-1.5,2.25) {};
+\node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:2,4) {};
 
-        % Midpoint on curve
-        \coordinate (Mc) at (0.1,{0.5*0.01 + 0.5});
-        \fill[UofSCHorseshoe] (Mc) circle (2pt);
+% Mark midpoint on function
+\node[circle, fill=UofSCHorseshoe, minimum size=4pt, inner sep=0pt] at (axis cs:0.25,0.0625) {};
 
-        % Arrow showing chord above curve
-        \draw[->,UofSCHorseshoe,thick] (Mc) -- ($(Mc)!0.8!(M)$);
+% Mark midpoint on secant
+\node[circle, fill=UofSCRose, minimum size=4pt, inner sep=0pt] at (axis cs:0.25,3.125) {};
 
-        % Global minimum marker
-        \fill[UofSCGarnet] (0,0.5) circle (2.5pt);
-        \node[below,UofSCGarnet,font=\small] at (0,0.3) {global min};
+% Vertical line showing convexity inequality
+\draw[UofSCHorseshoe, thick, dotted] (axis cs:0.25,0.0625) -- (axis cs:0.25,3.125);
 
-        % Title
-        \node[above,font=\bfseries] at (0,3.3) {Convex};
-    \end{scope}
+% Global minimum marker
+\node[circle, fill=UofSCGarnet, minimum size=6pt, inner sep=0pt] at (axis cs:0,0) {};
+\node[UofSCGarnet, font=\footnotesize, below right] at (axis cs:0.1,-0.1) {Global min};
 
-    % Non-convex function (right plot)
-    \begin{scope}[xshift=4.5cm]
-        % Axes
-        \draw[->] (-2.5,0) -- (2.5,0) node[right] {$x$};
-        \draw[->] (0,-0.5) -- (0,3.5) node[above] {$f(x)$};
+% Labels for points
+\node[UofSCAtlantic, font=\tiny, above left] at (axis cs:-1.5,2.25) {$(a, f(a))$};
+\node[UofSCAtlantic, font=\tiny, above right] at (axis cs:2,4) {$(b, f(b))$};
 
-        % Non-convex function
-        \draw[thick,UofSCGarnet,domain=-2:2,smooth,samples=100] plot (\x,{0.3*\x*\x*\x*\x - 1.2*\x*\x + 2});
+% Annotations
+\node[font=\footnotesize, align=center, text width=3cm] at (axis cs:0,4.3) {
+    Chord lies above\\
+    the curve
+};
 
-        % Two points on curve
-        \coordinate (A2) at (-1.5,{0.3*5.0625 - 1.2*2.25 + 2});
-        \coordinate (B2) at (1.5,{0.3*5.0625 - 1.2*2.25 + 2});
-        \fill[UofSCAtlantic] (A2) circle (2pt);
-        \fill[UofSCAtlantic] (B2) circle (2pt);
+\end{axis}
 
-        % Chord connecting points
-        \draw[thick,UofSCAtlantic,dashed] (A2) -- (B2);
+% ========== Right Plot: Non-Convex Function ==========
+\begin{axis}[
+    at={(convexplot.east)},
+    anchor=west,
+    xshift=1.5cm,
+    width=7.5cm, height=7cm,
+    xlabel={$x$},
+    ylabel={$f(x)$},
+    xmin=-3, xmax=3,
+    ymin=-1.5, ymax=3,
+    axis lines=left,
+    axis line style={thick, ->, >=stealth},
+    xlabel style={at={(axis description cs:1.02,0.22)}, anchor=west},
+    ylabel style={at={(axis description cs:0.22,1.02)}, anchor=south},
+    grid=major,
+    grid style={UofSC50Black!30},
+    title={\textbf{Non-Convex Function}},
+    title style={at={(0.5,1.02)}, font=\bfseries}
+]
 
-        % Show chord goes below curve at origin
-        \coordinate (Mchord) at (0,{0.5*(0.3*5.0625 - 1.2*2.25 + 2 + 0.3*5.0625 - 1.2*2.25 + 2)});
-        \coordinate (Mcurve) at (0,2);
-        \fill[UofSCRose] (Mcurve) circle (2pt);
+% Non-convex function: f(x) = x^4 - 2*x^2 + 0.5 (double-well potential)
+\addplot[UofSCGarnet, very thick, domain=-1.8:1.8, samples=150, smooth] {x^4 - 2*x^2 + 0.5};
 
-        % Arrow showing chord below curve
-        \draw[->,UofSCRose,thick] (Mcurve) -- ($(Mcurve)!0.8!(Mchord)$);
+% Local minimum 1 (left)
+\node[circle, fill=UofSCHorseshoe, minimum size=6pt, inner sep=0pt] at (axis cs:-1,-0.5) {};
+\node[UofSCHorseshoe, font=\footnotesize, below] at (axis cs:-1,-0.7) {Local min};
 
-        % Local minima markers
-        \fill[UofSCHorseshoe] (-1.41,{0.3*4 - 1.2*2 + 2}) circle (2.5pt);
-        \fill[UofSCHorseshoe] (1.41,{0.3*4 - 1.2*2 + 2}) circle (2.5pt);
-        \node[below left,UofSCHorseshoe,font=\scriptsize] at (-1.41,{0.3*4 - 1.2*2 + 2 - 0.2}) {local min};
-        \node[below right,UofSCHorseshoe,font=\scriptsize] at (1.41,{0.3*4 - 1.2*2 + 2 - 0.2}) {local min};
+% Local minimum 2 (right) - also global
+\node[circle, fill=UofSCHorseshoe, minimum size=6pt, inner sep=0pt] at (axis cs:1,-0.5) {};
+\node[UofSCHorseshoe, font=\footnotesize, below] at (axis cs:1,-0.7) {Local min};
 
-        % Local maximum marker
-        \fill[UofSCRose] (0,2) circle (2.5pt);
-        \node[above,UofSCRose,font=\scriptsize] at (0,2.2) {local max};
+% Local maximum (saddle point in 1D = local max)
+\node[circle, fill=UofSCRose, minimum size=6pt, inner sep=0pt] at (axis cs:0,0.5) {};
+\node[UofSCRose, font=\footnotesize, above right] at (axis cs:0.1,0.6) {Local max};
 
-        % Title
-        \node[above,font=\bfseries] at (0,3.3) {Non-convex};
-    \end{scope}
+% Chord between two points on curve
+\draw[UofSCAtlantic, thick, dashed] (axis cs:-1.3,0.01) -- (axis cs:1.3,0.01);
+\node[circle, fill=UofSCAtlantic, minimum size=4pt, inner sep=0pt] at (axis cs:-1.3,0.01) {};
+\node[circle, fill=UofSCAtlantic, minimum size=4pt, inner sep=0pt] at (axis cs:1.3,0.01) {};
+
+% Gradient descent paths showing convergence to different minima
+% Path 1: starting from left, goes to left minimum
+\draw[UofSCCongaree, thick, ->, >=stealth] (axis cs:-1.5,1.56) -- (axis cs:-1.2,0.18);
+\draw[UofSCCongaree, thick, ->, >=stealth] (axis cs:-1.2,0.18) -- (axis cs:-1.05,-0.44);
+\node[circle, fill=UofSCCongaree, minimum size=4pt, inner sep=0pt] at (axis cs:-1.5,1.56) {};
+\node[UofSCCongaree, font=\tiny] at (axis cs:-1.7,1.7) {$\vecx_0$};
+
+% Path 2: starting from right, goes to right minimum
+\draw[UofSCCongaree, thick, ->, >=stealth] (axis cs:1.5,1.56) -- (axis cs:1.2,0.18);
+\draw[UofSCCongaree, thick, ->, >=stealth] (axis cs:1.2,0.18) -- (axis cs:1.05,-0.44);
+\node[circle, fill=UofSCCongaree, minimum size=4pt, inner sep=0pt] at (axis cs:1.5,1.56) {};
+\node[UofSCCongaree, font=\tiny] at (axis cs:1.7,1.7) {$\vecx_0$};
+
+% Annotations
+\node[font=\footnotesize, align=center, text width=3cm] at (axis cs:0,2.5) {
+    Chord can lie\\
+    below curve
+};
+
+\end{axis}
+
+% ========== Central Text: Key Properties ==========
+\node[font=\small, align=left, text width=6cm] at (4.0,-1.2) {
+    \textbf{Convex:} Any local minimum is the global minimum.\\
+    \textbf{Non-convex:} Multiple local minima; result depends on initialization.
+};
+
+% ========== Mathematical Definition ==========
+\node[font=\footnotesize, align=center, text width=10cm] at (7.5,-2.0) {
+    \textbf{Convexity condition:} $f(\theta x + (1-\theta)y) \leq \theta f(x) + (1-\theta)f(y)$ for all $x, y$ and $\theta \in [0,1]$
+};
+
 \end{tikzpicture}
-\caption{Comparison of convex and non-convex functions. \textbf{Left:} A convex function (parabola) where the chord connecting any two points lies above the curve, and the unique critical point is the global minimum. \textbf{Right:} A non-convex function with multiple local minima and a local maximum. The chord connecting the two blue points passes below the curve (violating convexity). Gradient descent may converge to any local minimum depending on initialization.}
+\caption{Comparison of convex and non-convex functions. \textbf{Left:} A convex function $f(x) = x^2$ (Garnet curve). The chord connecting any two points on the curve (Atlantic dashed line) lies above the curve, satisfying the convexity definition. There is a unique global minimum (Garnet dot). \textbf{Right:} A non-convex function $f(x) = x^4 - 2x^2 + 0.5$ (double-well potential). The chord can lie below portions of the curve. Multiple local minima (Horseshoe dots) exist, separated by a local maximum (Rose dot). Gradient descent paths (Congaree arrows) from different initial points converge to different local minima, illustrating why non-convex optimization is challenging.}
 \label{fig:convex_nonconvex}
 \end{figure}

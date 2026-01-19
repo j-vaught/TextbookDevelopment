@@ -1,52 +1,211 @@
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
+
+% ========== Panel (a): Stable Spiral (Complex eigenvalues with negative real part) ==========
+\begin{scope}[xshift=0cm, yshift=0cm]
+    \node[font=\bfseries] at (3.5, 4.5) {(a) Stable Spiral};
+    \node[font=\footnotesize, UofSCHorseshoe] at (3.5, 4.0) {$\lambda = -0.3 \pm 0.8\jj$};
+
     \begin{axis}[
-        width=12cm,
-        height=7cm,
-        xlabel={Time $t$},
-        ylabel={State response},
-        xmin=0, xmax=5,
-        ymin=-0.5, ymax=2.5,
+        name=spiral,
+        at={(0cm, 0cm)},
+        width=7cm, height=7cm,
+        xlabel={$x_1$},
+        ylabel={$x_2$},
+        xmin=-2.5, xmax=2.5,
+        ymin=-2.5, ymax=2.5,
+        axis lines=middle,
+        axis line style={thick, ->, >=stealth},
         grid=major,
         grid style={UofSC50Black!30},
-        legend pos=north east,
-        legend style={sharp corners, draw=UofSC70Black, font=\small},
-        cycle list name=uofsc
+        ticks=none,
+        xlabel style={at={(axis description cs:1.02,0.5)}, anchor=west},
+        ylabel style={at={(axis description cs:0.5,1.02)}, anchor=south}
     ]
+        % Trajectory 1 - Garnet
+        \addplot[UofSCGarnet, very thick, domain=0:12, samples=300, smooth, variable=\t,
+            decoration={markings, mark=at position 0.2 with {\arrow{>}}, mark=at position 0.5 with {\arrow{>}}, mark=at position 0.8 with {\arrow{>}}}, postaction={decorate}]
+            ({2*exp(-0.3*\t)*cos(deg(0.8*\t))}, {2*exp(-0.3*\t)*sin(deg(0.8*\t))});
 
-    % State x1(t) = e^{-t} with x1(0) = 2
-    \addplot[UofSCGarnet, very thick, domain=0:5, samples=100] {2*exp(-x)};
-    \addlegendentry{$x_1(t) = x_1(0)\ee^{-t}$, $\lambda_1 = -1$}
+        % Trajectory 2 - Atlantic
+        \addplot[UofSCAtlantic, very thick, domain=0:12, samples=300, smooth, variable=\t,
+            decoration={markings, mark=at position 0.2 with {\arrow{>}}, mark=at position 0.5 with {\arrow{>}}, mark=at position 0.8 with {\arrow{>}}}, postaction={decorate}]
+            ({1.8*exp(-0.3*\t)*cos(deg(0.8*\t + 120))}, {1.8*exp(-0.3*\t)*sin(deg(0.8*\t + 120))});
 
-    % State x2(t) = e^{-2t} with x2(0) = 1.5
-    \addplot[UofSCAtlantic, very thick, domain=0:5, samples=100] {1.5*exp(-2*x)};
-    \addlegendentry{$x_2(t) = x_2(0)\ee^{-2t}$, $\lambda_2 = -2$}
+        % Trajectory 3 - Horseshoe
+        \addplot[UofSCHorseshoe, very thick, domain=0:12, samples=300, smooth, variable=\t,
+            decoration={markings, mark=at position 0.2 with {\arrow{>}}, mark=at position 0.5 with {\arrow{>}}, mark=at position 0.8 with {\arrow{>}}}, postaction={decorate}]
+            ({1.6*exp(-0.3*\t)*cos(deg(0.8*\t + 240))}, {1.6*exp(-0.3*\t)*sin(deg(0.8*\t + 240))});
 
-    % Asymptotic line at 0
-    \addplot[UofSC50Black, dashed, thick] coordinates {(0,0) (5,0)};
+        % Equilibrium point
+        \node[circle, fill=UofSCBlack, minimum size=6pt, inner sep=0pt] at (axis cs:0,0) {};
 
-    % Initial condition markers
-    \addplot[only marks, mark=*, mark size=3pt, UofSCGarnet] coordinates {(0,2)};
-    \addplot[only marks, mark=*, mark size=3pt, UofSCAtlantic] coordinates {(0,1.5)};
-
-    % Time constant annotations
-    \draw[UofSCGarnet, thick, dashed] (axis cs:1,0) -- (axis cs:1,{2*exp(-1)});
-    \node[UofSCGarnet, font=\small] at (axis cs:1.3,0.5) {$\tau_1 = 1$};
-
-    \draw[UofSCAtlantic, thick, dashed] (axis cs:0.5,0) -- (axis cs:0.5,{1.5*exp(-1)});
-    \node[UofSCAtlantic, font=\small] at (axis cs:0.75,0.35) {$\tau_2 = 0.5$};
-
+        % Initial condition markers
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:2,0) {};
+        \node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:-0.9,1.56) {};
+        \node[circle, fill=UofSCHorseshoe, minimum size=5pt, inner sep=0pt] at (axis cs:-0.8,-1.39) {};
     \end{axis}
 
-    % Annotation box
-    \node[draw=UofSC70Black, fill=UofSCSandstorm, sharp corners, align=left, font=\small] at (9.5,4) {
-        For $\dot{\vecx} = \mA\vecx$:\\[2pt]
-        $\vecx(t) = \ee^{\mA t}\vecx(0)$\\[4pt]
-        Time constant: $\tau_i = -1/\Real(\lambda_i)$\\[2pt]
-        Stable if $\Real(\lambda_i) < 0$
-    };
+    % s-plane inset
+    \begin{scope}[xshift=5.5cm, yshift=0.5cm, scale=0.4]
+        \fill[UofSCHorseshoe!15] (-2,-2) rectangle (0,2);
+        \draw[->, thick] (-2.2,0) -- (1,0) node[right, font=\tiny] {$\Real$};
+        \draw[->, thick] (0,-2.2) -- (0,2.2) node[above, font=\tiny] {$\Imag$};
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (-0.6,1.6) {};
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (-0.6,-1.6) {};
+        \draw[thick, UofSCCongaree] (0,-2) -- (0,2);
+        \node[font=\tiny, UofSCHorseshoe] at (-1.2,-1.8) {LHP};
+    \end{scope}
+\end{scope}
+
+% ========== Panel (b): Unstable Node (Real positive eigenvalues) ==========
+\begin{scope}[xshift=8cm, yshift=0cm]
+    \node[font=\bfseries] at (3.5, 4.5) {(b) Unstable Node};
+    \node[font=\footnotesize, UofSCRose] at (3.5, 4.0) {$\lambda_1 = 0.5$, $\lambda_2 = 1.2$};
+
+    \begin{axis}[
+        name=unstable,
+        at={(0cm, 0cm)},
+        width=7cm, height=7cm,
+        xlabel={$x_1$},
+        ylabel={$x_2$},
+        xmin=-2.5, xmax=2.5,
+        ymin=-2.5, ymax=2.5,
+        axis lines=middle,
+        axis line style={thick, ->, >=stealth},
+        grid=major,
+        grid style={UofSC50Black!30},
+        ticks=none,
+        xlabel style={at={(axis description cs:1.02,0.5)}, anchor=west},
+        ylabel style={at={(axis description cs:0.5,1.02)}, anchor=south}
+    ]
+        % For unstable node: trajectories move AWAY from origin
+        % Using eigenvalues 0.5 and 1.2, eigenvectors [1;0] and [0;1]
+
+        % Trajectory 1 - starting near origin, moving outward (Garnet)
+        \addplot[UofSCGarnet, very thick, domain=0:1.5, samples=100, smooth, variable=\t,
+            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
+            ({0.3*exp(0.5*\t)}, {0.2*exp(1.2*\t)});
+
+        % Trajectory 2 (Atlantic)
+        \addplot[UofSCAtlantic, very thick, domain=0:1.5, samples=100, smooth, variable=\t,
+            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
+            ({-0.25*exp(0.5*\t)}, {0.15*exp(1.2*\t)});
+
+        % Trajectory 3 (Horseshoe)
+        \addplot[UofSCHorseshoe, very thick, domain=0:1.5, samples=100, smooth, variable=\t,
+            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
+            ({0.2*exp(0.5*\t)}, {-0.3*exp(1.2*\t)});
+
+        % Trajectory 4 (Rose)
+        \addplot[UofSCRose, very thick, domain=0:1.5, samples=100, smooth, variable=\t,
+            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
+            ({-0.35*exp(0.5*\t)}, {-0.2*exp(1.2*\t)});
+
+        % Equilibrium point
+        \node[circle, fill=UofSCBlack, minimum size=6pt, inner sep=0pt] at (axis cs:0,0) {};
+
+        % Initial condition markers
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (axis cs:0.3,0.2) {};
+        \node[circle, fill=UofSCAtlantic, minimum size=5pt, inner sep=0pt] at (axis cs:-0.25,0.15) {};
+        \node[circle, fill=UofSCHorseshoe, minimum size=5pt, inner sep=0pt] at (axis cs:0.2,-0.3) {};
+        \node[circle, fill=UofSCRose, minimum size=5pt, inner sep=0pt] at (axis cs:-0.35,-0.2) {};
+    \end{axis}
+
+    % s-plane inset
+    \begin{scope}[xshift=5.5cm, yshift=0.5cm, scale=0.4]
+        \fill[UofSCRose!15] (0,-2) rectangle (2,2);
+        \draw[->, thick] (-1,0) -- (2.2,0) node[right, font=\tiny] {$\Real$};
+        \draw[->, thick] (0,-2.2) -- (0,2.2) node[above, font=\tiny] {$\Imag$};
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (1,0) {};
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (2.4,0) {};
+        \draw[thick, UofSCCongaree] (0,-2) -- (0,2);
+        \node[font=\tiny, UofSCRose] at (1.2,-1.8) {RHP};
+    \end{scope}
+\end{scope}
+
+% ========== Panel (c): Saddle Point (One positive, one negative real eigenvalue) ==========
+\begin{scope}[xshift=4cm, yshift=-8cm]
+    \node[font=\bfseries] at (3.5, 4.5) {(c) Saddle Point};
+    \node[font=\footnotesize, UofSCCongaree] at (3.5, 4.0) {$\lambda_1 = -1$, $\lambda_2 = 0.8$};
+
+    \begin{axis}[
+        name=saddle,
+        at={(0cm, 0cm)},
+        width=7cm, height=7cm,
+        xlabel={$x_1$},
+        ylabel={$x_2$},
+        xmin=-2.5, xmax=2.5,
+        ymin=-2.5, ymax=2.5,
+        axis lines=middle,
+        axis line style={thick, ->, >=stealth},
+        grid=major,
+        grid style={UofSC50Black!30},
+        ticks=none,
+        xlabel style={at={(axis description cs:1.02,0.5)}, anchor=west},
+        ylabel style={at={(axis description cs:0.5,1.02)}, anchor=south}
+    ]
+        % Stable manifold (along x1 axis, lambda = -1)
+        \draw[UofSCHorseshoe, very thick, dashed] (axis cs:-2.3,0) -- (axis cs:2.3,0);
+        \node[UofSCHorseshoe, font=\footnotesize] at (axis cs:2,0.3) {stable};
+
+        % Unstable manifold (along x2 axis, lambda = 0.8)
+        \draw[UofSCRose, very thick, dashed] (axis cs:0,-2.3) -- (axis cs:0,2.3);
+        \node[UofSCRose, font=\footnotesize, rotate=90] at (axis cs:0.35,2) {unstable};
+
+        % Trajectory 1 - Garnet (approaching stable manifold, then diverging)
+        \addplot[UofSCGarnet, very thick, domain=-1.5:1.5, samples=100, smooth, variable=\t,
+            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
+            ({1.5*exp(-1*\t)}, {0.3*exp(0.8*\t)});
+
+        % Trajectory 2 - Atlantic
+        \addplot[UofSCAtlantic, very thick, domain=-1.5:1.5, samples=100, smooth, variable=\t,
+            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
+            ({-1.5*exp(-1*\t)}, {0.25*exp(0.8*\t)});
+
+        % Trajectory 3 - Congaree
+        \addplot[UofSCCongaree, very thick, domain=-1.5:1.5, samples=100, smooth, variable=\t,
+            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
+            ({1.2*exp(-1*\t)}, {-0.35*exp(0.8*\t)});
+
+        % Trajectory 4
+        \addplot[UofSCRose, very thick, domain=-1.5:1.5, samples=100, smooth, variable=\t,
+            decoration={markings, mark=at position 0.3 with {\arrow{>}}, mark=at position 0.7 with {\arrow{>}}}, postaction={decorate}]
+            ({-1.3*exp(-1*\t)}, {-0.28*exp(0.8*\t)});
+
+        % Equilibrium point
+        \node[circle, fill=UofSCBlack, minimum size=6pt, inner sep=0pt] at (axis cs:0,0) {};
+    \end{axis}
+
+    % s-plane inset
+    \begin{scope}[xshift=5.5cm, yshift=0.5cm, scale=0.4]
+        \fill[UofSCHorseshoe!15] (-2,-2) rectangle (0,2);
+        \fill[UofSCRose!15] (0,-2) rectangle (2,2);
+        \draw[->, thick] (-2.2,0) -- (2.2,0) node[right, font=\tiny] {$\Real$};
+        \draw[->, thick] (0,-2.2) -- (0,2.2) node[above, font=\tiny] {$\Imag$};
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (-2,0) {};
+        \node[circle, fill=UofSCGarnet, minimum size=5pt, inner sep=0pt] at (1.6,0) {};
+        \draw[thick, UofSCCongaree] (0,-2) -- (0,2);
+    \end{scope}
+\end{scope}
+
+% ========== Legend/Key Box ==========
+\node[draw=UofSC70Black, thick, fill=white, align=left, font=\footnotesize,
+      text width=7cm, inner sep=10pt] at (12.5, -2) {
+    \textbf{State Evolution: $\vecx(t) = \ee^{\mA t}\vecx_0$}\\[6pt]
+    \textbf{Stability Classification:}\\[4pt]
+    \textbullet\ \textbf{Stable spiral:} $\Real(\lambda) < 0$, complex pair\\
+    \quad Decaying oscillations toward equilibrium\\[3pt]
+    \textbullet\ \textbf{Unstable node:} $\lambda_1, \lambda_2 > 0$, real\\
+    \quad All trajectories diverge from origin\\[3pt]
+    \textbullet\ \textbf{Saddle point:} $\lambda_1 < 0 < \lambda_2$, real\\
+    \quad Stable/unstable manifolds, overall unstable\\[6pt]
+    \textbf{Insets:} Eigenvalue locations in $s$-plane\\
+    LHP (green) = stable, RHP (red) = unstable
+};
+
 \end{tikzpicture}
-\caption{Time response of a second-order diagonal system governed by $\ee^{\mA t}$. Each state $x_i(t)$ decays exponentially with rate determined by its eigenvalue $\lambda_i$. The time constant $\tau_i = -1/\lambda_i$ indicates when the response reaches $\ee^{-1} \approx 37\%$ of its initial value. Both eigenvalues are negative (stable), with $\lambda_2 = -2$ causing faster decay than $\lambda_1 = -1$.}
+\caption{Phase portraits showing time evolution of the autonomous system $\dot{\vecx} = \mA\vecx$ via the matrix exponential $\vecx(t) = \ee^{\mA t}\vecx_0$ for three characteristic eigenvalue configurations. (a) \textbf{Stable spiral}: complex conjugate eigenvalues with negative real part produce decaying oscillatory trajectories spiraling toward the origin. (b) \textbf{Unstable node}: two positive real eigenvalues cause all trajectories to diverge exponentially from the equilibrium. (c) \textbf{Saddle point}: one stable and one unstable eigenvalue create invariant manifolds; trajectories approach the stable manifold but ultimately diverge along the unstable direction. Insets show eigenvalue locations in the $s$-plane; the imaginary axis separates stable (LHP) from unstable (RHP) behavior.}
 \label{fig:matrix_exponential}
 \end{figure}
